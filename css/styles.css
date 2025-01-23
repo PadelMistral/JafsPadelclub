@@ -1,0 +1,903 @@
+ /* Resetear CSS */
+ * {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+
+
+/* Body: Fuente común */
+body {
+  font-family: 'Roboto', sans-serif;
+}
+
+
+
+/* Flecha para volver al inicio */
+main .arrowcircle {
+  position: fixed;
+  width: 60px;
+  height: auto;
+  bottom: 30px;
+  right: 30px;
+  z-index: 20;
+}
+
+
+
+/* Header */
+header {
+  padding: 5px;
+  background: url(https://www.wilson.com/sites/default/files/styles/none/public/24-0940%20_Pacev1_CLP_Header_1.png?) center/cover no-repeat;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+}
+
+header nav {
+  display: flex;
+  gap: 10px;
+}
+
+header .logo img {
+  height: 100px;
+  width: 120px;
+  border-radius: 50%;
+  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2), 0px 0px 10px #00ff88b7;
+  margin-left: 30px;
+}
+
+
+
+/* Navegador */
+.boton {
+  background-color: #00ff88;
+  text-decoration: none;
+  font-family: Cambria;
+  padding: 5px 10px;
+  color: #222222;
+  font-weight: bold;
+  border-radius: 20px;
+  border: none;
+  transition: all 0.5s ease-in-out;
+}
+
+nav > img {
+  background-color: #00ff88;
+  padding: 3px 8px;
+  border-radius: 10px;
+  margin-left: 15px;
+  transition: all 0.4s ease-in-out;
+  height: 25px;
+  width: 25px;
+  align-self: center;
+}
+
+header nav .enlace {
+  text-decoration: none;
+  font-family: Cambria;
+  padding: 5px 10px;
+  color: #ffffff;
+  text-shadow: 1px 1px 1px #000000;
+  border-radius: 5px;
+  font-weight: bold;
+  transition: all 0.5s ease-in-out;
+  margin: auto;
+}
+
+
+
+/* Transiciones Navegador */
+nav .boton:hover {
+  background-color: #00ff88b7;
+  color: #ffffff;
+}
+
+nav > img:hover {
+  background-color: #00ff88b7;
+}
+
+nav .enlace:hover {
+  background-color: #00ff88b7;
+  color: black;
+  text-shadow: none;
+}
+
+
+
+/* Section: Contenedor Común */
+section{
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 100px;
+  min-height: 100vh;
+  align-items: center;
+}
+
+section h2{
+  color: #0f8;
+  font-family: 'Roboto', sans-serif;
+  font-size: 2.3rem;
+  text-align: center;
+  margin: 50px;
+  text-shadow: 2px 2px 4px #000000cc , 3px 3px 1px #000000cc;
+}
+
+
+
+/* Primera Seccion index */
+.introduccion {
+  height: 100vh;
+  background: url(https://www.2playbook.com/uploads/s1/28/48/33/credit-premier-padel-29.jpeg) top/cover no-repeat;
+  text-align: center;
+  color: #ffffff;
+  padding: 20px;
+}
+  
+.contenido {
+  margin: auto;
+  max-width: 60%;
+  background-color: #0c0c0c9c;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.5);
+}
+
+.introduccion h1 {
+  font-family: 'Merriweather', serif;
+  font-size: 3rem;
+  color: #ffffff;
+  margin-bottom: 20px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.introduccion p {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: #dddddd;
+}
+
+.introduccion .boton {
+  font-size: 1.1rem;
+  background-color: rgba(0, 255, 136, 0.856);
+  text-decoration: none;
+  color: #141414;
+  font-weight: bold;
+  border-radius: 25px;
+  padding: 15px 25px;
+  transition: all 0.4s ease-in-out;
+  margin-top: 30px;
+  display: inline-block;
+}
+
+.introduccion .boton:hover {
+  background-color: #00ff88;
+  transform: scale(1.08);
+  color: #000000;
+}
+
+
+
+/* Segunda Sección: Tarjetas informativas */
+.seccion-tarjetas{
+  background-color: #141414;
+}
+
+.seccion-tarjetaspeq{
+  background: url(https://mir-s3-cdn-cf.behance.net/project_modules/1400/ad4fdb20936849.5cf4206fbafb6.jpg) top/cover no-repeat;
+  background-color: #141414;
+  transition: all 1s;
+  display: none;
+  min-height: 100vh;
+}
+
+.tarjetas {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: 99%;
+  gap: 20px;
+  align-items: center;
+}
+
+.contenedor-tarjetas{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 45px;
+  justify-content: center;
+  width: 75%;
+}
+
+.tarjeta {
+  width: 400px;
+  height: 450px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease-in-out;
+  text-align: center;
+}
+
+.tarpeq{
+  width: 300px;
+  height: 350px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease-in-out;
+  text-align: center;
+  color: #47ff75;
+  box-shadow: 0px 1px 10px #2e2e2e;
+}
+
+.tarjeta img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 10;
+  transition: all 0.3s ease-in-out;
+}
+
+.tarjeta h3 {
+  font-size: 1.2rem;
+  color: #0f8;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  background-color: #1f1f1fe7;
+  padding: 5px;
+}
+
+.tarjeta p {
+  font-size: 0.95rem;
+  color: #c4c4c4;
+  margin: 15px 15px 35px 15px;
+}
+
+.tarjeta a {
+  display: inline-block;
+  margin: 0 15px 15px 15px;
+  padding: 10px 15px;
+  background-color: #00ff88b7;
+  color: #ebebeb;
+  text-shadow: 1px 1px 1px black;
+  font-size: 0.9rem;
+  text-decoration: none;
+  border-radius: 20px;
+  transition: all 0.3s ease-in-out;
+}
+
+.contenido-tarjeta {
+  background-color: #1f1f1f;
+  height: 180px;
+  padding: 10px;
+  transform: translateY(-180px);
+  transition: transform 0.6s ease-in-out;
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
+}
+
+.contenido-tarjetapeq {
+  background-color: #1f1f1f;
+  height: 180px;
+  padding: 10px;
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
+}
+
+.contenido-tarjeta img {
+  width: 30px;
+  height: 10px;
+  margin-top: 25px;
+  transition: opacity 0.6s ease-in-out;
+}
+
+
+
+/* Etiquetas Tarjeta */
+.etiquetaprecio {
+  display: flex;
+  justify-content: space-around; 
+  align-items: center; 
+  flex-direction: row; 
+  height: 48%;
+  margin-bottom: 2px;
+  background-color: #333333;
+  transition: background-color 0.3s ease;
+  border-radius: 5px;
+}
+
+.etiquetaprecio:hover {
+  background-color: #444444; 
+}
+
+.etiquetaprecio h5 {
+  color: #ffffff;
+  margin: 5px;
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+
+.etiquetaprecio h5:hover {
+  color: #47ff75; 
+  border-color: #47ff75; 
+}
+
+.etiquetaprecio h6 {
+  margin: 5px;
+  color: #bbbbbb;
+  transition: color 0.3s ease;
+  border-bottom: 2px solid rgb(255, 208, 0);
+  padding-bottom: 2px;
+}
+
+.etiquetaprecio h6:hover {
+  color: #47ff75; 
+}
+
+.etiquetaprecio p {
+  color: #ffffff;
+  text-shadow: 1px 1px 1px black;
+  margin: 5px;
+  transition: transform 0.3s ease, color 0.3s ease;
+}
+
+.etiquetaprecio p:hover {
+  color: #47ff75;
+  transform: scale(1.1); 
+}
+
+
+
+/* Transiciones Tarjetas */
+.tarjeta:hover {
+  transform: translateY(-40px);
+  box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.tarjeta:hover .contenido-tarjeta {
+  transform: translate(0);
+}
+
+.tarjeta:hover .contenido-tarjeta img {
+  opacity: 0;
+}
+
+.tarjeta a:hover {
+  background-color: #0f8;
+  color: white;
+}
+
+
+
+/* Sección: Formulario */
+.formulario-registro {
+  background-color: #040f1ff8;
+}
+
+form {
+  margin: 20px auto 120px;
+  padding: 20px;
+  background: #292929;
+  border-radius: 10px;
+  width: 45%;
+  min-width: 400px;
+  box-shadow: 0px 0px 40px #121212;
+}
+
+form h3{
+  font-size: 2rem;
+  color: #00ff88;
+  text-shadow: 1px 1px 4px black;
+  margin-bottom: 25px;
+  text-align: center;
+}
+
+form .campo-formulario {
+  margin-bottom: 15px;
+}
+
+form .campo-formulario label {
+  display: block;
+  margin-bottom: 10px;
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+form .campo-formulario input {
+  width: 99%;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  background: #121212;
+  color: #b1afaf;
+}
+
+.lorm {
+  background-color: #f0f0f0;
+  color: #000000;
+  padding: 45px;
+  margin: auto;
+  margin-top: 70px;
+  border-radius: 5px;
+  width: 85%;
+  height: 400px;
+  overflow: auto;
+  border: 2px inset;
+}
+
+.terminos{
+  text-align: center;
+  color: #b1afaf;
+  padding: 10px;
+  border-top: 2px solid #adadad;
+  border-bottom: 2px solid #adadad;
+  margin-top: 55px;
+  background-image: linear-gradient(to left, #2b2a2a, #0e0e0e, #141414, #2b2a2a, #141414, #0e0e0e, #2b2a2a);
+}
+
+.terminos input{
+  margin-left: 15px;
+}
+
+.botones-formulario {
+  background-image: linear-gradient(to left, #2b2a2a, #0e0e0e, #141414, #2b2a2a, #141414, #0e0e0e, #2b2a2a);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 40px;
+}
+
+form .boton {
+  background-color: #0f8;
+  text-decoration: none;
+  font-family: Cambria;
+  padding: 10px 20px;
+  color: #000000;
+  font-weight: bold;
+  border-radius: 25px;
+  border: 1px outset black;
+  transition: all 0.2s ease-in-out;
+  margin: 0 20px;
+}
+
+
+
+/* Interacción Formulario */
+form .boton:hover {
+  background-color: #00ff88b7;
+  border: 1px inset black;
+}
+
+.campo-formulario input:focus {
+  outline: 1px solid #0f8;
+}
+
+
+
+/* Seccion Contenedor Presupuestos */
+.presupuestos{
+  background: url(https://mir-s3-cdn-cf.behance.net/project_modules/1400/ad4fdb20936849.5cf4206fbafb6.jpg) top/cover no-repeat;
+  background-color: #011316;
+  display: flex;
+  gap: 40px;
+  align-items: center;
+  transition: all .8s;
+}
+
+.presupuestos > h1{
+  color: #ebebeb;
+  text-shadow:1px 1px 1px black, 2px 2px 4px rgba(0, 0, 0, 0.8) , 3px 3px 1px black , 4px 4px 1px black , 0px 0px 15px #0f8;
+  margin-top: 30px;
+  font-size: 2.4rem;
+}
+
+.contenedor-presupuestos{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80%;
+}
+
+.infoprecios {
+  display: flex;
+  flex-direction: row;
+  transition: all ease 1.3s;
+  box-shadow: 0px 0px 34px 5px #000000;
+  border-radius: 5px;
+  margin: auto; 
+  overflow: hidden; 
+  width: 85%;
+  height: 90%;
+}
+
+.infoprecios img {
+  object-fit: cover;
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+  width: 60%; 
+  height: 100%; 
+}
+
+.txtprecios {
+  color: #1b1b1b;
+  font-size: 1.2rem;
+  height: 100%;
+  width: 40%;
+  background-color: rgb(173, 173, 173);
+  line-height: 1.2;
+  padding: 30px;
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.txtprecios p {
+  font-family: 'Roboto', sans-serif;
+}
+
+
+
+/* Flechas animacion presupuestos */
+.volveratras{
+  width:35px ;
+  height: 35px;
+  background-color: #4e9c78;
+  box-shadow: 0px 1px 15px #00ff88;
+  border-radius: 50%;
+  z-index: 20;
+  border: 1px solid;
+  align-self: center;
+  margin: 15px;
+}
+
+.volveratras img{
+  width: 100%;
+  height:100%;
+  padding: 8px;
+}
+
+#animacion{
+ display: none;
+}
+
+
+
+/* Transiciones de secciones de presupuestos */
+#animacion:checked ~ .presupuestos{
+  display: none;
+}
+
+#animacion:checked ~ .seccion-tarjetaspeq{
+  display: flex;
+}
+
+
+
+/* Seccion Sobre-Nosotros */
+.sobre-nosotros{
+  background: url(https://mir-s3-cdn-cf.behance.net/project_modules/1400/ad4fdb20936849.5cf4206fbafb6.jpg) top/cover no-repeat;
+  text-align: center;
+  padding: 40px 20px;
+  min-width: 95vw;
+  min-height: 100vh;
+  display: flex;
+}
+
+.sobre-nosotros h2 {
+  font-size: 3rem;
+  margin-bottom: 20px;
+  color: #2ecc71;
+
+}
+
+.sobre-nosotros p {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #ddd;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+
+
+/* Galería de Instalaciones */
+.instalaciones {
+  padding: 20px;
+  background-color: #fcfcfc9c;
+}
+
+.galeria {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.galeria img {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  object-fit: cover;
+  transition: all 0.5s;
+}
+
+.galeria img:hover{
+  transform: translateY(-10px);
+}
+
+
+
+/* Formulario de Contacto */
+.formu {
+  padding: 40px 20px;
+  background-color: #100e18;
+  min-width: 99vw;
+  opacity: .98;
+  min-height: 100vh;
+}
+
+.formu h2 {
+  text-align: center;
+  font-size: 2rem;
+  color: #2ecc71;
+  margin-bottom: 20px;
+}
+
+.mensaje {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  margin: 0 auto;
+  max-width: 450px;
+}
+
+.campo-formulario textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #2ecc71;
+  border-radius: 5px;
+  background-color: #0e1a13;
+  color: #fff;
+  max-width: 500px;
+}
+
+.campo-formulario textarea {
+  resize: none;
+}
+
+.boton {
+  background-color: #2ecc71;
+  color: #0a0d0f;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 0.3s ease;
+}
+
+.boton:hover {
+  background-color: #27ae60;
+}
+
+
+
+/* Información de Contacto */
+.direccion p {
+  margin: 10px 0;
+  font-size: .92rem;
+  border-bottom: 5px solid rgb(255, 255, 255);
+  background-color: #292929;
+  padding: 5px;
+  border-radius: 2px;
+  color:#27ae60;
+  text-shadow: 1px 1px 1px black;
+  transition: all 0.5s;
+}
+
+.direccion p:hover{
+ transform: scale(1.033);
+ border-bottom: 5px solid #00ff88;
+ cursor: pointer;
+ text-shadow: 1px 1px 1px rgb(0, 0, 0);
+ color: white;
+ background-color: #252525;
+}
+
+.direccion img{
+  width: 500px;
+  height: 300px;
+}
+
+
+
+/* Footer */
+footer {
+  background-color: #333333;
+  padding: 20px;
+  text-align: center;
+  color: #ffffff;
+  height: 150px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+footer ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 25px;
+}
+
+footer ul li {
+  margin: 0 15px;
+}
+
+footer ul li a {
+  color: #c9c9c9;
+  font-size: 1.5rem;
+  transition: color 0.3s ease-in-out;
+}
+
+footer ul li a:hover {
+  color: #0f8;
+}
+
+
+
+/* Teléfonos pequeños (pantallas menores a 600px) */
+@media (max-width: 700px) {
+  header {
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+  }
+
+  header .logo img {
+    height: 80px;
+    width: 80px;
+    margin-left: 0;
+  }
+
+  nav {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .introduccion h1 {
+    font-size: 2rem;
+  }
+
+  .introduccion .contenido {
+    margin: 100px auto 0;
+    max-width: 90%;
+    padding: 15px;
+  }
+
+  .tarjeta {
+    width: 85%;
+    height: auto;
+  }
+
+  .tarjeta img {
+    height: auto;
+  }
+
+  form {
+    width: 90%;
+    min-width: auto;
+  }
+
+  .presupuestos {
+    flex-direction: column;
+    gap: 20px;
+  }
+  .contenedor-presupuestos{
+    width: 70vw;
+  }
+  .infoprecios{
+    height: 500px;
+    width:100% ;
+    
+  }
+  .infoprecios img {
+    width: 60%;
+    height: auto;
+  }
+
+  .txtprecios {
+    width: 40%;
+    padding: 10px;
+    line-height: 1;
+    font-size: .84rem;
+    overflow: auto; 
+  }
+
+  .tarjetas{
+    flex-direction: column;
+  }
+  .galeria {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+}
+
+
+
+/* Tabletas (pantallas entre 600px y 1024px) */
+@media (min-width: 701px) and (max-width: 1024px) {
+  header {
+    padding: 10px 20px;
+  }
+
+  .introduccion .contenido {
+    max-width: 75%;
+    margin: 150px auto 0;
+  }
+ .presupuestos{
+    width: 100%;
+    height: 100vh;
+  }
+  .tarjeta {
+    min-width: 30%;
+  }
+
+  .contenedor-presupuestos{
+    width: 90vw;
+    height: 100vh;
+  }
+  .infoprecios{
+    height: 85%;
+    width: 100%;
+    margin: 0 30px;
+    
+  }
+  .infoprecios img {
+    width: 60%;
+    height: auto;
+  }
+
+  .txtprecios {
+    width: 40%;
+    height: auto;
+    padding: 20px;
+    font-size: .90rem;
+    overflow: auto;
+    line-height: 1.3;
+  }
+
+  .galeria {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+}
+
+
+
+/* Pantallas grandes (a partir de 1025px) */
+@media (min-width: 1025px) {
+  .contenedor-presupuestos {
+    gap: 60px;
+  }
+
+  .infoprecios img {
+    width: 60%;
+    height: 550px;
+  }
+
+  .txtprecios {
+    width: 40%;
+    height: 550px;
+  }
+
+  .galeria {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
