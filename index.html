@@ -152,24 +152,60 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
+<script>
         // Configuración
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgpgCOfbjtDGOXbJnyz1YgYqtF4hDS1CB6oiYSV323WZMh4--jRETamNlFwUmOryEg/exec';
         let currentDate = new Date();
-        let lastRequestTime = 0;
-        const REQUEST_THROTTLE = 2000; // 2 segundos entre peticiones
 
-        // Elementos DOM
-        const elements = {
-            fechaActual: document.getElementById('fechaActual'),
-            datePicker: document.getElementById('datePicker'),
-            prevWeekBtn: document.getElementById('prevWeek'),
-            nextWeekBtn: document.getElementById('nextWeek'),
-            loading: document.getElementById('loading'),
-            errorContainer: document.getElementById('errorContainer'),
-            errorMessage: document.getElementById('errorMessage'),
-            dataContainer: document.getElementById('dataContainer')
-        };
+        // [Mantén todas las funciones iguales hasta loadData]
+
+        function loadData(fecha) {
+            console.log('Intentando cargar datos para:', fecha);
+            showLoading();
+            hideError();
+            clearData();
+
+            // Opción 1: Usar JSONP (recomendado)
+            const callbackName = `jsonp_callback_${Date.now()}`;
+            const script = document.createElement('script');
+            script.src = `${SCRIPT_URL}?fecha=${fecha}&callback=${callbackName}`;
+            
+            window[callbackName] = function(response) {
+                console.log('Respuesta recibida:', response);
+                cleanupJsonp(callbackName, script);
+                
+                if (response && response.status === 'success') {
+                    renderData(response.data);
+                } else {
+                    const errorMsg = response?.message || 'Error desconocido al obtener datos';
+                    console.error('Error en la respuesta:', errorMsg);
+                    showError(errorMsg);
+                }
+                hideLoading();
+            };
+            
+            script.onerror = function() {
+                console.error('Error en la carga del script');
+                cleanupJsonp(callbackName, script);
+                showError('Error de conexión. Verifica: 1) Tu conexión a internet, 2) Que la URL del script sea correcta, 3) Que el despliegue tenga permisos públicos');
+                hideLoading();
+            };
+            
+            document.body.appendChild(script);
+            
+            // Timeout después de 15 segundos
+            setTimeout(() => {
+                if (document.body.contains(script)) {
+                    console.warn('Timeout excedido');
+                    cleanupJsonp(callbackName, script);
+                    showError('El servidor está tardando demasiado. Intenta recargar la página.');
+                    hideLoading();
+                }
+            }, 15000);
+        }
+
+        // [Mantén el resto de las funciones iguales]
+
 
         // Formatear fecha como YYYY-MM-DD
         function formatDate(date) {
