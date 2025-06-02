@@ -3,140 +3,174 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Disponibilidad Pistas APOING</title>
+    <title>Disponibilidad Pistas Pádel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --color-libre: #d4edda;
+            --color-ocupado: #f8d7da;
+            --color-reservado: #cce5ff;
+            --color-no-disponible: #e2e3e5;
+            --color-header: #343a40;
+        }
         body {
             padding: 20px;
             background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        .header {
-            background-color: #343a40;
+        .header-container {
+            background: linear-gradient(135deg, var(--color-header) 0%, #495057 100%);
             color: white;
-            padding: 20px;
-            border-radius: 5px;
-            margin-bottom: 20px;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .pista-card {
-            margin-bottom: 20px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            border-radius: 8px;
+            margin-bottom: 25px;
+            border: none;
+            border-radius: 10px;
             overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        .pista-card:hover {
+            transform: translateY(-5px);
         }
         .pista-header {
-            background-color: #495057;
+            background-color: var(--color-header);
             color: white;
-            padding: 10px 15px;
-            font-weight: bold;
+            padding: 12px 20px;
+            font-weight: 600;
+            font-size: 1.1rem;
         }
         .horario-item {
-            padding: 10px;
-            border-bottom: 1px solid #dee2e6;
-            transition: all 0.3s;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            transition: all 0.2s;
         }
         .horario-item:hover {
-            background-color: #f1f3f5;
+            background-color: #f8f9fa;
         }
-        .libre {
-            background-color: #d4edda;
-        }
-        .ocupado {
-            background-color: #f8d7da;
-        }
-        .reservado {
-            background-color: #cce5ff;
-        }
-        .no-disponible {
-            background-color: #e2e3e5;
-        }
+        .libre { background-color: var(--color-libre); }
+        .ocupado { background-color: var(--color-ocupado); }
+        .reservado { background-color: var(--color-reservado); }
+        .no-disponible { background-color: var(--color-no-disponible); }
         .badge-estado {
-            font-size: 0.9em;
-            padding: 5px 8px;
-            border-radius: 4px;
+            font-size: 0.85rem;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 500;
         }
         .fecha-selector {
-            background-color: #e9ecef;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
         }
-        .loading {
+        #loading {
             display: none;
             text-align: center;
-            padding: 20px;
+            padding: 30px;
+            background-color: #fff;
+            border-radius: 10px;
+            margin: 20px 0;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
         }
-        .error-container {
+        #errorContainer {
             display: none;
             margin-top: 20px;
         }
-        #mainContainer {
-            transition: all 0.3s;
+        .btn-nav {
+            min-width: 120px;
+            font-weight: 500;
+        }
+        #datePicker {
+            max-width: 250px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        @media (max-width: 768px) {
+            .btn-nav {
+                min-width: auto;
+                padding: 5px 10px;
+                font-size: 0.9rem;
+            }
+            .header-container {
+                padding: 15px;
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header text-center">
-            <h1><i class="fas fa-calendar-alt"></i> Disponibilidad Pistas APOING</h1>
-            <p class="mb-0">Consulta la disponibilidad de pistas en tiempo real</p>
+        <div class="header-container text-center">
+            <h1><i class="fas fa-calendar-alt me-2"></i> Disponibilidad Pistas Pádel</h1>
+            <p class="mb-0">Consulta en tiempo real la disponibilidad de pistas</p>
         </div>
 
         <div class="fecha-selector">
             <div class="row align-items-center">
-                <div class="col-md-4">
-                    <button id="prevWeek" class="btn btn-outline-primary">
-                        <i class="fas fa-arrow-left"></i> Semana anterior
+                <div class="col-md-4 text-center text-md-start">
+                    <button id="prevWeek" class="btn btn-outline-primary btn-nav">
+                        <i class="fas fa-arrow-left me-1"></i> Semana anterior
                     </button>
                 </div>
                 <div class="col-md-4 text-center">
-                    <h4 id="fechaActual" class="mb-0"></h4>
+                    <h4 id="fechaActual" class="mb-0 fw-bold"></h4>
                 </div>
-                <div class="col-md-4 text-end">
-                    <button id="nextWeek" class="btn btn-outline-primary">
-                        Semana siguiente <i class="fas fa-arrow-right"></i>
+                <div class="col-md-4 text-center text-md-end">
+                    <button id="nextWeek" class="btn btn-outline-primary btn-nav">
+                        Semana siguiente <i class="fas fa-arrow-right ms-1"></i>
                     </button>
                 </div>
             </div>
             <div class="row mt-3">
-                <div class="col-12">
+                <div class="col-12 text-center">
                     <input type="date" id="datePicker" class="form-control">
                 </div>
             </div>
         </div>
 
-        <div id="loading" class="loading">
-            <div class="spinner-border text-primary" role="status">
+        <div id="loading">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
                 <span class="visually-hidden">Cargando...</span>
             </div>
-            <p class="mt-2">Cargando disponibilidad...</p>
+            <p class="mt-3 fs-5">Cargando disponibilidad...</p>
         </div>
 
-        <div id="errorContainer" class="alert alert-danger error-container" role="alert">
-            <i class="fas fa-exclamation-triangle"></i> <span id="errorMessage"></span>
+        <div id="errorContainer" class="alert alert-danger" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i><span id="errorMessage"></span>
         </div>
 
-        <div id="mainContainer"></div>
+        <div id="dataContainer"></div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // URL de tu Google Apps Script (reemplaza con tu URL)
+        // Configuración
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgpgCOfbjtDGOXbJnyz1YgYqtF4hDS1CB6oiYSV323WZMh4--jRETamNlFwUmOryEg/exec';
-        
-        // Elementos del DOM
-        const mainContainer = document.getElementById('mainContainer');
-        const loadingElement = document.getElementById('loading');
-        const errorContainer = document.getElementById('errorContainer');
-        const errorMessage = document.getElementById('errorMessage');
-        const fechaActualElement = document.getElementById('fechaActual');
-        const datePicker = document.getElementById('datePicker');
-        const prevWeekBtn = document.getElementById('prevWeek');
-        const nextWeekBtn = document.getElementById('nextWeek');
-        
-        // Fecha actual
         let currentDate = new Date();
-        
+        let lastRequestTime = 0;
+        const REQUEST_THROTTLE = 2000; // 2 segundos entre peticiones
+
+        // Elementos DOM
+        const elements = {
+            fechaActual: document.getElementById('fechaActual'),
+            datePicker: document.getElementById('datePicker'),
+            prevWeekBtn: document.getElementById('prevWeek'),
+            nextWeekBtn: document.getElementById('nextWeek'),
+            loading: document.getElementById('loading'),
+            errorContainer: document.getElementById('errorContainer'),
+            errorMessage: document.getElementById('errorMessage'),
+            dataContainer: document.getElementById('dataContainer')
+        };
+
         // Formatear fecha como YYYY-MM-DD
         function formatDate(date) {
             const year = date.getFullYear();
@@ -144,84 +178,231 @@
             const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         }
-        
-        // Actualizar la interfaz con la fecha
+
+        // Mostrar fecha formateada
         function updateDateDisplay() {
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            fechaActualElement.textContent = currentDate.toLocaleDateString('es-ES', options);
-            datePicker.value = formatDate(currentDate);
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            };
+            elements.fechaActual.textContent = currentDate.toLocaleDateString('es-ES', options);
+            elements.datePicker.value = formatDate(currentDate);
         }
-        
-        // Cargar datos desde Google Apps Script
-        async function loadData(fecha) {
+
+        // Cargar datos usando JSONP
+        function loadData(fecha) {
+            const now = Date.now();
+            if (now - lastRequestTime < REQUEST_THROTTLE) {
+                return;
+            }
+            lastRequestTime = now;
+            
             showLoading();
             hideError();
+            clearData();
+
+            // Crear script para JSONP
+            const callbackName = `jsonp_callback_${Date.now()}`;
+            const script = document.createElement('script');
+            script.src = `${SCRIPT_URL}?fecha=${fecha}&callback=${callbackName}`;
             
-            try {
-                const response = await fetch(`${SCRIPT_URL}?fecha=${fecha}`);
+            // Manejar respuesta exitosa
+            window[callbackName] = function(response) {
+                cleanupJsonp(callbackName, script);
                 
-                if (!response.ok) {
-                    throw new Error('Error al cargar los datos');
+                if (response && response.status === 'success') {
+                    renderData(response.data);
+                } else {
+                    showError(response?.message || 'Error desconocido al obtener datos');
                 }
-                
-                const html = await response.text();
-                
-                // Extraer datos del HTML (esto depende de cómo estés devolviendo los datos desde GAS)
-                // En este ejemplo asumimos que el HTML contiene los datos estructurados
-                
                 hideLoading();
-                mainContainer.innerHTML = html;
-                
-            } catch (error) {
-                showError(error.message);
+            };
+            
+            // Manejar errores de carga
+            script.onerror = function() {
+                cleanupJsonp(callbackName, script);
+                showError('Error de conexión. Inténtalo de nuevo.');
                 hideLoading();
+            };
+            
+            document.body.appendChild(script);
+            
+            // Timeout después de 15 segundos
+            setTimeout(() => {
+                if (document.body.contains(script)) {
+                    cleanupJsonp(callbackName, script);
+                    showError('Tiempo de espera agotado. El servidor está tardando demasiado.');
+                    hideLoading();
+                }
+            }, 15000);
+        }
+        
+        // Limpiar callbacks JSONP
+        function cleanupJsonp(callbackName, script) {
+            try {
+                delete window[callbackName];
+                if (script && document.body.contains(script)) {
+                    document.body.removeChild(script);
+                }
+            } catch (e) {
+                console.error('Error limpiando JSONP:', e);
             }
         }
-        
-        // Mostrar/ocultar loading
+
+        // Mostrar datos en la interfaz
+        function renderData(data) {
+            if (!data || !data.pistas || data.pistas.length === 0) {
+                elements.dataContainer.innerHTML = `
+                    <div class="alert alert-info text-center">
+                        No hay datos disponibles para esta fecha.
+                    </div>`;
+                return;
+            }
+            
+            let html = '';
+            
+            // Mostrar días disponibles si existen
+            if (data.dias && data.dias.length > 0) {
+                html += `<div class="card mb-3">
+                    <div class="card-header bg-secondary text-white">
+                        <i class="fas fa-calendar-day me-2"></i>Días mostrados
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap justify-content-center gap-2">`;
+                
+                data.dias.forEach(dia => {
+                    html += `<span class="badge bg-primary">${dia}</span>`;
+                });
+                
+                html += `</div></div></div>`;
+            }
+            
+            // Mostrar pistas
+            data.pistas.forEach((pista, index) => {
+                if (!pista.horarios || pista.horarios.length === 0) return;
+                
+                html += `<div class="pista-card">
+                    <div class="pista-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-map-marker-alt me-2"></i>${pista.nombre}</span>
+                        <span class="badge bg-light text-dark">
+                            <i class="fas fa-clock me-1"></i>${pista.horarios.length} horarios
+                        </span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th width="30%">Hora</th>
+                                    <th width="70%">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+                
+                pista.horarios.forEach(horario => {
+                    let estadoText = '';
+                    let icon = '';
+                    
+                    switch(horario.estado) {
+                        case 'libre':
+                            estadoText = 'LIBRE';
+                            icon = '<i class="fas fa-check-circle me-1"></i>';
+                            break;
+                        case 'reservado':
+                            estadoText = 'RESERVADO (Tú)';
+                            icon = '<i class="fas fa-user-check me-1"></i>';
+                            break;
+                        case 'ocupado':
+                            estadoText = `OCUPADO${horario.reservadoPor ? ` (${horario.reservadoPor})` : ''}`;
+                            icon = '<i class="fas fa-times-circle me-1"></i>';
+                            break;
+                        case 'no-disponible':
+                            estadoText = 'NO DISPONIBLE';
+                            icon = '<i class="fas fa-ban me-1"></i>';
+                            break;
+                        default:
+                            estadoText = horario.estado.toUpperCase();
+                    }
+                    
+                    html += `<tr class="${horario.estado} horario-item">
+                        <td>${horario.hora}</td>
+                        <td>
+                            <span class="badge-estado ${horario.estado}">
+                                ${icon}${estadoText}
+                            </span>
+                        </td>
+                    </tr>`;
+                });
+                
+                html += `</tbody></table></div></div>`;
+            });
+            
+            elements.dataContainer.innerHTML = html || `
+                <div class="alert alert-warning text-center">
+                    No se encontraron pistas disponibles.
+                </div>`;
+        }
+
+        // Limpiar datos mostrados
+        function clearData() {
+            elements.dataContainer.innerHTML = '';
+        }
+
+        // Mostrar spinner de carga
         function showLoading() {
-            loadingElement.style.display = 'block';
-            mainContainer.style.opacity = '0.5';
+            elements.loading.style.display = 'block';
+            elements.dataContainer.style.opacity = '0.5';
         }
-        
+
+        // Ocultar spinner
         function hideLoading() {
-            loadingElement.style.display = 'none';
-            mainContainer.style.opacity = '1';
+            elements.loading.style.display = 'none';
+            elements.dataContainer.style.opacity = '1';
         }
-        
-        // Mostrar/ocultar errores
+
+        // Mostrar mensaje de error
         function showError(message) {
-            errorMessage.textContent = message;
-            errorContainer.style.display = 'block';
+            elements.errorMessage.textContent = message;
+            elements.errorContainer.style.display = 'block';
         }
-        
+
+        // Ocultar mensaje de error
         function hideError() {
-            errorContainer.style.display = 'none';
+            elements.errorContainer.style.display = 'none';
         }
-        
+
         // Event listeners
-        datePicker.addEventListener('change', (e) => {
-            currentDate = new Date(e.target.value);
-            updateDateDisplay();
-            loadData(formatDate(currentDate));
+        elements.datePicker.addEventListener('change', (e) => {
+            const newDate = new Date(e.target.value);
+            if (!isNaN(newDate.getTime())) {
+                currentDate = newDate;
+                updateDateDisplay();
+                loadData(formatDate(currentDate));
+            }
         });
-        
-        prevWeekBtn.addEventListener('click', () => {
+
+        elements.prevWeekBtn.addEventListener('click', () => {
             currentDate.setDate(currentDate.getDate() - 7);
             updateDateDisplay();
             loadData(formatDate(currentDate));
         });
-        
-        nextWeekBtn.addEventListener('click', () => {
+
+        elements.nextWeekBtn.addEventListener('click', () => {
             currentDate.setDate(currentDate.getDate() + 7);
             updateDateDisplay();
             loadData(formatDate(currentDate));
         });
-        
+
         // Inicialización
         document.addEventListener('DOMContentLoaded', () => {
             updateDateDisplay();
             loadData(formatDate(currentDate));
+            
+            // Configurar date picker para evitar fechas pasadas
+            const today = new Date();
+            elements.datePicker.min = formatDate(today);
+            elements.datePicker.max = formatDate(new Date(today.getFullYear(), today.getMonth() + 3, today.getDate()));
         });
     </script>
 </body>
