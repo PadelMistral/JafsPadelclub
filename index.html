@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <title>Reservas Apoing</title>
+  <link rel="icon" href="data:,">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #contenedor { margin-top: 20px; }
+    button { padding: 6px 12px; margin: 5px; font-size: 16px; cursor: pointer; }
+    .loading { font-style: italic; color: gray; }
+  </style>
+</head>
+<body>
+
+  <h1>Disponibilidad de Pistas Apoing</h1>
+  <div>
+    <button onclick="cambiarSemana(-1)">← Semana anterior</button>
+    <strong id="fechaMostrada">Cargando...</strong>
+    <button onclick="cambiarSemana(1)">Semana siguiente →</button>
+  </div>
+
+  <div id="contenedor">
+    <p class="loading">Cargando datos...</p>
+  </div>
+
+  <script>
+    const scriptURL = 'https://script.google.com/macros/s/AKfycbxgpgCOfbjtDGOXbJnyz1YgYqtF4hDS1CB6oiYSV323WZMh4--jRETamNlFwUmOryEg/exec'; // 👈 Reemplaza esto
+    let fechaActual = new Date();
+
+    function formatoFecha(fecha) {
+      return fecha.toISOString().split('T')[0];
+    }
+
+    function consultar(fechaISO) {
+      const contenedor = document.getElementById('contenedor');
+      const fechaMostrada = document.getElementById('fechaMostrada');
+
+      contenedor.innerHTML = '<p class="loading">Cargando datos...</p>';
+      fechaMostrada.textContent = new Date(fechaISO).toLocaleDateString("es-ES", {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      });
+
+      fetch(`${scriptURL}?fecha=${encodeURIComponent(fechaISO)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.html) {
+            contenedor.innerHTML = data.html;
+          } else {
+            contenedor.innerHTML = `<p class="loading">Error: ${data.error || 'No se pudo cargar la información'}</p>`;
+          }
+        })
+        .catch(err => {
+          contenedor.innerHTML = `<p class="loading">Error al conectar: ${err.message}</p>`;
+        });
+    }
+
+    function cambiarSemana(deltaSemanas) {
+      fechaActual.setDate(fechaActual.getDate() + deltaSemanas * 7);
+      consultar(formatoFecha(fechaActual));
+    }
+
+    window.onload = () => {
+      consultar(formatoFecha(fechaActual));
+    };
+  </script>
+
+</body>
+</html>
