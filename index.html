@@ -1,70 +1,228 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta charset="UTF-8">
-  <title>Reservas Apoing</title>
-  <link rel="icon" href="data:,">
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    #contenedor { margin-top: 20px; }
-    button { padding: 6px 12px; margin: 5px; font-size: 16px; cursor: pointer; }
-    .loading { font-style: italic; color: gray; }
-  </style>
+    <title>Disponibilidad Pistas APOING</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .header {
+            background-color: #343a40;
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .pista-card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .pista-header {
+            background-color: #495057;
+            color: white;
+            padding: 10px 15px;
+            font-weight: bold;
+        }
+        .horario-item {
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+            transition: all 0.3s;
+        }
+        .horario-item:hover {
+            background-color: #f1f3f5;
+        }
+        .libre {
+            background-color: #d4edda;
+        }
+        .ocupado {
+            background-color: #f8d7da;
+        }
+        .reservado {
+            background-color: #cce5ff;
+        }
+        .no-disponible {
+            background-color: #e2e3e5;
+        }
+        .badge-estado {
+            font-size: 0.9em;
+            padding: 5px 8px;
+            border-radius: 4px;
+        }
+        .fecha-selector {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .error-container {
+            display: none;
+            margin-top: 20px;
+        }
+        #mainContainer {
+            transition: all 0.3s;
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <div class="header text-center">
+            <h1><i class="fas fa-calendar-alt"></i> Disponibilidad Pistas APOING</h1>
+            <p class="mb-0">Consulta la disponibilidad de pistas en tiempo real</p>
+        </div>
 
-  <h1>Disponibilidad de Pistas Apoing</h1>
-  <div>
-    <button onclick="cambiarSemana(-1)">← Semana anterior</button>
-    <strong id="fechaMostrada">Cargando...</strong>
-    <button onclick="cambiarSemana(1)">Semana siguiente →</button>
-  </div>
+        <div class="fecha-selector">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <button id="prevWeek" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left"></i> Semana anterior
+                    </button>
+                </div>
+                <div class="col-md-4 text-center">
+                    <h4 id="fechaActual" class="mb-0"></h4>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button id="nextWeek" class="btn btn-outline-primary">
+                        Semana siguiente <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <input type="date" id="datePicker" class="form-control">
+                </div>
+            </div>
+        </div>
 
-  <div id="contenedor">
-    <p class="loading">Cargando datos...</p>
-  </div>
+        <div id="loading" class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="mt-2">Cargando disponibilidad...</p>
+        </div>
 
-  <script>
-    const scriptURL = 'https://script.google.com/macros/s/AKfycbxgpgCOfbjtDGOXbJnyz1YgYqtF4hDS1CB6oiYSV323WZMh4--jRETamNlFwUmOryEg/exec'; // 👈 Reemplaza esto
-    let fechaActual = new Date();
+        <div id="errorContainer" class="alert alert-danger error-container" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> <span id="errorMessage"></span>
+        </div>
 
-    function formatoFecha(fecha) {
-      return fecha.toISOString().split('T')[0];
-    }
+        <div id="mainContainer"></div>
+    </div>
 
-    function consultar(fechaISO) {
-      const contenedor = document.getElementById('contenedor');
-      const fechaMostrada = document.getElementById('fechaMostrada');
-
-      contenedor.innerHTML = '<p class="loading">Cargando datos...</p>';
-      fechaMostrada.textContent = new Date(fechaISO).toLocaleDateString("es-ES", {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-      });
-
-      fetch(`${scriptURL}?fecha=${encodeURIComponent(fechaISO)}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.html) {
-            contenedor.innerHTML = data.html;
-          } else {
-            contenedor.innerHTML = `<p class="loading">Error: ${data.error || 'No se pudo cargar la información'}</p>`;
-          }
-        })
-        .catch(err => {
-          contenedor.innerHTML = `<p class="loading">Error al conectar: ${err.message}</p>`;
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // URL de tu Google Apps Script (reemplaza con tu URL)
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgpgCOfbjtDGOXbJnyz1YgYqtF4hDS1CB6oiYSV323WZMh4--jRETamNlFwUmOryEg/exec';
+        
+        // Elementos del DOM
+        const mainContainer = document.getElementById('mainContainer');
+        const loadingElement = document.getElementById('loading');
+        const errorContainer = document.getElementById('errorContainer');
+        const errorMessage = document.getElementById('errorMessage');
+        const fechaActualElement = document.getElementById('fechaActual');
+        const datePicker = document.getElementById('datePicker');
+        const prevWeekBtn = document.getElementById('prevWeek');
+        const nextWeekBtn = document.getElementById('nextWeek');
+        
+        // Fecha actual
+        let currentDate = new Date();
+        
+        // Formatear fecha como YYYY-MM-DD
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+        
+        // Actualizar la interfaz con la fecha
+        function updateDateDisplay() {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            fechaActualElement.textContent = currentDate.toLocaleDateString('es-ES', options);
+            datePicker.value = formatDate(currentDate);
+        }
+        
+        // Cargar datos desde Google Apps Script
+        async function loadData(fecha) {
+            showLoading();
+            hideError();
+            
+            try {
+                const response = await fetch(`${SCRIPT_URL}?fecha=${fecha}`);
+                
+                if (!response.ok) {
+                    throw new Error('Error al cargar los datos');
+                }
+                
+                const html = await response.text();
+                
+                // Extraer datos del HTML (esto depende de cómo estés devolviendo los datos desde GAS)
+                // En este ejemplo asumimos que el HTML contiene los datos estructurados
+                
+                hideLoading();
+                mainContainer.innerHTML = html;
+                
+            } catch (error) {
+                showError(error.message);
+                hideLoading();
+            }
+        }
+        
+        // Mostrar/ocultar loading
+        function showLoading() {
+            loadingElement.style.display = 'block';
+            mainContainer.style.opacity = '0.5';
+        }
+        
+        function hideLoading() {
+            loadingElement.style.display = 'none';
+            mainContainer.style.opacity = '1';
+        }
+        
+        // Mostrar/ocultar errores
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorContainer.style.display = 'block';
+        }
+        
+        function hideError() {
+            errorContainer.style.display = 'none';
+        }
+        
+        // Event listeners
+        datePicker.addEventListener('change', (e) => {
+            currentDate = new Date(e.target.value);
+            updateDateDisplay();
+            loadData(formatDate(currentDate));
         });
-    }
-
-    function cambiarSemana(deltaSemanas) {
-      fechaActual.setDate(fechaActual.getDate() + deltaSemanas * 7);
-      consultar(formatoFecha(fechaActual));
-    }
-
-    window.onload = () => {
-      consultar(formatoFecha(fechaActual));
-    };
-  </script>
-
+        
+        prevWeekBtn.addEventListener('click', () => {
+            currentDate.setDate(currentDate.getDate() - 7);
+            updateDateDisplay();
+            loadData(formatDate(currentDate));
+        });
+        
+        nextWeekBtn.addEventListener('click', () => {
+            currentDate.setDate(currentDate.getDate() + 7);
+            updateDateDisplay();
+            loadData(formatDate(currentDate));
+        });
+        
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDateDisplay();
+            loadData(formatDate(currentDate));
+        });
+    </script>
 </body>
 </html>
