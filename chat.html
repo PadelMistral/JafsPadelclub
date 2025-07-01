@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - Padeluminatis</title>
+    <link rel="stylesheet" href="./css/chat.css">
+    <link rel="stylesheet" href="./css/header.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="app-body">
+    <!-- Header Fijo -->
+    <header class="app-header">
+        <div class="header-content">
+            <img src="./imagenes/Logojafs.png" alt="Logo" class="app-logo">
+            <h1 class="app-title">Chat - Padeluminatis</h1>
+            <button class="menu-toggle" aria-label="Menú">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        <nav class="app-nav">
+          <a href="./home.html" class="nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
+          <a href="./eventos.html" class="nav-item"><i class="fas fa-calendar-check"></i><span>Eventos</span></a>
+          <a href="./calendario.html" class="nav-item"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
+          <a href="./clasificacion.html" class="nav-item"><i class="fas fa-trophy"></i><span>Clasificación</span></a>
+          <a href="./normas.html" class="nav-item"><i class="fas fa-gavel"></i><span>Normas</span></a>
+          <a href="./chat.html" class="nav-item active"><i class="fas fa-comments"></i><span>Chat</span></a>
+          <a href="./ranking.html" class="nav-item"><i class="fas fa-list-ol"></i><span>Ranking</span></a>
+          <a href="./admin.html" class="nav-item nav-admin" style="display:none"><i class="fas fa-user-shield"></i><span>Admin</span></a>
+          <a href="./perfil.html" class="nav-item"><i class="fas fa-user"></i><span>Perfil</span></a>
+          <a href="./notificaciones.html" class="nav-item"><i class="fas fa-bell"></i><span>Notificaciones</span></a>
+          <a href="#" class="nav-item nav-logout" style="display:none"><i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span></a>
+        </nav>
+    </header>
+    <!-- Contenedor principal del chat -->
+    <div class="chat-container">
+        <div class="messages-container" id="mensajes"></div>
+        <form id="form-chat" class="message-input-container">
+            <div class="input-wrapper">
+                <input type="text" id="mensaje-input" class="message-input" placeholder="Escribe un mensaje..." autocomplete="off" required />
+                <button type="button" class="emoji-button" id="emoji-btn"><i class="far fa-smile"></i></button>
+                <input type="file" id="input-archivo" class="file-upload" accept="image/*" style="display:none;" />
+                <button type="button" class="emoji-button" id="adjuntar-btn"><i class="fas fa-paperclip"></i></button>
+            </div>
+            <button type="submit" class="send-button"><i class="fas fa-paper-plane"></i></button>
+        </form>
+        <div class="emoji-picker" id="emoji-picker"></div>
+    </div>
+    <script src="./js/menu-hamburguesa.js"></script>
+    <script type="module" src="./js/chat.js"></script>
+    <script src="./js/enlaceAdmin.js"></script>
+</body>
+</html>

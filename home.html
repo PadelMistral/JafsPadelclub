@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0A2342">
+    <title>Inicio - Padeluminatis</title>
+    <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="./css/header.css">
+    <link rel="stylesheet" href="./css/home.css">
+</head>
+<body class="app-body">
+    <header class="app-header">
+        <div class="header-content">
+            <img src="./imagenes/Logojafs.png" alt="Logo" class="app-logo">
+            <h1 class="app-title">Inicio - Padeluminatis</h1>
+            <button class="menu-toggle" aria-label="Menú">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        <nav class="app-nav">
+          <a href="./home.html" class="nav-item active"><i class="fas fa-home"></i><span>Inicio</span></a>
+          <a href="./eventos.html" class="nav-item"><i class="fas fa-calendar-check"></i><span>Eventos</span></a>
+          <a href="./calendario.html" class="nav-item"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
+          <a href="./clasificacion.html" class="nav-item"><i class="fas fa-trophy"></i><span>Clasificación</span></a>
+          <a href="./normas.html" class="nav-item"><i class="fas fa-gavel"></i><span>Normas</span></a>
+          <a href="./chat.html" class="nav-item"><i class="fas fa-comments"></i><span>Chat</span></a>
+          <a href="./ranking.html" class="nav-item"><i class="fas fa-list-ol"></i><span>Ranking</span></a>
+          <a href="./admin.html" class="nav-item nav-admin" style="display:none"><i class="fas fa-user-shield"></i><span>Admin</span></a>
+          <a href="./perfil.html" class="nav-item"><i class="fas fa-user"></i><span>Perfil</span></a>
+          <a href="./notificaciones.html" class="nav-item"><i class="fas fa-bell"></i><span>Notificaciones</span></a>
+          <a href="index.html" class="nav-item nav-logout"><i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span></a>
+        </nav>
+    </header>
+    <main class="app-main">
+        <!-- Tarjeta de Bienvenida -->
+        <section class="welcome-card card">
+            <div class="user-greeting">
+                <h2>¡Bienvenido, <span id="username"></span>!</h2>
+                <div class="stats-filter-toggle">
+                    <button id="toggle-stats-liga" class="toggle-btn active" data-filter="liga">
+                        <i class="fas fa-trophy"></i>
+                        <span>Liga</span>
+                    </button>
+                    <button id="toggle-stats-amistosos" class="toggle-btn" data-filter="amistosos">
+                        <i class="fas fa-handshake"></i>
+                        <span>Amistosos</span>
+                    </button>
+                    <button id="toggle-stats-retos" class="toggle-btn" data-filter="retos">
+                        <i class="fas fa-crosshairs"></i>
+                        <span>Retos</span>
+                    </button>
+                    <button id="toggle-stats-torneos" class="toggle-btn" data-filter="torneos">
+                        <i class="fas fa-medal"></i>
+                        <span>Torneos</span>
+                    </button>
+                </div>
+                <p class="ranking-status" id="ranking-status">Posición en la Clasificación: <span data-bind="ranking.position">-</span></p>
+            </div>
+            <div class="quick-stats">
+                <div class="stat-item">
+                    <i class="fas fa-clipboard-check"></i>
+                    <span class="stat-value" data-bind="stats.points">0</span>
+                    <span class="stat-label">Partidos Jugados</span>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-check-circle"></i>
+                    <span class="stat-value" data-bind="stats.wins">0</span>
+                    <span class="stat-label">Victorias</span>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-percentage"></i>
+                    <span class="stat-value" data-bind="stats.winRate">0%</span>
+                    <span class="stat-label">Victorias-Derrotas</span>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-calendar-plus"></i>
+                    <span id="last-match-container">--</span>
+                    <span class="stat-label">Ultimo Partido</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sección de Próximo Partido -->
+        <section class="next-match card">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="fas fa-chevron-right"></i>
+                    Próximo Partido
+                </h2>
+                <div class="match-filter-toggle">
+                    <button id="toggle-match-filter" class="toggle-btn active" data-filter="mis-partidos">
+                        <i class="fas fa-user"></i>
+                        <span>Mis Partidos</span>
+                    </button>
+                    <button id="toggle-match-filter-all" class="toggle-btn" data-filter="todos-partidos">
+                        <i class="fas fa-users"></i>
+                        <span>Todos los Partidos</span>
+                    </button>
+                </div>
+            </div>
+            <div id="next-match">
+                <p class="no-matches">Cargando próximos partidos...</p>
+            </div>
+        </section>
+
+        <!-- Acciones Rápidas -->
+        <section class="quick-actions">
+            <div class="action-card challenge">
+                <i class="fas fa-plus-circle"></i>
+                <span>Nuevo Reto</span>
+            </div>
+            <div class="action-card results">
+                <i class="fas fa-clipboard-check"></i>
+                <span>Reportar Resultado</span>
+            </div>
+            <div class="action-card">
+                <i class="fas fa-bell"></i>
+                <span>Notificaciones</span>
+            </div>
+            <div class="action-card">
+                <i class="fas fa-users"></i>
+                <span>Buscar Jugador</span>
+            </div>
+        </section>
+
+        <!-- Lista de Partidos Pendientes -->
+        <section class="pending-matches card">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="fas fa-list-ol"></i>
+                    Partidos Pendientes
+                </h2>
+                <div class="match-filter-toggle">
+                    <button id="toggle-pending-filter" class="toggle-btn active" data-filter="mis-partidos">
+                        <i class="fas fa-user"></i>
+                        <span>Mis Partidos</span>
+                    </button>
+                    <button id="toggle-pending-filter-all" class="toggle-btn" data-filter="todos-partidos">
+                        <i class="fas fa-users"></i>
+                        <span>Todos los Partidos</span>
+                    </button>
+                </div>
+            </div>
+            <div id="upcoming-matches-list">
+                <p class="no-matches">Cargando partidos pendientes...</p>
+            </div>
+        </section>
+    </main>
+    <script src="./js/menu-hamburguesa.js"></script>
+    <script type="module" src="./js/enlaceAdmin.js"></script>
+    <script type="module" src="./js/todoenuno.js"></script>
+    <script src="./js/acciones-rapidas.js"></script>
+    <script src="./js/filtros-estadisticas.js"></script>
+</body>
+</html>

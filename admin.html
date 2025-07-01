@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0A2342">
+  <title>Panel de Administración - Padeluminatis</title>
+  <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="./css/header.css">
+  <link rel="stylesheet" href="./css/admin.css">
+</head>
+<body class="app-body">
+  <header class="app-header">
+    <div class="header-content">
+      <img src="./imagenes/Logojafs.png" alt="Logo" class="app-logo">
+      <h1 class="app-title">Panel Admin - Padeluminatis</h1>
+      <button class="menu-toggle" aria-label="Menú">
+        <i class="fas fa-bars"></i>
+      </button>
+    </div>
+    <nav class="app-nav">
+      <a href="./home.html" class="nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
+      <a href="./eventos.html" class="nav-item"><i class="fas fa-calendar-check"></i><span>Eventos</span></a>
+      <a href="./calendario.html" class="nav-item"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
+      <a href="./clasificacion.html" class="nav-item"><i class="fas fa-trophy"></i><span>Clasificación</span></a>
+      <a href="./normas.html" class="nav-item"><i class="fas fa-gavel"></i><span>Normas</span></a>
+      <a href="./chat.html" class="nav-item"><i class="fas fa-comments"></i><span>Chat</span></a>
+      <a href="./ranking.html" class="nav-item"><i class="fas fa-list-ol"></i><span>Ranking</span></a>
+      <a href="./admin.html" class="nav-item nav-admin active"><i class="fas fa-user-shield"></i><span>Admin</span></a>
+      <a href="./perfil.html" class="nav-item"><i class="fas fa-user"></i><span>Perfil</span></a>
+      <a href="./notificaciones.html" class="nav-item"><i class="fas fa-bell"></i><span>Notificaciones</span></a>
+      <a href="#" class="nav-item nav-logout"><i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span></a>
+    </nav>
+  </header>
+
+  <main class="app-main">
+    <h1 class="titulo-pantalla-admin">Panel de Administración</h1>
+    <!-- Selector de Secciones -->
+    <section class="section-selector card">
+      <div class="selector-tabs">
+        <button class="tab-btn active" data-section="admin-panel">
+          <i class="fas fa-cogs"></i>
+          Panel de Administración
+        </button>
+        <button class="tab-btn" data-section="firebase-console">
+          <i class="fas fa-database"></i>
+          Firebase Console
+        </button>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 1: Panel de Administración Original -->
+    <div id="admin-panel" class="section-content active">
+      <!-- Gestión de Usuarios -->
+      <section class="card seccion-admin">
+        <h2 class="section-title"><i class="fas fa-users-cog"></i> Gestión de Usuarios</h2>
+        <div class="tarjeta">
+          <span id="resumen-usuarios">Usuarios pendientes: <span id="cuenta-usuarios">-</span></span>
+          <button class="boton-accion" onclick="document.getElementById('modal-usuarios').classList.add('active')">Ver detalles &rarr;</button>
+        </div>
+      </section>
+
+      <!-- Gestión de Equipos -->
+      <section class="card seccion-admin">
+        <h2 class="section-title"><i class="fas fa-people-group"></i> Gestión de Equipos</h2>
+        <div class="tarjeta">
+          <span id="resumen-equipos">Equipos registrados: <span id="cuenta-equipos">-</span></span>
+          <button class="boton-accion" onclick="document.getElementById('modal-equipos').classList.add('active')">Ver detalles &rarr;</button>
+        </div>
+      </section>
+
+      <!-- Gestión de Calendario -->
+      <section class="card seccion-admin">
+        <h2 class="section-title"><i class="fas fa-calendar-plus"></i> Gestión de Calendario</h2>
+        <div class="tarjeta">
+          <span id="resumen-calendario">Jornadas creadas: <span id="cuenta-jornadas">-</span></span>
+          <button class="boton-accion" onclick="document.getElementById('modal-calendario').classList.add('active')">Ver detalles &rarr;</button>
+        </div>
+      </section>
+
+      <!-- Partidos Jugados -->
+      <section class="card seccion-admin">
+        <h2 class="section-title"><i class="fas fa-check-double"></i> Partidos Jugados</h2>
+        <div class="tarjeta">
+          <span id="resumen-jugados">Partidos jugados: <span id="cuenta-jugados">-</span></span>
+          <button class="boton-accion" onclick="document.getElementById('modal-jugados').classList.add('active')">Ver detalles &rarr;</button>
+        </div>
+      </section>
+
+      <!-- Partidos Pendientes -->
+      <section class="card seccion-admin">
+        <h2 class="section-title"><i class="fas fa-hourglass-half"></i> Partidos Pendientes</h2>
+        <div class="tarjeta">
+          <span id="resumen-pendientes">Partidos pendientes: <span id="cuenta-pendientes">-</span></span>
+          <button class="boton-accion" onclick="document.getElementById('modal-pendientes').classList.add('active')">Ver detalles &rarr;</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- SECCIÓN 2: Firebase Console Integrada -->
+    <div id="firebase-console" class="section-content">
+      <!-- Panel de Control Principal -->
+      <section class="admin-dashboard card">
+        <div class="dashboard-header">
+          <h2 class="section-title">
+            <i class="fas fa-database"></i>
+            Firebase Console Integrada
+          </h2>
+          <div class="dashboard-stats">
+            <div class="stat-card">
+              <i class="fas fa-users"></i>
+              <span class="stat-number" id="total-users">-</span>
+              <span class="stat-label">Usuarios</span>
+            </div>
+            <div class="stat-card">
+              <i class="fas fa-people-group"></i>
+              <span class="stat-number" id="total-teams">-</span>
+              <span class="stat-label">Equipos</span>
+            </div>
+            <div class="stat-card">
+              <i class="fas fa-calendar"></i>
+              <span class="stat-number" id="total-matches">-</span>
+              <span class="stat-label">Partidos</span>
+            </div>
+            <div class="stat-card">
+              <i class="fas fa-trophy"></i>
+              <span class="stat-number" id="total-collections">-</span>
+              <span class="stat-label">Colecciones</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Árbol visual de Firestore -->
+      <section class="collections-nav card">
+        <div class="firebase-tree-panel">
+          <div class="firebase-tree-header">
+            <span class="firebase-tree-title"><i class="fas fa-database"></i> Estructura Firestore</span>
+            <button class="btn-primary" id="btn-add-collection-tree"><i class="fas fa-plus"></i> Añadir colección</button>
+          </div>
+          <div id="firebase-tree" class="firebase-tree"></div>
+        </div>
+      </section>
+
+      <!-- Editor de Firebase -->
+      <section class="firebase-editor card" id="firebase-editor" style="display: none;">
+        <div class="editor-header">
+          <div class="breadcrumb" id="breadcrumb">
+            <span class="breadcrumb-item">Firebase</span>
+          </div>
+          <div class="editor-actions">
+            <button class="btn-secondary" id="btn-back">
+              <i class="fas fa-arrow-left"></i> Volver
+            </button>
+            <button class="btn-success" id="btn-save-changes">
+              <i class="fas fa-save"></i> Guardar Cambios
+            </button>
+            <button class="btn-danger" id="btn-delete-item">
+              <i class="fas fa-trash"></i> Eliminar
+            </button>
+          </div>
+        </div>
+        
+        <div class="editor-content">
+          <div class="editor-sidebar">
+            <div class="sidebar-section">
+              <h4><i class="fas fa-list"></i> Documentos</h4>
+              <div class="documents-list" id="documents-list">
+                <!-- Lista de documentos -->
+              </div>
+              <button class="btn-primary btn-sm" id="btn-add-document">
+                <i class="fas fa-plus"></i> Nuevo Documento
+              </button>
+            </div>
+          </div>
+          
+          <div class="editor-main">
+            <div class="document-editor" id="document-editor">
+              <div class="editor-placeholder">
+                <i class="fas fa-file-alt"></i>
+                <p>Selecciona un documento para editarlo</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Historial de Cambios -->
+      <section class="changes-history card">
+        <div class="history-header">
+          <h3><i class="fas fa-history"></i> Historial de Cambios</h3>
+          <button class="btn-secondary" id="btn-clear-history">
+            <i class="fas fa-trash"></i> Limpiar
+          </button>
+        </div>
+        <div class="history-list" id="changes-history">
+          <!-- Historial de cambios -->
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Modales para Panel de Administración Original -->
+  <div class="admin-modal" id="modal-usuarios">
+    <div class="admin-modal-content">
+      <button class="admin-modal-close" onclick="this.closest('.admin-modal').classList.remove('active')">&times;</button>
+      <div class="user-management-section">
+        <h2 class="user-management-title">Gestión de Usuarios</h2>
+        <div class="users-grid" id="lista-usuarios">
+          <!-- Los usuarios se cargarán dinámicamente aquí -->
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="admin-modal" id="modal-equipos">
+    <div class="admin-modal-content">
+      <button class="admin-modal-close" onclick="this.closest('.admin-modal').classList.remove('active')">&times;</button>
+      <div class="user-management-section">
+        <h2 class="user-management-title">Gestión de Equipos</h2>
+        <div class="form-equipo-compact">
+          <div class="equipo-creator">
+            <select id="select-jugador1" class="select-jugador-compact">
+              <option value="">Jugador 1</option>
+            </select>
+            <span class="vs-compact">VS</span>
+            <select id="select-jugador2" class="select-jugador-compact">
+              <option value="">Jugador 2</option>
+            </select>
+            <button id="btn-crear-equipo" class="btn-crear-equipo-compact">
+              <i class="fas fa-plus"></i> Crear
+            </button>
+          </div>
+        </div>
+        <div class="equipos-lista">
+          <h3 class="section-subtitle">Equipos Existentes</h3>
+          <ul id="lista-equipos-admin" class="lista-equipos-compact"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="admin-modal" id="modal-calendario">
+    <div class="admin-modal-content">
+      <button class="admin-modal-close" onclick="this.closest('.admin-modal').classList.remove('active')">&times;</button>
+      <div class="user-management-section">
+        <h2 class="user-management-title">Gestión de Calendario</h2>
+        <div class="form-jornada">
+          <input type="text" id="nombre-jornada" class="input-text" placeholder="Nombre de la jornada (Ej: Jornada 1 - Octubre)">
+          <div id="partidos-jornada" class="contenedor-partidos"></div>
+          <div class="controles-jornada">
+            <button id="btn-anadir-partido" class="boton-accion secundario">
+              ＋ Añadir Partido
+            </button>
+            <button id="btn-crear-jornada" class="boton-accion">
+              🗓️ Crear Jornada
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="admin-modal" id="modal-jugados">
+    <div class="admin-modal-content">
+      <button class="admin-modal-close" onclick="this.closest('.admin-modal').classList.remove('active')">&times;</button>
+      <div class="user-management-section">
+        <h2 class="user-management-title">Partidos Jugados</h2>
+        <div id="partidos-jugados" class="lista-partidos-admin"></div>
+      </div>
+    </div>
+  </div>
+  <div class="admin-modal" id="modal-pendientes">
+    <div class="admin-modal-content">
+      <button class="admin-modal-close" onclick="this.closest('.admin-modal').classList.remove('active')">&times;</button>
+      <div class="user-management-section">
+        <h2 class="user-management-title">Partidos Pendientes</h2>
+        <div id="partidos-pendientes" class="lista-partidos-pendientes"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modales para Firebase Console -->
+  <!-- Modal para Nuevo Campo -->
+  <div class="modal" id="modal-new-field">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fas fa-plus-circle"></i> Añadir Nuevo Campo</h3>
+        <button class="modal-close" onclick="closeModal('modal-new-field')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="field-name">Nombre del Campo:</label>
+          <input type="text" id="field-name" placeholder="ej: nombre, edad, email...">
+        </div>
+        <div class="form-group">
+          <label for="field-type">Tipo de Campo:</label>
+          <select id="field-type">
+            <option value="string">Texto (String)</option>
+            <option value="number">Número (Number)</option>
+            <option value="boolean">Booleano (Boolean)</option>
+            <option value="array">Array</option>
+            <option value="object">Objeto</option>
+            <option value="timestamp">Fecha/Hora (Timestamp)</option>
+            <option value="reference">Referencia</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="field-value">Valor:</label>
+          <input type="text" id="field-value" placeholder="Valor del campo">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-new-field')">Cancelar</button>
+        <button class="btn-primary" onclick="addNewFieldToDocument()">Añadir Campo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Nueva Colección -->
+  <div class="modal" id="modal-new-collection">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fas fa-folder-plus"></i> Crear Nueva Colección</h3>
+        <button class="modal-close" onclick="closeModal('modal-new-collection')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="collection-name">Nombre de la Colección:</label>
+          <input type="text" id="collection-name" placeholder="ej: productos, eventos, notificaciones...">
+        </div>
+        <div class="form-group">
+          <label for="collection-description">Descripción (opcional):</label>
+          <textarea id="collection-description" placeholder="Describe para qué se usará esta colección..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-new-collection')">Cancelar</button>
+        <button class="btn-primary" onclick="createNewCollection()">Crear Colección</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Confirmar Eliminación -->
+  <div class="modal" id="modal-confirm-delete">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fas fa-exclamation-triangle"></i> Confirmar Eliminación</h3>
+        <button class="modal-close" onclick="closeModal('modal-confirm-delete')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>¿Estás seguro de que quieres eliminar este elemento?</p>
+        <p class="delete-item-info" id="delete-item-info"></p>
+        <p class="warning-text">Esta acción no se puede deshacer.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-confirm-delete')">Cancelar</button>
+        <button class="btn-danger" onclick="confirmDelete()">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Restaurar Versión -->
+  <div class="modal" id="modal-restore-version">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fas fa-undo"></i> Restaurar Versión Anterior</h3>
+        <button class="modal-close" onclick="closeModal('modal-restore-version')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>¿Quieres restaurar a la versión anterior?</p>
+        <div class="version-preview" id="version-preview">
+          <!-- Vista previa de la versión -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-restore-version')">Cancelar</button>
+        <button class="btn-primary" onclick="restoreVersionConfirm()">Restaurar</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/admin.js"></script>
+  <script type="module" src="./js/firebaseAdmin.js"></script>
+  <script type="module" src="./js/enlaceAdmin.js"></script>
+  <script src="./js/menu-hamburguesa.js"></script>
+</body>
+</html>

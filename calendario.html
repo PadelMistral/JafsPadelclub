@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" >
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" >
+  <meta name="theme-color" content="#0A2342" >
+  <title>Calendario - Padeluminatis</title>
+  <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png" >
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" >
+  <link rel="stylesheet" href="./css/header.css">
+  <link rel="stylesheet" href="./css/home.css">
+  <link rel="stylesheet" href="./css/calendario.css" >
+</head>
+<body class="app-body">
+  <header class="app-header">
+    <div class="header-content">
+      <img src="./imagenes/Logojafs.png" alt="Logo" class="app-logo">
+      <h1 class="app-title">Calendario - Padeluminatis</h1>
+      <button class="menu-toggle" aria-label="Menú">
+        <i class="fas fa-bars"></i>
+      </button>
+    </div>
+    <nav class="app-nav">
+      <a href="./home.html" class="nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
+      <a href="./eventos.html" class="nav-item"><i class="fas fa-calendar-check"></i><span>Eventos</span></a>
+      <a href="./calendario.html" class="nav-item active"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
+      <a href="./clasificacion.html" class="nav-item"><i class="fas fa-trophy"></i><span>Clasificación</span></a>
+      <a href="./normas.html" class="nav-item"><i class="fas fa-gavel"></i><span>Normas</span></a>
+      <a href="./chat.html" class="nav-item"><i class="fas fa-comments"></i><span>Chat</span></a>
+      <a href="./ranking.html" class="nav-item"><i class="fas fa-list-ol"></i><span>Ranking</span></a>
+      <a href="./admin.html" class="nav-item nav-admin" style="display:none"><i class="fas fa-user-shield"></i><span>Admin</span></a>
+      <a href="./perfil.html" class="nav-item"><i class="fas fa-user"></i><span>Perfil</span></a>
+      <a href="./notificaciones.html" class="nav-item"><i class="fas fa-bell"></i><span>Notificaciones</span></a>
+      <a href="#" class="nav-item nav-logout"><i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span></a>
+    </nav>
+  </header>
+
+  <main class="app-main">
+    <div class="calendario-container">
+      <div class="calendario-header">
+        <div class="calendario-controls">
+          <button id="btn-mes-anterior" class="btn-navegacion"><i class="fas fa-chevron-left"></i></button>
+          <h2 id="mes-actual" class="subtitulo-calendario">Calendario</h2>
+          <button id="btn-mes-siguiente" class="btn-navegacion"><i class="fas fa-chevron-right"></i></button>
+        </div>
+
+        <div class="calendario-actions">
+          <div class="vista-selector">
+            <button id="btn-vista-tabla" class="btn-vista active"><i class="fas fa-table"></i> <span class="texto-boton">Tabla</span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vista Tabla -->
+      <div id="vista-tabla" class="vista-activa">
+        <div id="semanas-calendario" class="semanas-calendario"></div>
+        <div id="loading-calendario" class="loading-overlay">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Cargando calendario...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Crear partido -->
+    <div id="create-match-modal" class="modal-general">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3><i class="fas fa-plus-circle"></i> Crear Partido</h3>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="match-type-selector">
+            <button class="match-type-btn active" data-type="liga">
+              <i class="fas fa-trophy"></i> Liga
+            </button>
+            <button class="match-type-btn" data-type="amistoso">
+              <i class="fas fa-handshake"></i> Amistoso
+            </button>
+            <button class="match-type-btn" data-type="reto">
+              <i class="fas fa-fire"></i> Reto
+            </button>
+          </div>
+          
+          <!-- Formulario partido liga -->
+          <form id="form-crear-partido-liga" class="match-form form-liga active">
+            <div class="form-group">
+              <label for="select-rival-liga">
+                <i class="fas fa-users"></i> Equipo Rival:
+              </label>
+              <select id="select-rival-liga" required class="select-liga">
+                <option value="">Selecciona un equipo rival</option>
+              </select>
+              <small class="form-help">Solo se muestran equipos con los que aún no has jugado</small>
+            </div>
+            <button type="submit" class="btn-guardar btn-liga">
+              <i class="fas fa-plus"></i> Crear Partido Liga
+            </button>
+          </form>
+          
+          <!-- Formulario partido amistoso -->
+          <form id="form-crear-partido-amistoso" class="match-form form-amistoso" style="display:none;">
+            <div class="form-group">
+              <label>
+                <i class="fas fa-star"></i> Nivel (opcional):
+              </label>
+              <div class="nivel-personalizado">
+                <input type="number" id="nivel-minimo-amistoso" min="1" max="5" placeholder="1" />
+                <span>-</span>
+                <input type="number" id="nivel-maximo-amistoso" min="1" max="5" placeholder="5" />
+                <span>/ 5</span>
+              </div>
+              <small class="form-help">Rango de nivel permitido para unirse (1-5)</small>
+            </div>
+            <div class="form-group">
+              <label>
+                <i class="fas fa-users"></i> Añadir usuarios al partido:
+              </label>
+              <div class="tennis-court-container">
+                <div class="tennis-court padel-grid">
+                  <div class="court-player-slot" data-pos="1"></div>
+                  <div class="court-player-slot" data-pos="2"></div>
+                  <div class="court-player-slot" data-pos="3"></div>
+                  <div class="court-player-slot" data-pos="4"></div>
+                </div>
+              </div>
+            </div>
+            <button type="submit" class="btn-guardar btn-amistoso">
+              <i class="fas fa-plus"></i> Crear Partido Amistoso
+            </button>
+          </form>
+          
+          <!-- Formulario partido reto -->
+          <form id="form-crear-partido-reto" class="match-form form-reto" style="display:none;">
+            <div class="form-group">
+              <label>
+                <i class="fas fa-star"></i> Nivel (opcional):
+              </label>
+              <div class="nivel-personalizado">
+                <input type="number" id="nivel-minimo-reto" min="1" max="5" placeholder="1" />
+                <span>-</span>
+                <input type="number" id="nivel-maximo-reto" min="1" max="5" placeholder="5" />
+                <span>/ 5</span>
+              </div>
+              <small class="form-help">Rango de nivel permitido para aceptar el reto (1-5)</small>
+            </div>
+            <div class="form-group">
+              <label>
+                <i class="fas fa-users"></i> Añadir usuarios al partido:
+              </label>
+              <div class="tennis-court-container">
+                <div class="tennis-court padel-grid">
+                  <div class="court-player-slot" data-pos="1"></div>
+                  <div class="court-player-slot" data-pos="2"></div>
+                  <div class="court-player-slot" data-pos="3"></div>
+                  <div class="court-player-slot" data-pos="4"></div>
+                </div>
+            </div>
+            </div>
+            <div class="form-group">
+              <label for="family-points-apuesta">
+                <i class="fas fa-coins"></i> Family Points a apostar:
+              </label>
+              <input type="number" id="family-points-apuesta" min="1" value="10" required />
+              <small class="form-help">Family points que apostarás. El ganador obtendrá estos puntos</small>
+            </div>
+            <button type="submit" class="btn-guardar btn-reto">
+              <i class="fas fa-fire"></i> Lanzar Reto
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Detalles del partido -->
+    <div id="modal-partido" class="modal-general">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3><i class="fas fa-info-circle"></i> Detalles del Partido</h3>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div id="modal-contenido-partido"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Añadir Resultado -->
+    <div id="modal-resultados" class="modal-general modal-resultados">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3><i class="fas fa-trophy"></i> Añadir Resultado</h3>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <form id="form-resultados" class="form-resultados">
+            <div class="form-group">
+              <label>
+                <i class="fas fa-users"></i> Partido:
+              </label>
+              <div id="info-partido-resultado" style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin: 10px 0;">
+                <!-- Se llenará dinámicamente -->
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label>
+                <i class="fas fa-gamepad"></i> Sets:
+              </label>
+              <div id="sets-container">
+                <div class="set-resultado">
+                  <div class="set-numero">Set 1:</div>
+                  <div class="set-inputs">
+                    <input type="number" id="set1-local" min="0" max="7" placeholder="0" required>
+                    <span>-</span>
+                    <input type="number" id="set1-visitante" min="0" max="7" placeholder="0" required>
+                  </div>
+                </div>
+                <div class="set-resultado">
+                  <div class="set-numero">Set 2:</div>
+                  <div class="set-inputs">
+                    <input type="number" id="set2-local" min="0" max="7" placeholder="0" required>
+                    <span>-</span>
+                    <input type="number" id="set2-visitante" min="0" max="7" placeholder="0" required>
+                  </div>
+                </div>
+                <div class="set-resultado">
+                  <div class="set-numero">Set 3:</div>
+                  <div class="set-inputs">
+                    <input type="number" id="set3-local" min="0" max="7" placeholder="0">
+                    <span>-</span>
+                    <input type="number" id="set3-visitante" min="0" max="7" placeholder="0">
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <button type="submit" class="btn-guardar">
+              <i class="fas fa-save"></i> Guardar Resultado
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="./js/menu-hamburguesa.js"></script>
+  <script type="module" src="./js/enlaceAdmin.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+  <script type="module" src="./js/particles-init.js"></script>
+  <script type="module" src="./js/pruebacalendario.js"></script>
+</body>
+</html>

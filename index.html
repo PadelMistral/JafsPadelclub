@@ -1,445 +1,338 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Disponibilidad Pistas Pádel</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --color-libre: #d4edda;
-            --color-ocupado: #f8d7da;
-            --color-reservado: #cce5ff;
-            --color-no-disponible: #e2e3e5;
-            --color-header: #343a40;
-        }
-        body {
-            padding: 20px;
-            background-color: #f8f9fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .header-container {
-            background: linear-gradient(135deg, var(--color-header) 0%, #495057 100%);
-            color: white;
-            padding: 25px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-        .pista-card {
-            margin-bottom: 25px;
-            border: none;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease;
-        }
-        .pista-card:hover {
-            transform: translateY(-5px);
-        }
-        .pista-header {
-            background-color: var(--color-header);
-            color: white;
-            padding: 12px 20px;
-            font-weight: 600;
-            font-size: 1.1rem;
-        }
-        .horario-item {
-            padding: 12px;
-            border-bottom: 1px solid #eee;
-            transition: all 0.2s;
-        }
-        .horario-item:hover {
-            background-color: #f8f9fa;
-        }
-        .libre { background-color: var(--color-libre); }
-        .ocupado { background-color: var(--color-ocupado); }
-        .reservado { background-color: var(--color-reservado); }
-        .no-disponible { background-color: var(--color-no-disponible); }
-        .badge-estado {
-            font-size: 0.85rem;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-weight: 500;
-        }
-        .fecha-selector {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-        }
-        #loading {
-            display: none;
-            text-align: center;
-            padding: 30px;
-            background-color: #fff;
-            border-radius: 10px;
-            margin: 20px 0;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-        }
-        #errorContainer {
-            display: none;
-            margin-top: 20px;
-        }
-        .btn-nav {
-            min-width: 120px;
-            font-weight: 500;
-        }
-        #datePicker {
-            max-width: 250px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        @media (max-width: 768px) {
-            .btn-nav {
-                min-width: auto;
-                padding: 5px 10px;
-                font-size: 0.9rem;
-            }
-            .header-container {
-                padding: 15px;
-            }
-            h1 {
-                font-size: 1.5rem;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login - Liga de Pádel</title>
+  <link rel="stylesheet" href="./css/login.css" />
+  <link rel="stylesheet" href="./css/loading.css" />
+  <link rel="shortcut icon" href="./imagenes/Logojafs.png" type="image/x-icon">
+  <!-- Enlace al manifest.json (para instalación como app) -->
+  <link rel="manifest" href="/padeluminatis/manifest.json">
+  <!-- Color de tema para la barra de estado móvil -->
+  <meta name="theme-color" content="#FF6B35">
+  <!-- Registro del Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/padeluminatis/service-worker.js')
+          .then(reg => console.log('✅ Service Worker registrado con éxito'))
+          .catch(err => console.error('❌ Error al registrar:', err));
+      });
+    }
+  </script>
+  <!-- Font Awesome -->
+       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4).0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+  <!-- Estilos del Loading Espectacular -->
+  <style>
+    /* ===== LOADING ESPECTACULAR ===== */
+    .loading-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 50%, #0a0e1a 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      overflow: hidden;
+    }
+
+    /* Lluvia de partículas */
+    .rain-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .rain-drop {
+      position: absolute;
+      top: -20px;
+      left: var(--left);
+      width: 2px;
+      height: 20px;
+      background: linear-gradient(to bottom, transparent, #00C3FF, #FFB800);
+      border-radius: 0 0 50% 50%;
+      animation: rainFall 2s linear infinite;
+      animation-delay: var(--delay);
+      opacity: 0.7;
+      box-shadow: 0 0 10px rgba(0, 195, 255, 0.5);
+    }
+
+    @keyframes rainFall {
+      0% {
+        transform: translateY(-20px) scale(0);
+        opacity: 0;
+      }
+      10% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      90% {
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(100vh) scale(0.5);
+        opacity: 0;
+      }
+    }
+
+    /* Logo palpitando como corazón */
+    .heartbeat-logo {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      animation: heartbeat 1.5s ease-in-out infinite;
+      box-shadow: 
+        0 0 30px rgba(0, 195, 255, 0.6),
+        0 0 60px rgba(255, 184, 0, 0.4),
+        inset 0 0 20px rgba(255, 255, 255, 0.1);
+      border: 3px solid rgba(255, 255, 255, 0.2);
+    }
+
+    @keyframes heartbeat {
+      0%, 100% { transform: scale(1); }
+      25% { transform: scale(1.1); }
+      50% { transform: scale(1.05); }
+      75% { transform: scale(1.15); }
+    }
+
+    /* Bordes giratorios */
+    .rotating-border {
+      position: absolute;
+      border-radius: 50%;
+    }
+
+    .blue-border {
+      width: 160px;
+      height: 160px;
+      border: 3px solid transparent;
+      border-top: 3px solid #00C3FF;
+      border-right: 3px solid #00C3FF;
+      animation: rotate 2s linear infinite;
+      box-shadow: 0 0 20px rgba(0, 195, 255, 0.5);
+    }
+
+    .yellow-border {
+      width: 200px;
+      height: 200px;
+      border: 3px solid transparent;
+      border-bottom: 3px solid #FFB800;
+      border-left: 3px solid #FFB800;
+      animation: rotate 3s linear infinite reverse;
+      box-shadow: 0 0 20px rgba(255, 184, 0, 0.5);
+    }
+
+    @keyframes rotate {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Texto de carga */
+    .loading-title {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0 0 0.5rem 0;
+      background: linear-gradient(45deg, #00C3FF, #FFB800, #00C3FF);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: gradientShift 3s ease-in-out infinite;
+      text-shadow: 0 0 20px rgba(0, 195, 255, 0.5);
+    }
+
+    @keyframes gradientShift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    /* Barra de progreso */
+    .progress-bar {
+      width: 300px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00C3FF, #FFB800, #00C3FF);
+      background-size: 200% 100%;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s ease;
+      box-shadow: 0 0 10px rgba(0, 195, 255, 0.5);
+    }
+
+    .progress-percentage {
+      background: linear-gradient(45deg, #00C3FF, #FFB800);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 10px rgba(0, 195, 255, 0.5);
+    }
+
+    /* Animación de salida */
+    .loading-container.fade-out {
+      animation: fadeOut 0.5s ease-out forwards;
+    }
+
+    @keyframes fadeOut {
+      0% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.1); }
+    }
+  </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header-container text-center">
-            <h1><i class="fas fa-calendar-alt me-2"></i> Disponibilidad Pistas Pádel</h1>
-            <p class="mb-0">Consulta en tiempo real la disponibilidad de pistas</p>
-        </div>
-
-        <div class="fecha-selector">
-            <div class="row align-items-center">
-                <div class="col-md-4 text-center text-md-start">
-                    <button id="prevWeek" class="btn btn-outline-primary btn-nav">
-                        <i class="fas fa-arrow-left me-1"></i> Semana anterior
-                    </button>
-                </div>
-                <div class="col-md-4 text-center">
-                    <h4 id="fechaActual" class="mb-0 fw-bold"></h4>
-                </div>
-                <div class="col-md-4 text-center text-md-end">
-                    <button id="nextWeek" class="btn btn-outline-primary btn-nav">
-                        Semana siguiente <i class="fas fa-arrow-right ms-1"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="row mt-3">
-                <div class="col-12 text-center">
-                    <input type="date" id="datePicker" class="form-control">
-                </div>
-            </div>
-        </div>
-
-        <div id="loading">
-            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
-                <span class="visually-hidden">Cargando...</span>
-            </div>
-            <p class="mt-3 fs-5">Cargando disponibilidad...</p>
-        </div>
-
-        <div id="errorContainer" class="alert alert-danger" role="alert">
-            <i class="fas fa-exclamation-triangle me-2"></i><span id="errorMessage"></span>
-        </div>
-
-        <div id="dataContainer"></div>
+<body class="fondo">
+  <div id="particles-js"></div>
+  
+  <!-- LOADING ESPECTACULAR -->
+  <div id="loading-container" class="loading-container">
+    <!-- Destello de relámpago -->
+    <div class="lightning"></div>
+    
+    <!-- Lluvia de partículas -->
+    <div class="rain-container">
+      <div class="rain-drop" style="--delay: 0s; --left: 10%"></div>
+      <div class="rain-drop" style="--delay: 0.2s; --left: 20%"></div>
+      <div class="rain-drop" style="--delay: 0.4s; --left: 30%"></div>
+      <div class="rain-drop" style="--delay: 0.6s; --left: 40%"></div>
+      <div class="rain-drop" style="--delay: 0.8s; --left: 50%"></div>
+      <div class="rain-drop" style="--delay: 1s; --left: 60%"></div>
+      <div class="rain-drop" style="--delay: 1.2s; --left: 70%"></div>
+      <div class="rain-drop" style="--delay: 1.4s; --left: 80%"></div>
+      <div class="rain-drop" style="--delay: 1.6s; --left: 90%"></div>
+      <div class="rain-drop" style="--delay: 1.8s; --left: 15%"></div>
+      <div class="rain-drop" style="--delay: 2s; --left: 25%"></div>
+      <div class="rain-drop" style="--delay: 2.2s; --left: 35%"></div>
+      <div class="rain-drop" style="--delay: 2.4s; --left: 45%"></div>
+      <div class="rain-drop" style="--delay: 2.6s; --left: 55%"></div>
+      <div class="rain-drop" style="--delay: 2.8s; --left: 65%"></div>
+      <div class="rain-drop" style="--delay: 3s; --left: 75%"></div>
+      <div class="rain-drop" style="--delay: 3.2s; --left: 85%"></div>
+      <div class="rain-drop" style="--delay: 3.4s; --left: 95%"></div>
+      <!-- Más gotas de lluvia -->
+      <div class="rain-drop" style="--delay: 0.1s; --left: 5%"></div>
+      <div class="rain-drop" style="--delay: 0.3s; --left: 12%"></div>
+      <div class="rain-drop" style="--delay: 0.5s; --left: 18%"></div>
+      <div class="rain-drop" style="--delay: 0.7s; --left: 22%"></div>
+      <div class="rain-drop" style="--delay: 0.9s; --left: 28%"></div>
+      <div class="rain-drop" style="--delay: 1.1s; --left: 32%"></div>
+      <div class="rain-drop" style="--delay: 1.3s; --left: 38%"></div>
+      <div class="rain-drop" style="--delay: 1.5s; --left: 42%"></div>
+      <div class="rain-drop" style="--delay: 1.7s; --left: 48%"></div>
+      <div class="rain-drop" style="--delay: 1.9s; --left: 52%"></div>
+      <div class="rain-drop" style="--delay: 2.1s; --left: 58%"></div>
+      <div class="rain-drop" style="--delay: 2.3s; --left: 62%"></div>
+      <div class="rain-drop" style="--delay: 2.5s; --left: 68%"></div>
+      <div class="rain-drop" style="--delay: 2.7s; --left: 72%"></div>
+      <div class="rain-drop" style="--delay: 2.9s; --left: 78%"></div>
+      <div class="rain-drop" style="--delay: 3.1s; --left: 82%"></div>
+      <div class="rain-drop" style="--delay: 3.3s; --left: 88%"></div>
+      <div class="rain-drop" style="--delay: 3.5s; --left: 92%"></div>
+      <div class="rain-drop" style="--delay: 3.7s; --left: 98%"></div>
     </div>
+    
+    <!-- Logo palpitando como corazón -->
+    <div class="loading-logo-container">
+      <div class="loading-logo">
+        <img src="./imagenes/Logojafs.png" alt="Logo" class="heartbeat-logo">
+      </div>
+      
+      <!-- Bordes giratorios azul y amarillo -->
+      <div class="rotating-border blue-border"></div>
+      <div class="rotating-border yellow-border"></div>
+      
+      <!-- Anillo de carga -->
+      <div class="loading-ring">
+        <div class="loading-ring-inner"></div>
+      </div>
+    </div>
+    
+    <!-- Texto de carga -->
+    <div class="loading-text">
+      <h2 class="loading-title">Padeluminatis</h2>
+      <p class="loading-subtitle">Iniciando sesión...</p>
+    </div>
+    
+    <!-- Barra de progreso -->
+    <div class="progress-container">
+      <div class="progress-bar">
+        <div class="progress-fill"></div>
+      </div>
+      <div class="progress-text">
+        <span class="progress-percentage">0%</span>
+      </div>
+    </div>
+  </div>
+  
+  <div class="contenedor-login">
+    <div class="tituloLog"><h1 class="titulo">Iniciar sesión</h1>
+           <div class="logo">
+            <img src="./imagenes/Logojafs.png" alt="Logo de JafsPadel League" width="100" height="100">
+        </div>
+        </div>
+    <!-- FORMULARIO DE LOGIN -->
+    <form id="loginForm" class="formulario-login">
+      <div class="input-group">
+        <i class="fas fa-user"></i>
+        <input type="email" id="email" placeholder="Usuario o Email" class="input-texto" required />
+      </div>
+      <div class="input-group">
+        <i class="fas fa-lock"></i>
+        <input type="password" id="password" placeholder="Contraseña" class="input-texto" required />
+        <i class="fas fa-eye toggle-password" id="togglePassword"></i>
+      </div>
+      <button type="submit" class="boton-enviar-especial">Entrar</button>
+    </form>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-        // Configuración
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgpgCOfbjtDGOXbJnyz1YgYqtF4hDS1CB6oiYSV323WZMh4--jRETamNlFwUmOryEg/exec';
-        let currentDate = new Date();
+    <!-- MENSAJE DE ERROR O BIENVENIDA -->
+    <div id="mensaje" style="color: white; text-align: center; margin-top: 10px;"></div>
 
-        // [Mantén todas las funciones iguales hasta loadData]
-
-        function loadData(fecha) {
-            console.log('Intentando cargar datos para:', fecha);
-            showLoading();
-            hideError();
-            clearData();
-
-            // Opción 1: Usar JSONP (recomendado)
-            const callbackName = `jsonp_callback_${Date.now()}`;
-            const script = document.createElement('script');
-            script.src = `${SCRIPT_URL}?fecha=${fecha}&callback=${callbackName}`;
-            
-            window[callbackName] = function(response) {
-                console.log('Respuesta recibida:', response);
-                cleanupJsonp(callbackName, script);
-                
-                if (response && response.status === 'success') {
-                    renderData(response.data);
-                } else {
-                    const errorMsg = response?.message || 'Error desconocido al obtener datos';
-                    console.error('Error en la respuesta:', errorMsg);
-                    showError(errorMsg);
-                }
-                hideLoading();
-            };
-            
-            script.onerror = function() {
-                console.error('Error en la carga del script');
-                cleanupJsonp(callbackName, script);
-                showError('Error de conexión. Verifica: 1) Tu conexión a internet, 2) Que la URL del script sea correcta, 3) Que el despliegue tenga permisos públicos');
-                hideLoading();
-            };
-            
-            document.body.appendChild(script);
-            
-            // Timeout después de 15 segundos
-            setTimeout(() => {
-                if (document.body.contains(script)) {
-                    console.warn('Timeout excedido');
-                    cleanupJsonp(callbackName, script);
-                    showError('El servidor está tardando demasiado. Intenta recargar la página.');
-                    hideLoading();
-                }
-            }, 15000);
-        }
-
-        // [Mantén el resto de las funciones iguales]
+    <p class="texto-registro">
+      ¿No tienes cuenta? <a href="registro.html">Regístrate</a>
+    </p>
+      <p class="texto-registro">
+  <a href="recuperar.html">¿Has olvidado la contraseña?</a>
+</p>
+  </div>
 
 
-        // Formatear fecha como YYYY-MM-DD
-        function formatDate(date) {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        }
 
-        // Mostrar fecha formateada
-        function updateDateDisplay() {
-            const options = { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            };
-            elements.fechaActual.textContent = currentDate.toLocaleDateString('es-ES', options);
-            elements.datePicker.value = formatDate(currentDate);
-        }
 
-        // Cargar datos usando JSONP
-        function loadData(fecha) {
-            const now = Date.now();
-            if (now - lastRequestTime < REQUEST_THROTTLE) {
-                return;
-            }
-            lastRequestTime = now;
-            
-            showLoading();
-            hideError();
-            clearData();
+  <!-- Font Awesome para iconos -->
+  <!-- Modal para mensajes -->
+<!-- Modal para mensajes -->
+<div id="modalOverlay" class="modal-overlay">
+    <div class="modal-content">
+        <!-- Animación de pádel -->
 
-            // Crear script para JSONP
-            const callbackName = `jsonp_callback_${Date.now()}`;
-            const script = document.createElement('script');
-            script.src = `${SCRIPT_URL}?fecha=${fecha}&callback=${callbackName}`;
-            
-            // Manejar respuesta exitosa
-            window[callbackName] = function(response) {
-                cleanupJsonp(callbackName, script);
-                
-                if (response && response.status === 'success') {
-                    renderData(response.data);
-                } else {
-                    showError(response?.message || 'Error desconocido al obtener datos');
-                }
-                hideLoading();
-            };
-            
-            // Manejar errores de carga
-            script.onerror = function() {
-                cleanupJsonp(callbackName, script);
-                showError('Error de conexión. Inténtalo de nuevo.');
-                hideLoading();
-            };
-            
-            document.body.appendChild(script);
-            
-            // Timeout después de 15 segundos
-            setTimeout(() => {
-                if (document.body.contains(script)) {
-                    cleanupJsonp(callbackName, script);
-                    showError('Tiempo de espera agotado. El servidor está tardando demasiado.');
-                    hideLoading();
-                }
-            }, 15000);
-        }
         
-        // Limpiar callbacks JSONP
-        function cleanupJsonp(callbackName, script) {
-            try {
-                delete window[callbackName];
-                if (script && document.body.contains(script)) {
-                    document.body.removeChild(script);
-                }
-            } catch (e) {
-                console.error('Error limpiando JSONP:', e);
-            }
-        }
+        <div id="welcomeMessage" class="welcome-message"></div>
+        <div id="modalMessage" class="modal-message"></div>
+        <button id="modalButton" class="modal-button" style="display: none;">Aceptar</button>
+    </div>
+</div>
 
-        // Mostrar datos en la interfaz
-        function renderData(data) {
-            if (!data || !data.pistas || data.pistas.length === 0) {
-                elements.dataContainer.innerHTML = `
-                    <div class="alert alert-info text-center">
-                        No hay datos disponibles para esta fecha.
-                    </div>`;
-                return;
-            }
-            
-            let html = '';
-            
-            // Mostrar días disponibles si existen
-            if (data.dias && data.dias.length > 0) {
-                html += `<div class="card mb-3">
-                    <div class="card-header bg-secondary text-white">
-                        <i class="fas fa-calendar-day me-2"></i>Días mostrados
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex flex-wrap justify-content-center gap-2">`;
-                
-                data.dias.forEach(dia => {
-                    html += `<span class="badge bg-primary">${dia}</span>`;
-                });
-                
-                html += `</div></div></div>`;
-            }
-            
-            // Mostrar pistas
-            data.pistas.forEach((pista, index) => {
-                if (!pista.horarios || pista.horarios.length === 0) return;
-                
-                html += `<div class="pista-card">
-                    <div class="pista-header d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-map-marker-alt me-2"></i>${pista.nombre}</span>
-                        <span class="badge bg-light text-dark">
-                            <i class="fas fa-clock me-1"></i>${pista.horarios.length} horarios
-                        </span>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th width="30%">Hora</th>
-                                    <th width="70%">Estado</th>
-                                </tr>
-                            </thead>
-                            <tbody>`;
-                
-                pista.horarios.forEach(horario => {
-                    let estadoText = '';
-                    let icon = '';
-                    
-                    switch(horario.estado) {
-                        case 'libre':
-                            estadoText = 'LIBRE';
-                            icon = '<i class="fas fa-check-circle me-1"></i>';
-                            break;
-                        case 'reservado':
-                            estadoText = 'RESERVADO (Tú)';
-                            icon = '<i class="fas fa-user-check me-1"></i>';
-                            break;
-                        case 'ocupado':
-                            estadoText = `OCUPADO${horario.reservadoPor ? ` (${horario.reservadoPor})` : ''}`;
-                            icon = '<i class="fas fa-times-circle me-1"></i>';
-                            break;
-                        case 'no-disponible':
-                            estadoText = 'NO DISPONIBLE';
-                            icon = '<i class="fas fa-ban me-1"></i>';
-                            break;
-                        default:
-                            estadoText = horario.estado.toUpperCase();
-                    }
-                    
-                    html += `<tr class="${horario.estado} horario-item">
-                        <td>${horario.hora}</td>
-                        <td>
-                            <span class="badge-estado ${horario.estado}">
-                                ${icon}${estadoText}
-                            </span>
-                        </td>
-                    </tr>`;
-                });
-                
-                html += `</tbody></table></div></div>`;
-            });
-            
-            elements.dataContainer.innerHTML = html || `
-                <div class="alert alert-warning text-center">
-                    No se encontraron pistas disponibles.
-                </div>`;
-        }
+<!-- GSAP para animaciones profesionales -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
 
-        // Limpiar datos mostrados
-        function clearData() {
-            elements.dataContainer.innerHTML = '';
-        }
 
-        // Mostrar spinner de carga
-        function showLoading() {
-            elements.loading.style.display = 'block';
-            elements.dataContainer.style.opacity = '0.5';
-        }
-
-        // Ocultar spinner
-        function hideLoading() {
-            elements.loading.style.display = 'none';
-            elements.dataContainer.style.opacity = '1';
-        }
-
-        // Mostrar mensaje de error
-        function showError(message) {
-            elements.errorMessage.textContent = message;
-            elements.errorContainer.style.display = 'block';
-        }
-
-        // Ocultar mensaje de error
-        function hideError() {
-            elements.errorContainer.style.display = 'none';
-        }
-
-        // Event listeners
-        elements.datePicker.addEventListener('change', (e) => {
-            const newDate = new Date(e.target.value);
-            if (!isNaN(newDate.getTime())) {
-                currentDate = newDate;
-                updateDateDisplay();
-                loadData(formatDate(currentDate));
-            }
-        });
-
-        elements.prevWeekBtn.addEventListener('click', () => {
-            currentDate.setDate(currentDate.getDate() - 7);
-            updateDateDisplay();
-            loadData(formatDate(currentDate));
-        });
-
-        elements.nextWeekBtn.addEventListener('click', () => {
-            currentDate.setDate(currentDate.getDate() + 7);
-            updateDateDisplay();
-            loadData(formatDate(currentDate));
-        });
-
-        // Inicialización
-        document.addEventListener('DOMContentLoaded', () => {
-            updateDateDisplay();
-            loadData(formatDate(currentDate));
-            
-            // Configurar date picker para evitar fechas pasadas
-            const today = new Date();
-            elements.datePicker.min = formatDate(today);
-            elements.datePicker.max = formatDate(new Date(today.getFullYear(), today.getMonth() + 3, today.getDate()));
-        });
-    </script>
+  <!-- Llamada al JS externo -->
+  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+  <script type="module" src="./js/particles-init.js"></script>
+  <script type="module" src="./js/password-toggle.js"></script>
+  <script type="module" src="./js/login.js"></script>
 </body>
 </html>

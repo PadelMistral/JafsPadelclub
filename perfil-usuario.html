@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perfil de Usuario - Padeluminatis</title>
+    <link rel="stylesheet" href="css/perfil.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+
+
+
+        /* Contenedor de partículas */
+        #particles-js {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 4;
+            pointer-events: none;
+        }
+
+        /* Header alternativo estilo modal */
+        .modal-header {
+            position: sticky;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.95) 70%, rgba(15, 52, 96, 0.95) 100%);
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem 2rem;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 
+                0 4px 20px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        /* Efecto de transparencia al hacer scroll */
+        .modal-header.scrolled {
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.7) 0%, rgba(22, 33, 62, 0.7) 70%, rgba(15, 52, 96, 0.7) 100%);
+            backdrop-filter: blur(15px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 
+                0 4px 20px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .modal-header-left {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .btn-volver-modal {
+            background: linear-gradient(135deg, #128C7E, #0d6b5f);
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            box-shadow: 0 4px 15px rgba(20, 140, 126, 0.3);
+        }
+
+        .btn-volver-modal:hover {
+            transform: scale(1.1) translateX(-3px);
+            box-shadow: 0 6px 20px rgba(20, 140, 126, 0.4);
+            background: linear-gradient(135deg, #0d6b5f, #128C7E);
+        }
+
+        .modal-logo {
+            width: 60px;
+            height: 60px;
+            border-radius: 15px;
+            object-fit: cover;
+            box-shadow: 0 0 20px rgba(233, 196, 106, 0.4);
+            transition: var(--transition);
+            background: linear-gradient(135deg, #E9C46A, #d4a42c);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #1a2a35;
+        }
+
+        .modal-logo:hover {
+            transform: scale(1.05) rotate(5deg);
+            box-shadow: 0 0 25px rgba(233, 196, 106, 0.6);
+        }
+
+        .modal-title {
+            font-size: 1.8rem;
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #E9C46A, #d4a42c);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .modal-header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .modal-badge {
+            background: linear-gradient(135deg, rgba(20, 140, 126, 0.2), rgba(20, 140, 126, 0.1));
+            border: 1px solid rgba(20, 140, 126, 0.3);
+            border-radius: 20px;
+            padding: 0.5rem 1rem;
+            color: #128C7E;
+            font-size: 0.9rem;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+        }
+
+        /* Contenido principal con efecto modal */
+        .modal-main {
+            margin-top: 20px;
+            padding: 2rem;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Efecto de borde modal */
+        .modal-main::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent 30%, rgba(20, 140, 126, 0.02) 50%, transparent 70%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Modificar el fondo de las secciones para que usen colores del header */
+        .profile-section {
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.8) 0%, rgba(22, 33, 62, 0.8) 50%, rgba(15, 52, 96, 0.8) 100%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 
+                0 8px 32px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+                
+        }
+
+        .profile-container{
+            z-index: 5;;
+        }
+        .partner-section,
+        .stats-grid,
+        .paddle-section,
+        .history-section,
+        .rivals-section {
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.6) 0%, rgba(22, 33, 62, 0.6) 50%, rgba(15, 52, 96, 0.6) 100%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 
+                0 6px 24px rgba(0, 0, 0, 0.25),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        /* Modificar las tarjetas para que tengan un tono diferente */
+        .stat-card-main {
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.4) 0%, rgba(22, 33, 62, 0.4) 100%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 
+                0 4px 16px rgba(0, 0, 0, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            
+        }
+
+        .competition-card {
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.5) 0%, rgba(22, 33, 62, 0.5) 100%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 
+                0 4px 16px rgba(0, 0, 0, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .partner-card,
+        .stat-card,
+        .rivals-card {
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.4) 0%, rgba(22, 33, 62, 0.4) 100%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 
+                0 4px 16px rgba(0, 0, 0, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .paddle-card {
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.5) 0%, rgba(22, 33, 62, 0.5) 100%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 
+                0 6px 20px rgba(0, 0, 0, 0.25),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        /* Estilos para rivales */
+        .rival-item {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.3) 0%, rgba(22, 33, 62, 0.3) 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 
+                0 2px 8px rgba(0, 0, 0, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
+
+        .rival-item h4 {
+            margin: 0 0 12px 0;
+            color: #ffffff;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .rival-item .player-info {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .rival-item .player-info img {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .rival-item .player-details h5 {
+            margin: 0 0 8px 0;
+            color: #ffffff;
+            font-size: 0.95rem;
+        }
+
+        .rival-item .player-stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 8px;
+        }
+
+        .rival-item .player-stats .stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.85rem;
+            color: #b0b0b0;
+        }
+
+        .rival-item .player-stats .stat i {
+            color: #128C7E;
+            width: 14px;
+        }
+
+        .rival-details {
+            margin-top: 12px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .rival-detail {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+            font-size: 0.85rem;
+            color: #e0e0e0;
+        }
+
+        .rival-detail i {
+            width: 16px;
+            color: #128C7E;
+        }
+
+        /* Ocultar elementos que no deberían aparecer en el perfil de otro usuario */
+        #edit-profile-pic,
+        .edit-icon,
+        .profile-actions,
+        #change-partner,
+        .paddle-actions,
+        #paddle-select {
+            display: none !important;
+        }
+
+        /* Estilos para el overlay del modal */
+        #modal-busqueda-usuarios,
+        #modal-perfil-otro {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background: rgba(10, 10, 20, 0.85) !important;
+            backdrop-filter: blur(8px);
+            z-index: 9998 !important;
+            display: none;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 20px !important;
+            box-sizing: border-box !important;
+        }
+
+        /* Estilos para el contenido del modal */
+        #modal-busqueda-usuarios .busqueda-modal-content,
+        #modal-perfil-otro .perfil-otro-modal-content {
+            width: 100% !important;
+            height: 100% !important;
+            max-width: 1400px !important;
+            max-height: 90vh !important;
+            overflow-y: auto !important;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 70%, #0f3460 100%) !important;
+            border-radius: 20px !important;
+            padding: 40px !important;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            position: relative !important;
+            transform: none !important;
+            top: auto !important;
+            left: auto !important;
+            margin: 0 !important;
+        }
+
+        /* Estilos para el botón de volver */
+        .btn-volver-perfil {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 15px;
+        }
+
+        .btn-volver-perfil:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .btn-volver-perfil i {
+            font-size: 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .modal-header {
+                padding: 1rem;
+            }
+            
+            .modal-title {
+                font-size: 1.4rem;
+            }
+            
+            .modal-logo {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+            
+            .modal-main {
+                padding: 1rem;
+                margin-top: 90px;
+            }
+            
+            .modal-badge {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body class="app-body">
+    <!-- Contenedor de partículas -->
+    <div id="particles-js"></div>
+
+    <!-- Header alternativo estilo modal -->
+    <header class="modal-header">
+        <div class="modal-header-left">
+            <button class="btn-volver-modal" onclick="window.location.href='perfil.html'" title="Volver a mi perfil">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <img src="./imagenes/Logojafs.png" alt="Logo" class="modal-logo">
+            <h1 class="modal-title">Perfil de Usuario</h1>
+        </div>
+        <div class="modal-header-right">
+            <div class="modal-badge">
+                <i class="fas fa-eye"></i> Vista de Usuario
+            </div>
+        </div>
+    </header>
+
+    <main class="modal-main">
+        <!-- El resto del contenido es una adaptación de perfil.html -->
+        <section class="profile-section">
+            <div class="profile-background">
+                <div class="profile-glow"></div>
+                <div class="profile-particles"></div>
+            </div>
+            
+            <div class="profile-container">
+                <div class="profile-image-container">
+                    <div class="profile-image-frame">
+                        <img id="profile-pic" src="https://ui-avatars.com/api/?name=Usuario&background=00a884&color=fff" alt="Foto de perfil">
+                    </div>
+                </div>
+
+                <div class="profile-info-container">
+                    <div class="user-presentation">
+                        <h1 id="user-name" class="user-name">Cargando...</h1>
+                        <div class="user-level-container">
+                            <div class="level-badge">
+                                <span id="user-level">1.5</span>
+                            </div>
+                            <div class="level-progress-container">
+                                <div class="level-progress-bar">
+                                    <div id="level-progress" class="level-progress-fill"></div>
+                                </div>
+                                <span class="level-text">Progreso: <span id="level-percentage">0</span>%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="profile-stats-grid">
+                        <div class="stat-card-main">
+                            <div class="stat-icon"><i class="fas fa-coins"></i></div>
+                            <div class="stat-content">
+                                <span class="stat-value" id="family-points">0</span>
+                                <span class="stat-label">Family Points</span>
+                            </div>
+                        </div>
+                        <div class="stat-card-main">
+                            <div class="stat-icon"><i class="fas fa-trophy"></i></div>
+                            <div class="stat-content">
+                                <span class="stat-value" id="total-points">0</span>
+                                <span class="stat-label">Puntos Ranking</span>
+                            </div>
+                        </div>
+                        <div class="stat-card-main">
+                            <div class="stat-icon"><i class="fas fa-medal"></i></div>
+                            <div class="stat-content">
+                                <span class="stat-value" id="achievements-unlocked">0</span>
+                                <span class="stat-label">Logros</span>
+                            </div>
+                        </div>
+                        <div class="stat-card-main">
+                            <div class="stat-icon"><i class="fas fa-bolt"></i></div>
+                            <div class="stat-content">
+                                <span class="stat-value" id="retos-jugados">0</span>
+                                <span class="stat-label">Retos jugados</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="competition-sections">
+                <div class="competition-card league-card">
+                    <div class="competition-header"><i class="fas fa-trophy"></i><h3>Liga Actual</h3></div>
+                    <div class="competition-content">
+                        <div class="competition-stat"><span class="stat-label">Posición</span><span class="stat-value" id="league-position">-</span></div>
+                        <div class="competition-stat"><span class="stat-label">Puntos</span><span class="stat-value" id="league-points">0 pts</span></div>
+                        <div class="competition-stat"><span class="stat-label">Partidos Jugados</span><span class="stat-value" id="league-matches-played">0</span></div>
+                        <div class="competition-stat"><span class="stat-label">Victorias</span><span class="stat-value" id="league-matches-won">0</span></div>
+                        <div class="competition-stat"><span class="stat-label">Derrotas</span><span class="stat-value" id="league-matches-lost">0</span></div>
+                        <div class="competition-stat"><span class="stat-label">Equipos</span><span class="stat-value" id="league-teams">0</span></div>
+                        <div class="competition-stat"><span class="stat-label">Líder</span><span class="stat-value" id="league-leader">N/A</span></div>
+                        <div class="competition-stat"><span class="stat-label">Último</span><span class="stat-value" id="league-last">N/A</span></div>
+                        
+                        <!-- Barra de progreso del equipo -->
+                        <div class="competition-progress">
+                            <span class="progress-label">Progreso del Equipo</span>
+                            <div class="progress-bar-competition">
+                                <div id="league-finished-bar" class="progress-fill-competition"></div>
+                            </div>
+                            <span class="progress-text" id="league-finished-percent">0%</span>
+                            <span class="progress-text" id="league-finished-left-text">0 partidos restantes</span>
+                        </div>
+                        
+                        <!-- Barra de progreso de la liga -->
+                        <div class="competition-progress">
+                            <span class="progress-label">Progreso de la Liga</span>
+                            <div class="progress-bar-competition">
+                                <div id="league-progress" class="progress-fill-competition"></div>
+                            </div>
+                            <span class="progress-text" id="league-matches-left-text">0 partidos restantes</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="competition-card tournament-card">
+                    <div class="competition-header"><i class="fas fa-star"></i><h3>Torneos Actuales</h3></div>
+                    <div class="competition-content">
+                        <div id="tournaments-list" class="tournaments-list">
+                            <div class="no-tournaments"><i class="fas fa-info-circle"></i><span>No está en torneos</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="competition-card friendly-card">
+                    <div class="competition-header"><i class="fas fa-handshake"></i><h3>Amistosos</h3></div>
+                    <div class="competition-content">
+                        <div class="competition-stat"><span class="stat-label">Total</span><span class="stat-value" id="friendly-total">0</span></div>
+                        <div class="competition-stat"><span class="stat-label">Victorias</span><span class="stat-value" id="friendly-wins-amistosos">0</span></div>
+                        <div class="competition-stat"><span class="stat-label">Derrotas</span><span class="stat-value" id="friendly-losses">0</span></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="partner-section scroll-reveal">
+            <div class="partner-card compact-card">
+                <span class="mini-title">Compañero</span>
+                <h3>Compañero Actual</h3>
+                <div class="player-info">
+                    <img id="partner-pic" src="https://ui-avatars.com/api/?name=Compañero&background=00a884&color=fff" alt="Compañero">
+                    <div class="player-details">
+                        <h4 id="partner-name">Sin compañero</h4>
+                        <div class="player-stats">
+                            <div class="stat"><i class="fas fa-gamepad"></i><span id="partner-matches">0</span> partidos</div>
+                            <div class="stat"><i class="fas fa-trophy"></i><span id="partner-wins">0</span> victorias</div>
+                            <div class="stat"><i class="fas fa-percentage"></i><span id="partner-win-rate">0%</span> win rate</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="stats-grid compact-stats">
+            <div class="stat-card scroll-reveal compact-card">
+                <span class="mini-title">General</span>
+                <h3>Estadísticas Generales</h3>
+                <div class="stats-grid-3">
+                    <div class="stat-item-compact"><i class="fas fa-gamepad"></i><span class="stat-value" id="total-matches">0</span><span class="stat-label">Partidos</span></div>
+                    <div class="stat-item-compact"><i class="fas fa-trophy"></i><span class="stat-value" id="total-wins">0</span><span class="stat-label">Victorias</span></div>
+                    <div class="stat-item-compact"><i class="fas fa-times-circle"></i><span class="stat-value" id="total-losses">0</span><span class="stat-label">Derrotas</span></div>
+                    <div class="stat-item-compact"><i class="fas fa-percentage"></i><span class="stat-value" id="win-rate">0%</span><span class="stat-label">Win Rate</span></div>
+                    <div class="stat-item-compact"><i class="fas fa-fire"></i><span class="stat-value" id="current-streak">0</span><span class="stat-label">Racha Actual</span></div>
+                    <div class="stat-item-compact"><i class="fas fa-crown"></i><span class="stat-value" id="best-streak">0</span><span class="stat-label">Mejor Racha</span></div>
+                </div>
+            </div>
+
+            <div class="stat-card scroll-reveal compact-card">
+                <span class="mini-title">Tipos</span>
+                <h3>Victorias por Tipo</h3>
+                <div class="stats-grid-3">
+                    <div class="stat-item-compact"><i class="fas fa-trophy"></i><span class="stat-value" id="league-wins">0</span><span class="stat-label">Ligas</span></div>
+                    <div class="stat-item-compact"><i class="fas fa-handshake"></i><span class="stat-value" id="friendly-wins-tipos">0</span><span class="stat-label">Amistosos</span></div>
+                    <div class="stat-item-compact"><i class="fas fa-star"></i><span class="stat-value" id="event-wins">0</span><span class="stat-label">Eventos</span></div>
+                    <div class="stat-item-compact"><i class="fas fa-bolt"></i><span class="stat-value" id="challenge-wins">0</span><span class="stat-label">Retos</span></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="paddle-section scroll-reveal" style="display: flex; justify-content: center;">
+            <div class="paddle-card">
+                <div class="paddle-header">
+                    <h3>Su Pala</h3>
+                </div>
+                <div class="paddle-content">
+                    <div class="paddle-image"><img id="paddle-pic" src="imagenes/5c0e4dc8-3bc6-4692-9e73-47d471dcd846.webp" alt="Pala"></div>
+                    <div class="paddle-info">
+                        <h4 id="paddle-name">Sin pala seleccionada</h4>
+                        <div class="paddle-stats">
+                            <div class="stat"><span>Potencia</span><div class="progress-bar"><div id="power-stat" class="progress" style="width: 0%"></div></div></div>
+                            <div class="stat"><span>Control</span><div class="progress-bar"><div id="control-stat" class="progress" style="width: 0%"></div></div></div>
+                            <div class="stat"><span>Punto Dulce</span><div class="progress-bar"><div id="sweet-spot-stat" class="progress" style="width: 0%"></div></div></div>
+                            <div class="stat"><span>Ligereza</span><div class="progress-bar"><div id="lightness-stat" class="progress" style="width: 0%"></div></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Top Jugadores -->
+        <section class="rivals-section compact-stats">
+            <div class="rivals-card scroll-reveal compact-card">
+                <span class="mini-title">Rivales</span>
+                <h3>Top Jugadores</h3>
+                
+                <!-- Rival Más Fácil -->
+                <div class="rival-item">
+                    <h4>Mi Rival Más Fácil</h4>
+                    <div class="player-info">
+                        <img id="top-wins-pic" src="https://ui-avatars.com/api/?name=TopVictorias&background=4CAF50&color=fff" alt="Rival Fácil">
+                        <div class="player-details">
+                            <h5 id="top-wins-name">Sin datos</h5>
+                            <div class="player-stats">
+                                <div class="stat">
+                                    <i class="fas fa-trophy"></i>
+                                    <span id="top-wins-count">0</span> victorias
+                                </div>
+                                <div class="stat">
+                                    <i class="fas fa-times-circle"></i>
+                                    <span id="top-wins-losses">0</span> derrotas
+                                </div>
+                            </div>
+                            <div id="top-wins-details" class="rival-details">
+                                <!-- Detalles del mejor rival se cargarán dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rival Más Difícil -->
+                <div class="rival-item">
+                    <h4>Mi Rival Más Difícil</h4>
+                    <div class="player-info">
+                        <img id="worst-rival-pic" src="https://ui-avatars.com/api/?name=PeorRival&background=f44336&color=fff" alt="Rival Difícil">
+                        <div class="player-details">
+                            <h5 id="worst-rival-name">Sin datos</h5>
+                            <div class="player-stats">
+                                <div class="stat">
+                                    <i class="fas fa-times-circle"></i>
+                                    <span id="worst-rival-losses">0</span> derrotas
+                                </div>
+                                <div class="stat">
+                                    <i class="fas fa-trophy"></i>
+                                    <span id="worst-rival-wins">0</span> victorias
+                                </div>
+                            </div>
+                            <div id="worst-rival-details" class="rival-details">
+                                <!-- Detalles del peor rival se cargarán dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="history-section scroll-reveal">
+            <button class="history-button" id="open-history-modal">
+                <i class="fas fa-history"></i>
+                <span>Ver Historial de Partidos</span>
+            </button>
+        </section>
+
+        <div class="modal-historial" id="modal-historial" style="display:none;">
+            <div class="modal-historial-content">
+                <button class="close-modal-historial" data-modal="modal-historial"><i class="fas fa-times"></i></button>
+                <h3>Historial de Partidos</h3>
+                <div class="historial-filtros">
+                    <button class="action-button active" data-filter="all">Todos</button>
+                    <button class="action-button" data-filter="wins">Victorias</button>
+                    <button class="action-button" data-filter="losses">Derrotas</button>
+                </div>
+                <div id="historial-partidos" class="historial-list"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts para partículas -->
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    <script type="module" src="./js/particles-init.js"></script>
+    <script type="module" src="./js/perfil-usuario.js"></script>
+    
+    <!-- Script para efecto de scroll en header -->
+    <script>
+        // Efecto de transparencia en el header al hacer scroll
+        window.addEventListener('scroll', function() {
+            const header = document.querySelector('.modal-header');
+            if (window.scrollY > 50) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        });
+    </script>
+</body>
+</html> 

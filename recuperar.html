@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recuperar Contraseña - Liga de Pádel</title>
+  <link rel="stylesheet" href="./css/login.css" />
+  <link rel="shortcut icon" href="./imagenes/Logojafs.png" type="image/x-icon">
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="fondo">
+  <div id="particles-js"></div>
+  <div class="contenedor-login">
+    <div class="tituloLog">
+      <h1 class="titulo">Recuperar contraseña</h1>
+      <div class="logo">
+        <img src="./imagenes/Logojafs.png" alt="Logo de JafsPadel League" width="100" height="100">
+      </div>
+    </div>
+    
+    <form id="recuperarForm" class="formulario-login">
+      <div class="input-group">
+        <i class="fas fa-envelope"></i>
+        <input type="email" id="email" placeholder="Email" class="input-texto" required />
+      </div>
+      <button type="submit" class="boton-enviar-especial">Enviar enlace</button>
+    </form>
+
+    <div id="mensaje" style="color: white; text-align: center; margin-top: 10px;"></div>
+
+    <p class="texto-registro">
+      <a href="index.html">Volver al inicio de sesión</a>
+    </p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+  <script type="module" src="./js/particles-init.js"></script>
+  <script type="module" src="./js/recuperar.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "Liga de Pádel",
+  "short_name": "JafsPadel",
+  "description": "Liga profesional de pádel con estadísticas en vivo y rankings",
+  "start_url": "/padeluminatis/",
+  "display": "standalone",
+  "background_color": "#004E89",
+  "theme_color": "#FF6B35",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/imagenes/Logojafs.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/imagenes/Logojafs.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

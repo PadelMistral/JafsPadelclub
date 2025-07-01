@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logros - Padeluminatis</title>
+  <link rel="stylesheet" href="./css/home.css">
+  <link rel="stylesheet" href="./css/logros.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="app-body">
+  <div class="logros-bg-blur"></div>
+  <main class="logros-main" style="height: 100vh; min-height: 100vh; display: flex; align-items: stretch; justify-content: center;">
+    <div class="logros-container" style="overflow-y: auto; max-height: 100vh;">
+      <div class="logros-header">
+        <button class="btn-volver" onclick="window.location.href='perfil.html'" title="Volver a perfil">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <h1><i class="fas fa-trophy"></i>Logros</h1>
+      </div>
+      <div class="logros-tabs">
+        <button class="logros-tab active" data-rareza="platino">
+          <i class="fas fa-crown"></i>
+          <span>Platino</span>
+        </button>
+        <button class="logros-tab" data-rareza="oro">
+          <i class="fas fa-medal"></i>
+          <span>Oro</span>
+        </button>
+        <button class="logros-tab" data-rareza="plata">
+          <i class="fas fa-medal"></i>
+          <span>Plata</span>
+        </button>
+        <button class="logros-tab" data-rareza="bronce">
+          <i class="fas fa-medal"></i>
+          <span>Bronce</span>
+        </button>
+      </div>
+      <div id="logros-lista" class="logros-lista"></div>
+    </div>
+  </main>
+  <script type="module" src="./js/logros.js"></script>
+</body>
+</html> 

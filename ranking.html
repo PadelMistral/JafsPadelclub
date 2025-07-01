@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0A2342">
+  <title>Ranking - Padeluminatis</title>
+  <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="./css/header.css">
+  <style>
+    .ranking-container {
+      max-width: 800px;
+      margin: 2rem auto;
+      background: #111c3a;
+      padding: 1rem;
+      border-radius: 1rem;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+    .ranking-table {
+      width: 100%;
+      border-collapse: collapse;
+      color: white;
+    }
+    .ranking-table th, .ranking-table td {
+      border: 1px solid #334;
+      padding: 0.8rem;
+      text-align: center;
+    }
+    .ranking-table th {
+      background: #1e2f5a;
+    }
+    .ranking-row-top {
+      background: linear-gradient(90deg, #FFD700, #FFA500);
+      color: black;
+    }
+    .ranking-info {
+      margin: 2rem auto;
+      padding: 1rem;
+      background: #1a2c4a;
+      color: #ddd;
+      border-left: 4px solid #00bcd4;
+      border-radius: 0.5rem;
+      font-size: 0.95rem;
+    }
+    .ranking-info h3 {
+      margin-top: 0;
+      color: #00eaff;
+    }
+  </style>
+</head>
+<body class="app-body">
+  <header class="app-header">
+    <div class="header-content">
+      <img src="./imagenes/Logojafs.png" alt="Logo" class="app-logo">
+      <h1 class="app-title">Ranking - Padeluminatis</h1>
+      <button class="menu-toggle" aria-label="Menú">
+        <i class="fas fa-bars"></i>
+      </button>
+    </div>
+    <nav class="app-nav">
+      <a href="./home.html" class="nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
+      <a href="./eventos.html" class="nav-item"><i class="fas fa-calendar-check"></i><span>Eventos</span></a>
+      <a href="./calendario.html" class="nav-item"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
+      <a href="./clasificacion.html" class="nav-item"><i class="fas fa-trophy"></i><span>Clasificación</span></a>
+      <a href="./normas.html" class="nav-item"><i class="fas fa-gavel"></i><span>Normas</span></a>
+      <a href="./chat.html" class="nav-item"><i class="fas fa-comments"></i><span>Chat</span></a>
+      <a href="./ranking.html" class="nav-item active"><i class="fas fa-list-ol"></i><span>Ranking</span></a>
+      <a href="./admin.html" class="nav-item nav-admin" style="display:none"><i class="fas fa-user-shield"></i><span>Admin</span></a>
+      <a href="./perfil.html" class="nav-item"><i class="fas fa-user"></i><span>Perfil</span></a>
+      <a href="./notificaciones.html" class="nav-item"><i class="fas fa-bell"></i><span>Notificaciones</span></a>
+      <a href="#" class="nav-item nav-logout"><i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span></a>
+    </nav>
+  </header>
+  <main class="app-main">
+    <div class="ranking-container">
+      <h2 style="text-align:center; color: var(--primary-color);">Clasificación Global</h2>
+      <table class="ranking-table" id="tabla-ranking">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Jugador</th>
+            <th>Puntos</th>
+            <th>Partidos</th>
+            <th>Victorias</th>
+          </tr>
+        </thead>
+        <tbody id="ranking-body">
+          <!-- Se llenará dinámicamente -->
+        </tbody>
+      </table>
+    </div>
+    <div class="ranking-info">
+      <h3>¿Cómo se calculan los puntos de ranking?</h3>
+      <ul>
+        <li><strong>Puntos base:</strong> todos los jugadores comienzan con 500 puntos.</li>
+        <li><strong>Dificultad del rival:</strong> vencer a un rival con más puntos otorga más, y perder contra uno inferior resta más.</li>
+        <li><strong>Margen de victoria:</strong> cuanto más contundente sea el resultado (ej. 6-0, 6-1), más puntos se ganan.</li>
+        <li><strong>Tipo de partido:</strong>
+          <ul>
+            <li>Amistoso: x0.8</li>
+            <li>Liga: x1.0</li>
+            <li>Reto: x1.2</li>
+            <li>Torneo/Eventos: x1.5</li>
+          </ul>
+        </li>
+        <li><strong>Curva de progresión:</strong> los jugadores con muchos puntos ganan menos y pierden más.</li>
+        <li><strong>Derrotas:</strong> restan la mitad de lo que se ganaría por ese mismo enfrentamiento.</li>
+        <li><strong>Actualización automática:</strong> cada vez que se registra un partido, el sistema recalcula y guarda el ranking global directamente en la base de datos.</li>
+      </ul>
+    </div>
+  </main>
+  <script type="module">
+    import { db } from '../firebase-config.js';
+    import { collection, getDocs } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+
+    async function cargarRankingOrdenado() {
+      const usuariosSnap = await getDocs(collection(db, 'usuarios'));
+      const lista = [];
+      usuariosSnap.forEach(doc => {
+        const data = doc.data();
+        lista.push({
+          nombre: data.nombreUsuario || data.email,
+          puntos: data.puntosRanking || 500,
+          partidos: data.partidosJugados || 0,
+          victorias: data.victorias || 0
+        });
+      });
+      lista.sort((a, b) => b.puntos - a.puntos);
+      const tbody = document.getElementById('ranking-body');
+      tbody.innerHTML = lista.map((jug, i) => `
+        <tr class="${i === 0 ? 'ranking-row-top' : ''}">
+          <td>${i + 1}</td>
+          <td>${jug.nombre}</td>
+          <td>${jug.puntos}</td>
+          <td>${jug.partidos}</td>
+          <td>${jug.victorias}</td>
+        </tr>`).join('');
+    }
+
+    cargarRankingOrdenado();
+  </script>
+  <script src="./js/menu-hamburguesa.js"></script>
+  <script src="./js/enlaceAdmin.js"></script>
+</body>
+</html>
