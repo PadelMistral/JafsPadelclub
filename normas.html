@@ -1,113 +1,104 @@
 <!DOCTYPE html>
 <html lang="es" data-theme="dark">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#0A2342">
-    <title>Normas - Padeluminatis</title>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Normas | Padel Matrix</title>
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="./css/header.css">
-    <link rel="stylesheet" href="./css/home.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Rajdhani:wght@600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="./css/global.css">
+    <style>
+        .norm-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .norm-num {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--neon-cyan);
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 950;
+            font-family: var(--font-display);
+            margin-bottom: 15px;
+            box-shadow: 0 0 15px var(--neon-cyan-glow);
+        }
+
+        .norm-title {
+            font-family: var(--font-display);
+            font-size: 1.4rem;
+            font-weight: 900;
+            margin-bottom: 10px;
+            color: var(--neon-cyan);
+        }
+
+        .norm-text {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+    </style>
 </head>
+
 <body class="app-body">
-    <header class="app-header">
-        <div class="header-content">
-            <img src="./imagenes/Logojafs.png" alt="Logo" class="app-logo">
-            <h1 class="app-title">Padeluminatis</h1>
-            <button class="menu-toggle" aria-label="Menú">
-                <i class="fas fa-bars"></i>
-            </button>
-        </div>
-        <nav class="app-nav">
-          <a href="./home.html" class="nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
-          <a href="./eventos.html" class="nav-item"><i class="fas fa-calendar-check"></i><span>Eventos</span></a>
-          <a href="./calendario.html" class="nav-item"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
-          <a href="./clasificacion.html" class="nav-item"><i class="fas fa-trophy"></i><span>Clasificación</span></a>
-          <a href="./normas.html" class="nav-item active"><i class="fas fa-gavel"></i><span>Normas</span></a>
-          <a href="./chat.html" class="nav-item"><i class="fas fa-comments"></i><span>Chat</span></a>
-          <a href="./ranking.html" class="nav-item"><i class="fas fa-list-ol"></i><span>Ranking</span></a>
-          <a href="./admin.html" class="nav-item nav-admin" style="display:none"><i class="fas fa-user-shield"></i><span>Admin</span></a>
-          <a href="./perfil.html" class="nav-item"><i class="fas fa-user"></i><span>Perfil</span></a>
-          <a href="./notificaciones.html" class="nav-item"><i class="fas fa-bell"></i><span>Notificaciones</span></a>
-          <a href="#" class="nav-item nav-logout"><i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span></a>
-        </nav>
-    </header>
-    <main class="app-main">
-      <section class="normas-torneo">
-        <h2>Reglamento oficial</h2>
-     <h2>📅 Fechas y Formato</h2>
-          <ul>
-              <li><strong>Duración:</strong> del 19 de mayo al 22 de junio de 2025.</li>
-              <li><strong>Modalidad:</strong> liga todos contra todos.</li>
-              <li><strong>Partidos:</strong> cada pareja disputará un partido por semana.</li>
-              <li><strong>Plazo máximo:</strong> cada partido debe jugarse en un plazo de 2 semanas desde su programación.</li>
-          </ul>
+    <div class="nebula-bg">
+        <div class="star-layer"></div>
+    </div>
 
-          <h2>🤝 Organización de Partidos</h2>
-          <ul>
-              <li><strong>Contacto entre equipos:</strong> los equipos deben comunicarse para acordar fecha, hora y lugar del partido.</li>
-              <li><strong>Lugar de juego:</strong> los partidos pueden disputarse en el residencial o en otra ubicación acordada.</li>
-              <li><strong>Plazo para jugar:</strong> si no se juega en el plazo de 2 semanas, se considerará W.O. para el equipo que no haya facilitado la disputa del partido.</li>
-              <li><strong>Notificación de incidencias:</strong> cualquier problema debe comunicarse a los administradores.</li>
-          </ul>
+    <div class="app-container">
+        <header class="header-content">
+            <h1 class="brand-text text-gradient"
+                style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 900;">DIRECTIVAS.PADMIN</h1>
+            <div class="header-right">
+                <button class="btn-glass" onclick="window.history.back()"><i class="fas fa-times"></i></button>
+            </div>
+        </header>
 
-          <h2>🎾 Normas de Juego</h2>
-          <ul>
-              <li><strong>Formato de partido:</strong> al mejor de 3 sets.</li>
-              <li><strong>Desempates:</strong> en caso de 6-6 en juegos, se jugará un tie-break.</li>
-              <li><strong>Juego por ventaja:</strong> se aplicará el sistema de ventaja en todos los juegos con empate a 40-40.</li>
-              
-          </ul>
+        <main class="main-content animate-up">
 
-          <h2>📊 Clasificación y Puntuación</h2>
-          <ul>
-              <li><strong>Puntos por partido:</strong>
-                  <ul>
-                      <li>Victoria: 2 puntos.</li>
-                      <li>Derrota: 1 punto.</li>
-                      <li>W.O.: 0 puntos.</li>
-                  </ul>
-              </li>
-              <li><strong>Criterios de desempate:</strong>
-                  <ol>
-                      <li>Diferencia de juegos ganados y perdidos.</li>
-                      <li>Resultado del enfrentamiento directo.</li>
-                      <li>Mayor número de sets ganados.</li>
-                  </ol>
-              </li>
-          </ul>
+            <div class="norm-card animate-up">
+                <div class="norm-num">01</div>
+                <h2 class="norm-title">SISTEMA ELO</h2>
+                <p class="norm-text">El nexo calcula tu nivel basado en resultados reales. Ganar a rivales superiores
+                    otorga bonificaciones cuánticas, mientras que las derrotas ajustan tu posición en la Matrix.</p>
+            </div>
 
-          <h2>🔄 Sustituciones y Abandonos</h2>
-          <ul>
-              <li><strong>Cambio de compañero:</strong> no se permite cambiar de compañero durante la liga, salvo casos excepcionales aprobados por mayoría de los participantes.</li>
-              <li><strong>Abandono de la liga:</strong> el jugador que abandone la liga no tendrá derecho a la devolución de la inscripción.</li>
-              <li><strong>Lesiones durante el partido:</strong> si un jugador se lesiona durante el partido y no puede continuar, se considerará abandono y la victoria será para la pareja rival.</li>
-          </ul>
+            <div class="norm-card animate-up" style="animation-delay: 0.1s;">
+                <div class="norm-num">02</div>
+                <h2 class="norm-title">PROTOCOLOS DE PISTA</h2>
+                <p class="norm-text">Una vez confirmada la misión (4/4 jugadores), el enlace es vinculante. Las
+                    cancelaciones de última hora pueden afectar a tu nivel de reputación en la red.</p>
+            </div>
 
-                 <h2>💰 Inscripción y Premios</h2>
-          <ul>
-              <li><strong>Cuota de inscripción:</strong> 10 € por persona.</li>
-              <li><strong>Destino de la cuota:</strong> trofeos, gestión de la liga y sanciones.</li>
-              <li><strong>Premios:</strong>
-                  <ul>
-                      <li>Campeones: parte del dinero recaudado y inscripción gratuita para el próximo evento.</li>
-                      <li>Subcampeones: inscripción gratuita para el próximo evento.</li>
-                  </ul>
-              </li>
-          </ul>
+            <div class="norm-card animate-up" style="animation-delay: 0.2s;">
+                <div class="norm-num">03</div>
+                <h2 class="norm-title">CÓDIGO DE ALIADOS</h2>
+                <p class="norm-text">El respeto es la base de la Hermandad. Cualquier comportamiento disruptivo en las
+                    sesiones resultará en un purgado permanente de tu identidad digital.</p>
+            </div>
 
-          <h2>⚠️ Sanciones y Conducta</h2>
-          <ul>
-              <li><strong>Incomparecencia:</strong> si un equipo no se presenta al partido sin justificación, se le dará el partido por perdido (W.O.) y deberá abonar el coste de la pista.</li>
-              <li><strong>Conducta antideportiva:</strong> cualquier comportamiento inapropiado será sancionado por la organización, pudiendo llegar a la expulsión de la liga.</li>
-              <li><strong>Resolución de conflictos:</strong> la organización actuará como comité de competición para resolver cualquier disputa o incidencia.</li>
-          </ul>
-          </div>
-      </section>
-    </main>
-    <script src="./js/enlaceAdmin.js"></script>
-    <script src="./js/menu-hamburguesa.js"></script>
-    <script type="module" src="./js/particles-init.js"></script>
+            <div class="text-center p-8 opacity-20 text-2xs font-bold tracking-widest">
+                VERSIÓN CORE 8.0.4 - MISTRAL EDITION
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { initAppUI } from './js/ui-core.js';
+        initAppUI('normas');
+    </script>
 </body>
+
 </html>

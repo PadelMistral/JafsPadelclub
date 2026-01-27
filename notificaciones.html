@@ -1,42 +1,212 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="dark">
+<html lang="es">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#0A2342">
-    <title>Notificaciones - Padeluminatis</title>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Padeluminatis | Alertas</title>
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="./css/header.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="./css/core.css">
+    <style>
+        .page-content {
+            padding: 90px 16px 110px;
+            overflow-y: auto;
+            height: 100vh;
+        }
+
+        .n-item {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            gap: 15px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .n-item.unread {
+            border-left: 4px solid var(--sport-blue);
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .n-item:active {
+            transform: scale(0.98);
+        }
+
+        .n-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: var(--sport-blue);
+            border: 1px solid var(--glass-border);
+            flex-shrink: 0;
+        }
+
+        .n-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .n-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 4px;
+        }
+
+        .n-title {
+            font-size: 0.9rem;
+            font-weight: 800;
+            color: white;
+            font-family: var(--font-display);
+        }
+
+        .n-time {
+            font-size: 0.6rem;
+            font-weight: 800;
+            color: var(--text-scnd);
+            text-transform: uppercase;
+        }
+
+        .n-body {
+            font-size: 0.75rem;
+            color: var(--text-scnd);
+            line-height: 1.4;
+        }
+
+        .permission-card {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+            text-align: center;
+        }
+
+        .empty-state {
+            margin-top: 40px;
+            text-align: center;
+            opacity: 0.4;
+        }
+
+        .btn-chip {
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-scnd);
+            font-size: 0.7rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-chip.active {
+            background: var(--sport-blue);
+            color: white;
+            border-color: var(--sport-blue);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+    </style>
 </head>
-<body class="app-body">
-    <header class="app-header">
-        <div class="header-content">
-            <img src="./imagenes/Logojafs.png" alt="Logo" class="app-logo">
-            <h1 class="app-title">Padeluminatis</h1>
-            <button class="menu-toggle" aria-label="Menú">
-                <i class="fas fa-bars"></i>
-            </button>
+
+<body>
+    <div class="sport-bg"></div>
+
+    <main class="page-content animate-up">
+
+        <div class="permission-card" id="permission-area">
+            <i class="fas fa-bell-concierge text-3xl text-sport-green mb-1"></i>
+            <h3 class="font-display font-black text-white">ACTIVA TUS ALERTAS</h3>
+            <p class="text-xs text-scnd">Recibe avisos de tus partidos, retos y mensajes aunque no estés en la App.</p>
+            <button class="btn-primary w-full py-3" id="btn-request-push">PERMITIR NOTIFICACIONES</button>
         </div>
-        <nav class="app-nav">
-          <a href="./home.html" class="nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
-          <a href="./eventos.html" class="nav-item"><i class="fas fa-calendar-check"></i><span>Eventos</span></a>
-          <a href="./calendario.html" class="nav-item"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
-          <a href="./clasificacion.html" class="nav-item"><i class="fas fa-trophy"></i><span>Clasificación</span></a>
-          <a href="./normas.html" class="nav-item"><i class="fas fa-gavel"></i><span>Normas</span></a>
-          <a href="./chat.html" class="nav-item"><i class="fas fa-comments"></i><span>Chat</span></a>
-          <a href="./ranking.html" class="nav-item"><i class="fas fa-list-ol"></i><span>Ranking</span></a>
-          <a href="./admin.html" class="nav-item nav-admin" style="display:none"><i class="fas fa-user-shield"></i><span>Admin</span></a>
-          <a href="./perfil.html" class="nav-item"><i class="fas fa-user"></i><span>Perfil</span></a>
-          <a href="./notificaciones.html" class="nav-item active"><i class="fas fa-bell"></i><span>Notificaciones</span></a>
-          <a href="#" class="nav-item nav-logout"><i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span></a>
-        </nav>
-    </header>
-    <main class="app-main">
-      <h2 style="color:var(--primary-color);margin-top:2rem;">Tus notificaciones</h2>
-      <!-- Aquí puedes agregar el contenido de notificaciones -->
+
+        <div class="flex-row between items-center mb-4 px-1">
+            <h2 class="font-display font-black text-lg text-white">BANDEJA DE ENTRADA</h2>
+            <div class="flex-row gap-2">
+                <button class="btn-ghost text-2xs font-bold text-red-400" id="btn-clear-all" title="Borrar Historial">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+                <button class="btn-ghost text-2xs font-bold text-sport-blue" id="btn-read-all">MARCAR TODO</button>
+            </div>
+        </div>
+
+        <div class="flex-row gap-2 mb-6 px-1 sticky top-0 bg-black/20 py-2" id="filter-tabs">
+            <button class="btn-chip active" data-filter="all">Todas</button>
+            <button class="btn-chip" data-filter="unread">No leídas</button>
+            <button class="btn-chip" data-filter="read">Leídas</button>
+        </div>
+
+        <div id="notif-list">
+            <div class="center py-10">
+                <div class="spinner-galaxy"></div>
+            </div>
+        </div>
+
     </main>
-    <script src="./js/menu-hamburguesa.js"></script>
-    <script src="./js/enlaceAdmin.js"></script>
+
+    <script type="module">
+        import { initAppUI } from './js/ui-core.js';
+        import { initBackground, injectHeader, injectNavbar, setupModals } from './js/modules/ui-loader.js';
+        import { auth, observerAuth, getDocument } from './js/firebase-service.js';
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            initBackground();
+            setupModals();
+
+            observerAuth(async (user) => {
+                if (!user) {
+                    window.location.href = 'index.html';
+                    return;
+                }
+                const userData = await getDocument('usuarios', user.uid);
+                await injectHeader(userData);
+                injectNavbar('notifications'); // Assuming this ID or adjusting logic
+            });
+
+            // Notification Permission Logic
+            const btnPush = document.getElementById('btn-request-push');
+            const permArea = document.getElementById('permission-area');
+
+            if ("Notification" in window) {
+                if (Notification.permission === 'granted') {
+                    permArea.style.display = 'none';
+                }
+
+                btnPush.onclick = async () => {
+                    const permission = await Notification.requestPermission();
+                    if (permission === 'granted') {
+                        permArea.innerHTML = `
+                            <i class="fas fa-check-circle text-3xl text-sport-green"></i>
+                            <h3 class="font-display font-black text-white uppercase">SISTEMA ACTIVO</h3>
+                            <p class="text-xs text-scnd">¡Perfecto! Te avisaremos de cualquier novedad importante.</p>
+                        `;
+                        setTimeout(() => permArea.style.display = 'none', 3000);
+                    }
+                };
+            } else {
+                permArea.style.display = 'none';
+            }
+        });
+    </script>
+    <script type="module" src="./js/notificaciones.js"></script>
 </body>
-</html> 
+
+</html>

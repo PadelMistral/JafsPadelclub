@@ -1,0 +1,271 @@
+/* forms.css - Form Controls, Inputs & Sliders (v2.0) */
+
+/* Text Inputs */
+.sport-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 14px 18px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 500;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.sport-input:focus {
+  border-color: var(--sport-blue);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.sport-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.sport-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Select Dropdowns */
+select.sport-input {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 40px;
+}
+
+select.sport-input option {
+  background: #1e1b4b;
+  color: white;
+  padding: 10px;
+}
+
+/* Textarea */
+textarea.sport-input {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* Labels */
+.text-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-scnd);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Checkbox */
+.sport-checkbox {
+  appearance: none;
+  background-color: var(--sport-card);
+  margin: 0;
+  font: inherit;
+  color: currentColor;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  display: grid;
+  place-content: center;
+  transition: 0.2s;
+  cursor: pointer;
+}
+
+.sport-checkbox::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  transform: scale(0);
+  transition: 120ms transform ease-in-out;
+  box-shadow: inset 1em 1em white;
+  transform-origin: center;
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+.sport-checkbox:checked {
+  background-color: var(--sport-blue);
+  border-color: var(--sport-blue);
+}
+
+.sport-checkbox:checked::before {
+  transform: scale(1);
+}
+
+.sport-checkbox:hover {
+  border-color: var(--sport-blue);
+}
+
+/* Radio Buttons */
+.sport-radio {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.sport-radio::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transform: scale(0);
+  transition: 120ms transform ease-in-out;
+  background: white;
+}
+
+.sport-radio:checked {
+  border-color: var(--sport-green);
+}
+
+.sport-radio:checked::before {
+  transform: scale(1);
+  background: var(--sport-green);
+}
+
+/* Range Sliders */
+.slider-group {
+  margin-bottom: 20px;
+}
+
+input[type="range"],
+.slider-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb,
+.slider-track::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--sport-blue), var(--sport-purple));
+  cursor: pointer;
+  border: 3px solid var(--bg-app);
+  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.4);
+  transition: all 0.2s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--sport-blue), var(--sport-purple));
+  cursor: pointer;
+  border: 3px solid var(--bg-app);
+  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.4);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  width: 50px;
+  height: 28px;
+  display: inline-block;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  transition: 0.3s;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--sport-green);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(22px);
+}
+
+/* Form Group */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* Input with Icon */
+.input-icon-wrapper {
+  position: relative;
+}
+
+.input-icon-wrapper i {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-scnd);
+}
+
+.input-icon-wrapper .sport-input {
+  padding-left: 46px;
+}
+
+/* Error State */
+.sport-input.error {
+  border-color: #ef4444;
+}
+
+.sport-input.error:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.error-message {
+  color: #f87171;
+  font-size: 0.75rem;
+  margin-top: 6px;
+}
+
+/* Success State */
+.sport-input.success {
+  border-color: var(--sport-green);
+}
+
+.sport-input.success:focus {
+  box-shadow: 0 0 0 3px rgba(163, 230, 53, 0.15);
+}

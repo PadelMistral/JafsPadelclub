@@ -1,550 +1,438 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="dark">
+<html lang="es">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#0A2342">
-    <title>Mi Perfil - Padeluminatis</title>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Perfil Jugador | Padeluminatis Pro</title>
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="./css/header.css">
-    <link rel="stylesheet" href="./css/perfil.css">
-    <link rel="stylesheet" href="css/modal-busqueda.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="./css/core.css">
     <style>
-        /* Estilos para el overlay del modal */
-        #modal-busqueda-usuarios,
-        #modal-perfil-otro {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            background: rgba(10, 10, 20, 0.85) !important;
-            backdrop-filter: blur(8px);
-            z-index: 9998 !important;
-            display: none;
-            align-items: center !important;
-            justify-content: center !important;
-            padding: 20px !important;
-            box-sizing: border-box !important;
+        .page-content {
+            padding: 85px 16px 120px;
+            overflow-y: auto;
+            height: 100vh;
         }
 
-        /* Estilos para el contenido del modal */
-        #modal-busqueda-usuarios .busqueda-modal-content,
-        #modal-perfil-otro .perfil-otro-modal-content {
-            width: 100% !important;
-            height: 100% !important;
-            max-width: 1400px !important;
-            max-height: 90vh !important;
-            overflow-y: auto !important;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 70%, #0f3460 100%) !important;
-            border-radius: 20px !important;
-            padding: 40px !important;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            position: relative !important;
-            transform: none !important;
-            top: auto !important;
-            left: auto !important;
-            margin: 0 !important;
+        .profile-header {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+            border-radius: 24px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            margin-bottom: 20px;
+        }
+
+        .p-photo-container {
+            position: relative;
+            width: 100px;
+            margin: 0 auto 15px;
+        }
+
+        .p-photo {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 4px solid var(--sport-blue);
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+            overflow: hidden;
+        }
+
+        .edit-badge {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid var(--bg-app);
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4);
+            transition: all 0.3s;
+        }
+
+        .edit-badge:hover {
+            transform: scale(1.1);
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1px 1fr 1px 1fr;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 16px;
+            margin-top: 20px;
+            align-items: center;
+        }
+
+        .separator {
+            width: 1px;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Level Progress Bar */
+        .level-progress-container {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .level-bar-wrap {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            height: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .level-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #a3e635);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+        }
+
+        .level-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.65rem;
+            color: var(--text-scnd);
+        }
+
+        .list-group {
+            background: var(--glass-bg);
+            border-radius: 20px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            margin-bottom: 16px;
+        }
+
+        .list-item {
+            padding: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .list-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding-left: 4px;
+        }
+
+        .section-header i {
+            color: var(--sport-blue);
+            font-size: 0.9rem;
+        }
+
+        /* Gear Card Enhanced */
+        .gear-card {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.05));
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 14px;
+            padding: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+
+        .gear-card:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .gear-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+        }
+
+        /* ELO Graph Placeholder */
+        .elo-graph {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 20px;
+            min-height: 120px;
+        }
+
+        /* Address Section */
+        .address-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+
+        .address-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px;
+            color: white;
+            font-size: 0.85rem;
+            text-align: center;
+            width: 100%;
+        }
+
+        .address-input:focus {
+            outline: none;
+            border-color: var(--sport-blue);
+        }
+
+        .address-label {
+            font-size: 0.65rem;
+            color: var(--text-scnd);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            display: block;
+            text-align: center;
         }
     </style>
 </head>
 
-<body class="app-body">
-    <header class="app-header">
-        <div class="header-content">
-            <img src="./imagenes/Logojafs.png" alt="Logo" class="app-logo">
-            <h1 class="app-title">Mi Perfil - Padeluminatis</h1>
-            <button class="menu-toggle" aria-label="Menú">
-                <i class="fas fa-bars"></i>
-            </button>
+<body>
+    <div class="sport-bg"></div>
+
+    <main class="page-content">
+
+        <div class="profile-header">
+            <div class="p-photo-container interact" onclick="document.getElementById('upload-photo').click()">
+                <div class="p-photo">
+                    <img id="p-avatar" src="./imagenes/default-avatar.png"
+                        style="width:100%; height:100%; object-fit:cover">
+                </div>
+                <div class="edit-badge"><i class="fas fa-camera"></i></div>
+            </div>
+            <input type="file" id="upload-photo" hidden accept="image/*">
+
+            <h2 id="p-name" class="font-display font-bold text-2xl text-white">CARGANDO...</h2>
+            <p id="p-role" class="text-blue-400 font-bold text-xs mt-1 uppercase tracking-widest">Atleta Pro</p>
+
+            <div class="stat-grid">
+                <div class="flex-col center">
+                    <span id="p-nivel" class="font-display font-bold text-xl text-sport-blue">2.5</span>
+                    <span class="text-label">Nivel</span>
+                </div>
+                <div class="separator"></div>
+                <div class="flex-col center">
+                    <span id="p-puntos" class="font-display font-bold text-xl text-sport-green">0</span>
+                    <span class="text-label">Puntos</span>
+                </div>
+                <div class="separator"></div>
+                <div class="flex-col center">
+                    <span id="p-winrate" class="font-display font-bold text-xl text-sport-orange">0%</span>
+                    <span class="text-label">Win %</span>
+                </div>
+            </div>
         </div>
-        <nav class="app-nav">
-          <a href="./home.html" class="nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
-          <a href="./eventos.html" class="nav-item"><i class="fas fa-calendar-check"></i><span>Eventos</span></a>
-          <a href="./calendario.html" class="nav-item"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
-          <a href="./clasificacion.html" class="nav-item"><i class="fas fa-trophy"></i><span>Clasificación</span></a>
-          <a href="./normas.html" class="nav-item"><i class="fas fa-gavel"></i><span>Normas</span></a>
-          <a href="./chat.html" class="nav-item"><i class="fas fa-comments"></i><span>Chat</span></a>
-          <a href="./ranking.html" class="nav-item"><i class="fas fa-list-ol"></i><span>Ranking</span></a>
-          <a href="./admin.html" class="nav-item nav-admin" style="display:none"><i class="fas fa-user-shield"></i><span>Admin</span></a>
-          <a href="./perfil.html" class="nav-item active"><i class="fas fa-user"></i><span>Perfil</span></a>
-          <a href="./notificaciones.html" class="nav-item"><i class="fas fa-bell"></i><span>Notificaciones</span></a>
-          <a href="#" class="nav-item nav-logout"><i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span></a>
-        </nav>
-    </header>
-    <main class="app-main">
-        <section class="profile-section">
-            <div class="profile-background">
-                <div class="profile-glow"></div>
-                <div class="profile-particles"></div>
+
+        <!-- Level Progress -->
+        <div class="level-progress-container">
+            <div class="flex-row between">
+                <span class="text-xs font-bold text-white">Progreso de Nivel</span>
+                <span class="text-xs font-bold text-sport-green" id="level-progress-text">+0 para subir</span>
             </div>
-            
-            <div class="profile-container">
-                <!-- Foto de Perfil Centrada -->
-                <div class="profile-image-container">
-                    <div class="profile-image-frame">
-                        <img id="profile-pic" src="https://ui-avatars.com/api/?name=Usuario&background=00a884&color=fff" alt="Foto de perfil">
-                        <div class="edit-icon">
-                            <i class="fas fa-camera"></i>
-                        </div>
-                        <div class="edit-overlay" id="edit-profile-pic">
-                            <i class="fas fa-camera"></i>
-                            <span>Cambiar foto</span>
-                        </div>
-                    </div>
+            <div class="level-bar-wrap">
+                <div class="level-bar" id="level-bar" style="width: 50%"></div>
+            </div>
+            <div class="level-labels">
+                <span id="level-lower">2.0</span>
+                <span id="level-current" class="text-sport-blue font-bold">Nivel 2.5</span>
+                <span id="level-upper">3.0</span>
+            </div>
+        </div>
+
+        <!-- ELO Evolution Graph -->
+        <div class="elo-graph">
+            <div class="flex-row between mb-2">
+                <span class="text-xs font-bold text-white"><i
+                        class="fas fa-chart-line mr-2 text-sport-purple"></i>Evolución ELO</span>
+                <span class="text-2xs text-scnd">Últimos 10 partidos</span>
+            </div>
+            <canvas id="elo-chart" height="80"></canvas>
+        </div>
+
+        <div class="flex-col gap-4">
+            <!-- Configuration -->
+            <div>
+                <div class="section-header">
+                    <i class="fas fa-cog"></i>
+                    <span class="text-label">Configuración</span>
                 </div>
-
-                <!-- Información del Usuario -->
-                <div class="profile-info-container">
-                    <div class="user-presentation">
-                        <h1 id="user-name" class="user-name">Cargando...</h1>
-                        <div class="user-level-container">
-                            <div class="level-badge">
-                                <span id="user-level">1.5</span>
-                            </div>
-                            <div class="level-progress-container">
-                                <div class="level-progress-bar">
-                                    <div id="level-progress" class="level-progress-fill"></div>
-                                </div>
-                                <span class="level-text">Progreso: <span id="level-percentage">0</span>%</span>
-                            </div>
+                <div class="list-group">
+                    <div class="list-item">
+                        <span class="text-sm font-bold">Alias</span>
+                        <div class="flex-row">
+                            <input type="text" id="p-username-inp" class="sport-input"
+                                style="padding:5px 10px; text-align:right; border:none; background:transparent; font-weight:700; color:var(--sport-blue); max-width: 140px;"
+                                placeholder="Tu nombre...">
+                            <button class="btn-icon-circle" style="width:30px; height:30px; font-size:0.7rem"
+                                id="p-save-name"><i class="fas fa-check"></i></button>
                         </div>
                     </div>
-
-                    <!-- Estadísticas Principales -->
-                    <div class="profile-stats-grid">
-                        <div class="stat-card-main">
-                            <div class="stat-icon">
-                                <i class="fas fa-coins"></i>
-                            </div>
-                            <div class="stat-content">
-                                <span class="stat-value" id="family-points">500</span>
-                                <span class="stat-label">Family Points</span>
-                            </div>
+                    <div class="list-item">
+                        <span class="text-sm font-bold">Teléfono</span>
+                        <div class="flex-row">
+                            <input type="tel" id="p-phone-inp" class="sport-input"
+                                style="padding:5px 10px; text-align:right; border:none; background:transparent; font-weight:700; color:var(--sport-green); max-width: 140px;"
+                                placeholder="600 000 000">
+                            <button class="btn-icon-circle"
+                                style="width:30px; height:30px; font-size:0.7rem; border-color: var(--sport-green); color: var(--sport-green);"
+                                id="p-save-phone"><i class="fas fa-check"></i></button>
                         </div>
-                        
-                        <div class="stat-card-main">
-                            <div class="stat-icon">
-                                <i class="fas fa-trophy"></i>
-                            </div>
-                            <div class="stat-content">
-                                <span class="stat-value" id="total-points">0</span>
-                                <span class="stat-label">Puntos Ranking</span>
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card-main">
-                            <div class="stat-icon">
-                                <i class="fas fa-medal"></i>
-                            </div>
-                            <div class="stat-content" id="logros-stat-content" style="cursor: pointer;" onclick="window.location.href='./logros.html'">
-                                <span class="stat-value" id="achievements-unlocked">0</span>
-                                <span class="stat-label">Logros</span>
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card-main">
-                            <div class="stat-icon">
-                                <i class="fas fa-bolt"></i>
-                            </div>
-                            <div class="stat-content">
-                                    <span class="stat-value" id="retos-jugados">0</span>
-                                    <span class="stat-label">Retos jugados</span>
-                            </div>
-                        </div>
+                    </div>
+                    <div class="list-item" onclick="window.location.href='diario.html'">
+                        <span class="text-sm font-bold">Diario Táctico</span>
+                        <i class="fas fa-chevron-right text-scnd"></i>
+                    </div>
+                    <div class="list-item" onclick="window.location.href='historial.html'">
+                        <span class="text-sm font-bold">Historial Partidos</span>
+                        <i class="fas fa-chevron-right text-scnd"></i>
                     </div>
                 </div>
             </div>
 
-            <!-- Secciones de Competición -->
-            <div class="competition-sections">
-                <!-- Liga Actual -->
-                <div class="competition-card league-card">
-                    <div class="competition-header">
-                        <i class="fas fa-trophy"></i>
-                        <h3>Liga Actual</h3>
-                    </div>
-                    <div class="competition-content">
-                        <div class="competition-stat">
-                            <span class="stat-label">Posición</span>
-                            <span class="stat-value" id="league-position">-</span>
-                        </div>
-                        <div class="competition-stat">
-                            <span class="stat-label">Puntos</span>
-                            <span class="stat-value" id="league-points">0/0</span>
-                        </div>
-                        <div class="competition-stat">
-                            <span class="stat-label">Equipos</span>
-                            <span class="stat-value" id="league-teams">0</span>
-                        </div>
-                        <div class="competition-stat">
-                            <span class="stat-label">Líder</span>
-                            <span class="stat-value" id="league-leader">N/A</span>
-                        </div>
-                        <div class="competition-stat">
-                            <span class="stat-label">Último</span>
-                            <span class="stat-value" id="league-last">N/A</span>
-                        </div>
-                        <div class="competition-progress">
-                            <span class="progress-label">Acabar partidos</span>
-                            <div class="progress-bar-competition">
-                                <div id="league-finished-bar" class="progress-fill-competition"></div>
-                            </div>
-                            <span class="progress-text" id="league-finished-percent">0%</span>
-                            <span class="progress-text" id="league-finished-left-text">0 partidos restantes</span>
-                        </div>
-                        <div class="competition-progress">
-                            <span class="progress-label">Final de Liga</span>
-                            <div class="progress-bar-competition">
-                                <div id="league-progress" class="progress-fill-competition"></div>
-                            </div>
-                            <span class="progress-text" id="league-matches-left-text">0 partidos restantes</span>
-                        </div>
-                    </div>
+            <!-- Address / Vivienda -->
+            <div>
+                <div class="section-header">
+                    <i class="fas fa-home"></i>
+                    <span class="text-label">Dirección</span>
                 </div>
-
-                <!-- Torneos Actuales -->
-                <div class="competition-card tournament-card">
-                    <div class="competition-header">
-                        <i class="fas fa-star"></i>
-                        <h3>Torneos Actuales</h3>
-                    </div>
-                    <div class="competition-content">
-                        <div id="tournaments-list" class="tournaments-list">
-                            <div class="no-tournaments">
-                                <i class="fas fa-info-circle"></i>
-                                <span>No estás registrado en ningún torneo</span>
-                            </div>
+                <div class="list-group p-4">
+                    <div class="address-grid">
+                        <div>
+                            <span class="address-label">Bloque</span>
+                            <input type="text" id="addr-bloque" class="address-input" placeholder="-">
+                        </div>
+                        <div>
+                            <span class="address-label">Piso</span>
+                            <input type="text" id="addr-piso" class="address-input" placeholder="-">
+                        </div>
+                        <div>
+                            <span class="address-label">Puerta</span>
+                            <input type="text" id="addr-puerta" class="address-input" placeholder="-">
                         </div>
                     </div>
-                </div>
-
-                <!-- Amistosos -->
-                <div class="competition-card friendly-card">
-                    <div class="competition-header">
-                        <i class="fas fa-handshake"></i>
-                        <h3>Amistosos</h3>
-                    </div>
-                    <div class="competition-content">
-                        <div class="competition-stat">
-                            <span class="stat-label">Total Jugados</span>
-                            <span class="stat-value" id="friendly-total">0</span>
-                        </div>
-                        <div class="competition-stat">
-                            <span class="stat-label">Victorias</span>
-                            <span class="stat-value" id="friendly-wins">0</span>
-                        </div>
-                        <div class="competition-stat">
-                            <span class="stat-label">Derrotas</span>
-                            <span class="stat-value" id="friendly-losses">0</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Acciones del Perfil -->
-            <div class="profile-actions">
-                <button class="action-button compare-profile" id="compare-profile">
-                    <i class="fas fa-search"></i>
-                    <span>Buscar Perfil Jugador</span>
-                </button>
-                <button class="action-button challenge-friend" id="challenge-friend">
-                    <i class="fas fa-sword"></i>
-                    <span>Retar a un Amigo</span>
-                </button>
-            </div>
-        </section>
-
-        <!-- Compañero Actual -->
-        <section class="partner-section scroll-reveal">
-            <div class="partner-card compact-card">
-                <span class="mini-title">Compañero</span>
-                <h3>Compañero Actual</h3>
-                <div class="player-info">
-                    <img id="partner-pic" src="https://ui-avatars.com/api/?name=Compañero&background=00a884&color=fff" alt="Compañero">
-                    <div class="player-details">
-                        <h4 id="partner-name">Sin compañero</h4>
-                        <div class="player-stats">
-                            <div class="stat">
-                                <i class="fas fa-gamepad"></i>
-                                <span id="partner-matches">0</span> partidos
-                            </div>
-                            <div class="stat">
-                                <i class="fas fa-trophy"></i>
-                                <span id="partner-wins">0</span> victorias
-                            </div>
-                            <div class="stat">
-                                <i class="fas fa-percentage"></i>
-                                <span id="partner-win-rate">0%</span> win rate
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="partner-actions">
-                    <button id="change-partner" class="action-button change-partner"><i class="fas fa-exchange-alt"></i>Cambiar compañero</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- Estadísticas Generales -->
-        <section class="stats-grid compact-stats">
-            <div class="stat-card scroll-reveal compact-card">
-                <span class="mini-title">General</span>
-                <h3>Estadísticas Generales</h3>
-                <div class="stats-grid-3">
-                    <div class="stat-item-compact">
-                        <i class="fas fa-gamepad"></i>
-                        <span class="stat-value" id="total-matches">0</span>
-                        <span class="stat-label">Partidos</span>
-                    </div>
-                    <div class="stat-item-compact">
-                        <i class="fas fa-trophy"></i>
-                        <span class="stat-value" id="total-wins">0</span>
-                        <span class="stat-label">Victorias</span>
-                    </div>
-                    <div class="stat-item-compact">
-                        <i class="fas fa-times-circle"></i>
-                        <span class="stat-value" id="total-losses">0</span>
-                        <span class="stat-label">Derrotas</span>
-                    </div>
-                    <div class="stat-item-compact">
-                        <i class="fas fa-percentage"></i>
-                        <span class="stat-value" id="win-rate">0%</span>
-                        <span class="stat-label">Win Rate</span>
-                    </div>
-                    <div class="stat-item-compact">
-                        <i class="fas fa-fire"></i>
-                        <span class="stat-value" id="current-streak">0</span>
-                        <span class="stat-label">Racha Actual</span>
-                    </div>
-                    <div class="stat-item-compact">
-                        <i class="fas fa-crown"></i>
-                        <span class="stat-value" id="best-streak">0</span>
-                        <span class="stat-label">Mejor Racha</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Victorias por Tipo -->
-            <div class="stat-card scroll-reveal compact-card">
-                <span class="mini-title">Tipos</span>
-                <h3>Victorias por Tipo</h3>
-                <div class="stats-grid-3">
-                    <div class="stat-item-compact">
-                        <i class="fas fa-trophy"></i>
-                        <span class="stat-value" id="league-wins">0</span>
-                        <span class="stat-label">Ligas</span>
-                    </div>
-                    <div class="stat-item-compact">
-                        <i class="fas fa-handshake"></i>
-                        <span class="stat-value" id="friendly-wins">0</span>
-                        <span class="stat-label">Amistosos</span>
-                    </div>
-                    <div class="stat-item-compact">
-                        <i class="fas fa-star"></i>
-                        <span class="stat-value" id="event-wins">0</span>
-                        <span class="stat-label">Eventos</span>
-                    </div>
-                    <div class="stat-item-compact">
-                        <i class="fas fa-bolt"></i>
-                        <span class="stat-value" id="challenge-wins">0</span>
-                        <span class="stat-label">Retos</span>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Mi Pala -->
-        <section class="paddle-section scroll-reveal" style="display: flex; justify-content: center;">
-            <div class="paddle-card">
-                <div class="paddle-header">
-                    <h3>Mi Pala</h3>
-                    <select id="paddle-select" class="paddle-select">
-                        <option value="">Seleccionar Pala</option>
-                        <!-- Las palas se cargarán dinámicamente -->
-                    </select>
-                </div>
-                <div class="paddle-content">
-                    <div class="paddle-image">
-                        <img id="paddle-pic" src="imagenes/5c0e4dc8-3bc6-4692-9e73-47d471dcd846.webp" alt="Pala">
-                    </div>
-                    <div class="paddle-info">
-                        <h4 id="paddle-name">Sin pala seleccionada</h4>
-                        <div class="paddle-stats">
-                            <div class="stat">
-                                <span>Potencia</span>
-                                <div class="progress-bar">
-                                    <div id="power-stat" class="progress" style="width: 0%"></div>
-                                </div>
-                            </div>
-                            <div class="stat">
-                                <span>Control</span>
-                                <div class="progress-bar">
-                                    <div id="control-stat" class="progress" style="width: 0%"></div>
-                                </div>
-                            </div>
-                            <div class="stat">
-                                <span>Punto Dulce</span>
-                                <div class="progress-bar">
-                                    <div id="sweet-spot-stat" class="progress" style="width: 0%"></div>
-                                </div>
-                            </div>
-                            <div class="stat">
-                                <span>Ligereza</span>
-                                <div class="progress-bar">
-                                    <div id="lightness-stat" class="progress" style="width: 0%"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="paddle-actions">
-                    <button class="action-button" id="compare-paddle">
-                        <i class="fas fa-balance-scale"></i> Comparar Pala
+                    <button class="btn-secondary mt-4 w-full" id="save-address">
+                        <i class="fas fa-save mr-2"></i>Guardar Dirección
                     </button>
                 </div>
             </div>
-        </section>
 
-        <!-- Top Jugadores -->
-        <section class="rivals-section compact-stats">
-            <div class="rivals-card scroll-reveal compact-card">
-                <span class="mini-title">Rivales</span>
-                <h3>Top Jugadores</h3>
-                
-                <!-- Rival Más Fácil -->
-                <div class="rival-item">
-                    <h4>Mi Rival Más Fácil</h4>
-                    <div class="player-info">
-                        <img id="top-wins-pic" src="https://ui-avatars.com/api/?name=TopVictorias&background=4CAF50&color=fff" alt="Rival Fácil">
-                        <div class="player-details">
-                            <h5 id="top-wins-name">Sin datos</h5>
-                            <div class="player-stats">
-                                <div class="stat">
-                                    <i class="fas fa-trophy"></i>
-                                    <span id="top-wins-count">0</span> victorias
-                                </div>
-                                <div class="stat">
-                                    <i class="fas fa-times-circle"></i>
-                                    <span id="top-wins-losses">0</span> derrotas
-                                </div>
-                            </div>
-                            <div id="top-wins-details" class="rival-details">
-                                <!-- Detalles del mejor rival se cargarán dinámicamente -->
-                            </div>
-                        </div>
-                    </div>
+            <!-- Inventory / Palas -->
+            <div>
+                <div class="section-header">
+                    <i class="fas fa-table-tennis"></i>
+                    <span class="text-label">Inventario de Palas</span>
                 </div>
-
-                <!-- Rival Más Difícil -->
-                <div class="rival-item">
-                    <h4>Mi Rival Más Difícil</h4>
-                    <div class="player-info">
-                        <img id="worst-rival-pic" src="https://ui-avatars.com/api/?name=PeorRival&background=f44336&color=fff" alt="Rival Difícil">
-                        <div class="player-details">
-                            <h5 id="worst-rival-name">Sin datos</h5>
-                            <div class="player-stats">
-                                <div class="stat">
-                                    <i class="fas fa-times-circle"></i>
-                                    <span id="worst-rival-losses">0</span> derrotas
-                                </div>
-                                <div class="stat">
-                                    <i class="fas fa-trophy"></i>
-                                    <span id="worst-rival-wins">0</span> victorias
-                                </div>
-                            </div>
-                            <div id="worst-rival-details" class="rival-details">
-                                <!-- Detalles del peor rival se cargarán dinámicamente -->
-                            </div>
-                        </div>
-                    </div>
+                <div id="gear-container">
+                    <!-- JS Feed -->
                 </div>
-            </div>
-        </section>
-
-        <!-- Botón para abrir historial -->
-        <section class="history-section scroll-reveal">
-            <button class="history-button" id="open-history-modal">
-                <i class="fas fa-history"></i>
-                <span>Ver Historial de Partidos</span>
-            </button>
-        </section>
-
-        <!-- Modal de Historial de Partidos -->
-        <div class="modal-historial" id="modal-historial" style="display:none;">
-            <div class="modal-historial-content">
-                <button class="close-modal-historial" data-modal="modal-historial">
-                    <i class="fas fa-times"></i>
+                <button class="btn-primary mt-3 w-full" onclick="openGearModal()">
+                    <i class="fas fa-plus mr-2"></i>Añadir Pala
                 </button>
-                <h3>Historial de Partidos</h3>
-                <div class="historial-filtros">
-                    <button class="action-button active" data-filter="all">Todos</button>
-                    <button class="action-button" data-filter="wins">Victorias</button>
-                    <button class="action-button" data-filter="losses">Derrotas</button>
-                </div>
-                <div class="historial-tipo-filtros">
-                    <button class="action-button" data-tipo="all">Todos los tipos</button>
-                    <button class="action-button" data-tipo="liga">Liga</button>
-                    <button class="action-button" data-tipo="amistoso">Amistoso</button>
-                    <button class="action-button" data-tipo="evento">Eventos</button>
-                </div>
-                <div id="historial-partidos" class="historial-list">
-                    <!-- Los partidos se cargarán dinámicamente -->
-                </div>
             </div>
+
+            <button class="btn-ghost text-red-400 mt-4" id="btn-logout" style="width:100%">
+                <i class="fas fa-sign-out-alt mr-2"></i>Cerrar Sesión
+            </button>
         </div>
 
-        <!-- Modal para cambiar compañero -->
-        <div id="modal-cambiar-companero" class="modal-lista" style="display:none;">
-          <div class="modal-lista-content">
-            <span class="close-modal-lista" id="close-modal-cambiar-companero">&times;</span>
-            <h3>Cambiar compañero</h3>
-            <p>¿Qué opción deseas?</p>
-            <button id="option-sin-companero" class="action-button">Quedarme sin compañero</button>
-            <div style="margin: 10px 0;">
-              <label for="select-nuevo-companero">Seleccionar nuevo compañero:</label>
-              <select id="select-nuevo-companero" class="action-button" style="width:100%;margin-top:5px;"></select>
-              <button id="option-cambiar-companero" class="action-button" style="margin-top:8px;">Solicitar cambio</button>
-            </div>
-            <button id="option-cancelar-cambio" class="action-button" style="background:#b91c1c;margin-top:10px;">Cancelar</button>
-            </div>
-        </div>
-
-        <!-- Modal de Búsqueda de Usuarios -->
-        <div id="modal-busqueda-usuarios" class="modal-busqueda">
-            <div class="busqueda-modal-content">
-                <div class="busqueda-header">
-                    <h3><i class="fas fa-search"></i> Buscar Perfil Jugador</h3>
-                    <button id="close-busqueda-modal" class="close-busqueda-modal">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                
-                <div class="busqueda-filtros">
-                    <div class="busqueda-input-container">
-                        <input type="text" id="busqueda-input" placeholder="Buscar por nombre o email..." class="busqueda-input">
-                        <button id="buscar-btn" class="buscar-btn">
-                            <i class="fas fa-search"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="usuarios-container">
-                    <div id="usuarios-lista" class="usuarios-lista">
-                        <!-- Los usuarios se cargarán dinámicamente -->
-                    </div>
-                </div>
-            </div>
-        </div>
     </main>
 
-    <script type="module" src="./js/perfil.js"></script>
-    <script src="./js/menu-hamburguesa.js"></script>
-    <script type="module" src="./js/enlaceAdmin.js"></script>
+    <!-- Enhanced Gear Modal -->
+    <div id="modal-gear" class="modal-overlay">
+        <div class="modal-sheet">
+            <div class="flex-row between mb-4">
+                <h3 class="font-display font-bold text-xl">Nueva Pala</h3>
+                <button class="btn-ghost" onclick="document.getElementById('modal-gear').classList.remove('active')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="flex-col gap-4">
+                <input type="text" id="gear-marca" class="sport-input"
+                    placeholder="Marca (Ej: Nox, Bullpadel, Adidas...)">
+                <input type="text" id="gear-modelo" class="sport-input"
+                    placeholder="Modelo (Ej: AT10 Genius, Hack 03...)">
 
-    <!-- Input oculto para cambiar foto de perfil -->
-    <input type="file" id="profile-pic-input" accept="image/*" style="display:none;" />
+                <div class="section-header mt-2">
+                    <i class="fas fa-sliders"></i>
+                    <span class="text-label">Características</span>
+                </div>
+
+                <div class="flex-row between">
+                    <span class="text-sm text-scnd">Potencia</span>
+                    <input type="range" id="gear-potencia" min="1" max="10" value="5" class="flex-1 ml-3">
+                    <span class="text-sm font-bold text-sport-orange ml-2" id="val-potencia">5</span>
+                </div>
+                <div class="flex-row between">
+                    <span class="text-sm text-scnd">Control</span>
+                    <input type="range" id="gear-control" min="1" max="10" value="5" class="flex-1 ml-3">
+                    <span class="text-sm font-bold text-sport-blue ml-2" id="val-control">5</span>
+                </div>
+                <div class="flex-row between">
+                    <span class="text-sm text-scnd">Manejabilidad</span>
+                    <input type="range" id="gear-manejo" min="1" max="10" value="5" class="flex-1 ml-3">
+                    <span class="text-sm font-bold text-sport-green ml-2" id="val-manejo">5</span>
+                </div>
+
+                <select id="gear-forma" class="sport-input">
+                    <option value="">Selecciona Forma...</option>
+                    <option value="redonda">Redonda (Control)</option>
+                    <option value="lagrima">Lágrima (Equilibrada)</option>
+                    <option value="diamante">Diamante (Potencia)</option>
+                </select>
+
+                <select id="gear-peso" class="sport-input">
+                    <option value="">Selecciona Peso...</option>
+                    <option value="355-365">Ligera (355-365g)</option>
+                    <option value="365-375">Media (365-375g)</option>
+                    <option value="375-385">Pesada (375-385g)</option>
+                </select>
+
+                <div class="flex-row gap-3 mt-2">
+                    <button class="btn-secondary flex-1"
+                        onclick="document.getElementById('modal-gear').classList.remove('active')">Cancelar</button>
+                    <button class="btn-primary flex-1" onclick="savePala()">
+                        <i class="fas fa-save mr-2"></i>Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module" src="./js/perfil.js"></script>
 </body>
+
 </html>

@@ -1,223 +1,235 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="dark">
+<html lang="es">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eventos - Padeluminatis</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./css/eventos.css">
-    <link rel="stylesheet" href="./css/header.css">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0c0a1d">
+    <title>Eventos | Padeluminatis Pro</title>
+    <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="./css/core.css">
+    <style>
+        .page-content {
+            padding: 85px 16px 120px;
+            overflow-y: auto;
+            height: 100vh;
+        }
+
+        .page-header {
+            margin-bottom: 24px;
+        }
+
+        .page-title {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 1.5rem;
+            color: white;
+        }
+
+        .page-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-scnd);
+            margin-top: 4px;
+        }
+
+        .events-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .e-card {
+            position: relative;
+            border-radius: 24px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            border: 1px solid var(--glass-border);
+            transition: all 0.3s;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .e-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(163, 230, 53, 0.3);
+        }
+
+        .e-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: brightness(0.5) saturate(0.8);
+            transition: all 0.5s;
+        }
+
+        .e-card:hover img {
+            transform: scale(1.05);
+            filter: brightness(0.7) saturate(1);
+        }
+
+        .e-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(15, 23, 42, 0.95) 20%, transparent 70%);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        .e-badge {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: linear-gradient(135deg, #a3e635, #65a30d);
+            color: #0f172a;
+            font-size: 0.6rem;
+            font-weight: 800;
+            padding: 6px 12px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .e-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: #a3e635;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .e-meta i {
+            margin-right: 4px;
+        }
+
+        .e-title {
+            font-family: var(--font-display);
+            font-size: 1.4rem;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        .e-desc {
+            font-size: 0.75rem;
+            color: var(--text-scnd);
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+            opacity: 0.4;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+
+        .loading-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+        }
+    </style>
 </head>
-<body class="app-body">
-    <header class="app-header">
-        <div class="header-content">
-            <img src="./imagenes/Logojafs.png" alt="Logo" class="app-logo">
-            <h1 class="app-title">Eventos - Padeluminatis</h1>
-            <button class="menu-toggle" aria-label="Menú">
-                <i class="fas fa-bars"></i>
-            </button>
+
+<body>
+    <div class="sport-bg"></div>
+
+    <main class="page-content">
+
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="fas fa-trophy text-sport-green mr-2"></i>Próximos Eventos
+            </h1>
+            <p class="page-subtitle">Torneos, ligas y competiciones especiales</p>
         </div>
-        <nav class="app-nav">
-            <a href="./home.html" class="nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
-            <a href="./eventos.html" class="nav-item active"><i class="fas fa-calendar-check"></i><span>Eventos</span></a>
-            <a href="./calendario.html" class="nav-item"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
-            <a href="./clasificacion.html" class="nav-item"><i class="fas fa-trophy"></i><span>Clasificación</span></a>
-            <a href="./normas.html" class="nav-item"><i class="fas fa-gavel"></i><span>Normas</span></a>
-            <a href="./chat.html" class="nav-item"><i class="fas fa-comments"></i><span>Chat</span></a>
-            <a href="./ranking.html" class="nav-item"><i class="fas fa-list-ol"></i><span>Ranking</span></a>
-            <a href="./admin.html" class="nav-item nav-admin" style="display:none"><i class="fas fa-user-shield"></i><span>Admin</span></a>
-            <a href="./perfil.html" class="nav-item"><i class="fas fa-user"></i><span>Perfil</span></a>
-            <a href="./notificaciones.html" class="nav-item"><i class="fas fa-bell"></i><span>Notificaciones</span></a>
-            <a href="#" class="nav-item nav-logout"><i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span></a>
-        </nav>
-    </header>
-    <main class="app-main">
-        <h2 class="section-title">Próximos eventos de pádel</h2>
-        
-        <div class="filters-container">
-            <div class="filter-group">
-                <label class="filter-label">Tipo de evento</label>
-                <select class="filter-select" id="filterType">
-                    <option value="all">Todos</option>
-                    <option value="tournament">Torneo</option>
-                    <option value="league">Liga</option>
-                    <option value="mixed">Liga + Torneo</option>
-                </select>
+
+        <div id="events-container" class="events-grid">
+            <div class="loading-section">
+                <div class="spinner-galaxy"></div>
+                <span class="text-xs text-scnd mt-3">Cargando eventos...</span>
             </div>
-            
-            <div class="filter-group">
-                <label class="filter-label">Estado</label>
-                <select class="filter-select" id="filterStatus">
-                    <option value="all">Todos</option>
-                    <option value="open">Inscripciones abiertas</option>
-                    <option value="closed">Inscripciones cerradas</option>
-                    <option value="in-progress">En curso</option>
-                    <option value="completed">Finalizados</option>
-                </select>
-            </div>
-            
-            <div class="filter-group">
-                <label class="filter-label">Nivel</label>
-                <select class="filter-select" id="filterLevel">
-                    <option value="all">Todos los niveles</option>
-                    <option value="1">Nivel 1 (Principiante)</option>
-                    <option value="2">Nivel 2 (Intermedio)</option>
-                    <option value="3">Nivel 3 (Avanzado)</option>
-                    <option value="4">Nivel 4 (Profesional)</option>
-                    <option value="5">Nivel 5 (Élite)</option>
-                </select>
-            </div>
-            
-            <button class="btn btn-primary" id="applyFilters">
-                <i class="fas fa-filter"></i> Filtrar
-            </button>
-            
-            <button id="createEventBtn" class="btn btn-accent">
-                <i class="fas fa-plus"></i> Crear evento
-            </button>
         </div>
-        
-        <div class="events-container" id="eventsList">
-            <!-- Eventos se cargarán dinámicamente con JavaScript -->
-        </div>
+
     </main>
-    
-    <!-- Modal para crear/editar evento -->
-    <div id="eventModal" class="modal">
-        <div class="modal-content compact-form">
-            <div class="modal-header">
-                <h3 class="modal-title" id="modalTitle">Crear nuevo evento</h3>
-                <button class="close-modal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="eventForm">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label class="form-label">Nombre del evento</label>
-                            <input type="text" class="form-control" id="eventName" placeholder="Ej: Torneo Primavera" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Tipo de evento</label>
-                            <select class="form-control" id="eventType" required>
-                                <option value="tournament">Torneo</option>
-                                <option value="league">Liga</option>
-                                <option value="mixed">Liga + Torneo</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Formato</label>
-                            <select class="form-control" id="eventFormat" required>
-                                <option value="elimination">Solo eliminatorias</option>
-                                <option value="group+elimination">Liguilla + Eliminatorias</option>
-                                <option value="group">Solo liguilla</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Fecha de inicio</label>
-                            <input type="datetime-local" class="form-control" id="startDate" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Fecha de fin</label>
-                            <input type="datetime-local" class="form-control" id="endDate" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Fecha límite inscripción</label>
-                            <input type="datetime-local" class="form-control" id="registrationEnd" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Máximo participantes</label>
-                            <input type="number" class="form-control" id="maxParticipants" min="4" value="16">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Nivel mínimo</label>
-                            <select class="form-control" id="minLevel">
-                                <option value="0">Cualquiera</option>
-                                <option value="1">Nivel 1</option>
-                                <option value="2">Nivel 2</option>
-                                <option value="3">Nivel 3</option>
-                                <option value="4">Nivel 4</option>
-                                <option value="5">Nivel 5</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Nivel máximo</label>
-                            <select class="form-control" id="maxLevel">
-                                <option value="0">Cualquiera</option>
-                                <option value="1">Nivel 1</option>
-                                <option value="2">Nivel 2</option>
-                                <option value="3">Nivel 3</option>
-                                <option value="4">Nivel 4</option>
-                                <option value="5">Nivel 5</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Forma de inscripción</label>
-                            <div class="radio-group">
-                                <div class="radio-option">
-                                    <input type="radio" id="registrationTeam" name="registrationType" value="team" checked>
-                                    <label for="registrationTeam">Parejas</label>
-                                </div>
-                                <div class="radio-option">
-                                    <input type="radio" id="registrationIndividual" name="registrationType" value="individual">
-                                    <label for="registrationIndividual">Individual</label>
-                                </div>
-                                <div class="radio-option">
-                                    <input type="radio" id="registrationPreferences" name="registrationType" value="preferences">
-                                    <label for="registrationPreferences">Preferencias</label>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Costo de inscripción (€)</label>
-                            <input type="number" class="form-control" id="entryFee" min="0" value="0" step="0.5">
-                        </div>
+
+    <script type="module">
+        import { db, subscribeCol, observerAuth, getDocument } from './js/firebase-service.js';
+        import { injectHeader, injectNavbar, initBackground, setupModals } from './js/modules/ui-loader.js';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initBackground();
+            setupModals();
+
+            observerAuth(async (user) => {
+                if (!user) {
+                    window.location.href = 'index.html';
+                    return;
+                }
+
+                const userData = await getDocument('usuarios', user.uid);
+                await injectHeader(userData);
+                injectNavbar('eventos');
+            });
+        });
+
+        const container = document.getElementById('events-container');
+
+        subscribeCol("eventos", (list) => {
+            if (list.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-calendar-xmark"></i>
+                        <span class="font-bold uppercase tracking-widest text-sm">Sin eventos programados</span>
+                        <span class="text-xs mt-2">Próximamente nuevas competiciones</span>
                     </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Descripción</label>
-                        <textarea class="form-control form-textarea" id="eventDescription" placeholder="Detalles del evento, normas, premios, etc." rows="3"></textarea>
+                `;
+                return;
+            }
+
+            // Sort by date
+            list.sort((a, b) => {
+                const dateA = a.fecha ? new Date(a.fecha) : new Date();
+                const dateB = b.fecha ? new Date(b.fecha) : new Date();
+                return dateA - dateB;
+            });
+
+            container.innerHTML = list.map((e, idx) => `
+                <div class="e-card animate-up" style="animation-delay: ${idx * 0.1}s" onclick="window.location.href='${e.link || '#'}'">
+                    <img src="${e.image || './imagenes/Logojafs.png'}" alt="${e.nombre}">
+                    ${e.tipo ? `<span class="e-badge">${e.tipo}</span>` : ''}
+                    <div class="e-overlay">
+                        <div class="e-meta">
+                            <span><i class="fas fa-calendar"></i>${e.fecha || 'Por definir'}</span>
+                            <span><i class="fas fa-users"></i>${e.slots || 0} plazas</span>
+                            ${e.premio ? `<span><i class="fas fa-gift"></i>${e.premio}</span>` : ''}
+                        </div>
+                        <h2 class="e-title">${(e.nombre || 'Evento').toUpperCase()}</h2>
+                        <p class="e-desc">${e.descripcion || 'Más información próximamente'}</p>
                     </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Reglas específicas</label>
-                        <textarea class="form-control form-textarea" id="eventRules" placeholder="Reglas especiales" rows="2"></textarea>
-                    </div>
-                    
-                    <div class="rules-box">
-                        <h4><i class="fas fa-info-circle"></i> Reglas automáticas aplicadas</h4>
-                        <ul>
-                            <li>Victoria en liga: 3 puntos, Derrota ajustada: 1 punto</li>
-                            <li>En torneos: Eliminación directa con partido por el 3er puesto</li>
-                            <li>Tie-break en caso de empate a 6 juegos</li>
-                        </ul>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-danger" id="cancelEventBtn">Cancelar</button>
-                <button class="btn btn-primary" id="saveEventBtn">Guardar evento</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Modal para detalles del evento -->
-    <div id="eventDetailsModal" class="modal event-details-modal">
-        <!-- Contenido del modal de detalles (similar al anterior) -->
-    </div>
-    
-    <script type="module" src="./js/eventos.js"></script>
-    <script type="module" src="./js/menu-hamburguesa.js"></script>
-    <script type="module" src="./js/enlaceAdmin.js"></script>
+                </div>
+            `).join('');
+        });
+    </script>
 </body>
+
 </html>

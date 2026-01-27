@@ -1,43 +1,77 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
+
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Recuperar Contraseña - Liga de Pádel</title>
-  <link rel="stylesheet" href="./css/login.css" />
-  <link rel="shortcut icon" href="./imagenes/Logojafs.png" type="image/x-icon">
-  <!-- Font Awesome -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Recuperar | Padel Matrix</title>
+    <link rel="stylesheet" href="./css/core.css">
+    <style>
+        .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 400px;
+            background: rgba(15, 23, 42, 0.15);
+            backdrop-filter: blur(25px) saturate(160%);
+            -webkit-backdrop-filter: blur(25px) saturate(160%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 40px;
+            padding: 48px 32px;
+            box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.7);
+        }
+    </style>
 </head>
-<body class="fondo">
-  <div id="particles-js"></div>
-  <div class="contenedor-login">
-    <div class="tituloLog">
-      <h1 class="titulo">Recuperar contraseña</h1>
-      <div class="logo">
-        <img src="./imagenes/Logojafs.png" alt="Logo de JafsPadel League" width="100" height="100">
-      </div>
-    </div>
-    
-    <form id="recuperarForm" class="formulario-login">
-      <div class="input-group">
-        <i class="fas fa-envelope"></i>
-        <input type="email" id="email" placeholder="Email" class="input-texto" required />
-      </div>
-      <button type="submit" class="boton-enviar-especial">Enviar enlace</button>
-    </form>
 
-    <div id="mensaje" style="color: white; text-align: center; margin-top: 10px;"></div>
+<body class="app-body">
+    <div class="sport-bg"></div>
 
-    <p class="texto-registro">
-      <a href="index.html">Volver al inicio de sesión</a>
-    </p>
-  </div>
+    <main class="auth-container">
+        <div class="auth-card text-center animate-up">
+            <h1 class="font-display font-black text-2xl text-white mb-4">RESTABLECER</h1>
+            <p class="text-xs text-scnd mb-6">Introduce tu email para enviarte un enlace de recuperación cuántica.</p>
 
-  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
-  <script type="module" src="./js/particles-init.js"></script>
-  <script type="module" src="./js/recuperar.js"></script>
+            <div class="mb-4">
+                <input type="email" id="reset-email" class="sport-input" placeholder="operativo@email.com">
+            </div>
+
+            <button class="btn-primary w-full py-4 font-black" id="btn-reset">
+                ENVIAR ENLACE <i class="fas fa-paper-plane ml-2"></i>
+            </button>
+
+            <div class="mt-8">
+                <a href="index.html" class="text-xs text-sport-blue font-bold">
+                    <i class="fas fa-arrow-left mr-2"></i> VOLVER AL ACCESO
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { auth } from './js/firebase-service.js';
+        import { sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js";
+        import { showToast } from './js/ui-core.js';
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+
+        initGalaxyBackground();
+
+        document.getElementById('btn-reset').onclick = async () => {
+            const email = document.getElementById('reset-email').value.trim();
+            if (!email) return showToast("Error", "Introduce un email.", "warning");
+
+            try {
+                await sendPasswordResetEmail(auth, email);
+                showToast("Sistemas OK", "Enlace enviado. Revisa tu bandeja.", "success");
+                setTimeout(() => window.location.href = 'index.html', 3000);
+            } catch (e) { showToast("Error", "No se encontró el email.", "error"); }
+        }
+    </script>
 </body>
+
 </html>

@@ -1,0 +1,715 @@
+/* =========================================
+   CALENDARIO PREMIUM - ESTILOS MAESTROS
+   Unificación de estilos para fácil mantenimiento
+========================================= */
+
+:root {
+  /* Dimensions - Proportional Sizing */
+  --hour-col-width: 38px; /* Slightly reduced */
+  --row-height: 58px;
+  --header-height: 40px;
+
+  /* Colors - Unified with Home */
+  --bg-dark: #0a0a0c;
+  --bg-card: rgba(21, 21, 24, 0.4);
+  --primary: #ff6b35; /* Premium Orange */
+  --primary-glow: rgba(255, 107, 53, 0.4);
+  --accent: #00c3ff; /* Electric Blue */
+  --success: #00ff88;
+  --danger: #ff4757;
+  --text-main: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.5);
+  --border-glass: rgba(255, 255, 255, 0.08);
+  --radius-xl: 18px;
+  --radius-lg: 14px;
+}
+
+/* 1. CONTENEDOR PRINCIPAL - FULL SCREEN */
+.calendar-main-container {
+  width: 100%;
+  margin-top: 0;
+  background: var(--bg-card);
+  backdrop-filter: blur(25px);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  padding: 4px;
+  border: none;
+  border-bottom: 1px solid var(--border-glass);
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: calc(100vh - 44px - 70px); /* Total Height - Header - Nav */
+  margin-bottom: 0;
+}
+
+.calendar-bottom-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  background: rgba(15, 18, 25, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 15px;
+  border-top: 1px solid var(--border-glass);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  z-index: 10;
+}
+
+.calendar-bottom-info .info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.calendar-bottom-info .divider-v {
+  width: 1px;
+  height: 20px;
+  background: var(--border-glass);
+}
+
+/* 2. HEADER Y NAVEGACIÓN */
+.calendar-header-premium {
+  padding: 10px 0;
+}
+
+.calendario-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-glass);
+}
+
+.week-selector-info {
+  text-align: center;
+}
+
+.week-label {
+  font-size: 1.1rem;
+  color: #fff;
+  font-weight: 800;
+  margin: 0;
+  font-family: "Rajdhani", sans-serif;
+  letter-spacing: 1px;
+}
+
+.month-label {
+  font-size: 0.7rem;
+  color: var(--primary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.btn-nav {
+  background: rgba(255, 107, 53, 0.1);
+  border: 1px solid rgba(255, 107, 53, 0.2);
+  color: var(--primary);
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-nav:hover {
+  background: var(--primary);
+  color: #000;
+  transform: scale(1.05);
+  box-shadow: 0 0 15px var(--primary-glow);
+}
+
+/* 3. LEYENDA */
+.legend-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  padding: 15px;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-glass);
+}
+
+.legend-item {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.dot.libre {
+  background: rgba(255, 255, 255, 0.2);
+}
+.dot.abierta {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+.dot.reservado {
+  background: var(--danger);
+}
+.dot.mi-partida {
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary-glow);
+}
+
+/* 4. GRID DEL CALENDARIO */
+.calendar-grid {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+.calendar-grid::-webkit-scrollbar {
+  width: 4px;
+}
+.calendar-grid::-webkit-scrollbar-thumb {
+  background: var(--border-glass);
+  border-radius: 10px;
+}
+
+.grid-header {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.corner-header {
+  width: var(--hour-col-width);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 0.8rem;
+}
+
+.day-header {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.02);
+  margin: 0 2px;
+  border-radius: 12px;
+  padding: 8px 0;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.day-header.today {
+  background: rgba(255, 107, 53, 0.08);
+  border: 1px solid rgba(255, 107, 53, 0.2);
+}
+
+.day-header.today .day-num {
+  color: var(--primary);
+  text-shadow: 0 0 10px var(--primary-glow);
+}
+
+.day-name {
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.day-num {
+  font-size: 1rem;
+  font-weight: 800;
+  font-family: "Rajdhani", sans-serif;
+  color: #fff;
+}
+
+/* 5. CUERPO Y CELDAS */
+.grid-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.time-row {
+  display: flex;
+  height: var(--row-height);
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+.time-col {
+  width: var(--hour-col-width);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.01);
+  border-radius: 8px;
+  margin-right: 4px;
+}
+
+.time-start {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #fff;
+  font-family: "Rajdhani", sans-serif;
+}
+
+.time-end {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.slot-cell {
+  flex: 1;
+  margin: 0 1px;
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  overflow: hidden; /* Prohibit growth */
+  height: var(--row-height);
+}
+
+.slot-cell:hover {
+  background: rgba(255, 255, 255, 0.05);
+  transform: scale(1.02);
+  z-index: 2;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* Estados de Celda */
+.slot-cell.free .status-label {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  opacity: 0.4;
+  text-transform: uppercase;
+}
+
+.slot-cell.free:hover .status-label {
+  color: var(--success);
+  opacity: 1;
+}
+
+.slot-cell.occupied {
+  background: rgba(255, 71, 87, 0.05);
+  border-color: rgba(255, 71, 87, 0.1);
+}
+
+.slot-cell.mine {
+  background: rgba(255, 107, 53, 0.1);
+  border-color: rgba(255, 107, 53, 0.3);
+  box-shadow: inset 0 0 10px rgba(255, 107, 53, 0.05);
+}
+
+.slot-cell.open {
+  background: rgba(0, 195, 255, 0.05);
+  border-color: rgba(0, 195, 255, 0.2);
+}
+
+.occupied-info {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.occupied-info i {
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.occupant-name {
+  font-size: 0.5rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #fff;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+/* 6. MODAL UNIFICADO PREMIUM */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100dvh;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  z-index: 9999;
+  /* Perfect Centering */
+  align-items: center;
+  justify-content: center;
+  padding: 15px;
+  overflow: hidden; /* Prevent body scroll interaction */
+}
+
+.modal-overlay.active {
+  display: flex !important;
+  animation: fadeInOverlay 0.3s ease;
+}
+
+@keyframes fadeInOverlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-card {
+  background: #121214;
+  width: 92%;
+  max-width: 320px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.9);
+  display: flex;
+  flex-direction: column;
+  max-height: 85dvh;
+  position: relative;
+  margin: auto;
+  transform-origin: center;
+  overflow: hidden;
+  animation: modalPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modalPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-header {
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.modal-title {
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 800;
+  font-size: 1.2rem;
+  letter-spacing: 1px;
+  color: var(--primary);
+}
+
+.close-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1; /* Take remaining space */
+}
+
+/* Creation Form Specifics */
+.creation-hero {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.creation-time-display {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  margin: 5px 0;
+}
+
+.creation-date-sub {
+  font-size: 0.75rem;
+  color: var(--primary);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+/* Styled Category Toggles */
+.category-toggle-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px;
+  border-radius: 16px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.cat-btn {
+  background: transparent;
+  border: none;
+  padding: 12px;
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-family: "Rajdhani", sans-serif;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.cat-btn i {
+  font-size: 1.2rem;
+  margin-bottom: 2px;
+}
+
+.cat-btn.active.amistoso {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 195, 255, 0.2),
+    rgba(0, 195, 255, 0.05)
+  );
+  color: var(--accent);
+  box-shadow: 0 4px 15px rgba(0, 195, 255, 0.1);
+  border: 1px solid rgba(0, 195, 255, 0.2);
+}
+
+.cat-btn.active.reto {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 107, 53, 0.2),
+    rgba(255, 107, 53, 0.05)
+  );
+  color: var(--primary);
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.1);
+  border: 1px solid rgba(255, 107, 53, 0.2);
+}
+
+/* Enhanced Inputs */
+.form-input-pro {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  width: 100%;
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700;
+  transition: 0.3s;
+}
+.form-input-pro:focus {
+  border-color: var(--primary);
+  background: rgba(0, 0, 0, 0.5);
+  outline: none;
+}
+
+.range-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 800;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+}
+
+/* 7. VS SCHEMA & CREATION UI */
+.vs-schema-container {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 80, 40, 0.3) 0%,
+    rgba(0, 60, 30, 0.5) 100%
+  );
+  border-radius: 20px;
+  padding: 25px 20px;
+  margin-bottom: 25px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Tennis Court Lines */
+.vs-schema-container::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 15px;
+  right: 15px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-50%);
+}
+
+.vs-schema-container::after {
+  content: "";
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  left: 50%;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateX(-50%);
+}
+
+.player-slot {
+  background: rgba(0, 0, 0, 0.4);
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  height: 55px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 15px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  cursor: pointer;
+  backdrop-filter: blur(5px);
+}
+
+.player-slot.filled {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 107, 53, 0.2),
+    rgba(255, 107, 53, 0.05)
+  );
+  border: 2px solid rgba(255, 107, 53, 0.5);
+  color: #fff;
+  font-weight: 800;
+}
+
+.vs-circle {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #1a1a1a, #0a0a0a);
+  border: 3px solid var(--primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 900;
+  font-size: 1rem;
+  color: var(--primary);
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.3);
+  position: relative;
+  z-index: 5;
+}
+
+/* 9. TOAST PREMIUM */
+.toast-premium {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3000;
+  padding: 12px 24px;
+  border-radius: 50px;
+  background: rgba(18, 18, 20, 0.95);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  pointer-events: none;
+  min-width: 250px;
+}
+
+/* Additional Styles for slot display */
+.slot-chip {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.6rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.slot-chip.free {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+}
+.slot-chip.abierta {
+  background: rgba(0, 195, 255, 0.2);
+  color: var(--accent);
+}
+.slot-chip.propia {
+  background: rgba(255, 107, 53, 0.2);
+  color: var(--primary);
+}
+.slot-chip.cerrada {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+/* Utilities */
+.center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.py-20 {
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+}

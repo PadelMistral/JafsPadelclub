@@ -1,0 +1,58 @@
+/* ui.css - Sports Component Library (Utilities Only) */
+
+/* Badges */
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 50px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.badge-blue {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+.badge-green {
+  background: rgba(132, 204, 22, 0.15);
+  color: #a3e635;
+}
+.badge-orange {
+  background: rgba(249, 115, 22, 0.15);
+  color: #fb923c;
+}
+
+/* Grid & Flex Utils */
+.flex-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.flex-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.between {
+  justify-content: space-between;
+}
+.center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.align-end {
+  align-items: flex-end;
+}
+.text-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-scnd);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

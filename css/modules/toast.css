@@ -1,0 +1,72 @@
+/* toast.css - Floating Notifications */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toast {
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(10px);
+  border-left: 4px solid var(--sport-blue);
+  color: white;
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: toastIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  width: 100%;
+}
+
+.toast.success {
+  border-color: var(--sport-green);
+}
+.toast.error {
+  border-color: #ef4444;
+}
+.toast.info {
+  border-color: var(--sport-blue);
+}
+
+.toast-icon {
+  font-size: 1.2rem;
+}
+.toast-content {
+  flex: 1;
+}
+.toast-title {
+  font-weight: 800;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.toast-msg {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastOut {
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}

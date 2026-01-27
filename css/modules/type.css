@@ -1,0 +1,152 @@
+/* type.css - Premium Typography System */
+
+/* Font Families */
+.font-display {
+  font-family: var(--font-display);
+}
+.font-body {
+  font-family: var(--font-body);
+}
+
+/* Weights */
+.font-normal {
+  font-weight: 400;
+}
+.font-medium {
+  font-weight: 500;
+}
+.font-semibold {
+  font-weight: 600;
+}
+.font-bold {
+  font-weight: 700;
+}
+.font-black {
+  font-weight: 800;
+}
+
+/* Sizes */
+.text-2xs {
+  font-size: 0.625rem;
+} /* 10px */
+.text-xs {
+  font-size: 0.75rem;
+} /* 12px */
+.text-sm {
+  font-size: 0.875rem;
+} /* 14px */
+.text-base {
+  font-size: 1rem;
+} /* 16px */
+.text-lg {
+  font-size: 1.125rem;
+} /* 18px */
+.text-xl {
+  font-size: 1.25rem;
+} /* 20px */
+.text-2xl {
+  font-size: 1.5rem;
+} /* 24px */
+.text-3xl {
+  font-size: 1.875rem;
+} /* 30px */
+.text-4xl {
+  font-size: 2.25rem;
+} /* 36px */
+
+/* Transforms */
+.uppercase {
+  text-transform: uppercase;
+}
+.lowercase {
+  text-transform: lowercase;
+}
+.capitalize {
+  text-transform: capitalize;
+}
+.italic {
+  font-style: italic;
+}
+
+/* Spacing */
+.tracking-tight {
+  letter-spacing: -0.025em;
+}
+.tracking-normal {
+  letter-spacing: 0;
+}
+.tracking-wide {
+  letter-spacing: 0.025em;
+}
+.tracking-widest {
+  letter-spacing: 0.1em;
+}
+.leading-none {
+  line-height: 1;
+}
+.leading-tight {
+  line-height: 1.25;
+}
+.leading-relaxed {
+  line-height: 1.625;
+}
+
+/* Truncation */
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Colors */
+.text-white {
+  color: #ffffff;
+}
+.text-main {
+  color: var(--text-main);
+}
+.text-scnd {
+  color: var(--text-scnd);
+}
+.text-sport-blue {
+  color: var(--sport-blue);
+}
+.text-sport-green {
+  color: var(--sport-green);
+}
+.text-sport-orange {
+  color: var(--sport-orange);
+}
+.text-red-400 {
+  color: #f87171;
+}
+.text-yellow-400 {
+  color: #facc15;
+}
+.text-purple-400 {
+  color: #c084fc;
+}
+
+/* Gradients */
+.text-gradient {
+  background: linear-gradient(135deg, var(--sport-blue), var(--sport-green));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Labels */
+.text-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-scnd);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}

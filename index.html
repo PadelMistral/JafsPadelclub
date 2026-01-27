@@ -1,338 +1,326 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login - Liga de Pádel</title>
-  <link rel="stylesheet" href="./css/login.css" />
-  <link rel="stylesheet" href="./css/loading.css" />
-  <link rel="shortcut icon" href="./imagenes/Logojafs.png" type="image/x-icon">
-  <!-- Enlace al manifest.json (para instalación como app) -->
-  <link rel="manifest" href="/padeluminatis/manifest.json">
-  <!-- Color de tema para la barra de estado móvil -->
-  <meta name="theme-color" content="#FF6B35">
-  <!-- Registro del Service Worker -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/padeluminatis/service-worker.js')
-          .then(reg => console.log('✅ Service Worker registrado con éxito'))
-          .catch(err => console.error('❌ Error al registrar:', err));
-      });
-    }
-  </script>
-  <!-- Font Awesome -->
-       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4).0/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
-  <!-- Estilos del Loading Espectacular -->
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0c0a1d">
+  <title>Padeluminatis Pro | Acceso Elite</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="./css/core.css">
   <style>
-    /* ===== LOADING ESPECTACULAR ===== */
-    .loading-container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 50%, #0a0e1a 100%);
+    .auth-screen {
+      min-height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      z-index: 9999;
-      overflow: hidden;
+      padding: 24px;
+      position: relative;
+      z-index: 10;
     }
 
-    /* Lluvia de partículas */
-    .rain-container {
-      position: absolute;
-      top: 0;
-      left: 0;
+    .auth-container {
       width: 100%;
-      height: 100%;
-      pointer-events: none;
+      max-width: 400px;
+      /* More translucent and elegant */
+      background: rgba(15, 23, 42, 0.15);
+      backdrop-filter: blur(25px) saturate(160%);
+      -webkit-backdrop-filter: blur(25px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 40px;
+      padding: 48px 32px;
+      box-shadow:
+        0 40px 100px -20px rgba(0, 0, 0, 0.7),
+        inset 0 1px 1px rgba(255, 255, 255, 0.03);
+      animation: authEntrance 0.8s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    .rain-drop {
-      position: absolute;
-      top: -20px;
-      left: var(--left);
-      width: 2px;
-      height: 20px;
-      background: linear-gradient(to bottom, transparent, #00C3FF, #FFB800);
-      border-radius: 0 0 50% 50%;
-      animation: rainFall 2s linear infinite;
-      animation-delay: var(--delay);
-      opacity: 0.7;
-      box-shadow: 0 0 10px rgba(0, 195, 255, 0.5);
-    }
-
-    @keyframes rainFall {
-      0% {
-        transform: translateY(-20px) scale(0);
+    @keyframes authEntrance {
+      from {
         opacity: 0;
+        transform: translateY(30px) scale(0.95);
       }
-      10% {
+
+      to {
         opacity: 1;
         transform: translateY(0) scale(1);
       }
-      90% {
-        opacity: 1;
-      }
-      100% {
-        transform: translateY(100vh) scale(0.5);
-        opacity: 0;
-      }
     }
 
-    /* Logo palpitando como corazón */
-    .heartbeat-logo {
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      animation: heartbeat 1.5s ease-in-out infinite;
-      box-shadow: 
-        0 0 30px rgba(0, 195, 255, 0.6),
-        0 0 60px rgba(255, 184, 0, 0.4),
-        inset 0 0 20px rgba(255, 255, 255, 0.1);
-      border: 3px solid rgba(255, 255, 255, 0.2);
+    .auth-logo-box {
+      position: relative;
+      width: 100px;
+      height: 100px;
+      margin: 0 auto 24px;
     }
 
-    @keyframes heartbeat {
-      0%, 100% { transform: scale(1); }
-      25% { transform: scale(1.1); }
-      50% { transform: scale(1.05); }
-      75% { transform: scale(1.15); }
-    }
-
-    /* Bordes giratorios */
-    .rotating-border {
-      position: absolute;
-      border-radius: 50%;
-    }
-
-    .blue-border {
-      width: 160px;
-      height: 160px;
-      border: 3px solid transparent;
-      border-top: 3px solid #00C3FF;
-      border-right: 3px solid #00C3FF;
-      animation: rotate 2s linear infinite;
-      box-shadow: 0 0 20px rgba(0, 195, 255, 0.5);
-    }
-
-    .yellow-border {
-      width: 200px;
-      height: 200px;
-      border: 3px solid transparent;
-      border-bottom: 3px solid #FFB800;
-      border-left: 3px solid #FFB800;
-      animation: rotate 3s linear infinite reverse;
-      box-shadow: 0 0 20px rgba(255, 184, 0, 0.5);
-    }
-
-    @keyframes rotate {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* Texto de carga */
-    .loading-title {
-      font-size: 2.5rem;
-      font-weight: 700;
-      color: #ffffff;
-      margin: 0 0 0.5rem 0;
-      background: linear-gradient(45deg, #00C3FF, #FFB800, #00C3FF);
-      background-size: 200% 200%;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      animation: gradientShift 3s ease-in-out infinite;
-      text-shadow: 0 0 20px rgba(0, 195, 255, 0.5);
-    }
-
-    @keyframes gradientShift {
-      0%, 100% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-    }
-
-    /* Barra de progreso */
-    .progress-bar {
-      width: 300px;
-      height: 8px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-      overflow: hidden;
-      margin-bottom: 1rem;
-    }
-
-    .progress-fill {
+    .auth-logo {
+      width: 100%;
       height: 100%;
-      background: linear-gradient(90deg, #00C3FF, #FFB800, #00C3FF);
-      background-size: 200% 100%;
-      border-radius: 4px;
+      border-radius: 28px;
+      overflow: hidden;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
+      animation: logoFloat 4s ease-in-out infinite;
+    }
+
+    @keyframes logoFloat {
+
+      0%,
+      100% {
+        transform: translateY(0) rotate(0deg);
+        filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.3));
+      }
+
+      50% {
+        transform: translateY(-10px) rotate(2deg);
+        filter: drop-shadow(0 0 25px rgba(59, 130, 246, 0.6));
+      }
+    }
+
+    .auth-title {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .auth-title h1 {
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.8rem;
+      letter-spacing: -1px;
+      color: white;
+      text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+    }
+
+    .auth-title p {
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: var(--sport-blue);
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      margin-top: 4px;
+    }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .password-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .password-toggle {
+      position: absolute;
+      right: 16px;
+      color: rgba(255, 255, 255, 0.4);
+      cursor: pointer;
+      padding: 10px;
+      transition: color 0.2s;
+      z-index: 5;
+    }
+
+    .password-toggle:hover {
+      color: white;
+    }
+
+    /* Full Screen Spectacular Loader */
+    .spectacular-loader {
+      position: fixed;
+      inset: 0;
+      background: #020617;
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .loader-glow {
+      position: absolute;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%);
+      animation: pulse-glow 2s infinite;
+    }
+
+    @keyframes pulse-glow {
+
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: 0.5;
+      }
+
+      50% {
+        transform: scale(1.5);
+        opacity: 0.8;
+      }
+    }
+
+    .progress-container {
+      width: 240px;
+      position: relative;
+      z-index: 10;
+    }
+
+    .progress-bar-bg {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
       width: 0%;
-      transition: width 0.3s ease;
-      box-shadow: 0 0 10px rgba(0, 195, 255, 0.5);
+      background: linear-gradient(90deg, var(--sport-blue), var(--sport-green));
+      box-shadow: 0 0 20px var(--sport-blue);
+      transition: width 0.1s linear;
     }
 
-    .progress-percentage {
-      background: linear-gradient(45deg, #00C3FF, #FFB800);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      text-shadow: 0 0 10px rgba(0, 195, 255, 0.5);
+    .progress-text {
+      font-family: var(--font-display);
+      font-weight: 800;
+      color: white;
+      font-size: 2.5rem;
+      text-align: center;
     }
 
-    /* Animación de salida */
-    .loading-container.fade-out {
-      animation: fadeOut 0.5s ease-out forwards;
+    .loader-status {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-scnd);
+      margin-top: 8px;
+      text-align: center;
     }
 
-    @keyframes fadeOut {
-      0% { opacity: 1; transform: scale(1); }
-      100% { opacity: 0; transform: scale(1.1); }
+    /* Real Google Button Colors */
+    .btn-google {
+      background: white;
+      color: #3c4043;
+      font-weight: 600;
+      border: none;
+      border-radius: 14px;
+      padding: 14px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn-google:hover {
+      background: #f8f9fa;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .google-icon {
+      width: 18px;
+      height: 18px;
     }
   </style>
 </head>
-<body class="fondo">
-  <div id="particles-js"></div>
-  
-  <!-- LOADING ESPECTACULAR -->
-  <div id="loading-container" class="loading-container">
-    <!-- Destello de relámpago -->
-    <div class="lightning"></div>
-    
-    <!-- Lluvia de partículas -->
-    <div class="rain-container">
-      <div class="rain-drop" style="--delay: 0s; --left: 10%"></div>
-      <div class="rain-drop" style="--delay: 0.2s; --left: 20%"></div>
-      <div class="rain-drop" style="--delay: 0.4s; --left: 30%"></div>
-      <div class="rain-drop" style="--delay: 0.6s; --left: 40%"></div>
-      <div class="rain-drop" style="--delay: 0.8s; --left: 50%"></div>
-      <div class="rain-drop" style="--delay: 1s; --left: 60%"></div>
-      <div class="rain-drop" style="--delay: 1.2s; --left: 70%"></div>
-      <div class="rain-drop" style="--delay: 1.4s; --left: 80%"></div>
-      <div class="rain-drop" style="--delay: 1.6s; --left: 90%"></div>
-      <div class="rain-drop" style="--delay: 1.8s; --left: 15%"></div>
-      <div class="rain-drop" style="--delay: 2s; --left: 25%"></div>
-      <div class="rain-drop" style="--delay: 2.2s; --left: 35%"></div>
-      <div class="rain-drop" style="--delay: 2.4s; --left: 45%"></div>
-      <div class="rain-drop" style="--delay: 2.6s; --left: 55%"></div>
-      <div class="rain-drop" style="--delay: 2.8s; --left: 65%"></div>
-      <div class="rain-drop" style="--delay: 3s; --left: 75%"></div>
-      <div class="rain-drop" style="--delay: 3.2s; --left: 85%"></div>
-      <div class="rain-drop" style="--delay: 3.4s; --left: 95%"></div>
-      <!-- Más gotas de lluvia -->
-      <div class="rain-drop" style="--delay: 0.1s; --left: 5%"></div>
-      <div class="rain-drop" style="--delay: 0.3s; --left: 12%"></div>
-      <div class="rain-drop" style="--delay: 0.5s; --left: 18%"></div>
-      <div class="rain-drop" style="--delay: 0.7s; --left: 22%"></div>
-      <div class="rain-drop" style="--delay: 0.9s; --left: 28%"></div>
-      <div class="rain-drop" style="--delay: 1.1s; --left: 32%"></div>
-      <div class="rain-drop" style="--delay: 1.3s; --left: 38%"></div>
-      <div class="rain-drop" style="--delay: 1.5s; --left: 42%"></div>
-      <div class="rain-drop" style="--delay: 1.7s; --left: 48%"></div>
-      <div class="rain-drop" style="--delay: 1.9s; --left: 52%"></div>
-      <div class="rain-drop" style="--delay: 2.1s; --left: 58%"></div>
-      <div class="rain-drop" style="--delay: 2.3s; --left: 62%"></div>
-      <div class="rain-drop" style="--delay: 2.5s; --left: 68%"></div>
-      <div class="rain-drop" style="--delay: 2.7s; --left: 72%"></div>
-      <div class="rain-drop" style="--delay: 2.9s; --left: 78%"></div>
-      <div class="rain-drop" style="--delay: 3.1s; --left: 82%"></div>
-      <div class="rain-drop" style="--delay: 3.3s; --left: 88%"></div>
-      <div class="rain-drop" style="--delay: 3.5s; --left: 92%"></div>
-      <div class="rain-drop" style="--delay: 3.7s; --left: 98%"></div>
+
+<body>
+  <!-- Galactic Background -->
+  <div class="sport-bg">
+    <div class="bg-glow blue" style="top:-10%; left:-10%; opacity:0.3"></div>
+    <div class="bg-glow purple" style="bottom:-10%; right:-10%; opacity:0.3"></div>
+    <div class="bg-glow green"
+      style="top:40%; left:20%; width:40vw; height:40vw; background:var(--sport-green); opacity:0.1; filter:blur(120px)">
     </div>
-    
-    <!-- Logo palpitando como corazón -->
-    <div class="loading-logo-container">
-      <div class="loading-logo">
-        <img src="./imagenes/Logojafs.png" alt="Logo" class="heartbeat-logo">
+  </div>
+
+  <main class="auth-screen">
+    <div id="login-form-card" class="auth-container">
+      <div class="auth-logo-box">
+        <img src="./imagenes/Logojafs.png" alt="Logo" class="auth-logo">
       </div>
-      
-      <!-- Bordes giratorios azul y amarillo -->
-      <div class="rotating-border blue-border"></div>
-      <div class="rotating-border yellow-border"></div>
-      
-      <!-- Anillo de carga -->
-      <div class="loading-ring">
-        <div class="loading-ring-inner"></div>
+
+      <div class="auth-title">
+        <h1>PADELUMINATIS</h1>
+        <p>Pro Circuit Portal</p>
+      </div>
+
+      <form id="loginForm" class="flex-col">
+        <div class="input-group">
+          <label class="text-label ml-2 mb-2 block">Email de Jugador</label>
+          <input type="email" id="email" name="email" class="sport-input" autocomplete="username email"
+            placeholder="tu@email.com" required>
+        </div>
+
+        <div class="input-group">
+          <label class="text-label ml-2 mb-2 block">Contraseña</label>
+          <div class="password-wrapper">
+            <input type="password" id="password" name="password" class="sport-input" autocomplete="current-password"
+              placeholder="••••••••" required>
+            <i class="fas fa-eye password-toggle" id="togglePassword"></i>
+          </div>
+        </div>
+
+        <div class="flex-row between mt-2 mb-6">
+          <label class="flex-row gap-2 cursor-pointer">
+            <input type="checkbox" class="sport-checkbox">
+            <span class="text-xs text-scnd font-bold">Mantener sesión</span>
+          </label>
+          <a href="recuperar.html" class="text-xs font-bold text-sport-blue">¿Clave perdida?</a>
+        </div>
+
+        <button type="submit" class="btn-primary py-4">
+          ACCEDER AL CIRCUITO <i class="fas fa-chevron-right ml-2"></i>
+        </button>
+
+        <div class="flex-row between w-full mt-8 mb-6 opacity-30">
+          <div class="h-px flex-1 bg-white" style="height:1px"></div>
+          <span class="text-2xs font-bold mx-4">O CONTINUA CON</span>
+          <div class="h-px flex-1 bg-white" style="height:1px"></div>
+        </div>
+
+        <button type="button" id="googleLogin" class="btn-google mb-2">
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="google-icon">
+          Continuar con Google
+        </button>
+      </form>
+
+      <div class="mt-8 text-center">
+        <p class="text-xs text-scnd">¿No eres miembro aún? <a href="registro.html"
+            class="font-bold text-white underline decoration-blue-500 underline-offset-4">Únete ahora</a></p>
       </div>
     </div>
-    
-    <!-- Texto de carga -->
-    <div class="loading-text">
-      <h2 class="loading-title">Padeluminatis</h2>
-      <p class="loading-subtitle">Iniciando sesión...</p>
-    </div>
-    
-    <!-- Barra de progreso -->
+  </main>
+
+  <!-- Full Screen espectacular Loader -->
+  <div id="master-loader" class="spectacular-loader">
+    <div class="loader-glow"></div>
     <div class="progress-container">
-      <div class="progress-bar">
-        <div class="progress-fill"></div>
+      <div class="progress-bar-bg">
+        <div id="progress-fill" class="progress-bar-fill"></div>
       </div>
-      <div class="progress-text">
-        <span class="progress-percentage">0%</span>
-      </div>
+      <div id="progress-number" class="progress-text">0%</div>
+      <div class="loader-status" id="loader-status">Sincronizando con el servidor...</div>
+    </div>
+    <div class="mt-12">
+      <img src="./imagenes/Logojafs.png" style="width: 40px; opacity: 0.5;">
     </div>
   </div>
-  
-  <div class="contenedor-login">
-    <div class="tituloLog"><h1 class="titulo">Iniciar sesión</h1>
-           <div class="logo">
-            <img src="./imagenes/Logojafs.png" alt="Logo de JafsPadel League" width="100" height="100">
-        </div>
-        </div>
-    <!-- FORMULARIO DE LOGIN -->
-    <form id="loginForm" class="formulario-login">
-      <div class="input-group">
-        <i class="fas fa-user"></i>
-        <input type="email" id="email" placeholder="Usuario o Email" class="input-texto" required />
-      </div>
-      <div class="input-group">
-        <i class="fas fa-lock"></i>
-        <input type="password" id="password" placeholder="Contraseña" class="input-texto" required />
-        <i class="fas fa-eye toggle-password" id="togglePassword"></i>
-      </div>
-      <button type="submit" class="boton-enviar-especial">Entrar</button>
-    </form>
 
-    <!-- MENSAJE DE ERROR O BIENVENIDA -->
-    <div id="mensaje" style="color: white; text-align: center; margin-top: 10px;"></div>
-
-    <p class="texto-registro">
-      ¿No tienes cuenta? <a href="registro.html">Regístrate</a>
-    </p>
-      <p class="texto-registro">
-  <a href="recuperar.html">¿Has olvidado la contraseña?</a>
-</p>
-  </div>
-
-
-
-
-  <!-- Font Awesome para iconos -->
-  <!-- Modal para mensajes -->
-<!-- Modal para mensajes -->
-<div id="modalOverlay" class="modal-overlay">
-    <div class="modal-content">
-        <!-- Animación de pádel -->
-
-        
-        <div id="welcomeMessage" class="welcome-message"></div>
-        <div id="modalMessage" class="modal-message"></div>
-        <button id="modalButton" class="modal-button" style="display: none;">Aceptar</button>
-    </div>
-</div>
-
-<!-- GSAP para animaciones profesionales -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
-
-
-  <!-- Llamada al JS externo -->
-  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
-  <script type="module" src="./js/particles-init.js"></script>
-  <script type="module" src="./js/password-toggle.js"></script>
   <script type="module" src="./js/login.js"></script>
+  <script type="module">
+    import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+    initGalaxyBackground();
+  </script>
 </body>
+
 </html>

@@ -1,386 +1,442 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="dark">
+<html lang="es">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0A2342">
-  <title>Panel de Administración - Padeluminatis</title>
-  <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="./css/header.css">
-  <link rel="stylesheet" href="./css/admin.css">
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0c0a1d">
+    <title>Padeluminatis - Panel Admin</title>
+    <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="./css/core.css">
 </head>
-<body class="app-body">
-  <header class="app-header">
-    <div class="header-content">
-      <img src="./imagenes/Logojafs.png" alt="Logo" class="app-logo">
-      <h1 class="app-title">Panel Admin - Padeluminatis</h1>
-      <button class="menu-toggle" aria-label="Menú">
-        <i class="fas fa-bars"></i>
-      </button>
-    </div>
-    <nav class="app-nav">
-      <a href="./home.html" class="nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
-      <a href="./eventos.html" class="nav-item"><i class="fas fa-calendar-check"></i><span>Eventos</span></a>
-      <a href="./calendario.html" class="nav-item"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
-      <a href="./clasificacion.html" class="nav-item"><i class="fas fa-trophy"></i><span>Clasificación</span></a>
-      <a href="./normas.html" class="nav-item"><i class="fas fa-gavel"></i><span>Normas</span></a>
-      <a href="./chat.html" class="nav-item"><i class="fas fa-comments"></i><span>Chat</span></a>
-      <a href="./ranking.html" class="nav-item"><i class="fas fa-list-ol"></i><span>Ranking</span></a>
-      <a href="./admin.html" class="nav-item nav-admin active"><i class="fas fa-user-shield"></i><span>Admin</span></a>
-      <a href="./perfil.html" class="nav-item"><i class="fas fa-user"></i><span>Perfil</span></a>
-      <a href="./notificaciones.html" class="nav-item"><i class="fas fa-bell"></i><span>Notificaciones</span></a>
-      <a href="#" class="nav-item nav-logout"><i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span></a>
-    </nav>
-  </header>
 
-  <main class="app-main">
-    <h1 class="titulo-pantalla-admin">Panel de Administración</h1>
-    <!-- Selector de Secciones -->
-    <section class="section-selector card">
-      <div class="selector-tabs">
-        <button class="tab-btn active" data-section="admin-panel">
-          <i class="fas fa-cogs"></i>
-          Panel de Administración
-        </button>
-        <button class="tab-btn" data-section="firebase-console">
-          <i class="fas fa-database"></i>
-          Firebase Console
-        </button>
-      </div>
-    </section>
+<body>
+    <div class="sport-bg"></div>
 
-    <!-- SECCIÓN 1: Panel de Administración Original -->
-    <div id="admin-panel" class="section-content active">
-      <!-- Gestión de Usuarios -->
-      <section class="card seccion-admin">
-        <h2 class="section-title"><i class="fas fa-users-cog"></i> Gestión de Usuarios</h2>
-        <div class="tarjeta">
-          <span id="resumen-usuarios">Usuarios pendientes: <span id="cuenta-usuarios">-</span></span>
-          <button class="boton-accion" onclick="document.getElementById('modal-usuarios').classList.add('active')">Ver detalles &rarr;</button>
-        </div>
-      </section>
+    <main class="page-content">
 
-      <!-- Gestión de Equipos -->
-      <section class="card seccion-admin">
-        <h2 class="section-title"><i class="fas fa-people-group"></i> Gestión de Equipos</h2>
-        <div class="tarjeta">
-          <span id="resumen-equipos">Equipos registrados: <span id="cuenta-equipos">-</span></span>
-          <button class="boton-accion" onclick="document.getElementById('modal-equipos').classList.add('active')">Ver detalles &rarr;</button>
-        </div>
-      </section>
-
-      <!-- Gestión de Calendario -->
-      <section class="card seccion-admin">
-        <h2 class="section-title"><i class="fas fa-calendar-plus"></i> Gestión de Calendario</h2>
-        <div class="tarjeta">
-          <span id="resumen-calendario">Jornadas creadas: <span id="cuenta-jornadas">-</span></span>
-          <button class="boton-accion" onclick="document.getElementById('modal-calendario').classList.add('active')">Ver detalles &rarr;</button>
-        </div>
-      </section>
-
-      <!-- Partidos Jugados -->
-      <section class="card seccion-admin">
-        <h2 class="section-title"><i class="fas fa-check-double"></i> Partidos Jugados</h2>
-        <div class="tarjeta">
-          <span id="resumen-jugados">Partidos jugados: <span id="cuenta-jugados">-</span></span>
-          <button class="boton-accion" onclick="document.getElementById('modal-jugados').classList.add('active')">Ver detalles &rarr;</button>
-        </div>
-      </section>
-
-      <!-- Partidos Pendientes -->
-      <section class="card seccion-admin">
-        <h2 class="section-title"><i class="fas fa-hourglass-half"></i> Partidos Pendientes</h2>
-        <div class="tarjeta">
-          <span id="resumen-pendientes">Partidos pendientes: <span id="cuenta-pendientes">-</span></span>
-          <button class="boton-accion" onclick="document.getElementById('modal-pendientes').classList.add('active')">Ver detalles &rarr;</button>
-        </div>
-      </section>
-    </div>
-
-    <!-- SECCIÓN 2: Firebase Console Integrada -->
-    <div id="firebase-console" class="section-content">
-      <!-- Panel de Control Principal -->
-      <section class="admin-dashboard card">
-        <div class="dashboard-header">
-          <h2 class="section-title">
-            <i class="fas fa-database"></i>
-            Firebase Console Integrada
-          </h2>
-          <div class="dashboard-stats">
-            <div class="stat-card">
-              <i class="fas fa-users"></i>
-              <span class="stat-number" id="total-users">-</span>
-              <span class="stat-label">Usuarios</span>
+        <div class="admin-header mb-6">
+            <div class="flex-row between">
+                <div>
+                    <h1 class="font-display font-black text-2xl text-white">Panel de Control</h1>
+                    <p class="text-sm text-scnd mt-1">Gestión completa de Padeluminatis</p>
+                </div>
+                <a href="home.html" class="btn-ghost">
+                    <i class="fas fa-home"></i>
+                </a>
             </div>
-            <div class="stat-card">
-              <i class="fas fa-people-group"></i>
-              <span class="stat-number" id="total-teams">-</span>
-              <span class="stat-label">Equipos</span>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-3 gap-3 mb-6">
+            <div class="stat-card-mini blue">
+                <span class="stat-num" id="total-users">0</span>
+                <span class="stat-text">Usuarios</span>
             </div>
-            <div class="stat-card">
-              <i class="fas fa-calendar"></i>
-              <span class="stat-number" id="total-matches">-</span>
-              <span class="stat-label">Partidos</span>
+            <div class="stat-card-mini green">
+                <span class="stat-num" id="total-matches">0</span>
+                <span class="stat-text">Partidos</span>
             </div>
-            <div class="stat-card">
-              <i class="fas fa-trophy"></i>
-              <span class="stat-number" id="total-collections">-</span>
-              <span class="stat-label">Colecciones</span>
+            <div class="stat-card-mini orange">
+                <span class="stat-num" id="active-matches">0</span>
+                <span class="stat-text">Abiertos</span>
             </div>
-          </div>
         </div>
-      </section>
 
-      <!-- Árbol visual de Firestore -->
-      <section class="collections-nav card">
-        <div class="firebase-tree-panel">
-          <div class="firebase-tree-header">
-            <span class="firebase-tree-title"><i class="fas fa-database"></i> Estructura Firestore</span>
-            <button class="btn-primary" id="btn-add-collection-tree"><i class="fas fa-plus"></i> Añadir colección</button>
-          </div>
-          <div id="firebase-tree" class="firebase-tree"></div>
+        <!-- Tabs -->
+        <div class="admin-tabs mb-4">
+            <button class="admin-tab active" data-tab="users">
+                <i class="fas fa-users"></i> Usuarios
+            </button>
+            <button class="admin-tab" data-tab="matches">
+                <i class="fas fa-calendar"></i> Partidos
+            </button>
+            <button class="admin-tab" data-tab="palas">
+                <i class="fas fa-table-tennis"></i> Palas
+            </button>
+            <button class="admin-tab" data-tab="config">
+                <i class="fas fa-cog"></i> Config
+            </button>
         </div>
-      </section>
 
-      <!-- Editor de Firebase -->
-      <section class="firebase-editor card" id="firebase-editor" style="display: none;">
-        <div class="editor-header">
-          <div class="breadcrumb" id="breadcrumb">
-            <span class="breadcrumb-item">Firebase</span>
-          </div>
-          <div class="editor-actions">
-            <button class="btn-secondary" id="btn-back">
-              <i class="fas fa-arrow-left"></i> Volver
-            </button>
-            <button class="btn-success" id="btn-save-changes">
-              <i class="fas fa-save"></i> Guardar Cambios
-            </button>
-            <button class="btn-danger" id="btn-delete-item">
-              <i class="fas fa-trash"></i> Eliminar
-            </button>
-          </div>
-        </div>
-        
-        <div class="editor-content">
-          <div class="editor-sidebar">
-            <div class="sidebar-section">
-              <h4><i class="fas fa-list"></i> Documentos</h4>
-              <div class="documents-list" id="documents-list">
-                <!-- Lista de documentos -->
-              </div>
-              <button class="btn-primary btn-sm" id="btn-add-document">
-                <i class="fas fa-plus"></i> Nuevo Documento
-              </button>
+        <!-- Users Tab -->
+        <section id="tab-users" class="admin-section">
+            <div class="flex-row between mb-4 gap-2">
+                <input type="text" class="search-input flex-1" id="user-search" placeholder="Buscar usuario...">
+                <select class="filter-select" id="user-role-filter">
+                    <option value="all">Todos</option>
+                    <option value="admin">Admins</option>
+                </select>
             </div>
-          </div>
-          
-          <div class="editor-main">
-            <div class="document-editor" id="document-editor">
-              <div class="editor-placeholder">
-                <i class="fas fa-file-alt"></i>
-                <p>Selecciona un documento para editarlo</p>
-              </div>
+            <div id="users-list" class="flex-col gap-2">
+                <div class="center py-10">
+                    <div class="spinner-galaxy"></div>
+                </div>
             </div>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- Historial de Cambios -->
-      <section class="changes-history card">
-        <div class="history-header">
-          <h3><i class="fas fa-history"></i> Historial de Cambios</h3>
-          <button class="btn-secondary" id="btn-clear-history">
-            <i class="fas fa-trash"></i> Limpiar
-          </button>
-        </div>
-        <div class="history-list" id="changes-history">
-          <!-- Historial de cambios -->
-        </div>
-      </section>
-    </div>
-  </main>
+        <!-- Matches Tab -->
+        <section id="tab-matches" class="admin-section hidden">
+            <div class="flex-row gap-2 mb-4">
+                <select id="match-filter" class="filter-select flex-1">
+                    <option value="all">Todos los partidos</option>
+                    <option value="pending">Pendientes</option>
+                    <option value="played">Jugados</option>
+                    <option value="open">Con plazas libres</option>
+                </select>
+                <button class="btn-icon-circle" onclick="refreshMatches()">
+                    <i class="fas fa-refresh"></i>
+                </button>
+            </div>
+            <div id="matches-list" class="flex-col gap-2">
+                <div class="center py-10">
+                    <div class="spinner-galaxy"></div>
+                </div>
+            </div>
+        </section>
 
-  <!-- Modales para Panel de Administración Original -->
-  <div class="admin-modal" id="modal-usuarios">
-    <div class="admin-modal-content">
-      <button class="admin-modal-close" onclick="this.closest('.admin-modal').classList.remove('active')">&times;</button>
-      <div class="user-management-section">
-        <h2 class="user-management-title">Gestión de Usuarios</h2>
-        <div class="users-grid" id="lista-usuarios">
-          <!-- Los usuarios se cargarán dinámicamente aquí -->
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="admin-modal" id="modal-equipos">
-    <div class="admin-modal-content">
-      <button class="admin-modal-close" onclick="this.closest('.admin-modal').classList.remove('active')">&times;</button>
-      <div class="user-management-section">
-        <h2 class="user-management-title">Gestión de Equipos</h2>
-        <div class="form-equipo-compact">
-          <div class="equipo-creator">
-            <select id="select-jugador1" class="select-jugador-compact">
-              <option value="">Jugador 1</option>
-            </select>
-            <span class="vs-compact">VS</span>
-            <select id="select-jugador2" class="select-jugador-compact">
-              <option value="">Jugador 2</option>
-            </select>
-            <button id="btn-crear-equipo" class="btn-crear-equipo-compact">
-              <i class="fas fa-plus"></i> Crear
-            </button>
-          </div>
-        </div>
-        <div class="equipos-lista">
-          <h3 class="section-subtitle">Equipos Existentes</h3>
-          <ul id="lista-equipos-admin" class="lista-equipos-compact"></ul>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="admin-modal" id="modal-calendario">
-    <div class="admin-modal-content">
-      <button class="admin-modal-close" onclick="this.closest('.admin-modal').classList.remove('active')">&times;</button>
-      <div class="user-management-section">
-        <h2 class="user-management-title">Gestión de Calendario</h2>
-        <div class="form-jornada">
-          <input type="text" id="nombre-jornada" class="input-text" placeholder="Nombre de la jornada (Ej: Jornada 1 - Octubre)">
-          <div id="partidos-jornada" class="contenedor-partidos"></div>
-          <div class="controles-jornada">
-            <button id="btn-anadir-partido" class="boton-accion secundario">
-              ＋ Añadir Partido
-            </button>
-            <button id="btn-crear-jornada" class="boton-accion">
-              🗓️ Crear Jornada
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="admin-modal" id="modal-jugados">
-    <div class="admin-modal-content">
-      <button class="admin-modal-close" onclick="this.closest('.admin-modal').classList.remove('active')">&times;</button>
-      <div class="user-management-section">
-        <h2 class="user-management-title">Partidos Jugados</h2>
-        <div id="partidos-jugados" class="lista-partidos-admin"></div>
-      </div>
-    </div>
-  </div>
-  <div class="admin-modal" id="modal-pendientes">
-    <div class="admin-modal-content">
-      <button class="admin-modal-close" onclick="this.closest('.admin-modal').classList.remove('active')">&times;</button>
-      <div class="user-management-section">
-        <h2 class="user-management-title">Partidos Pendientes</h2>
-        <div id="partidos-pendientes" class="lista-partidos-pendientes"></div>
-      </div>
-    </div>
-  </div>
+        <!-- Palas Database Tab -->
+        <section id="tab-palas" class="admin-section hidden">
+            <div class="sport-card p-4 mb-4">
+                <h3 class="font-bold text-white mb-3">
+                    <i class="fas fa-database mr-2 text-sport-purple"></i>Base de Datos de Palas
+                </h3>
+                <p class="text-xs text-scnd mb-4">Añade palas al catálogo global para comparativas</p>
 
-  <!-- Modales para Firebase Console -->
-  <!-- Modal para Nuevo Campo -->
-  <div class="modal" id="modal-new-field">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3><i class="fas fa-plus-circle"></i> Añadir Nuevo Campo</h3>
-        <button class="modal-close" onclick="closeModal('modal-new-field')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="field-name">Nombre del Campo:</label>
-          <input type="text" id="field-name" placeholder="ej: nombre, edad, email...">
-        </div>
-        <div class="form-group">
-          <label for="field-type">Tipo de Campo:</label>
-          <select id="field-type">
-            <option value="string">Texto (String)</option>
-            <option value="number">Número (Number)</option>
-            <option value="boolean">Booleano (Boolean)</option>
-            <option value="array">Array</option>
-            <option value="object">Objeto</option>
-            <option value="timestamp">Fecha/Hora (Timestamp)</option>
-            <option value="reference">Referencia</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="field-value">Valor:</label>
-          <input type="text" id="field-value" placeholder="Valor del campo">
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="closeModal('modal-new-field')">Cancelar</button>
-        <button class="btn-primary" onclick="addNewFieldToDocument()">Añadir Campo</button>
-      </div>
-    </div>
-  </div>
+                <button class="btn-primary w-full" onclick="openAddPalaModal()">
+                    <i class="fas fa-plus mr-2"></i>Añadir Pala al Catálogo
+                </button>
+            </div>
 
-  <!-- Modal para Nueva Colección -->
-  <div class="modal" id="modal-new-collection">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3><i class="fas fa-folder-plus"></i> Crear Nueva Colección</h3>
-        <button class="modal-close" onclick="closeModal('modal-new-collection')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="collection-name">Nombre de la Colección:</label>
-          <input type="text" id="collection-name" placeholder="ej: productos, eventos, notificaciones...">
-        </div>
-        <div class="form-group">
-          <label for="collection-description">Descripción (opcional):</label>
-          <textarea id="collection-description" placeholder="Describe para qué se usará esta colección..."></textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="closeModal('modal-new-collection')">Cancelar</button>
-        <button class="btn-primary" onclick="createNewCollection()">Crear Colección</button>
-      </div>
-    </div>
-  </div>
+            <div id="palas-catalog" class="flex-col gap-2">
+                <div class="center py-10">
+                    <div class="spinner-galaxy"></div>
+                </div>
+            </div>
+        </section>
 
-  <!-- Modal para Confirmar Eliminación -->
-  <div class="modal" id="modal-confirm-delete">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3><i class="fas fa-exclamation-triangle"></i> Confirmar Eliminación</h3>
-        <button class="modal-close" onclick="closeModal('modal-confirm-delete')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p>¿Estás seguro de que quieres eliminar este elemento?</p>
-        <p class="delete-item-info" id="delete-item-info"></p>
-        <p class="warning-text">Esta acción no se puede deshacer.</p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="closeModal('modal-confirm-delete')">Cancelar</button>
-        <button class="btn-danger" onclick="confirmDelete()">Eliminar</button>
-      </div>
-    </div>
-  </div>
+        <!-- Config Tab -->
+        <section id="tab-config" class="admin-section hidden">
+            <div class="sport-card p-4 mb-4">
+                <h3 class="font-bold text-white mb-3">
+                    <i class="fas fa-trophy mr-2 text-sport-orange"></i>Sistema de Puntuación ELO
+                </h3>
+                <div class="flex-col gap-3">
+                    <div class="config-row">
+                        <div class="flex-col gap-0">
+                            <span class="text-sm font-bold text-white">Factor K Base</span>
+                            <span class="text-2xs text-scnd">Impacto base de cada partido</span>
+                        </div>
+                        <input type="number" class="mini-input" value="32" id="cfg-k">
+                    </div>
+                    <div class="config-row">
+                        <div class="flex-col gap-0">
+                            <span class="text-sm font-bold text-white">Multiplicador Competitivo</span>
+                            <span class="text-2xs text-scnd">Bonus para partidos de reto</span>
+                        </div>
+                        <input type="number" class="mini-input" value="1.5" step="0.1" id="cfg-mult">
+                    </div>
+                    <div class="config-row">
+                        <div class="flex-col gap-0">
+                            <span class="text-sm font-bold text-white">Cambio Nivel Mínimo</span>
+                            <span class="text-2xs text-scnd">Ajuste mínimo por partido</span>
+                        </div>
+                        <input type="number" class="mini-input" value="0.01" step="0.01" id="cfg-lvl-min">
+                    </div>
+                    <div class="config-row">
+                        <div class="flex-col gap-0">
+                            <span class="text-sm font-bold text-white">Cambio Nivel Máximo</span>
+                            <span class="text-2xs text-scnd">Ajuste máximo por partido</span>
+                        </div>
+                        <input type="number" class="mini-input" value="0.05" step="0.01" id="cfg-lvl-max">
+                    </div>
+                </div>
+                <button class="btn-primary mt-4 w-full" onclick="saveConfig()">
+                    <i class="fas fa-save mr-2"></i>Guardar Configuración
+                </button>
+            </div>
 
-  <!-- Modal para Restaurar Versión -->
-  <div class="modal" id="modal-restore-version">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3><i class="fas fa-undo"></i> Restaurar Versión Anterior</h3>
-        <button class="modal-close" onclick="closeModal('modal-restore-version')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p>¿Quieres restaurar a la versión anterior?</p>
-        <div class="version-preview" id="version-preview">
-          <!-- Vista previa de la versión -->
+            <div class="sport-card p-4">
+                <h3 class="font-bold text-white mb-3">
+                    <i class="fas fa-bolt mr-2 text-sport-green"></i>Acciones Rápidas
+                </h3>
+                <div class="flex-col gap-2">
+                    <button class="btn-secondary w-full" onclick="recalculateAllRankings()">
+                        <i class="fas fa-calculator mr-2"></i>Recalcular Rankings
+                    </button>
+                    <button class="btn-secondary w-full" onclick="resetAllStreaks()">
+                        <i class="fas fa-refresh mr-2"></i>Resetear Rachas
+                    </button>
+                    <button class="btn-ghost text-red-400 w-full" onclick="clearOldMatches()">
+                        <i class="fas fa-trash mr-2"></i>Limpiar Partidos Antiguos
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Edit User Modal -->
+    <div id="modal-edit-user" class="modal-overlay">
+        <div class="modal-sheet" id="edit-user-area"></div>
+    </div>
+
+    <!-- Edit Match Modal -->
+    <div id="modal-edit-match" class="modal-overlay">
+        <div class="modal-sheet" id="edit-match-area"></div>
+    </div>
+
+    <!-- Add Pala Modal -->
+    <div id="modal-add-pala" class="modal-overlay">
+        <div class="modal-sheet">
+            <div class="flex-row between mb-4">
+                <h3 class="font-display font-bold text-lg">Añadir Pala al Catálogo</h3>
+                <button class="btn-ghost"
+                    onclick="document.getElementById('modal-add-pala').classList.remove('active')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="flex-col gap-4">
+                <input type="text" id="cat-pala-marca" class="sport-input" placeholder="Marca">
+                <input type="text" id="cat-pala-modelo" class="sport-input" placeholder="Modelo">
+                <input type="number" id="cat-pala-precio" class="sport-input" placeholder="Precio (€)">
+                <select id="cat-pala-forma" class="sport-input">
+                    <option value="">Forma...</option>
+                    <option value="redonda">Redonda</option>
+                    <option value="lagrima">Lágrima</option>
+                    <option value="diamante">Diamante</option>
+                </select>
+                <div class="flex-row between">
+                    <span class="text-sm text-scnd">Potencia</span>
+                    <input type="range" id="cat-pala-pot" min="1" max="10" value="5" class="flex-1 ml-3">
+                </div>
+                <div class="flex-row between">
+                    <span class="text-sm text-scnd">Control</span>
+                    <input type="range" id="cat-pala-ctrl" min="1" max="10" value="5" class="flex-1 ml-3">
+                </div>
+                <button class="btn-primary mt-2" onclick="saveCatalogPala()">
+                    <i class="fas fa-plus mr-2"></i>Añadir al Catálogo
+                </button>
+            </div>
         </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="closeModal('modal-restore-version')">Cancelar</button>
-        <button class="btn-primary" onclick="restoreVersionConfirm()">Restaurar</button>
-      </div>
     </div>
-  </div>
 
-  <script type="module" src="./js/admin.js"></script>
-  <script type="module" src="./js/firebaseAdmin.js"></script>
-  <script type="module" src="./js/enlaceAdmin.js"></script>
-  <script src="./js/menu-hamburguesa.js"></script>
+    <script type="module" src="./js/admin.js"></script>
+
+    <style>
+        .page-content {
+            padding: 90px 16px 40px;
+            overflow-y: auto;
+            height: 100vh;
+        }
+
+        .admin-header {
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.15), rgba(239, 68, 68, 0.15));
+            border: 1px solid rgba(249, 115, 22, 0.25);
+            border-radius: 20px;
+            padding: 20px;
+        }
+
+        .stat-card-mini {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 16px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .stat-card-mini:hover {
+            transform: translateY(-2px);
+        }
+
+        .stat-card-mini.blue {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.2);
+        }
+
+        .stat-card-mini.blue .stat-num {
+            color: #3b82f6;
+        }
+
+        .stat-card-mini.green {
+            background: rgba(163, 230, 53, 0.1);
+            border-color: rgba(163, 230, 53, 0.2);
+        }
+
+        .stat-card-mini.green .stat-num {
+            color: #a3e635;
+        }
+
+        .stat-card-mini.orange {
+            background: rgba(249, 115, 22, 0.1);
+            border-color: rgba(249, 115, 22, 0.2);
+        }
+
+        .stat-card-mini.orange .stat-num {
+            color: #f97316;
+        }
+
+        .stat-num {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 1.8rem;
+            color: white;
+            display: block;
+        }
+
+        .stat-text {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-scnd);
+            text-transform: uppercase;
+        }
+
+        .admin-tabs {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+
+        .admin-tab {
+            flex: 1;
+            padding: 12px 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: var(--text-scnd);
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .admin-tab:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .admin-tab.active {
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(239, 68, 68, 0.2));
+            border-color: rgba(249, 115, 22, 0.3);
+            color: #fb923c;
+        }
+
+        .search-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: white;
+            font-size: 0.85rem;
+        }
+
+        .search-input:focus {
+            border-color: var(--sport-blue);
+            outline: none;
+        }
+
+        .filter-select {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 10px 16px;
+            color: white;
+            font-size: 0.8rem;
+        }
+
+        .mini-input {
+            width: 80px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: white;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        .config-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+        }
+
+        .user-row {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 12px 16px;
+            display: grid;
+            grid-template-columns: 40px 1fr auto;
+            gap: 12px;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .user-row:hover {
+            border-color: rgba(249, 115, 22, 0.3);
+            transform: translateX(4px);
+        }
+
+        .match-row {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .match-row:hover {
+            border-color: rgba(249, 115, 22, 0.3);
+            transform: translateX(4px);
+        }
+
+        .match-row.open {
+            border-left: 4px solid var(--sport-green);
+        }
+
+        .match-row.full {
+            border-left: 4px solid var(--sport-blue);
+        }
+
+        .match-row.played {
+            border-left: 4px solid var(--sport-orange);
+            opacity: 0.7;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Loading centered */
+        .spinner-galaxy {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--sport-orange);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
 </body>
+
 </html>

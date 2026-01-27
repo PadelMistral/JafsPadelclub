@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Diario Táctico | Padeluminatis Pro</title>
+    <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="./css/core.css">
+    <style>
+        .mood-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+
+        .mood-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 0;
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            background: var(--sport-card);
+            opacity: 0.5;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .mood-item.active {
+            opacity: 1;
+            border-color: var(--sport-blue);
+            background: rgba(59, 130, 246, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .mood-item.active i {
+            color: var(--sport-blue);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sport-bg"></div>
+
+    <!-- UI Loader Target -->
+
+    <main class="animate-slide" style="padding: 20px 15px 100px; overflow-y:auto; height:calc(100vh - 80px);">
+
+        <div class="flex-row gap-3 mb-6">
+            <button class="btn-primary flex-1" id="btn-new-entry"
+                onclick="document.getElementById('modal-entry').classList.add('active')">
+                <i class="fas fa-plus mr-2"></i> Nuevo
+            </button>
+            <button class="btn-secondary flex-1" onclick="alert('Coach IA analiza tus datos en Inicio')">
+                <i class="fas fa-robot mr-2"></i> Análisis
+            </button>
+        </div>
+
+        <div id="journal-list" class="flex-col gap-3">
+            <div class="center py-10 opacity-30"><i class="fas fa-circle-notch fa-spin"></i></div>
+        </div>
+
+    </main>
+
+    <!-- Entry Modal -->
+    <div id="modal-entry" class="modal-overlay">
+        <div class="modal-sheet" style="max-height: 90vh; overflow-y:auto">
+            <div class="flex-row between mb-4">
+                <h2 class="font-display font-bold text-xl">Reporte de Sesión</h2>
+                <button class="btn-ghost"
+                    onclick="document.getElementById('modal-entry').classList.remove('active')">Cerrar</button>
+            </div>
+
+            <span class="text-label mb-2 block">Sensaciones</span>
+            <div class="mood-grid" id="mood-box">
+                <div class="mood-item active" data-mood="Normal"><i class="fas fa-meh text-xl mb-1"></i><span
+                        class="text-xs font-bold">OK</span></div>
+                <div class="mood-item" data-mood="Genial"><i class="fas fa-grin-stars text-xl mb-1"></i><span
+                        class="text-xs font-bold">TOP</span></div>
+                <div class="mood-item" data-mood="Bien"><i class="fas fa-smile text-xl mb-1"></i><span
+                        class="text-xs font-bold">GOOD</span></div>
+                <div class="mood-item" data-mood="Cansado"><i class="fas fa-tired text-xl mb-1"></i><span
+                        class="text-xs font-bold">TIRED</span></div>
+                <div class="mood-item" data-mood="Mal"><i class="fas fa-frown text-xl mb-1"></i><span
+                        class="text-xs font-bold">BAD</span></div>
+            </div>
+
+            <div class="sport-card p-4 mb-4">
+                <span class="text-label text-sport-blue mb-3 block">Tipo de Sesión</span>
+                <select id="inp-tipo" class="sport-input p-2 text-sm mb-3">
+                    <option value="Partido">Partido de Competición</option>
+                    <option value="Amistoso">Partido Amistoso</option>
+                    <option value="Entrenamiento">Sesión de Entrenamiento</option>
+                    <option value="Clase">Clase con Monitor</option>
+                    <option value="Fisico">Entrenamiento Físico</option>
+                    <option value="Nota">Nota Personal / Reflexión</option>
+                </select>
+
+                <div id="linked-match-info" class="mb-4 hidden">
+                    <span class="text-[10px] font-black text-sport-blue uppercase mb-2 block">Partido Vinculado</span>
+                    <div class="bg-white/5 p-3 rounded-xl border border-white/10 flex-row between">
+                        <span id="txt-match-date" class="text-xs font-bold">...</span>
+                        <span id="txt-match-type" class="status-badge badge-blue">...</span>
+                    </div>
+                    <input type="hidden" id="inp-match-id">
+                </div>
+
+                <span class="text-label text-sport-blue mb-3 block">Configuración</span>
+                <div class="grid grid-cols-2 gap-3" style="display:grid; grid-template-columns: 1fr 1fr">
+                    <input type="text" id="inp-pala" class="sport-input p-2 text-sm" placeholder="Pala Usada">
+                    <input type="text" id="inp-pista" class="sport-input p-2 text-sm" placeholder="Club / Pista">
+                </div>
+                <div class="grid grid-cols-2 gap-3 mt-3" style="display:grid; grid-template-columns: 1fr 1fr">
+                    <input type="text" id="inp-rival" class="sport-input p-2 text-sm" placeholder="Rival / Pareja">
+                    <input type="text" id="inp-golpe" class="sport-input p-2 text-sm" placeholder="Mejor Golpe">
+                </div>
+            </div>
+
+            <div class="flex-col gap-4 mb-5">
+                <div class="flex-row between">
+                    <span class="text-sm font-bold text-scnd w-20">Defensa</span>
+                    <input type="range" id="inp-defensa" class="slider-track flex-1" min="1" max="10" step="1"
+                        value="5">
+                    <span class="font-bold w-6 text-center" id="val-defensa">5</span>
+                </div>
+                <div class="flex-row between">
+                    <span class="text-sm font-bold text-scnd w-20">Volea</span>
+                    <input type="range" id="inp-volea" class="slider-track flex-1" min="1" max="10" step="1" value="5">
+                    <span class="font-bold w-6 text-center" id="val-volea">5</span>
+                </div>
+                <div class="flex-row between">
+                    <span class="text-sm font-bold text-scnd w-20">Ataque</span>
+                    <input type="range" id="inp-ataque" class="slider-track flex-1" min="1" max="10" step="1" value="5">
+                    <span class="font-bold w-6 text-center" id="val-ataque">5</span>
+                </div>
+                <div class="flex-row between">
+                    <span class="text-sm font-bold text-scnd w-20">Físico</span>
+                    <input type="range" id="inp-fisico" class="slider-track flex-1" min="1" max="10" step="1" value="5">
+                    <span class="font-bold w-6 text-center" id="val-fisico">5</span>
+                </div>
+            </div>
+
+            <textarea id="entry-notes" class="sport-input w-full mb-4" rows="3"
+                placeholder="Notas tácticas (rivales, fallos key...)"></textarea>
+
+            <button class="btn-primary w-full" id="btn-save-entry">GUARDAR EN BITÁCORA</button>
+        </div>
+    </div>
+
+    <script type="module" src="./js/diario-logic.js"></script>
+</body>
+
+</html>

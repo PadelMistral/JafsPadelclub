@@ -1,58 +1,134 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Registro - Liga de Pádel</title>
-  <link rel="stylesheet" href="./css/login.css" />
-  <link rel="shortcut icon" href="./imagenes/Logojafs.png" type="image/x-icon">
-  <!-- Font Awesome -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#3b82f6">
+    <title>Registro | Padeluminatis Pro</title>
+    <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="./css/core.css">
+    <style>
+        .auth-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 440px;
+            background: rgba(15, 23, 42, 0.15);
+            /* Consistent with index.html */
+            backdrop-filter: blur(25px) saturate(160%);
+            -webkit-backdrop-filter: blur(25px) saturate(160%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 40px;
+            padding: 40px 32px;
+            box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.7);
+        }
+    </style>
 </head>
-<body class="fondo">
-  <div id="particles-js"></div>
-  <div class="contenedor-login">
-    <div class="tituloLog">
-      <h1 class="titulo">Crear cuenta</h1>
-      <div class="logo">
-        <img src="./imagenes/Logojafs.png" alt="Logo de JafsPadel League" width="100" height="100">
-      </div>
-    </div>
 
-    <form id="registroForm" class="formulario-login">
-      <div class="input-group">
-        <i class="fas fa-user"></i>
-        <input type="text" id="nombre" placeholder="Nombre completo" class="input-texto" required />
-      </div>
-      <div class="input-group">
-        <i class="fas fa-envelope"></i>
-        <input type="email" id="email" placeholder="Email" class="input-texto" required />
-      </div>
-      <div class="input-group">
-        <i class="fas fa-lock"></i>
-        <input type="password" id="password" placeholder="Contraseña" class="input-texto" required />
-        <i class="fas fa-eye toggle-password" id="togglePassword"></i>
-      </div>
-      <div class="input-group">
-        <i class="fas fa-lock"></i>
-        <input type="password" id="confirmPassword" placeholder="Confirmar contraseña" class="input-texto" required />
-        <i class="fas fa-eye toggle-password" id="toggleConfirmPassword"></i>
-      </div>
-      <button type="submit" class="boton-enviar-especial">Registrarse</button>
-    </form>
-    
-    <div id="mensaje" style="color: white; text-align: center; margin-top: 10px;"></div>
+<body>
+    <div class="sport-bg"></div>
+    <div class="mesh-pattern"></div>
 
-    <p class="texto-registro">
-      ¿Ya tienes cuenta? <a href="index.html">Iniciar sesión</a>
-    </p>
-    </div>
+    <main class="auth-container">
+        <div class="auth-card animate-up">
 
-  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
-  <script type="module" src="./js/particles-init.js"></script>
-  <script type="module" src="./js/password-toggle.js"></script>
-  <script type="module" src="./js/registro.js"></script>
+            <div class="text-center mb-8">
+                <h1 class="font-display font-black text-2xl text-white">NUEVA FICHA</h1>
+                <p class="text-xs font-bold text-scnd tracking-widest mt-1 uppercase">Registro de Jugador</p>
+            </div>
+
+            <form id="reg-form" class="flex-col gap-4">
+                <div>
+                    <label class="text-label ml-1 mb-1 block">Alias (Nombre en Pista)</label>
+                    <input type="text" id="r-user" class="sport-input" placeholder="Ej: Paquito99" required>
+                </div>
+
+                <div>
+                    <label class="text-label ml-1 mb-1 block">Nombre Completo</label>
+                    <input type="text" id="r-name" class="sport-input" placeholder="Nombre y Apellidos" required>
+                </div>
+
+                <div>
+                    <label class="text-label ml-1 mb-1 block">Email</label>
+                    <input type="email" id="r-email" name="email" class="sport-input" autocomplete="email"
+                        placeholder="correo@ejemplo.com" required>
+                </div>
+
+                <div>
+                    <label class="text-label ml-1 mb-1 block">Teléfono de Contacto</label>
+                    <input type="tel" id="r-phone" class="sport-input" placeholder="600 000 000" required>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3" style="display:grid; grid-template-columns:1fr 1fr 1fr">
+                    <div>
+                        <label class="text-label ml-1 mb-1 block">Bloque</label>
+                        <input type="text" id="r-block" class="sport-input" placeholder="B-1">
+                    </div>
+                    <div>
+                        <label class="text-label ml-1 mb-1 block">Piso</label>
+                        <input type="text" id="r-floor" class="sport-input" placeholder="2">
+                    </div>
+                    <div>
+                        <label class="text-label ml-1 mb-1 block">Puerta</label>
+                        <input type="text" id="r-door" class="sport-input" placeholder="A">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3" style="display:grid; grid-template-columns:1fr 1fr">
+                    <div>
+                        <label class="text-label ml-1 mb-1 block">Contraseña</label>
+                        <input type="password" id="r-pass" name="new-password" class="sport-input"
+                            autocomplete="new-password" placeholder="••••••••" required>
+                    </div>
+                    <div>
+                        <label class="text-label ml-1 mb-1 block">Repetir</label>
+                        <input type="password" id="r-pass2" name="confirm-password" class="sport-input"
+                            autocomplete="new-password" placeholder="••••••••" required>
+                    </div>
+                </div>
+
+                <div class="sport-card p-4 mt-2">
+                    <div class="flex-row between mb-4">
+                        <span class="text-label text-sport-blue">Nivel Inicial Estimado</span>
+                        <span id="r-lvl-val" class="font-display font-black text-xl text-white">2.5</span>
+                    </div>
+                    <input type="range" id="r-lvl" class="slider-track" min="1" max="7" step="0.5" value="2.5">
+                    <div class="flex-row between mt-2 opacity-40">
+                        <span class="text-xs font-bold">Principiante</span>
+                        <span class="text-xs font-bold">Semi-Pro</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary mt-4 py-4">CREAR CUENTA</button>
+            </form>
+
+            <div class="mt-6 text-center pt-6 border-t border-white/5">
+                <p class="text-xs text-scnd">¿Ya tienes ficha? <a href="index.html"
+                        class="font-bold text-white underline decoration-blue-500">Inicia sesión</a></p>
+            </div>
+
+        </div>
+    </main>
+
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        initGalaxyBackground();
+    </script>
+    <script>
+        const r = document.getElementById('r-lvl');
+        const v = document.getElementById('r-lvl-val');
+        if (r && v) r.oninput = () => v.textContent = parseFloat(r.value).toFixed(1);
+    </script>
 </body>
+
 </html>

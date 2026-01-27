@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Padel Lab | Padeluminatis</title>
+    <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="./css/core.css">
+    <style>
+        .lab-chart-container {
+            position: relative;
+            height: 200px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        /* Bar Graph */
+        .spec-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .spec-track {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .spec-fill {
+            height: 100%;
+            transition: width 0.5s ease-out;
+        }
+
+        .fill-p1 {
+            background: var(--sport-blue);
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+        }
+
+        .fill-p2 {
+            background: var(--sport-green);
+            box-shadow: 0 0 10px rgba(132, 204, 22, 0.3);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sport-bg"></div>
+
+    <!-- UI Loader Target -->
+
+    <main class="animate-slide" style="padding: 0 15px 100px; overflow-y:auto; height:calc(100vh - 80px);">
+
+        <div class="sport-card mb-5 mt-5">
+            <div class="flex-row gap-3 mb-4">
+                <div class="btn-icon-circle bg-blue-500/10 border-blue-500/20">
+                    <i class="fas fa-microscope text-sport-blue"></i>
+                </div>
+                <div class="flex-col gap-0">
+                    <h2 class="font-display font-bold text-lg">Comparador Tech</h2>
+                    <span class="text-xs text-scnd">Base de datos de palas</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3" style="display:grid; grid-template-columns: 1fr 1fr">
+                <div class="flex-col">
+                    <span class="text-label text-sport-blue">MO. A</span>
+                    <select id="pala-1" class="sport-input p-2 text-xs"></select>
+                </div>
+                <div class="flex-col">
+                    <span class="text-label text-sport-green">MO. B</span>
+                    <select id="pala-2" class="sport-input p-2 text-xs"></select>
+                </div>
+            </div>
+        </div>
+
+        <div id="comparison-results" class="flex-col gap-4"></div>
+
+    </main>
+
+    <script type="module">
+        import { initAppUI } from './js/ui-core.js';
+        initAppUI('palas');
+
+        const palas = [
+            { id: 1, name: "Bullpadel Vertex 03", power: 95, control: 85, sweet: 80, comfort: 75, hardness: 90, balance: 95, style: "ATAQUE" },
+            { id: 2, name: "Head Alpha Pro", power: 88, control: 92, sweet: 88, comfort: 90, hardness: 75, balance: 80, style: "HÍBRIDO" },
+            { id: 3, name: "Adidas Adipower 3.2", power: 98, control: 80, sweet: 75, comfort: 70, hardness: 95, balance: 98, style: "POTENCIA" },
+            { id: 4, name: "Nox AT10 Genius", power: 85, control: 95, sweet: 92, comfort: 95, hardness: 65, balance: 75, style: "CONTROL" },
+            { id: 5, name: "Babolat Technical", power: 100, control: 75, sweet: 70, comfort: 65, hardness: 100, balance: 100, style: "AGRESIVO" }
+        ];
+
+        window.onload = () => {
+            const s1 = document.getElementById('pala-1');
+            const s2 = document.getElementById('pala-2');
+            palas.forEach(p => {
+                s1.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+                s2.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+            });
+            s2.value = 2;
+            s1.onchange = updateComparison;
+            s2.onchange = updateComparison;
+            updateComparison();
+        };
+
+        window.updateComparison = () => {
+            const p1 = palas.find(p => p.id == document.getElementById('pala-1').value);
+            const p2 = palas.find(p => p.id == document.getElementById('pala-2').value);
+            const container = document.getElementById('comparison-results');
+
+            const metrics = [
+                { key: 'power', label: 'Potencia' },
+                { key: 'control', label: 'Control' },
+                { key: 'sweet', label: 'Punto Dulce' },
+                { key: 'hardness', label: 'Dureza' },
+                { key: 'balance', label: 'Balance' },
+                { key: 'comfort', label: 'Confort' }
+            ];
+
+            container.innerHTML = `
+                <div class="sport-card p-5">
+                    <div class="flex-row between mb-6">
+                        <span class="status-badge badge-blue">${p1.style}</span>
+                        <span class="status-badge badge-green">${p2.style}</span>
+                    </div>
+                    ${metrics.map(m => `
+                        <div class="mb-4">
+                            <div class="flex-row between mb-1">
+                                <span class="text-xs font-bold text-sport-blue">${p1[m.key]}</span>
+                                <span class="text-label">${m.label}</span>
+                                <span class="text-xs font-bold text-sport-green">${p2[m.key]}</span>
+                            </div>
+                            <div class="spec-track">
+                                <div class="spec-fill fill-p1" style="width: ${p1[m.key] / 2}%"></div> <!-- Split bar space -->
+                                <div class="spec-fill" style="background:transparent; flex:1"></div>
+                                <div class="spec-fill fill-p2" style="width: ${p2[m.key] / 2}%"></div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="sport-card p-4 border-l-4 border-l-blue-500" style="border-left: 4px solid var(--sport-blue)">
+                    <div class="font-bold text-sm text-white mb-2">Veredicto del Lab</div>
+                    <p class="text-xs text-scnd opacity-80" style="line-height:1.5">
+                        Si buscas <b>${p1.power > p2.power ? 'definición' : 'manejo'}</b>, la <span class="text-sport-blue">${p1.name}</span> es superior. 
+                        Para un juego más <b>${p2.control > p1.control ? 'táctico' : 'explosivo'}</b>, elige la <span class="text-sport-green">${p2.name}</span>.
+                    </p>
+                </div>
+            `;
+        };
+    </script>
+</body>
+
+</html>

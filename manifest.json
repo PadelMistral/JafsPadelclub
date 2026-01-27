@@ -1,0 +1,20 @@
+{
+  "name": "Padeluminatis Pro",
+  "short_name": "PadelPro",
+  "start_url": "./home.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "./imagenes/Logojafs.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./imagenes/Logojafs.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

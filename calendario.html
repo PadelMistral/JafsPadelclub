@@ -1,253 +1,395 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="dark">
+<html lang="es">
+
 <head>
-  <meta charset="UTF-8" >
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" >
-  <meta name="theme-color" content="#0A2342" >
-  <title>Calendario - Padeluminatis</title>
-  <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png" >
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" >
-  <link rel="stylesheet" href="./css/header.css">
-  <link rel="stylesheet" href="./css/home.css">
-  <link rel="stylesheet" href="./css/calendario.css" >
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0c0a1d">
+    <title>Calendario | Padeluminatis Pro</title>
+    <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="./css/core.css">
+    <link rel="stylesheet" href="./css/mistral-ui.css">
+    <style>
+        /* Modern Grid Layout inspired by Mistral */
+        .calendar-main-container {
+            width: 100%;
+            height: calc(100vh - 160px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .calendar-grid {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 20px;
+        }
+
+        .calendar-grid-header {
+            display: flex;
+            margin-bottom: 10px;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: #020617;
+            padding: 10px 0;
+            margin-left: 54px;
+            /* Align with time-col */
+        }
+
+        .header-day {
+            flex: 1;
+            flex-basis: 0;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 5px 0;
+            border-radius: 10px;
+            transition: all 0.2s;
+            min-width: 0;
+        }
+
+        .header-day.today {
+            background: rgba(59, 130, 246, 0.15);
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+        }
+
+        .day-name {
+            font-size: 0.55rem;
+            color: var(--text-scnd);
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+
+        .day-date {
+            font-size: 1rem;
+            font-weight: 900;
+            font-family: var(--font-display);
+            color: white;
+        }
+
+        .corner-header {
+            width: 50px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: var(--sport-blue);
+            font-weight: 900;
+        }
+
+        .time-row {
+            display: flex;
+            height: 65px;
+            margin-bottom: 4px;
+        }
+
+        .time-col {
+            width: 50px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            margin-right: 4px;
+        }
+
+        .time-start {
+            font-size: 0.8rem;
+            font-weight: 900;
+            color: white;
+            font-family: var(--font-display);
+        }
+
+        .time-end {
+            font-size: 0.55rem;
+            color: var(--text-scnd);
+            font-weight: 600;
+        }
+
+        .slot-cell {
+            flex: 1;
+            flex-basis: 0;
+            margin: 0 2px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            position: relative;
+            padding: 2px;
+        }
+
+        .slot-cell:hover:not(.past) {
+            transform: scale(1.02);
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            z-index: 5;
+        }
+
+        .slot-cell.past {
+            opacity: 0.2;
+            cursor: not-allowed;
+        }
+
+        .slot-chip {
+            padding: 3px 4px;
+            border-radius: 5px;
+            font-size: 0.5rem;
+            font-weight: 900;
+            text-align: center;
+            width: 100%;
+            text-transform: uppercase;
+        }
+
+        .slot-chip.free {
+            color: var(--text-scnd);
+            font-style: italic;
+            opacity: 0.5;
+        }
+
+        .slot-chip.abierta {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--sport-blue);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            animation: pulse-blue 2s infinite;
+        }
+
+        @keyframes pulse-blue {
+            0% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 5px rgba(59, 130, 246, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+            }
+        }
+
+        .slot-chip.cerrada {
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-decoration: line-through;
+        }
+
+
+        .slot-chip.propia {
+            background: rgba(163, 230, 53, 0.1);
+            color: #a3e635;
+            border: 1px solid rgba(163, 230, 53, 0.2);
+            box-shadow: 0 0 10px rgba(163, 230, 53, 0.1);
+        }
+
+        .slot-cell.has-match {
+            border-color: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .slot-cell.past-visible {
+            opacity: 0.5;
+            filter: grayscale(0.5);
+        }
+
+        .match-type-indicator {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+        }
+
+        .match-type-indicator.comp {
+            background: var(--sport-green);
+            box-shadow: 0 0 5px var(--sport-green);
+        }
+
+        .match-type-indicator.friend {
+            background: var(--sport-blue);
+            box-shadow: 0 0 5px var(--sport-blue);
+        }
+
+
+        /* Controls Section */
+        .calendario-controls {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            backdrop-filter: blur(15px);
+        }
+
+        .week-nav {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 5px 15px;
+            border-radius: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-arrow {
+            width: 30px;
+            height: 30px;
+            background: transparent;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--sport-blue);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1.2rem;
+        }
+
+        .nav-arrow:hover {
+            transform: scale(1.2);
+            text-shadow: 0 0 10px var(--sport-blue);
+        }
+
+
+        .nav-arrow:hover {
+            background: var(--sport-blue);
+            border-color: var(--sport-blue);
+        }
+
+        .week-label-box {
+            text-align: center;
+        }
+
+        .week-name {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 900;
+            font-family: var(--font-display);
+            letter-spacing: 1px;
+            color: white;
+        }
+
+        .week-month {
+            font-size: 0.6rem;
+            color: var(--sport-blue);
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* Legend Footer */
+        .calendar-legend {
+            background: rgba(0, 0, 0, 0.4);
+            border-top: 1px solid var(--glass-border);
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-around;
+            position: fixed;
+            bottom: 75px;
+            left: 0;
+            right: 0;
+            z-index: 20;
+            backdrop-filter: blur(10px);
+        }
+
+        .legend-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .l-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .l-txt {
+            font-size: 0.5rem;
+            font-weight: 800;
+            color: var(--text-scnd);
+            text-transform: uppercase;
+        }
+    </style>
 </head>
-<body class="app-body">
-  <header class="app-header">
-    <div class="header-content">
-      <img src="./imagenes/Logojafs.png" alt="Logo" class="app-logo">
-      <h1 class="app-title">Calendario - Padeluminatis</h1>
-      <button class="menu-toggle" aria-label="Menú">
-        <i class="fas fa-bars"></i>
-      </button>
-    </div>
-    <nav class="app-nav">
-      <a href="./home.html" class="nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
-      <a href="./eventos.html" class="nav-item"><i class="fas fa-calendar-check"></i><span>Eventos</span></a>
-      <a href="./calendario.html" class="nav-item active"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
-      <a href="./clasificacion.html" class="nav-item"><i class="fas fa-trophy"></i><span>Clasificación</span></a>
-      <a href="./normas.html" class="nav-item"><i class="fas fa-gavel"></i><span>Normas</span></a>
-      <a href="./chat.html" class="nav-item"><i class="fas fa-comments"></i><span>Chat</span></a>
-      <a href="./ranking.html" class="nav-item"><i class="fas fa-list-ol"></i><span>Ranking</span></a>
-      <a href="./admin.html" class="nav-item nav-admin" style="display:none"><i class="fas fa-user-shield"></i><span>Admin</span></a>
-      <a href="./perfil.html" class="nav-item"><i class="fas fa-user"></i><span>Perfil</span></a>
-      <a href="./notificaciones.html" class="nav-item"><i class="fas fa-bell"></i><span>Notificaciones</span></a>
-      <a href="#" class="nav-item nav-logout"><i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span></a>
-    </nav>
-  </header>
 
-  <main class="app-main">
-    <div class="calendario-container">
-      <div class="calendario-header">
+<body>
+    <div class="sport-bg"></div>
+
+    <main class="page-content" style="padding-top: 80px; padding-bottom: 120px;">
+
+        <!-- Header Controls -->
         <div class="calendario-controls">
-          <button id="btn-mes-anterior" class="btn-navegacion"><i class="fas fa-chevron-left"></i></button>
-          <h2 id="mes-actual" class="subtitulo-calendario">Calendario</h2>
-          <button id="btn-mes-siguiente" class="btn-navegacion"><i class="fas fa-chevron-right"></i></button>
+            <div class="flex-col">
+                <span id="current-clock" class="font-display font-black text-lg leading-tight">00:00</span>
+                <span class="text-[9px] font-black text-scnd tracking-widest uppercase">Benicalap, VLC</span>
+            </div>
+
+            <div class="week-nav">
+                <button class="nav-arrow" id="btn-prev"><i class="fas fa-chevron-left"></i></button>
+                <div class="week-label-box">
+                    <span id="week-label" class="week-name">CARGANDO...</span>
+                    <span id="month-label" class="week-month">SEMANA ACTUAL</span>
+                </div>
+                <button class="nav-arrow" id="btn-next"><i class="fas fa-chevron-right"></i></button>
+            </div>
         </div>
 
-        <div class="calendario-actions">
-          <div class="vista-selector">
-            <button id="btn-vista-tabla" class="btn-vista active"><i class="fas fa-table"></i> <span class="texto-boton">Tabla</span></button>
-          </div>
+        <!-- Main Grid -->
+        <div class="calendar-main-container" id="calendar-view">
+            <div id="calendar-grid" class="calendar-grid">
+                <!-- Data injected by JS -->
+                <div class="center py-20">
+                    <div class="spinner-galaxy"></div>
+                </div>
+            </div>
         </div>
-      </div>
 
-      <!-- Vista Tabla -->
-      <div id="vista-tabla" class="vista-activa">
-        <div id="semanas-calendario" class="semanas-calendario"></div>
-        <div id="loading-calendario" class="loading-overlay">
-          <div class="loading-spinner"></div>
-          <div class="loading-text">Cargando calendario...</div>
+    </main>
+
+    <!-- Legend -->
+    <div class="calendar-legend">
+        <div class="legend-item">
+            <div class="l-dot" style="background: rgba(255,255,255,0.2)"></div><span class="l-txt">Libre</span>
         </div>
-      </div>
+        <div class="legend-item">
+            <div class="l-dot" style="background: var(--sport-blue)"></div><span class="l-txt">Abierta</span>
+        </div>
+        <div class="legend-item">
+            <div class="l-dot" style="background: #ef4444"></div><span class="l-txt">Cerrada</span>
+        </div>
+        <div class="legend-item">
+            <div class="l-dot" style="background: #a3e635"></div><span class="l-txt">Mía</span>
+        </div>
     </div>
 
-    <!-- Modal: Crear partido -->
-    <div id="create-match-modal" class="modal-general">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3><i class="fas fa-plus-circle"></i> Crear Partido</h3>
-          <span class="close-modal">&times;</span>
-        </div>
-        <div class="modal-body">
-          <div class="match-type-selector">
-            <button class="match-type-btn active" data-type="liga">
-              <i class="fas fa-trophy"></i> Liga
-            </button>
-            <button class="match-type-btn" data-type="amistoso">
-              <i class="fas fa-handshake"></i> Amistoso
-            </button>
-            <button class="match-type-btn" data-type="reto">
-              <i class="fas fa-fire"></i> Reto
-            </button>
-          </div>
-          
-          <!-- Formulario partido liga -->
-          <form id="form-crear-partido-liga" class="match-form form-liga active">
-            <div class="form-group">
-              <label for="select-rival-liga">
-                <i class="fas fa-users"></i> Equipo Rival:
-              </label>
-              <select id="select-rival-liga" required class="select-liga">
-                <option value="">Selecciona un equipo rival</option>
-              </select>
-              <small class="form-help">Solo se muestran equipos con los que aún no has jugado</small>
-            </div>
-            <button type="submit" class="btn-guardar btn-liga">
-              <i class="fas fa-plus"></i> Crear Partido Liga
-            </button>
-          </form>
-          
-          <!-- Formulario partido amistoso -->
-          <form id="form-crear-partido-amistoso" class="match-form form-amistoso" style="display:none;">
-            <div class="form-group">
-              <label>
-                <i class="fas fa-star"></i> Nivel (opcional):
-              </label>
-              <div class="nivel-personalizado">
-                <input type="number" id="nivel-minimo-amistoso" min="1" max="5" placeholder="1" />
-                <span>-</span>
-                <input type="number" id="nivel-maximo-amistoso" min="1" max="5" placeholder="5" />
-                <span>/ 5</span>
-              </div>
-              <small class="form-help">Rango de nivel permitido para unirse (1-5)</small>
-            </div>
-            <div class="form-group">
-              <label>
-                <i class="fas fa-users"></i> Añadir usuarios al partido:
-              </label>
-              <div class="tennis-court-container">
-                <div class="tennis-court padel-grid">
-                  <div class="court-player-slot" data-pos="1"></div>
-                  <div class="court-player-slot" data-pos="2"></div>
-                  <div class="court-player-slot" data-pos="3"></div>
-                  <div class="court-player-slot" data-pos="4"></div>
-                </div>
-              </div>
-            </div>
-            <button type="submit" class="btn-guardar btn-amistoso">
-              <i class="fas fa-plus"></i> Crear Partido Amistoso
-            </button>
-          </form>
-          
-          <!-- Formulario partido reto -->
-          <form id="form-crear-partido-reto" class="match-form form-reto" style="display:none;">
-            <div class="form-group">
-              <label>
-                <i class="fas fa-star"></i> Nivel (opcional):
-              </label>
-              <div class="nivel-personalizado">
-                <input type="number" id="nivel-minimo-reto" min="1" max="5" placeholder="1" />
-                <span>-</span>
-                <input type="number" id="nivel-maximo-reto" min="1" max="5" placeholder="5" />
-                <span>/ 5</span>
-              </div>
-              <small class="form-help">Rango de nivel permitido para aceptar el reto (1-5)</small>
-            </div>
-            <div class="form-group">
-              <label>
-                <i class="fas fa-users"></i> Añadir usuarios al partido:
-              </label>
-              <div class="tennis-court-container">
-                <div class="tennis-court padel-grid">
-                  <div class="court-player-slot" data-pos="1"></div>
-                  <div class="court-player-slot" data-pos="2"></div>
-                  <div class="court-player-slot" data-pos="3"></div>
-                  <div class="court-player-slot" data-pos="4"></div>
-                </div>
-            </div>
-            </div>
-            <div class="form-group">
-              <label for="family-points-apuesta">
-                <i class="fas fa-coins"></i> Family Points a apostar:
-              </label>
-              <input type="number" id="family-points-apuesta" min="1" value="10" required />
-              <small class="form-help">Family points que apostarás. El ganador obtendrá estos puntos</small>
-            </div>
-            <button type="submit" class="btn-guardar btn-reto">
-              <i class="fas fa-fire"></i> Lanzar Reto
-            </button>
-          </form>
-        </div>
-      </div>
+    <!-- Match Modal Overlay (from ui-core/match-service) -->
+    <div id="modal-match" class="modal-overlay">
+        <div class="modal-sheet" id="match-detail-area"></div>
     </div>
 
-    <!-- Modal: Detalles del partido -->
-    <div id="modal-partido" class="modal-general">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3><i class="fas fa-info-circle"></i> Detalles del Partido</h3>
-          <span class="close-modal">&times;</span>
-        </div>
-        <div class="modal-body">
-          <div id="modal-contenido-partido"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal: Añadir Resultado -->
-    <div id="modal-resultados" class="modal-general modal-resultados">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3><i class="fas fa-trophy"></i> Añadir Resultado</h3>
-          <span class="close-modal">&times;</span>
-        </div>
-        <div class="modal-body">
-          <form id="form-resultados" class="form-resultados">
-            <div class="form-group">
-              <label>
-                <i class="fas fa-users"></i> Partido:
-              </label>
-              <div id="info-partido-resultado" style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin: 10px 0;">
-                <!-- Se llenará dinámicamente -->
-              </div>
-            </div>
-            
-            <div class="form-group">
-              <label>
-                <i class="fas fa-gamepad"></i> Sets:
-              </label>
-              <div id="sets-container">
-                <div class="set-resultado">
-                  <div class="set-numero">Set 1:</div>
-                  <div class="set-inputs">
-                    <input type="number" id="set1-local" min="0" max="7" placeholder="0" required>
-                    <span>-</span>
-                    <input type="number" id="set1-visitante" min="0" max="7" placeholder="0" required>
-                  </div>
-                </div>
-                <div class="set-resultado">
-                  <div class="set-numero">Set 2:</div>
-                  <div class="set-inputs">
-                    <input type="number" id="set2-local" min="0" max="7" placeholder="0" required>
-                    <span>-</span>
-                    <input type="number" id="set2-visitante" min="0" max="7" placeholder="0" required>
-                  </div>
-                </div>
-                <div class="set-resultado">
-                  <div class="set-numero">Set 3:</div>
-                  <div class="set-inputs">
-                    <input type="number" id="set3-local" min="0" max="7" placeholder="0">
-                    <span>-</span>
-                    <input type="number" id="set3-visitante" min="0" max="7" placeholder="0">
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <button type="submit" class="btn-guardar">
-              <i class="fas fa-save"></i> Guardar Resultado
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-
-  </main>
-
-  <script src="./js/menu-hamburguesa.js"></script>
-  <script type="module" src="./js/enlaceAdmin.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
-  <script type="module" src="./js/particles-init.js"></script>
-  <script type="module" src="./js/pruebacalendario.js"></script>
+    <script type="module" src="./js/calendario.js"></script>
 </body>
+
 </html>

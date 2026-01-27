@@ -1,0 +1,150 @@
+/* background.css - Premium Galaxy Arena v2.5 */
+.sport-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -100;
+  background: radial-gradient(
+    circle at 50% 10%,
+    #1e1436 0%,
+    #0d1117 70%,
+    #020617 100%
+  );
+  overflow: hidden;
+}
+
+.starfield {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  animation: rotateStarfield 300s linear infinite;
+}
+
+.star {
+  position: absolute;
+  background: white;
+  border-radius: 50%;
+  animation: twinkle var(--duration, 3s) ease-in-out infinite;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  opacity: 0.8;
+}
+
+.star.large {
+  box-shadow:
+    0 0 15px rgba(255, 255, 255, 0.8),
+    0 0 30px rgba(59, 130, 246, 0.5);
+  background: #fdfdfd;
+}
+
+.star.giant {
+  box-shadow:
+    0 0 20px rgba(255, 255, 255, 1),
+    0 0 40px rgba(59, 130, 246, 0.6),
+    0 0 60px rgba(59, 130, 246, 0.2);
+  background: #fff;
+  z-index: 5;
+}
+
+.star.sport-green {
+  background: #a3e635;
+  box-shadow: 0 0 12px rgba(163, 230, 53, 0.8);
+}
+
+.star.sport-yellow {
+  background: #facc15;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.8);
+}
+
+.shooting-star {
+  position: absolute;
+  width: 150px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), transparent);
+  transform: rotate(-45deg);
+  z-index: 2;
+  pointer-events: none;
+  animation: shootingStarMove var(--duration, 2s) linear forwards;
+}
+
+@keyframes shootingStarMove {
+  0% {
+    transform: translate(-100px, -100px) rotate(-45deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(500px, 500px) rotate(-45deg);
+    opacity: 0;
+  }
+}
+
+@keyframes rotateStarfield {
+  from {
+    transform: rotate(0deg) scale(1.3);
+  }
+  to {
+    transform: rotate(360deg) scale(1.3);
+  }
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+.bg-glow {
+  position: absolute;
+  width: 60vw;
+  height: 60vw;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.15;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.bg-glow.blue {
+  background: var(--sport-blue);
+  top: -10%;
+  left: -10%;
+  animation: drift 30s infinite alternate;
+}
+
+.bg-glow.purple {
+  background: var(--sport-purple);
+  bottom: -10%;
+  right: -10%;
+  animation: drift 35s infinite alternate-reverse;
+}
+
+@keyframes drift {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(15%, 15%) scale(1.3);
+  }
+}
+
+.court-lines {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(132, 204, 22, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(132, 204, 22, 0.08) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: radial-gradient(circle at center, black, transparent 85%);
+  opacity: 0.5;
+  z-index: 1;
+}
