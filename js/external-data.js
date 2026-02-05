@@ -22,7 +22,7 @@ export async function getDailyTip() {
 export async function getDetailedWeather() {
     try {
         // Location hardcoded for the club area (latitude=39.49, longitude=-0.39)
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=39.49&longitude=-0.39&current=temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=3`;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=39.49&longitude=-0.39&current=temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=10`;
         const res = await fetch(url);
         const data = await res.json();
         return data;

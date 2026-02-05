@@ -1,5 +1,9 @@
 /* js/modules/ui-loader.js - Dynamic Layout Injection v5.0 */
 import { getDocument, auth, subscribeCol } from '../firebase-service.js';
+import { initThemeSystem } from './theme-manager.js';
+
+// Initialize theme system immediately  
+initThemeSystem();
 
 const PUBLIC_PAGES = ['index.html', 'registro.html', 'recuperar.html'];
 
@@ -8,10 +12,17 @@ const PUBLIC_PAGES = ['index.html', 'registro.html', 'recuperar.html'];
  */
 function isPublicPage() {
     const path = window.location.pathname.toLowerCase();
-    // Default to public if root
+    // If it ends with home.html, calendario.html, etc it is NOT public
+    const privates = ['home.html', 'calendario.html', 'diario.html', 'perfil.html', 'admin.html', 'notificaciones.html', 'historial.html', 'eventos.html', 'palas.html', 'puntosranking.html'];
+    if (privates.some(p => path.includes(p))) return false;
+    
+    // Fallback: if it includes any public name
+    if (PUBLIC_PAGES.some(page => path.includes(page))) return true;
+    
+    // Root is public (login)
     if (path === '/' || path.endsWith('/') || path === '') return true;
-    // Check if filename is in public list
-    return PUBLIC_PAGES.some(page => path.endsWith(page) || path.includes('/' + page));
+    
+    return false;
 }
 
 /**
@@ -31,7 +42,7 @@ export async function injectHeader(userData = null) {
     const isAdmin = userData?.rol === 'Admin' || (auth.currentUser?.email === 'Juanan221091@gmail.com');
     
     header.innerHTML = `
-        <div class="header-brand" onclick="window.location.href='home.html'" style="cursor:pointer">
+        <div class="header-brand" onclick="window.location.href='home.html'">
             <div class="header-logo">
                 <img src="./imagenes/Logojafs.png" alt="Padeluminatis">
             </div>
@@ -49,9 +60,9 @@ export async function injectHeader(userData = null) {
             ` : ''}
             <div class="header-notif" onclick="window.location.href='notificaciones.html'" title="Notificaciones">
                 <i class="fas fa-bell"></i>
-                <span class="dot" id="notif-dot" style="display:none"></span>
+                <span class="notification-badge" id="notif-badge" style="display:none">0</span>
             </div>
-            <div class="header-avatar" onclick="window.location.href='perfil.html'" id="header-avatar-container" title="Mi Perfil">
+            <div class="header-avatar avatar-premium" onclick="window.location.href='perfil.html'" id="header-avatar-container" title="Mi Perfil">
                 <img src="${photo}" alt="Perfil" id="header-avatar-img">
             </div>
         </div>
@@ -61,12 +72,17 @@ export async function injectHeader(userData = null) {
     
     if (auth.currentUser) {
         subscribeCol("notificaciones", (list) => {
-            const unread = list.filter(n => !n.read).length;
-            const dot = document.getElementById('notif-dot');
-            if (dot) {
-                dot.style.display = unread > 0 ? 'block' : 'none';
+            const unread = list.filter(n => !n.leido && !n.read).length; // Check both naming conventions if exist
+            const badge = document.getElementById('notif-badge');
+            if (badge) {
+                if (unread > 0) {
+                    badge.style.display = 'flex';
+                    badge.textContent = unread > 9 ? '9+' : unread;
+                } else {
+                    badge.style.display = 'none';
+                }
             }
-        }, [['uid', '==', auth.currentUser.uid]]);
+        }, [['destinatario', '==', auth.currentUser.uid]]); // Standard in our app is destinatario
     }
 }
 
@@ -91,18 +107,26 @@ export function updateHeader(userData) {
 /**
  * Injects Bottom Navigation - Redesigned for Beauty
  */
-export function injectNavbar(activePage) {
+export async function injectNavbar(activePage) {
     if (isPublicPage() || document.querySelector('.bottom-nav')) return;
     
     const nav = document.createElement('nav');
     nav.className = 'bottom-nav';
     
+    const icons = {
+        home: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+        ranking: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M5 20v-8h4v8"/><path d="M15 20v-5h4v5"/><path d="M10 20v-11h4v11"/></svg>`,
+        calendar: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+        events: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+        history: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`
+    };
+
     const items = [
-        { id: 'home', icon: 'fa-house-chimney', label: 'Home', link: 'home.html', color: 'blue' },
-        { id: 'ranking', icon: 'fa-ranking-star', label: 'Ranking', link: 'puntosRanking.html', color: 'purple' },
-        { id: 'calendar', icon: 'fa-calendar-plus', label: 'Calendario', link: 'calendario.html', center: true },
-        { id: 'palas', icon: 'fa-table-tennis-paddle-ball', label: 'Palas', link: 'palas.html', color: 'green' }, // Use valid FA 6 icon
-        { id: 'history', icon: 'fa-history', label: 'Historial', link: 'historial.html', color: 'orange' }
+        { id: 'home', icon: icons.home, label: 'Inicio', link: 'home.html', color: 'blue' },
+        { id: 'ranking', icon: icons.ranking, label: 'Ranking', link: 'puntosRanking.html', color: 'gold' },
+        { id: 'calendar', icon: icons.calendar, label: 'Reservar', link: 'calendario.html', center: true },
+        { id: 'events', icon: icons.events, label: 'Retos', link: 'eventos.html', color: 'magenta' },
+        { id: 'history', icon: icons.history, label: 'Historial', link: 'historial.html', color: 'cyan' }
     ];
 
 
@@ -111,7 +135,7 @@ export function injectNavbar(activePage) {
             return `
                 <a href="${item.link}" class="nav-item center-item ${activePage === item.id ? 'active' : ''}">
                     <div class="nav-icon-wrap">
-                        <i class="fas ${item.icon}"></i>
+                        ${item.icon}
                     </div>
                 </a>
             `;
@@ -119,7 +143,7 @@ export function injectNavbar(activePage) {
         return `
             <a href="${item.link}" class="nav-item ${activePage === item.id ? 'active' : ''}" data-color="${item.color}">
                 <div class="nav-icon-box">
-                    <i class="fas ${item.icon}"></i>
+                    ${item.icon}
                 </div>
                 <span>${item.label}</span>
             </a>
@@ -128,58 +152,21 @@ export function injectNavbar(activePage) {
 
     document.body.appendChild(nav);
     
-    // FAB Logic for IA Vecina
-    if (!document.querySelector('.ai-fab')) {
-        const fab = document.createElement('div');
-        fab.className = 'ai-fab';
-        fab.innerHTML = '<i class="fas fa-comment-dots"></i>';
-        fab.onclick = async () => {
-            const { initVecinaChat, toggleChat } = await import('./vecina-chat.js');
-            initVecinaChat();
-            toggleChat();
-        };
-        document.body.appendChild(fab);
+    // Initialize AI Coach Chat (creates its own FAB)
+    try {
+        const { initVecinaChat } = await import('./vecina-chat.js');
+        initVecinaChat();
+    } catch(e) {
+        console.log('AI Chat not available:', e);
     }
 }
 
 /**
- * Initialize Galaxy Background & Glassmorphism Check
+ * Initialize Galaxy Background using centralized module
  */
-export function initBackground() {
-    const bg = document.querySelector('.sport-bg');
-    if (!bg) {
-        const newBg = document.createElement('div');
-        newBg.className = 'sport-bg';
-        document.body.prepend(newBg);
-        initBackground();
-        return;
-    }
-    if (bg.dataset.init) return;
-    bg.dataset.init = 'true';
-
-    const stars = document.createElement('div');
-    stars.className = 'starfield';
-    
-    for (let i = 0; i < 150; i++) {
-        const star = document.createElement('div');
-        star.className = 'star';
-        star.style.left = `${Math.random() * 100}%`;
-        star.style.top = `${Math.random() * 100}%`;
-        const size = Math.random() * 2 + 0.5;
-        star.style.width = `${size}px`;
-        star.style.height = `${size}px`;
-        star.style.setProperty('--duration', `${Math.random() * 5 + 2}s`);
-        stars.appendChild(star);
-    }
-    bg.appendChild(stars);
-
-    // Glow effects
-    const glow1 = document.createElement('div');
-    glow1.className = 'bg-glow blue';
-    const glow2 = document.createElement('div');
-    glow2.className = 'bg-glow purple';
-    bg.appendChild(glow1);
-    bg.appendChild(glow2);
+export async function initBackground() {
+    const { initGalaxyBackground } = await import('./galaxy-bg.js');
+    initGalaxyBackground();
 }
 
 export function setupModals() {
@@ -193,20 +180,62 @@ export function setupModals() {
     });
 }
 
-export function showLoading(message = 'Cargando...') {
+/**
+ * Loading Manager with Session Storage to avoid repeat on Home
+ */
+export function showLoading(message = 'Iniciando Sistemas...', force = false) {
+    if (!force && sessionStorage.getItem('initial_load_done')) return;
+    
     let loader = document.getElementById('global-loader');
     if (!loader) {
         loader = document.createElement('div');
         loader.id = 'global-loader';
         loader.className = 'global-loader active';
-        loader.innerHTML = `<div class="spinner-galaxy"></div><span class="mt-4 text-white font-bold">${message}</span>`;
+        loader.innerHTML = `
+            <div class="loader-galactic-bg">
+                <div class="starfield-mini"></div>
+            </div>
+            <div class="loader-content">
+                <div class="logo-pulse-container">
+                    <img src="./imagenes/Logojafs.png" class="loader-logo-pulse" alt="Logo">
+                    <div class="logo-ring"></div>
+                </div>
+                <div class="loader-text-box">
+                    <span class="loader-text">${message}</span>
+                    <div class="loader-bar-container">
+                        <div class="loader-bar-fill"></div>
+                    </div>
+                </div>
+            </div>
+        `;
         document.body.appendChild(loader);
+        
+        // Add some stars dynamically to the loader
+        const field = loader.querySelector('.starfield-mini');
+        if (field) {
+            for(let i=0; i<30; i++) {
+                const s = document.createElement('div');
+                s.className = 'loader-star';
+                s.style.left = Math.random()*100+'%';
+                s.style.top = Math.random()*100+'%';
+                s.style.animationDelay = Math.random()*2+'s';
+                field.appendChild(s);
+            }
+        }
     } else {
         loader.classList.add('active');
+        loader.querySelector('.loader-text').textContent = message;
     }
 }
 
 export function hideLoading() {
-    document.getElementById('global-loader')?.classList.remove('active');
+    const loader = document.getElementById('global-loader');
+    if (loader) {
+        loader.classList.add('fade-out');
+        sessionStorage.setItem('initial_load_done', 'true');
+        setTimeout(() => {
+            loader.classList.remove('active', 'fade-out');
+        }, 500);
+    }
 }
 

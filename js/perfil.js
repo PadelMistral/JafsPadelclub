@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function renderProfileData(data) {
+        if (!data) return;
         const nameEl = document.getElementById('p-name');
         const roleEl = document.getElementById('p-role');
         const avatarEl = document.getElementById('p-avatar');
@@ -43,25 +44,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const photo = data.fotoPerfil || data.fotoURL;
         const name = (data.nombreUsuario || data.nombre || 'JUGADOR');
         const phone = data.telefono || '';
+        
+        // Format vivienda for badge display
+        const vivInfo = data.vivienda || data.direccion || {};
+        const viviendaStr = vivInfo.bloque ? `Blq ${vivInfo.bloque} - ${vivInfo.piso}º${vivInfo.puerta}` : 'Sin vivienda';
 
         if (nameEl) nameEl.textContent = name.toUpperCase();
-        if (roleEl) roleEl.textContent = (data.rol || 'PRO TOUR MEMBER').toUpperCase();
+        if (roleEl) roleEl.textContent = viviendaStr.toUpperCase();
         if (avatarEl && photo) avatarEl.src = photo;
         if (userInp) userInp.value = name;
         if (document.getElementById('p-phone-inp')) document.getElementById('p-phone-inp').value = phone;
 
+        // Big Stats
         countUp(document.getElementById('p-nivel'), (data.nivel || 2.5).toFixed(2));
         countUp(document.getElementById('p-puntos'), Math.round(data.puntosRanking || 1000));
         const winrate = data.partidosJugados > 0 ? Math.round((data.victorias / data.partidosJugados) * 100) : 0;
-        document.getElementById('p-winrate').textContent = winrate + '%';
+        const winrateEl = document.getElementById('p-winrate');
+        if (winrateEl) winrateEl.textContent = winrate + '%';
+
+        // Grid Stats
+        countUp(document.getElementById('stat-total-matches'), data.partidosJugados || 0);
+        countUp(document.getElementById('stat-total-wins'), data.victorias || 0);
+        countUp(document.getElementById('stat-streak'), Math.abs(data.rachaActual || 0));
+        const rachaEl = document.getElementById('stat-streak');
+        if (rachaEl) {
+            rachaEl.style.color = (data.rachaActual || 0) >= 0 ? 'var(--sport-green)' : 'var(--sport-red)';
+        }
+        countUp(document.getElementById('stat-family-pts'), data.xp || data.puntosFamily || 0);
 
         // Vivienda fields
-        const viv = data.vivienda || data.direccion; // Fallback for old data
-        if (viv) {
-            document.getElementById('addr-bloque').value = viv.bloque || '';
-            document.getElementById('addr-piso').value = viv.piso || '';
-            document.getElementById('addr-puerta').value = viv.puerta || '';
-        }
+        const viv = data.vivienda || data.direccion || {}; // Fallback for old data
+        const bloqueEl = document.getElementById('addr-bloque');
+        const pisoEl = document.getElementById('addr-piso');
+        const puertaEl = document.getElementById('addr-puerta');
+        
+        if (bloqueEl) bloqueEl.value = viv.bloque || '';
+        if (pisoEl) pisoEl.value = viv.piso || '';
+        if (puertaEl) puertaEl.value = viv.puerta || '';
 
         // Level Progress Bar
         updateLevelProgress(data.nivel || 2.5, data.puntosRanking || 1000);
@@ -177,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (palas.length === 0) {
             list.innerHTML = `
-                <div class="gear-card" style="justify-content:center; opacity: 0.5">
+                <div class="gear-card flex-center opacity-50">
                     <span class="text-xs">No has registrado ninguna pala todavía</span>
                 </div>
             `;
@@ -186,31 +205,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         list.innerHTML = palas.map((p, idx) => `
             <div class="gear-card">
-                <div class="flex-row">
-                    <div class="gear-icon">
+                <div class="flex-row items-center gap-3">
+                    <div class="gear-icon flex-center">
                         <i class="fas fa-table-tennis text-white"></i>
                     </div>
                     <div class="flex-col gap-0">
                         <span class="text-sm font-bold text-white">${p.modelo}</span>
-                        <span class="text-2xs text-scnd uppercase tracking-wider">${p.marca}</span>
-                        ${p.forma ? `<span class="text-2xs text-sport-blue mt-1">${p.forma} · ${p.peso || ''}</span>` : ''}
+                        <span class="text-xs text-scnd uppercase tracking-wider">${p.marca}</span>
+                        ${p.forma ? `<span class="text-xs text-sport-blue mt-1">${p.forma} · ${p.peso || ''}</span>` : ''}
                     </div>
                 </div>
-                <div class="flex-row gap-2">
+                <div class="flex-row gap-2 items-center">
                     ${p.potencia ? `
-                        <div class="flex-col center" style="width: 30px">
-                            <span class="text-2xs text-sport-orange font-bold">${p.potencia}</span>
-                            <span class="text-2xs opacity-40">POT</span>
+                        <div class="flex-col flex-center w-8">
+                            <span class="text-xs text-sport-orange font-bold">${p.potencia}</span>
+                            <span class="text-xs opacity-40">POT</span>
                         </div>
                     ` : ''}
                     ${p.control ? `
-                        <div class="flex-col center" style="width: 30px">
-                            <span class="text-2xs text-sport-blue font-bold">${p.control}</span>
-                            <span class="text-2xs opacity-40">CTR</span>
+                        <div class="flex-col flex-center w-8">
+                            <span class="text-xs text-sport-blue font-bold">${p.control}</span>
+                            <span class="text-xs opacity-40">CTR</span>
                         </div>
                     ` : ''}
-                    <button class="text-red-400 ml-2" onclick="removePala(${idx})" style="background:none; border:none; padding:8px">
-                        <i class="fas fa-trash text-sm"></i>
+                    <button class="btn-icon-sm text-danger ml-2" onclick="removePala(${idx})">
+                        <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>
@@ -331,6 +350,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    function renderThemeSelector() {
+        const container = document.getElementById('theme-selector-container');
+        if (!container) return;
+
+        const themes = [
+            { id: 'galactic', name: 'Galactic', class: 'galactic' },
+            { id: 'winter', name: 'Ice King', class: 'winter' },
+            { id: 'arcade', name: 'Arcade', class: 'arcade' },
+            { id: 'fantasy', name: 'Forest', class: 'fantasy' },
+            { id: 'neon', name: 'Cyber', class: 'neon' },
+            { id: 'sunset', name: 'Sunset', class: 'sunset' },
+            { id: 'ocean', name: 'Ocean', class: 'ocean' },
+            { id: 'minimal', name: 'Clean', class: 'minimal' },
+            { id: 'matrix', name: 'Matrix', class: 'matrix' }
+        ];
+
+        const currentTheme = document.documentElement.getAttribute('data-theme') || localStorage.getItem('app-theme') || 'galactic';
+
+        container.innerHTML = `
+            <div class="theme-selector-grid">
+                ${themes.map(t => `
+                    <div class="theme-option ${currentTheme === t.id ? 'active' : ''}" onclick="setAppTheme('${t.id}')">
+                        <div class="theme-preview ${t.class}"></div>
+                        <span class="theme-name">${t.name}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    window.setAppTheme = (themeId) => {
+        document.documentElement.setAttribute('data-theme', themeId);
+        localStorage.setItem('app-theme', themeId);
+        renderThemeSelector();
+        showToast("Tema Actualizado", `Modo ${themeId.toUpperCase()} activado.`, "success");
+    };
+
     // Logout
     const btnLogout = document.getElementById('btn-logout');
     if(btnLogout) btnLogout.onclick = async () => {
@@ -340,4 +396,6 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = 'index.html';
         }
     };
+
+    renderThemeSelector();
 });

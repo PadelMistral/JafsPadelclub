@@ -1,0 +1,431 @@
+/* =====================================================
+   PADELUMINATIS PERFIL V6.0 - GALACTIC EDITION
+   Profile page styling.
+   ===================================================== */
+
+/* ===== PROFILE HEADER ===== */
+.profile-header {
+  text-align: center;
+  padding: var(--space-2xl) 0;
+  margin-bottom: var(--space-xl);
+  position: relative;
+}
+
+.profile-cover {
+  position: absolute;
+  top: 0;
+  left: -20px;
+  right: -20px;
+  height: 120px;
+  background: linear-gradient(
+    135deg,
+    rgba(88, 28, 135, 0.5),
+    rgba(30, 64, 175, 0.3)
+  );
+  border-radius: 0 0 var(--radius-2xl) var(--radius-2xl);
+  z-index: 0;
+}
+
+.profile-avatar-wrapper {
+  position: relative;
+  display: inline-block;
+  margin-bottom: var(--space-lg);
+  z-index: 1;
+}
+
+.profile-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 4px solid var(--primary);
+  overflow: hidden;
+  box-shadow:
+    0 0 30px var(--primary-glow),
+    0 20px 50px rgba(0, 0, 0, 0.6);
+  background: var(--bg-glass);
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-edit {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--bg-deep);
+  color: #000;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.profile-avatar-edit:hover {
+  transform: scale(1.1);
+}
+
+.profile-name {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  margin-bottom: var(--space-xs);
+  position: relative;
+  z-index: 1;
+}
+
+.profile-username {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-md);
+  position: relative;
+  z-index: 1;
+}
+
+.profile-level-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 8px 20px;
+  background: linear-gradient(135deg, var(--neon-purple), var(--neon-magenta));
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #fff;
+  box-shadow: 0 4px 20px var(--neon-purple-glow);
+  position: relative;
+  z-index: 1;
+}
+
+/* ===== PROFILE STATS ===== */
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-2xl);
+}
+
+.profile-stat {
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg) var(--space-sm);
+  text-align: center;
+  transition: var(--transition);
+}
+
+.profile-stat:hover {
+  border-color: var(--border-light);
+  transform: translateY(-2px);
+}
+
+.profile-stat-value {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.profile-stat-label {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.profile-stat.highlight .profile-stat-value {
+  color: var(--primary);
+  text-shadow: 0 0 15px var(--primary-glow);
+}
+
+/* ===== PROFILE SECTIONS ===== */
+.profile-section {
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  margin-bottom: var(--space-xl);
+}
+
+.profile-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-lg);
+}
+
+.profile-section-title {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.profile-section-action {
+  font-size: 0.8rem;
+  color: var(--primary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.profile-section-action:hover {
+  text-decoration: underline;
+}
+
+/* ===== ELO CHART ===== */
+.elo-chart-container {
+  height: 200px;
+  position: relative;
+}
+
+.elo-chart-placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+}
+
+.elo-chart-placeholder i {
+  font-size: 2rem;
+  margin-bottom: var(--space-md);
+}
+
+/* ===== PROFILE INFO LIST ===== */
+.profile-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.profile-info-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-lg);
+}
+
+.profile-info-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--primary-glow);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.profile-info-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-info-label {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.profile-info-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ===== EQUIPMENT GRID ===== */
+.equipment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md);
+}
+
+.equipment-card {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.equipment-card:hover {
+  border-color: var(--primary);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.equipment-icon {
+  font-size: 2rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.equipment-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.equipment-brand {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.equipment-card.empty {
+  border-style: dashed;
+}
+
+.equipment-card.empty .equipment-icon {
+  color: var(--text-dim);
+}
+
+/* ===== PROFILE SETTINGS ===== */
+.settings-group {
+  margin-bottom: var(--space-xl);
+}
+
+.settings-group-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: var(--space-md);
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg);
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: var(--transition);
+  margin-bottom: var(--space-sm);
+}
+
+.settings-item:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.settings-item-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.settings-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--bg-glass);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.settings-item-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-item-arrow {
+  color: var(--text-dim);
+}
+
+.settings-item.danger .settings-item-icon {
+  color: var(--sport-red);
+}
+
+.settings-item.danger .settings-item-label {
+  color: var(--sport-red);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  width: 50px;
+  height: 28px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  transition: var(--transition);
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: var(--transition);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--primary);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(22px);
+}
+
+/* ===== LOGOUT BUTTON ===== */
+.logout-btn {
+  width: 100%;
+  padding: var(--space-lg);
+  background: transparent;
+  border: 1px solid var(--sport-red);
+  border-radius: var(--radius-lg);
+  color: var(--sport-red);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+}

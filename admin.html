@@ -5,172 +5,199 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#0c0a1d">
-    <title>Padeluminatis - Panel Admin</title>
+    <meta name="theme-color" content="#020617">
+    <title>Panel Admin | Padeluminatis Pro</title>
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="./css/core.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/layout.css">
+    <link rel="stylesheet" href="./css/components-premium.css">
+    <link rel="stylesheet" href="./css/themes.css">
+    <link rel="stylesheet" href="./css/admin.css">
 </head>
 
 <body>
+    <!-- Galactic Background -->
     <div class="sport-bg"></div>
 
-    <main class="page-content">
+    <!-- Header & Nav injected by JS -->
 
-        <div class="admin-header mb-6">
-            <div class="flex-row between">
-                <div>
-                    <h1 class="font-display font-black text-2xl text-white">Panel de Control</h1>
-                    <p class="text-sm text-scnd mt-1">Gestión completa de Padeluminatis</p>
+    <main class="page-content admin-page">
+
+        <!-- Header -->
+        <div class="admin-header animate-fade-in">
+            <div class="flex-row between items-center">
+                <div class="header-content">
+                    <h1 class="page-title">
+                        <i class="fas fa-shield-halved"></i>
+                        Panel de Control
+                    </h1>
+                    <p class="page-subtitle">Gestión central del Nexo</p>
                 </div>
-                <a href="home.html" class="btn-ghost">
-                    <i class="fas fa-home"></i>
-                </a>
             </div>
         </div>
 
         <!-- Quick Stats -->
-        <div class="grid grid-cols-3 gap-3 mb-6">
-            <div class="stat-card-mini blue">
-                <span class="stat-num" id="total-users">0</span>
-                <span class="stat-text">Usuarios</span>
+        <div class="stats-grid animate-fade-in" style="animation-delay: 0.1s;">
+            <div class="stat-card blue">
+                <div class="stat-icon"><i class="fas fa-users"></i></div>
+                <div class="stat-info">
+                    <span class="stat-num" id="total-users">0</span>
+                    <span class="stat-label">Usuarios</span>
+                </div>
             </div>
-            <div class="stat-card-mini green">
-                <span class="stat-num" id="total-matches">0</span>
-                <span class="stat-text">Partidos</span>
+            <div class="stat-card green">
+                <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
+                <div class="stat-info">
+                    <span class="stat-num" id="total-matches">0</span>
+                    <span class="stat-label">Partidos</span>
+                </div>
             </div>
-            <div class="stat-card-mini orange">
-                <span class="stat-num" id="active-matches">0</span>
-                <span class="stat-text">Abiertos</span>
+            <div class="stat-card orange">
+                <div class="stat-icon"><i class="fas fa-bolt"></i></div>
+                <div class="stat-info">
+                    <span class="stat-num" id="active-matches">0</span>
+                    <span class="stat-label">Activos</span>
+                </div>
             </div>
         </div>
 
         <!-- Tabs -->
-        <div class="admin-tabs mb-4">
+        <div class="admin-tabs-container animate-fade-in" style="animation-delay: 0.15s;">
             <button class="admin-tab active" data-tab="users">
-                <i class="fas fa-users"></i> Usuarios
+                <i class="fas fa-users"></i> <span>Usuarios</span>
             </button>
             <button class="admin-tab" data-tab="matches">
-                <i class="fas fa-calendar"></i> Partidos
+                <i class="fas fa-calendar"></i> <span>Partidos</span>
             </button>
             <button class="admin-tab" data-tab="palas">
-                <i class="fas fa-table-tennis"></i> Palas
+                <i class="fas fa-table-tennis-paddle-ball"></i> <span>Palas</span>
             </button>
             <button class="admin-tab" data-tab="config">
-                <i class="fas fa-cog"></i> Config
+                <i class="fas fa-gears"></i> <span>Config</span>
             </button>
         </div>
 
         <!-- Users Tab -->
-        <section id="tab-users" class="admin-section">
-            <div class="flex-row between mb-4 gap-2">
-                <input type="text" class="search-input flex-1" id="user-search" placeholder="Buscar usuario...">
-                <select class="filter-select" id="user-role-filter">
-                    <option value="all">Todos</option>
-                    <option value="admin">Admins</option>
+        <section id="tab-users" class="admin-section animate-up">
+            <div class="filter-bar">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="user-search" placeholder="Buscar usuario...">
+                </div>
+                <select id="user-role-filter" class="filter-select">
+                    <option value="all">Rol: Todos</option>
+                    <option value="admin">Rol: Admin</option>
                 </select>
             </div>
-            <div id="users-list" class="flex-col gap-2">
-                <div class="center py-10">
-                    <div class="spinner-galaxy"></div>
+
+            <div id="users-list" class="data-list">
+                <div class="loading-state">
+                    <div class="spinner-neon"></div>
+                    <span>Cargando usuarios...</span>
                 </div>
             </div>
         </section>
 
         <!-- Matches Tab -->
-        <section id="tab-matches" class="admin-section hidden">
-            <div class="flex-row gap-2 mb-4">
+        <section id="tab-matches" class="admin-section hidden animate-up">
+            <div class="filter-bar">
                 <select id="match-filter" class="filter-select flex-1">
                     <option value="all">Todos los partidos</option>
                     <option value="pending">Pendientes</option>
                     <option value="played">Jugados</option>
-                    <option value="open">Con plazas libres</option>
+                    <option value="open">Con huecos</option>
                 </select>
-                <button class="btn-icon-circle" onclick="refreshMatches()">
-                    <i class="fas fa-refresh"></i>
+                <button class="btn-icon-glass" onclick="refreshMatches()">
+                    <i class="fas fa-sync-alt"></i>
                 </button>
             </div>
-            <div id="matches-list" class="flex-col gap-2">
-                <div class="center py-10">
-                    <div class="spinner-galaxy"></div>
+            <div id="matches-list" class="data-list">
+                <div class="loading-state">
+                    <div class="spinner-neon"></div>
+                    <span>Cargando partidos...</span>
                 </div>
             </div>
         </section>
 
         <!-- Palas Database Tab -->
-        <section id="tab-palas" class="admin-section hidden">
-            <div class="sport-card p-4 mb-4">
-                <h3 class="font-bold text-white mb-3">
-                    <i class="fas fa-database mr-2 text-sport-purple"></i>Base de Datos de Palas
-                </h3>
-                <p class="text-xs text-scnd mb-4">Añade palas al catálogo global para comparativas</p>
-
-                <button class="btn-primary w-full" onclick="openAddPalaModal()">
-                    <i class="fas fa-plus mr-2"></i>Añadir Pala al Catálogo
+        <section id="tab-palas" class="admin-section hidden animate-up">
+            <div class="action-card mb-4">
+                <div class="action-card-content">
+                    <h3><i class="fas fa-database text-sport-purple"></i> Catálogo Global</h3>
+                    <p>Base de datos maestra de palas para comparativas</p>
+                </div>
+                <button class="btn-primary sm" onclick="openAddPalaModal()">
+                    <i class="fas fa-plus"></i> Añadir
                 </button>
             </div>
 
-            <div id="palas-catalog" class="flex-col gap-2">
-                <div class="center py-10">
-                    <div class="spinner-galaxy"></div>
+            <div id="palas-catalog" class="data-list">
+                <div class="loading-state">
+                    <div class="spinner-neon"></div>
+                    <span>Cargando catálogo...</span>
                 </div>
             </div>
         </section>
 
         <!-- Config Tab -->
-        <section id="tab-config" class="admin-section hidden">
-            <div class="sport-card p-4 mb-4">
-                <h3 class="font-bold text-white mb-3">
-                    <i class="fas fa-trophy mr-2 text-sport-orange"></i>Sistema de Puntuación ELO
-                </h3>
-                <div class="flex-col gap-3">
-                    <div class="config-row">
-                        <div class="flex-col gap-0">
-                            <span class="text-sm font-bold text-white">Factor K Base</span>
-                            <span class="text-2xs text-scnd">Impacto base de cada partido</span>
+        <section id="tab-config" class="admin-section hidden animate-up">
+            <div class="config-card mb-4">
+                <div class="config-header">
+                    <h3><i class="fas fa-trophy text-gold"></i> Sistema ELO</h3>
+                </div>
+                <div class="config-body">
+                    <div class="config-item">
+                        <div class="config-label">
+                            <span class="label-main">Factor K Base</span>
+                            <span class="label-sub">Impacto base</span>
                         </div>
-                        <input type="number" class="mini-input" value="32" id="cfg-k">
+                        <input type="number" class="config-input" value="32" id="cfg-k">
                     </div>
-                    <div class="config-row">
-                        <div class="flex-col gap-0">
-                            <span class="text-sm font-bold text-white">Multiplicador Competitivo</span>
-                            <span class="text-2xs text-scnd">Bonus para partidos de reto</span>
+                    <div class="config-item">
+                        <div class="config-label">
+                            <span class="label-main">Multiplicador Comp.</span>
+                            <span class="label-sub">Bonus retos</span>
                         </div>
-                        <input type="number" class="mini-input" value="1.5" step="0.1" id="cfg-mult">
+                        <input type="number" class="config-input" value="1.5" step="0.1" id="cfg-mult">
                     </div>
-                    <div class="config-row">
-                        <div class="flex-col gap-0">
-                            <span class="text-sm font-bold text-white">Cambio Nivel Mínimo</span>
-                            <span class="text-2xs text-scnd">Ajuste mínimo por partido</span>
+                    <div class="config-item">
+                        <div class="config-label">
+                            <span class="label-main">Nivel Mín Change</span>
+                            <span class="label-sub">Ajuste mínimo</span>
                         </div>
-                        <input type="number" class="mini-input" value="0.01" step="0.01" id="cfg-lvl-min">
+                        <input type="number" class="config-input" value="0.01" step="0.01" id="cfg-lvl-min">
                     </div>
-                    <div class="config-row">
-                        <div class="flex-col gap-0">
-                            <span class="text-sm font-bold text-white">Cambio Nivel Máximo</span>
-                            <span class="text-2xs text-scnd">Ajuste máximo por partido</span>
+                    <div class="config-item">
+                        <div class="config-label">
+                            <span class="label-main">Nivel Max Change</span>
+                            <span class="label-sub">Ajuste máximo</span>
                         </div>
-                        <input type="number" class="mini-input" value="0.05" step="0.01" id="cfg-lvl-max">
+                        <input type="number" class="config-input" value="0.05" step="0.01" id="cfg-lvl-max">
                     </div>
                 </div>
-                <button class="btn-primary mt-4 w-full" onclick="saveConfig()">
-                    <i class="fas fa-save mr-2"></i>Guardar Configuración
-                </button>
+                <div class="config-footer">
+                    <button class="btn-primary w-full" onclick="saveConfig()">
+                        <i class="fas fa-save mr-2"></i>Guardar Ajustes
+                    </button>
+                </div>
             </div>
 
-            <div class="sport-card p-4">
-                <h3 class="font-bold text-white mb-3">
-                    <i class="fas fa-bolt mr-2 text-sport-green"></i>Acciones Rápidas
-                </h3>
-                <div class="flex-col gap-2">
-                    <button class="btn-secondary w-full" onclick="recalculateAllRankings()">
-                        <i class="fas fa-calculator mr-2"></i>Recalcular Rankings
+            <div class="config-card">
+                <div class="config-header">
+                    <h3><i class="fas fa-bolt text-sport-blue"></i> Acciones Rápidas</h3>
+                </div>
+                <div class="config-body gap-2">
+                    <button class="btn-secondary w-full justify-start" onclick="recalculateAllRankings()">
+                        <i class="fas fa-calculator w-6"></i> Recalcular Rankings
                     </button>
-                    <button class="btn-secondary w-full" onclick="resetAllStreaks()">
-                        <i class="fas fa-refresh mr-2"></i>Resetear Rachas
+                    <button class="btn-secondary w-full justify-start" onclick="resetAllStreaks()">
+                        <i class="fas fa-refresh w-6"></i> Resetear Rachas
                     </button>
-                    <button class="btn-ghost text-red-400 w-full" onclick="clearOldMatches()">
-                        <i class="fas fa-trash mr-2"></i>Limpiar Partidos Antiguos
+                    <button class="btn-danger-glass w-full justify-start" onclick="clearOldMatches()">
+                        <i class="fas fa-trash-alt w-6"></i> Limpiar Partidos Antiguos
                     </button>
                 </div>
             </div>
@@ -178,45 +205,60 @@
 
     </main>
 
-    <!-- Edit User Modal -->
+    <!-- Modals -->
     <div id="modal-edit-user" class="modal-overlay">
         <div class="modal-sheet" id="edit-user-area"></div>
     </div>
 
-    <!-- Edit Match Modal -->
     <div id="modal-edit-match" class="modal-overlay">
         <div class="modal-sheet" id="edit-match-area"></div>
     </div>
 
-    <!-- Add Pala Modal -->
     <div id="modal-add-pala" class="modal-overlay">
         <div class="modal-sheet">
-            <div class="flex-row between mb-4">
-                <h3 class="font-display font-bold text-lg">Añadir Pala al Catálogo</h3>
-                <button class="btn-ghost"
+            <div class="modal-header-row mb-4">
+                <h3 class="modal-title">Añadir Pala</h3>
+                <button class="btn-icon-glass sm"
                     onclick="document.getElementById('modal-add-pala').classList.remove('active')">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="flex-col gap-4">
-                <input type="text" id="cat-pala-marca" class="sport-input" placeholder="Marca">
-                <input type="text" id="cat-pala-modelo" class="sport-input" placeholder="Modelo">
-                <input type="number" id="cat-pala-precio" class="sport-input" placeholder="Precio (€)">
-                <select id="cat-pala-forma" class="sport-input">
-                    <option value="">Forma...</option>
-                    <option value="redonda">Redonda</option>
-                    <option value="lagrima">Lágrima</option>
-                    <option value="diamante">Diamante</option>
-                </select>
-                <div class="flex-row between">
-                    <span class="text-sm text-scnd">Potencia</span>
-                    <input type="range" id="cat-pala-pot" min="1" max="10" value="5" class="flex-1 ml-3">
+            <div class="form-stack">
+                <div class="input-group">
+                    <input type="text" id="cat-pala-marca" class="sport-input" placeholder="Marca">
                 </div>
-                <div class="flex-row between">
-                    <span class="text-sm text-scnd">Control</span>
-                    <input type="range" id="cat-pala-ctrl" min="1" max="10" value="5" class="flex-1 ml-3">
+                <div class="input-group">
+                    <input type="text" id="cat-pala-modelo" class="sport-input" placeholder="Modelo">
                 </div>
-                <button class="btn-primary mt-2" onclick="saveCatalogPala()">
+                <div class="input-group">
+                    <input type="number" id="cat-pala-precio" class="sport-input" placeholder="Precio (€)">
+                </div>
+                <div class="input-group">
+                    <select id="cat-pala-forma" class="sport-input">
+                        <option value="">Forma...</option>
+                        <option value="redonda">Redonda</option>
+                        <option value="lagrima">Lágrima</option>
+                        <option value="diamante">Diamante</option>
+                    </select>
+                </div>
+
+                <div class="range-group">
+                    <div class="flex-row between mb-1">
+                        <span class="text-xs text-scnd uppercase">Potencia</span>
+                        <span class="text-xs font-bold text-primary">5</span>
+                    </div>
+                    <input type="range" id="cat-pala-pot" min="1" max="10" value="5" class="sport-range">
+                </div>
+
+                <div class="range-group">
+                    <div class="flex-row between mb-1">
+                        <span class="text-xs text-scnd uppercase">Control</span>
+                        <span class="text-xs font-bold text-sport-green">5</span>
+                    </div>
+                    <input type="range" id="cat-pala-ctrl" min="1" max="10" value="5" class="sport-range">
+                </div>
+
+                <button class="btn-primary w-full mt-2" onclick="saveCatalogPala()">
                     <i class="fas fa-plus mr-2"></i>Añadir al Catálogo
                 </button>
             </div>
@@ -226,217 +268,387 @@
     <script type="module" src="./js/admin.js"></script>
 
     <style>
-        .page-content {
-            padding: 90px 16px 40px;
-            overflow-y: auto;
-            height: 100vh;
+        .admin-page {
+            padding-bottom: 100px;
         }
 
         .admin-header {
-            background: linear-gradient(135deg, rgba(249, 115, 22, 0.15), rgba(239, 68, 68, 0.15));
-            border: 1px solid rgba(249, 115, 22, 0.25);
-            border-radius: 20px;
-            padding: 20px;
+            margin-bottom: var(--space-xl);
         }
 
-        .stat-card-mini {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 16px;
+        .page-title {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .page-title i {
+            color: var(--primary);
+        }
+
+        .page-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-left: 36px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-sm);
+            margin-bottom: var(--space-xl);
+        }
+
+        .stat-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-md);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             text-align: center;
-            transition: all 0.3s;
+            gap: var(--space-xs);
         }
 
-        .stat-card-mini:hover {
-            transform: translateY(-2px);
+        .stat-card.blue {
+            border-color: rgba(59, 130, 246, 0.3);
+            background: linear-gradient(145deg, rgba(59, 130, 246, 0.1), transparent);
         }
 
-        .stat-card-mini.blue {
-            background: rgba(59, 130, 246, 0.1);
-            border-color: rgba(59, 130, 246, 0.2);
+        .stat-card.green {
+            border-color: rgba(34, 197, 94, 0.3);
+            background: linear-gradient(145deg, rgba(34, 197, 94, 0.1), transparent);
         }
 
-        .stat-card-mini.blue .stat-num {
+        .stat-card.orange {
+            border-color: rgba(249, 115, 22, 0.3);
+            background: linear-gradient(145deg, rgba(249, 115, 22, 0.1), transparent);
+        }
+
+        .stat-icon {
+            font-size: 1rem;
+            margin-bottom: 4px;
+        }
+
+        .stat-card.blue .stat-icon {
             color: #3b82f6;
         }
 
-        .stat-card-mini.green {
-            background: rgba(163, 230, 53, 0.1);
-            border-color: rgba(163, 230, 53, 0.2);
+        .stat-card.green .stat-icon {
+            color: #22c55e;
         }
 
-        .stat-card-mini.green .stat-num {
-            color: #a3e635;
-        }
-
-        .stat-card-mini.orange {
-            background: rgba(249, 115, 22, 0.1);
-            border-color: rgba(249, 115, 22, 0.2);
-        }
-
-        .stat-card-mini.orange .stat-num {
+        .stat-card.orange .stat-icon {
             color: #f97316;
         }
 
         .stat-num {
             font-family: var(--font-display);
-            font-weight: 800;
-            font-size: 1.8rem;
-            color: white;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #fff;
             display: block;
+            line-height: 1;
         }
 
-        .stat-text {
-            font-size: 0.65rem;
-            font-weight: 600;
-            color: var(--text-scnd);
+        .stat-label {
+            font-size: 0.6rem;
             text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 700;
         }
 
-        .admin-tabs {
+        /* Tabs */
+        .admin-tabs-container {
             display: flex;
-            gap: 6px;
             overflow-x: auto;
+            gap: var(--space-xs);
+            margin-bottom: var(--space-lg);
             padding-bottom: 4px;
+            -webkit-overflow-scrolling: touch;
         }
 
         .admin-tab {
             flex: 1;
-            padding: 12px 10px;
+            min-width: 80px;
             background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            color: var(--text-scnd);
-            font-size: 0.7rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 10px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;
-            gap: 6px;
-            white-space: nowrap;
+            gap: 4px;
+            transition: var(--transition);
         }
 
         .admin-tab:hover {
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.1);
         }
 
         .admin-tab.active {
-            background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(239, 68, 68, 0.2));
-            border-color: rgba(249, 115, 22, 0.3);
-            color: #fb923c;
+            background: var(--bg-glass);
+            border-color: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(0, 212, 255, 0.15);
         }
 
-        .search-input {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 12px 16px;
-            color: white;
+        .admin-tab i {
+            font-size: 1rem;
+            margin-bottom: 2px;
+        }
+
+        .admin-tab.active i {
+            color: var(--primary);
+        }
+
+        /* Filters */
+        .filter-bar {
+            display: flex;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-lg);
+        }
+
+        .search-wrapper {
+            flex: 1;
+            position: relative;
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            padding: 0 var(--space-md);
+        }
+
+        .search-wrapper i {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .search-wrapper input {
+            background: transparent;
+            border: none;
+            color: #fff;
+            padding: 10px;
+            width: 100%;
             font-size: 0.85rem;
         }
 
-        .search-input:focus {
-            border-color: var(--sport-blue);
+        .search-wrapper input:focus {
             outline: none;
         }
 
         .filter-select {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 10px 16px;
-            color: white;
-            font-size: 0.8rem;
-        }
-
-        .mini-input {
-            width: 80px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 8px 12px;
-            color: white;
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            color: var(--text-secondary);
+            padding: 0 var(--space-md);
             font-size: 0.85rem;
-            text-align: center;
+            outline: none;
         }
 
-        .config-row {
+        /* Data Lists */
+        .data-list {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 12px;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .user-row,
+        .match-row {
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-md);
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .user-row:hover,
+        .match-row:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateX(2px);
         }
 
         .user-row {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 14px;
-            padding: 12px 16px;
             display: grid;
-            grid-template-columns: 40px 1fr auto;
-            gap: 12px;
+            grid-template-columns: 48px 1fr auto;
             align-items: center;
-            cursor: pointer;
-            transition: all 0.2s;
+            gap: var(--space-md);
         }
 
-        .user-row:hover {
-            border-color: rgba(249, 115, 22, 0.3);
-            transform: translateX(4px);
-        }
-
-        .match-row {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 14px;
-            padding: 14px 16px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .match-row:hover {
-            border-color: rgba(249, 115, 22, 0.3);
-            transform: translateX(4px);
-        }
-
-        .match-row.open {
-            border-left: 4px solid var(--sport-green);
-        }
-
-        .match-row.full {
-            border-left: 4px solid var(--sport-blue);
-        }
-
-        .match-row.played {
-            border-left: 4px solid var(--sport-orange);
-            opacity: 0.7;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        /* Loading centered */
-        .spinner-galaxy {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-top-color: var(--sport-orange);
+        .avatar-circle {
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
+        .avatar-circle img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .user-info span {
+            display: block;
+        }
+
+        .user-name {
+            font-weight: 700;
+            color: #fff;
+            font-size: 0.9rem;
+        }
+
+        .user-details {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Config cards */
+        .config-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+        }
+
+        .config-header {
+            padding: var(--space-md) var(--space-lg);
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .config-header h3 {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #fff;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .config-body {
+            padding: var(--space-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-sm);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-md);
+        }
+
+        .config-label {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .label-main {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+
+        .label-sub {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .config-input {
+            width: 70px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            color: #fff;
+            padding: 6px;
+            text-align: center;
+            font-weight: 700;
+        }
+
+        .config-footer {
+            padding: var(--space-md) var(--space-lg);
+            border-top: 1px solid var(--border);
+        }
+
+        /* Action Card */
+        .action-card {
+            background: var(--bg-glass);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(145deg, rgba(168, 85, 247, 0.1), transparent);
+        }
+
+        .action-card-content h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .action-card-content p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .btn-danger-glass {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+            padding: 12px;
+            border-radius: var(--radius-lg);
+            font-weight: 700;
+            font-size: 0.85rem;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .btn-danger-glass:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        /* Loading */
+        .loading-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+            gap: 16px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
         }
     </style>
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        initGalaxyBackground();
+    </script>
 </body>
 
 </html>

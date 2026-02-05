@@ -5,156 +5,600 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Padel Lab | Padeluminatis</title>
+    <meta name="theme-color" content="#020617">
+    <title>Padel Lab | Padeluminatis Pro</title>
+    <meta name="description" content="Comparador de palas y laboratorio de pádel">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="./css/core.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/layout.css">
+    <link rel="stylesheet" href="./css/components-premium.css">
+    <link rel="stylesheet" href="./css/themes.css">
+    <link rel="stylesheet" href="./css/palas.css">
+</head>
+
+<body>
+    <!-- Galactic Background -->
+    <div class="sport-bg"></div>
+
+    <!-- Header & Nav injected by JS -->
+
+    <main class="page-content lab-page">
+
+        <!-- Page Header -->
+        <section class="lab-header animate-fade-in">
+            <div class="lab-icon-box">
+                <i class="fas fa-microscope"></i>
+                <div class="lab-pulse"></div>
+            </div>
+            <div class="lab-title-area">
+                <h1 class="lab-title">Padel Lab Tech</h1>
+                <span class="lab-subtitle">Base de datos colaborativa de palas</span>
+            </div>
+            <button class="btn btn-sm btn-primary"
+                onclick="document.getElementById('modal-register-pala').classList.add('active')">
+                <i class="fas fa-plus"></i> Nueva
+            </button>
+        </section>
+
+        <!-- Comparison Section -->
+        <section class="comparison-section animate-fade-in" style="animation-delay: 0.1s;">
+            <div class="comparison-card">
+                <h2 class="comparison-title">Comparador de Palas</h2>
+                <div class="comparison-selects">
+                    <div class="select-group pala-a">
+                        <label class="select-label">Muestra A</label>
+                        <select id="pala-1" class="form-select">
+                            <option value="">Selecciona pala...</option>
+                        </select>
+                    </div>
+                    <div class="select-vs">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                    <div class="select-group pala-b">
+                        <label class="select-label">Muestra B</label>
+                        <select id="pala-2" class="form-select">
+                            <option value="">Selecciona pala...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Comparison Results -->
+        <section class="results-section animate-fade-in" style="animation-delay: 0.15s;">
+            <div id="comparison-results" class="comparison-results">
+                <div class="results-placeholder">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Selecciona dos palas para comparar</span>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal Registro -->
+    <div id="modal-register-pala" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">Registrar Nueva Pala</h3>
+                <button class="modal-close" onclick="this.closest('.modal-overlay').classList.remove('active')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Marca</label>
+                    <input type="text" id="reg-pala-brand" placeholder="Ej: Nox, Adidas..." class="input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Modelo</label>
+                    <input type="text" id="reg-pala-name" placeholder="Ej: AT10 Genius..." class="input">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Balance</label>
+                    <select id="reg-pala-balance" class="form-select">
+                        <option value="Low">Bajo (Control)</option>
+                        <option value="Mid" selected>Medio (Polivalente)</option>
+                        <option value="High">Alto (Potencia)</option>
+                    </select>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="form-group">
+                    <label class="form-label">Características (0-100)</label>
+                    <div class="specs-grid">
+                        <div class="spec-input-group">
+                            <label>Potencia</label>
+                            <input type="number" id="reg-pala-power" value="80" min="0" max="100" class="input-number">
+                        </div>
+                        <div class="spec-input-group">
+                            <label>Control</label>
+                            <input type="number" id="reg-pala-control" value="80" min="0" max="100"
+                                class="input-number">
+                        </div>
+                        <div class="spec-input-group">
+                            <label>P. Dulce</label>
+                            <input type="number" id="reg-pala-sweet" value="80" min="0" max="100" class="input-number">
+                        </div>
+                        <div class="spec-input-group">
+                            <label>Dureza</label>
+                            <input type="number" id="reg-pala-hardness" value="70" min="0" max="100"
+                                class="input-number">
+                        </div>
+                        <div class="spec-input-group">
+                            <label>Confort</label>
+                            <input type="number" id="reg-pala-comfort" value="80" min="0" max="100"
+                                class="input-number">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').classList.remove('active')">
+                    Cancelar
+                </button>
+                <button class="btn btn-primary" onclick="saveNewPala()">
+                    <i class="fas fa-save"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./js/palas.js"></script>
+
     <style>
-        .lab-chart-container {
-            position: relative;
-            height: 200px;
-            width: 100%;
-            margin-bottom: 20px;
+        /* Lab Page Specific Styles */
+        .lab-page {
+            padding: 80px 16px 100px;
         }
 
-        /* Bar Graph */
+        /* Page Header */
+        .lab-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            margin-bottom: var(--space-xl);
+        }
+
+        .lab-icon-box {
+            width: 52px;
+            height: 52px;
+            background: rgba(0, 212, 255, 0.15);
+            border: 1px solid rgba(0, 212, 255, 0.25);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            color: var(--primary);
+            position: relative;
+        }
+
+        .lab-pulse {
+            position: absolute;
+            inset: -4px;
+            border: 2px solid var(--primary);
+            border-radius: inherit;
+            animation: labPulse 2s infinite;
+            opacity: 0.3;
+        }
+
+        @keyframes labPulse {
+            0% {
+                transform: scale(1);
+                opacity: 0.3;
+            }
+
+            100% {
+                transform: scale(1.2);
+                opacity: 0;
+            }
+        }
+
+        .lab-title-area {
+            flex: 1;
+        }
+
+        .lab-title {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+
+        .lab-subtitle {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* Comparison Card */
+        .comparison-section {
+            margin-bottom: var(--space-xl);
+        }
+
+        .comparison-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-2xl);
+            padding: var(--space-xl);
+        }
+
+        .comparison-title {
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: var(--space-lg);
+            text-align: center;
+        }
+
+        .comparison-selects {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: var(--space-md);
+            align-items: end;
+        }
+
+        .select-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+
+        .select-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .pala-a .select-label {
+            color: var(--primary);
+        }
+
+        .pala-b .select-label {
+            color: var(--sport-green);
+        }
+
+        .select-vs {
+            width: 36px;
+            height: 36px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 2px;
+        }
+
+        /* Comparison Results */
+        .comparison-results {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .results-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-3xl);
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .results-placeholder i {
+            font-size: 2.5rem;
+            opacity: 0.3;
+        }
+
+        .results-placeholder span {
+            font-size: 0.85rem;
+        }
+
+        /* Spec Row */
         .spec-row {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 12px;
+            gap: var(--space-md);
+            padding: var(--space-md);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-lg);
+        }
+
+        .spec-label {
+            min-width: 70px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-secondary);
         }
 
         .spec-track {
             flex: 1;
-            height: 6px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 3px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: var(--radius-full);
             overflow: hidden;
             display: flex;
+            position: relative;
         }
 
         .spec-fill {
             height: 100%;
+            border-radius: inherit;
             transition: width 0.5s ease-out;
         }
 
-        .fill-p1 {
-            background: var(--sport-blue);
-            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+        .spec-fill.fill-a {
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--primary-glow);
         }
 
-        .fill-p2 {
+        .spec-fill.fill-b {
             background: var(--sport-green);
-            box-shadow: 0 0 10px rgba(132, 204, 22, 0.3);
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+        }
+
+        .spec-values {
+            display: flex;
+            gap: var(--space-sm);
+            min-width: 60px;
+            justify-content: flex-end;
+        }
+
+        .spec-val {
+            font-family: var(--font-display);
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+
+        .spec-val.val-a {
+            color: var(--primary);
+        }
+
+        .spec-val.val-b {
+            color: var(--sport-green);
+        }
+
+        .spec-separator {
+            color: var(--text-dim);
+        }
+
+        /* Comparison Header */
+        .comparison-header {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: var(--space-md);
+            align-items: center;
+            margin-bottom: var(--space-xl);
+            padding-bottom: var(--space-lg);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .pala-header {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .pala-header.pala-a {
+            text-align: left;
+        }
+
+        .pala-header.pala-b {
+            text-align: right;
+        }
+
+        .pala-brand {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .pala-header.pala-a .pala-brand {
+            color: var(--primary);
+        }
+
+        .pala-header.pala-b .pala-brand {
+            color: var(--sport-green);
+        }
+
+        .pala-name {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .pala-balance {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .vs-badge {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-full);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-display);
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+
+        /* Comparison Metrics */
+        .comparison-metrics {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-xl);
+        }
+
+        .spec-row {
+            display: grid;
+            grid-template-columns: 90px 1fr auto 1fr;
+            gap: var(--space-md);
+            align-items: center;
+            padding: var(--space-md);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-lg);
+        }
+
+        .spec-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .spec-label i {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        /* Feedback Section */
+        .feedback-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-md);
+        }
+
+        .feedback-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-md);
+        }
+
+        .feedback-card.pala-a {
+            border-color: rgba(0, 212, 255, 0.2);
+        }
+
+        .feedback-card.pala-b {
+            border-color: rgba(34, 197, 94, 0.2);
+        }
+
+        .feedback-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: var(--space-sm);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .feedback-card.pala-a .feedback-title {
+            color: var(--primary);
+        }
+
+        .feedback-card.pala-b .feedback-title {
+            color: var(--sport-green);
+        }
+
+        .feedback-list {
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .feedback-quote {
+            font-size: 0.75rem;
+            font-style: italic;
+            color: var(--text-muted);
+            padding-left: var(--space-sm);
+            border-left: 2px solid var(--border);
+            margin-bottom: var(--space-sm);
+        }
+
+        .feedback-empty {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+        }
+
+        /* Specs Grid in Modal */
+        .specs-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-md);
+        }
+
+        .spec-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2xs);
+        }
+
+        .spec-input-group label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .input-number {
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            color: #fff;
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 700;
+            text-align: center;
+            transition: var(--transition-fast);
+        }
+
+        .input-number:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Responsive */
+        @media (min-width: 768px) {
+            .lab-page {
+                max-width: 600px;
+                margin: 0 auto;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .comparison-selects {
+                grid-template-columns: 1fr;
+                gap: var(--space-md);
+            }
+
+            .select-vs {
+                align-self: center;
+            }
+
+            .specs-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
     </style>
-</head>
-
-<body>
-    <div class="sport-bg"></div>
-
-    <!-- UI Loader Target -->
-
-    <main class="animate-slide" style="padding: 0 15px 100px; overflow-y:auto; height:calc(100vh - 80px);">
-
-        <div class="sport-card mb-5 mt-5">
-            <div class="flex-row gap-3 mb-4">
-                <div class="btn-icon-circle bg-blue-500/10 border-blue-500/20">
-                    <i class="fas fa-microscope text-sport-blue"></i>
-                </div>
-                <div class="flex-col gap-0">
-                    <h2 class="font-display font-bold text-lg">Comparador Tech</h2>
-                    <span class="text-xs text-scnd">Base de datos de palas</span>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3" style="display:grid; grid-template-columns: 1fr 1fr">
-                <div class="flex-col">
-                    <span class="text-label text-sport-blue">MO. A</span>
-                    <select id="pala-1" class="sport-input p-2 text-xs"></select>
-                </div>
-                <div class="flex-col">
-                    <span class="text-label text-sport-green">MO. B</span>
-                    <select id="pala-2" class="sport-input p-2 text-xs"></select>
-                </div>
-            </div>
-        </div>
-
-        <div id="comparison-results" class="flex-col gap-4"></div>
-
-    </main>
-
     <script type="module">
-        import { initAppUI } from './js/ui-core.js';
-        initAppUI('palas');
-
-        const palas = [
-            { id: 1, name: "Bullpadel Vertex 03", power: 95, control: 85, sweet: 80, comfort: 75, hardness: 90, balance: 95, style: "ATAQUE" },
-            { id: 2, name: "Head Alpha Pro", power: 88, control: 92, sweet: 88, comfort: 90, hardness: 75, balance: 80, style: "HÍBRIDO" },
-            { id: 3, name: "Adidas Adipower 3.2", power: 98, control: 80, sweet: 75, comfort: 70, hardness: 95, balance: 98, style: "POTENCIA" },
-            { id: 4, name: "Nox AT10 Genius", power: 85, control: 95, sweet: 92, comfort: 95, hardness: 65, balance: 75, style: "CONTROL" },
-            { id: 5, name: "Babolat Technical", power: 100, control: 75, sweet: 70, comfort: 65, hardness: 100, balance: 100, style: "AGRESIVO" }
-        ];
-
-        window.onload = () => {
-            const s1 = document.getElementById('pala-1');
-            const s2 = document.getElementById('pala-2');
-            palas.forEach(p => {
-                s1.innerHTML += `<option value="${p.id}">${p.name}</option>`;
-                s2.innerHTML += `<option value="${p.id}">${p.name}</option>`;
-            });
-            s2.value = 2;
-            s1.onchange = updateComparison;
-            s2.onchange = updateComparison;
-            updateComparison();
-        };
-
-        window.updateComparison = () => {
-            const p1 = palas.find(p => p.id == document.getElementById('pala-1').value);
-            const p2 = palas.find(p => p.id == document.getElementById('pala-2').value);
-            const container = document.getElementById('comparison-results');
-
-            const metrics = [
-                { key: 'power', label: 'Potencia' },
-                { key: 'control', label: 'Control' },
-                { key: 'sweet', label: 'Punto Dulce' },
-                { key: 'hardness', label: 'Dureza' },
-                { key: 'balance', label: 'Balance' },
-                { key: 'comfort', label: 'Confort' }
-            ];
-
-            container.innerHTML = `
-                <div class="sport-card p-5">
-                    <div class="flex-row between mb-6">
-                        <span class="status-badge badge-blue">${p1.style}</span>
-                        <span class="status-badge badge-green">${p2.style}</span>
-                    </div>
-                    ${metrics.map(m => `
-                        <div class="mb-4">
-                            <div class="flex-row between mb-1">
-                                <span class="text-xs font-bold text-sport-blue">${p1[m.key]}</span>
-                                <span class="text-label">${m.label}</span>
-                                <span class="text-xs font-bold text-sport-green">${p2[m.key]}</span>
-                            </div>
-                            <div class="spec-track">
-                                <div class="spec-fill fill-p1" style="width: ${p1[m.key] / 2}%"></div> <!-- Split bar space -->
-                                <div class="spec-fill" style="background:transparent; flex:1"></div>
-                                <div class="spec-fill fill-p2" style="width: ${p2[m.key] / 2}%"></div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-
-                <div class="sport-card p-4 border-l-4 border-l-blue-500" style="border-left: 4px solid var(--sport-blue)">
-                    <div class="font-bold text-sm text-white mb-2">Veredicto del Lab</div>
-                    <p class="text-xs text-scnd opacity-80" style="line-height:1.5">
-                        Si buscas <b>${p1.power > p2.power ? 'definición' : 'manejo'}</b>, la <span class="text-sport-blue">${p1.name}</span> es superior. 
-                        Para un juego más <b>${p2.control > p1.control ? 'táctico' : 'explosivo'}</b>, elige la <span class="text-sport-green">${p2.name}</span>.
-                    </p>
-                </div>
-            `;
-        };
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem } from './js/modules/theme-manager.js';
+        initThemeSystem();
+        initGalaxyBackground();
     </script>
 </body>
 

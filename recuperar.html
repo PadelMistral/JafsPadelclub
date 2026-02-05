@@ -1,55 +1,71 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="dark">
+<html lang="es">
 
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Recuperar | Padel Matrix</title>
-    <link rel="stylesheet" href="./css/core.css">
-    <style>
-        .auth-container {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-        }
-
-        .auth-card {
-            width: 100%;
-            max-width: 400px;
-            background: rgba(15, 23, 42, 0.15);
-            backdrop-filter: blur(25px) saturate(160%);
-            -webkit-backdrop-filter: blur(25px) saturate(160%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 40px;
-            padding: 48px 32px;
-            box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.7);
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#020617">
+    <title>Recuperar Contraseña | Padeluminatis Pro</title>
+    <meta name="description" content="Recupera tu acceso a Padeluminatis">
+    <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/components-premium.css">
+    <link rel="stylesheet" href="./css/auth.css">
 </head>
 
-<body class="app-body">
+<body>
+    <!-- Galactic Background -->
     <div class="sport-bg"></div>
 
-    <main class="auth-container">
-        <div class="auth-card text-center animate-up">
-            <h1 class="font-display font-black text-2xl text-white mb-4">RESTABLECER</h1>
-            <p class="text-xs text-scnd mb-6">Introduce tu email para enviarte un enlace de recuperación cuántica.</p>
+    <main class="auth-screen">
+        <div class="auth-container animate-fade-in">
 
-            <div class="mb-4">
-                <input type="email" id="reset-email" class="sport-input" placeholder="operativo@email.com">
+            <!-- Icon -->
+            <div class="auth-icon-wrapper">
+                <div class="auth-icon">
+                    <i class="fas fa-key"></i>
+                </div>
+                <div class="auth-icon-ring"></div>
             </div>
 
-            <button class="btn-primary w-full py-4 font-black" id="btn-reset">
-                ENVIAR ENLACE <i class="fas fa-paper-plane ml-2"></i>
-            </button>
+            <!-- Title -->
+            <h1 class="auth-title">Restablecer Acceso</h1>
+            <p class="auth-subtitle">Introduce tu email para recibir un enlace de recuperación</p>
 
-            <div class="mt-8">
-                <a href="index.html" class="text-xs text-sport-blue font-bold">
-                    <i class="fas fa-arrow-left mr-2"></i> VOLVER AL ACCESO
+            <!-- Form -->
+            <div class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">Email de tu cuenta</label>
+                    <div class="input-icon-wrapper">
+                        <i class="fas fa-envelope input-icon"></i>
+                        <input type="email" id="reset-email" class="input input-with-icon" placeholder="tu@email.com">
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-lg w-full" id="btn-reset">
+                    <i class="fas fa-paper-plane"></i> Enviar Enlace
+                </button>
+            </div>
+
+            <!-- Success State (hidden by default) -->
+            <div id="success-state" class="success-state hidden">
+                <div class="success-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h2 class="success-title">¡Enlace Enviado!</h2>
+                <p class="success-text">Revisa tu bandeja de entrada y sigue las instrucciones.</p>
+            </div>
+
+            <!-- Back Link -->
+            <div class="auth-footer">
+                <a href="index.html" class="back-link">
+                    <i class="fas fa-arrow-left"></i> Volver al Acceso
                 </a>
             </div>
+
         </div>
     </main>
 
@@ -61,16 +77,43 @@
 
         initGalaxyBackground();
 
-        document.getElementById('btn-reset').onclick = async () => {
-            const email = document.getElementById('reset-email').value.trim();
-            if (!email) return showToast("Error", "Introduce un email.", "warning");
+        const btnReset = document.getElementById('btn-reset');
+        const emailInput = document.getElementById('reset-email');
+        const successState = document.getElementById('success-state');
+        const form = document.querySelector('.auth-form');
+
+        btnReset.onclick = async () => {
+            const email = emailInput.value.trim();
+            if (!email) {
+                showToast("Introduce un email", "warning");
+                emailInput.focus();
+                return;
+            }
+
+            btnReset.disabled = true;
+            btnReset.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
 
             try {
                 await sendPasswordResetEmail(auth, email);
-                showToast("Sistemas OK", "Enlace enviado. Revisa tu bandeja.", "success");
-                setTimeout(() => window.location.href = 'index.html', 3000);
-            } catch (e) { showToast("Error", "No se encontró el email.", "error"); }
+                form.classList.add('hidden');
+                successState.classList.remove('hidden');
+                setTimeout(() => window.location.href = 'index.html', 4000);
+            } catch (e) {
+                showToast("No se encontró el email", "error");
+                btnReset.disabled = false;
+                btnReset.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Enlace';
+            }
+        };
+    </script>
+
+    <style>
+        .hidden {
+            display: none !important;
         }
+    </style>
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        initGalaxyBackground();
     </script>
 </body>
 

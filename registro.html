@@ -2,119 +2,120 @@
 <html lang="es">
 
 <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-8">
     <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#3b82f6">
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#020617">
     <title>Registro | Padeluminatis Pro</title>
+    <meta name="description" content="Únete al circuito Padeluminatis">
     <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="./css/core.css">
-    <style>
-        .auth-container {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .auth-card {
-            width: 100%;
-            max-width: 440px;
-            background: rgba(15, 23, 42, 0.15);
-            /* Consistent with index.html */
-            backdrop-filter: blur(25px) saturate(160%);
-            -webkit-backdrop-filter: blur(25px) saturate(160%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 40px;
-            padding: 40px 32px;
-            box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.7);
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/components-premium.css">
+    <link rel="stylesheet" href="./css/auth.css">
 </head>
 
 <body>
+    <!-- Galactic Background -->
     <div class="sport-bg"></div>
-    <div class="mesh-pattern"></div>
 
-    <main class="auth-container">
-        <div class="auth-card animate-up">
+    <main class="auth-screen">
+        <div class="auth-container animate-fade-in">
 
-            <div class="text-center mb-8">
-                <h1 class="font-display font-black text-2xl text-white">NUEVA FICHA</h1>
-                <p class="text-xs font-bold text-scnd tracking-widest mt-1 uppercase">Registro de Jugador</p>
+            <!-- Header -->
+            <div class="auth-header">
+                <div class="auth-icon">
+                    <i class="fas fa-user-plus"></i>
+                </div>
+                <h1 class="auth-title">Nueva Ficha</h1>
+                <p class="auth-subtitle">Registro de Jugador</p>
             </div>
 
-            <form id="reg-form" class="flex-col gap-4">
-                <div>
-                    <label class="text-label ml-1 mb-1 block">Alias (Nombre en Pista)</label>
-                    <input type="text" id="r-user" class="sport-input" placeholder="Ej: Paquito99" required>
-                </div>
-
-                <div>
-                    <label class="text-label ml-1 mb-1 block">Nombre Completo</label>
-                    <input type="text" id="r-name" class="sport-input" placeholder="Nombre y Apellidos" required>
-                </div>
-
-                <div>
-                    <label class="text-label ml-1 mb-1 block">Email</label>
-                    <input type="email" id="r-email" name="email" class="sport-input" autocomplete="email"
-                        placeholder="correo@ejemplo.com" required>
-                </div>
-
-                <div>
-                    <label class="text-label ml-1 mb-1 block">Teléfono de Contacto</label>
-                    <input type="tel" id="r-phone" class="sport-input" placeholder="600 000 000" required>
-                </div>
-
-                <div class="grid grid-cols-3 gap-3" style="display:grid; grid-template-columns:1fr 1fr 1fr">
-                    <div>
-                        <label class="text-label ml-1 mb-1 block">Bloque</label>
-                        <input type="text" id="r-block" class="sport-input" placeholder="B-1">
+            <!-- Registration Form -->
+            <form id="reg-form" class="auth-form">
+                <!-- Basic Info -->
+                <div class="form-section">
+                    <div class="form-group">
+                        <label class="form-label">Alias (Nombre en Pista)</label>
+                        <input type="text" id="r-user" class="input" placeholder="Ej: Paquito99" required>
                     </div>
-                    <div>
-                        <label class="text-label ml-1 mb-1 block">Piso</label>
-                        <input type="text" id="r-floor" class="sport-input" placeholder="2">
+
+                    <div class="form-group">
+                        <label class="form-label">Nombre Completo</label>
+                        <input type="text" id="r-name" class="input" placeholder="Nombre y Apellidos" required>
                     </div>
-                    <div>
-                        <label class="text-label ml-1 mb-1 block">Puerta</label>
-                        <input type="text" id="r-door" class="sport-input" placeholder="A">
+
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" id="r-email" name="email" class="input" autocomplete="email"
+                            placeholder="correo@ejemplo.com" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Teléfono de Contacto</label>
+                        <input type="tel" id="r-phone" class="input" placeholder="600 000 000" required>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3" style="display:grid; grid-template-columns:1fr 1fr">
-                    <div>
-                        <label class="text-label ml-1 mb-1 block">Contraseña</label>
-                        <input type="password" id="r-pass" name="new-password" class="sport-input"
-                            autocomplete="new-password" placeholder="••••••••" required>
-                    </div>
-                    <div>
-                        <label class="text-label ml-1 mb-1 block">Repetir</label>
-                        <input type="password" id="r-pass2" name="confirm-password" class="sport-input"
-                            autocomplete="new-password" placeholder="••••••••" required>
-                    </div>
-                </div>
-
-                <div class="sport-card p-4 mt-2">
-                    <div class="flex-row between mb-4">
-                        <span class="text-label text-sport-blue">Nivel Inicial Estimado</span>
-                        <span id="r-lvl-val" class="font-display font-black text-xl text-white">2.5</span>
-                    </div>
-                    <input type="range" id="r-lvl" class="slider-track" min="1" max="7" step="0.5" value="2.5">
-                    <div class="flex-row between mt-2 opacity-40">
-                        <span class="text-xs font-bold">Principiante</span>
-                        <span class="text-xs font-bold">Semi-Pro</span>
+                <!-- Address -->
+                <div class="form-section">
+                    <label class="form-label-section">Dirección (opcional)</label>
+                    <div class="address-row">
+                        <div class="form-group">
+                            <label class="form-label-sm">Bloque</label>
+                            <input type="text" id="r-block" class="input input-sm" placeholder="B-1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label-sm">Piso</label>
+                            <input type="text" id="r-floor" class="input input-sm" placeholder="2">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label-sm">Puerta</label>
+                            <input type="text" id="r-door" class="input input-sm" placeholder="A">
+                        </div>
                     </div>
                 </div>
 
-                <button type="submit" class="btn-primary mt-4 py-4">CREAR CUENTA</button>
+                <!-- Password -->
+                <div class="form-section">
+                    <div class="password-row">
+                        <div class="form-group">
+                            <label class="form-label">Contraseña</label>
+                            <input type="password" id="r-pass" name="new-password" class="input"
+                                autocomplete="new-password" placeholder="••••••••" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Repetir</label>
+                            <input type="password" id="r-pass2" name="confirm-password" class="input"
+                                autocomplete="new-password" placeholder="••••••••" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Level Selector -->
+                <div class="level-card">
+                    <div class="level-header">
+                        <span class="level-label">Nivel Inicial Estimado</span>
+                        <span class="level-value" id="r-lvl-val">2.5</span>
+                    </div>
+                    <input type="range" id="r-lvl" class="form-range level-slider" min="1" max="7" step="0.5"
+                        value="2.5">
+                    <div class="level-labels">
+                        <span>Principiante</span>
+                        <span>Semi-Pro</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg w-full">
+                    <i class="fas fa-rocket"></i> Crear Cuenta
+                </button>
             </form>
 
-            <div class="mt-6 text-center pt-6 border-t border-white/5">
-                <p class="text-xs text-scnd">¿Ya tienes ficha? <a href="index.html"
-                        class="font-bold text-white underline decoration-blue-500">Inicia sesión</a></p>
+            <!-- Footer -->
+            <div class="auth-footer">
+                <p>¿Ya tienes ficha? <a href="index.html" class="auth-link">Inicia sesión</a></p>
             </div>
 
         </div>
@@ -124,10 +125,29 @@
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         initGalaxyBackground();
     </script>
+    <script type="module" src="./js/registro.js"></script>
     <script>
         const r = document.getElementById('r-lvl');
         const v = document.getElementById('r-lvl-val');
         if (r && v) r.oninput = () => v.textContent = parseFloat(r.value).toFixed(1);
+    </script>
+
+    <style>
+        /* Auth Screen Styles */
+        /* Responsive */
+        @media (max-width: 480px) {
+            .address-row {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+
+            .password-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        initGalaxyBackground();
     </script>
 </body>
 

@@ -1,0 +1,527 @@
+/* =====================================================
+   PADELUMINATIS HISTORIAL V6.0 - GALACTIC EDITION
+   Match history page styling.
+   ===================================================== */
+
+/* ===== HISTORY STATS ===== */
+.history-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-2xl);
+}
+
+.history-stat-card {
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-lg);
+  text-align: center;
+  transition: var(--transition);
+}
+
+.history-stat-card:hover {
+  border-color: var(--border-light);
+  transform: translateY(-2px);
+}
+
+.history-stat-icon {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-sm);
+}
+
+.history-stat-icon.wins {
+  color: var(--sport-green);
+}
+
+.history-stat-icon.losses {
+  color: var(--sport-red);
+}
+
+.history-stat-icon.total {
+  color: var(--primary);
+}
+
+.history-stat-value {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.history-stat-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ===== HISTORY FILTERS ===== */
+.history-filters {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+  overflow-x: auto;
+  padding-bottom: var(--space-sm);
+}
+
+.history-filter {
+  flex-shrink: 0;
+  padding: 10px 20px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.history-filter:hover {
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.history-filter.active {
+  background: var(--primary);
+  color: #000;
+  border-color: var(--primary);
+}
+
+/* ===== MATCH HISTORY LIST ===== */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.history-match-card {
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-lg);
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.history-match-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+}
+
+.history-match-card.win::before {
+  background: var(--sport-green);
+}
+
+.history-match-card.loss::before {
+  background: var(--sport-red);
+}
+
+.history-match-card:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-light);
+  transform: scale(1.01);
+}
+
+.history-match-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+
+.history-match-type {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.history-match-type.liga {
+  background: var(--sport-gold-glow);
+  color: var(--sport-gold);
+  border: 1px solid var(--sport-gold);
+}
+
+.history-match-type.amistoso {
+  background: var(--sport-green-glow);
+  color: var(--sport-green);
+  border: 1px solid var(--sport-green);
+}
+
+.history-match-type.reto {
+  background: var(--neon-orange-glow);
+  color: var(--neon-orange);
+  border: 1px solid var(--neon-orange);
+}
+
+.history-match-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.history-match-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.history-match-team {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.history-match-team.right {
+  text-align: right;
+  align-items: flex-end;
+}
+
+.history-match-players {
+  display: flex;
+  gap: var(--space-xs);
+  margin-bottom: 4px;
+}
+
+.history-match-team.right .history-match-players {
+  flex-direction: row-reverse;
+}
+
+.history-match-player-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.history-match-player-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.history-match-player-names {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.history-match-score-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.history-match-vs {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.history-match-score {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  letter-spacing: 2px;
+}
+
+.history-match-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border);
+}
+
+.history-match-points {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.history-match-points.positive {
+  color: var(--sport-green);
+}
+
+.history-match-points.negative {
+  color: var(--sport-red);
+}
+
+.history-match-view {
+  font-size: 0.75rem;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ===== MATCH DETAIL MODAL ===== */
+.match-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-xl);
+}
+
+.match-detail-type {
+  padding: 6px 16px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.match-detail-date {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.match-detail-court {
+  margin-bottom: var(--space-xl);
+}
+
+.match-detail-sets {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--space-xl);
+}
+
+.set-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.set-label {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.set-value {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--text-primary);
+}
+
+.match-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md);
+}
+
+.detail-stat-item {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  text-align: center;
+}
+
+.detail-stat-value {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.detail-stat-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* ===== EMPTY STATE ===== */
+.history-empty {
+  text-align: center;
+  padding: var(--space-3xl) var(--space-xl);
+}
+
+.history-empty-icon {
+  font-size: 3rem;
+  color: var(--text-dim);
+  margin-bottom: var(--space-lg);
+}
+
+.history-empty-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.history-empty-text {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* ===== New Styles from HTML ===== */
+/* ===== HISTORY ITEM V7 - PREMIUM CIRCUIT ===== */
+.history-item-v7 {
+  display: flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 16px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  overflow: hidden;
+}
+
+.history-item-v7:hover {
+  transform: scale(1.02) translateX(8px);
+  background: rgba(15, 23, 42, 0.6);
+  border-color: var(--primary);
+}
+
+.h-item-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-right: 16px;
+}
+
+.h-date-v7 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.h-day {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 950;
+  color: #fff;
+  line-height: 1;
+}
+.h-mon {
+  font-size: 0.5rem;
+  font-weight: 900;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+.h-status-line {
+  width: 3px;
+  height: 30px;
+  border-radius: 2px;
+}
+.h-status-line.won {
+  background: var(--sport-green);
+  box-shadow: 0 0 10px var(--sport-green-glow);
+}
+.h-status-line.lost {
+  background: var(--sport-red);
+}
+
+.h-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.h-header-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.h-type-tag {
+  font-size: 0.55rem;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.h-type-tag.friendly {
+  color: var(--neon-cyan);
+}
+.h-type-tag.reto {
+  color: var(--neon-lime);
+}
+
+.h-time-v7 {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.h-score-v7 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 950;
+  color: #fff;
+  letter-spacing: 2px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.history-players-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.h-item-right {
+  display: flex;
+  align-items: center;
+  padding-left: 16px;
+}
+
+.h-result-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+}
+
+.h-result-badge.won {
+  background: var(--sport-green-glow);
+  color: var(--sport-green);
+  border: 1px solid var(--sport-green);
+}
+.h-result-badge.lost {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--sport-red);
+  border: 1px solid var(--sport-red);
+}
+
+.filter-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}

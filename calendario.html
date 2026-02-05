@@ -5,391 +5,135 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#0c0a1d">
-    <title>Calendario | Padeluminatis Pro</title>
+    <meta name="theme-color" content="#020617">
+    <title>Pistas | Padeluminatis Pro</title>
+    <meta name="description" content="Reserva pistas y organiza tus partidos">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="./css/core.css">
-    <link rel="stylesheet" href="./css/mistral-ui.css">
-    <style>
-        /* Modern Grid Layout inspired by Mistral */
-        .calendar-main-container {
-            width: 100%;
-            height: calc(100vh - 160px);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            margin-top: 10px;
-        }
-
-        .calendar-grid {
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-            overflow-y: auto;
-            padding-bottom: 20px;
-        }
-
-        .calendar-grid-header {
-            display: flex;
-            margin-bottom: 10px;
-            position: sticky;
-            top: 0;
-            z-index: 20;
-            background: #020617;
-            padding: 10px 0;
-            margin-left: 54px;
-            /* Align with time-col */
-        }
-
-        .header-day {
-            flex: 1;
-            flex-basis: 0;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            padding: 5px 0;
-            border-radius: 10px;
-            transition: all 0.2s;
-            min-width: 0;
-        }
-
-        .header-day.today {
-            background: rgba(59, 130, 246, 0.15);
-            box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
-        }
-
-        .day-name {
-            font-size: 0.55rem;
-            color: var(--text-scnd);
-            font-weight: 800;
-            text-transform: uppercase;
-        }
-
-
-        .day-date {
-            font-size: 1rem;
-            font-weight: 900;
-            font-family: var(--font-display);
-            color: white;
-        }
-
-        .corner-header {
-            width: 50px;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
-            color: var(--sport-blue);
-            font-weight: 900;
-        }
-
-        .time-row {
-            display: flex;
-            height: 65px;
-            margin-bottom: 4px;
-        }
-
-        .time-col {
-            width: 50px;
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 8px;
-            margin-right: 4px;
-        }
-
-        .time-start {
-            font-size: 0.8rem;
-            font-weight: 900;
-            color: white;
-            font-family: var(--font-display);
-        }
-
-        .time-end {
-            font-size: 0.55rem;
-            color: var(--text-scnd);
-            font-weight: 600;
-        }
-
-        .slot-cell {
-            flex: 1;
-            flex-basis: 0;
-            margin: 0 2px;
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            position: relative;
-            padding: 2px;
-        }
-
-        .slot-cell:hover:not(.past) {
-            transform: scale(1.02);
-            border-color: rgba(255, 255, 255, 0.2);
-            background: rgba(255, 255, 255, 0.05);
-            z-index: 5;
-        }
-
-        .slot-cell.past {
-            opacity: 0.2;
-            cursor: not-allowed;
-        }
-
-        .slot-chip {
-            padding: 3px 4px;
-            border-radius: 5px;
-            font-size: 0.5rem;
-            font-weight: 900;
-            text-align: center;
-            width: 100%;
-            text-transform: uppercase;
-        }
-
-        .slot-chip.free {
-            color: var(--text-scnd);
-            font-style: italic;
-            opacity: 0.5;
-        }
-
-        .slot-chip.abierta {
-            background: rgba(59, 130, 246, 0.1);
-            color: var(--sport-blue);
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            animation: pulse-blue 2s infinite;
-        }
-
-        @keyframes pulse-blue {
-            0% {
-                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
-            }
-
-            70% {
-                box-shadow: 0 0 0 5px rgba(59, 130, 246, 0);
-            }
-
-            100% {
-                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
-            }
-        }
-
-        .slot-chip.cerrada {
-            background: rgba(255, 255, 255, 0.05);
-            color: rgba(255, 255, 255, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            text-decoration: line-through;
-        }
-
-
-        .slot-chip.propia {
-            background: rgba(163, 230, 53, 0.1);
-            color: #a3e635;
-            border: 1px solid rgba(163, 230, 53, 0.2);
-            box-shadow: 0 0 10px rgba(163, 230, 53, 0.1);
-        }
-
-        .slot-cell.has-match {
-            border-color: rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .slot-cell.past-visible {
-            opacity: 0.5;
-            filter: grayscale(0.5);
-        }
-
-        .match-type-indicator {
-            position: absolute;
-            bottom: 4px;
-            right: 4px;
-            width: 4px;
-            height: 4px;
-            border-radius: 50%;
-        }
-
-        .match-type-indicator.comp {
-            background: var(--sport-green);
-            box-shadow: 0 0 5px var(--sport-green);
-        }
-
-        .match-type-indicator.friend {
-            background: var(--sport-blue);
-            box-shadow: 0 0 5px var(--sport-blue);
-        }
-
-
-        /* Controls Section */
-        .calendario-controls {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 12px 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            backdrop-filter: blur(15px);
-        }
-
-        .week-nav {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            background: rgba(0, 0, 0, 0.2);
-            padding: 5px 15px;
-            border-radius: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .nav-arrow {
-            width: 30px;
-            height: 30px;
-            background: transparent;
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--sport-blue);
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 1.2rem;
-        }
-
-        .nav-arrow:hover {
-            transform: scale(1.2);
-            text-shadow: 0 0 10px var(--sport-blue);
-        }
-
-
-        .nav-arrow:hover {
-            background: var(--sport-blue);
-            border-color: var(--sport-blue);
-        }
-
-        .week-label-box {
-            text-align: center;
-        }
-
-        .week-name {
-            display: block;
-            font-size: 0.9rem;
-            font-weight: 900;
-            font-family: var(--font-display);
-            letter-spacing: 1px;
-            color: white;
-        }
-
-        .week-month {
-            font-size: 0.6rem;
-            color: var(--sport-blue);
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        /* Legend Footer */
-        .calendar-legend {
-            background: rgba(0, 0, 0, 0.4);
-            border-top: 1px solid var(--glass-border);
-            padding: 10px 15px;
-            display: flex;
-            justify-content: space-around;
-            position: fixed;
-            bottom: 75px;
-            left: 0;
-            right: 0;
-            z-index: 20;
-            backdrop-filter: blur(10px);
-        }
-
-        .legend-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .l-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-        }
-
-        .l-txt {
-            font-size: 0.5rem;
-            font-weight: 800;
-            color: var(--text-scnd);
-            text-transform: uppercase;
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/layout.css">
+    <link rel="stylesheet" href="./css/components-premium.css">
+    <link rel="stylesheet" href="./css/themes.css">
+    <link rel="stylesheet" href="./css/calendar.css">
 </head>
 
 <body>
+    <!-- Galactic Background -->
     <div class="sport-bg"></div>
 
-    <main class="page-content" style="padding-top: 80px; padding-bottom: 120px;">
+    <main class="page-content calendar-main-v5" style="padding-top: 75px; padding-bottom: 95px;">
+        <div class="container px-2">
 
-        <!-- Header Controls -->
-        <div class="calendario-controls">
-            <div class="flex-col">
-                <span id="current-clock" class="font-display font-black text-lg leading-tight">00:00</span>
-                <span class="text-[9px] font-black text-scnd tracking-widest uppercase">Benicalap, VLC</span>
-            </div>
-
-            <div class="week-nav">
-                <button class="nav-arrow" id="btn-prev"><i class="fas fa-chevron-left"></i></button>
-                <div class="week-label-box">
-                    <span id="week-label" class="week-name">CARGANDO...</span>
-                    <span id="month-label" class="week-month">SEMANA ACTUAL</span>
+            <!-- Calendar Header Bar -->
+            <div class="cal-controls-v5 animate-fade-in">
+                <div class="cal-clock-box">
+                    <span id="current-time-v5">00:00:00</span>
+                    <span id="current-date-v5">CARGANDO...</span>
                 </div>
-                <button class="nav-arrow" id="btn-next"><i class="fas fa-chevron-right"></i></button>
-            </div>
-        </div>
 
-        <!-- Main Grid -->
-        <div class="calendar-main-container" id="calendar-view">
-            <div id="calendar-grid" class="calendar-grid">
-                <!-- Data injected by JS -->
-                <div class="center py-20">
-                    <div class="spinner-galaxy"></div>
+                <div class="cal-week-nav">
+                    <button id="btn-prev" class="btn-cal-nav"><i class="fas fa-chevron-left"></i></button>
+                    <div class="cal-week-info">
+                        <h2 id="week-range-text">-- - --</h2>
+                        <span id="month-year-text">---</span>
+                    </div>
+                    <button id="btn-next" class="btn-cal-nav"><i class="fas fa-chevron-right"></i></button>
+                </div>
+
+                <div class="cal-location-box">
+                    <span class="loc-city"><i class="fas fa-location-dot"></i> BENICALAP</span>
+                    <span class="loc-sub">VALENCIA</span>
                 </div>
             </div>
-        </div>
 
+            <!-- Calendar Grid -->
+            <div class="calendar-wrapper-v5 mt-2 animate-fade-in" style="animation-delay: 0.1s;">
+                <div id="calendar-grid-v5" class="calendar-grid-v5">
+                    <!-- Injected by JS -->
+                    <div class="p-10 text-center opacity-50">
+                        <div class="spinner-neon mx-auto"></div>
+                        <p class="mt-4 text-xs">Cargando grilla galáctica...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Legend Overlay -->
+            <div class="cal-legend-v5 mt-2 animate-fade-in" style="animation-delay: 0.2s;">
+                <div class="legend-item-v5">
+                    <span class="dot libre"></span>
+                    <span class="label">LIBRE</span>
+                </div>
+                <div class="legend-item-v5">
+                    <span class="dot abierta"></span>
+                    <span class="label">ABIERTA</span>
+                </div>
+                <div class="legend-item-v5">
+                    <span class="dot cerrada"></span>
+                    <span class="label">CERRADA</span>
+                </div>
+                <div class="legend-item-v5">
+                    <span class="dot propia"></span>
+                    <span class="label">MÍA</span>
+                </div>
+            </div>
+
+            <!-- Hint -->
+            <div class="cal-hint-v5 text-center mt-3 opacity-40">
+                <i class="fas fa-circle-info mr-1"></i> Toca una celda para reservar o ver detalles
+            </div>
+
+        </div>
     </main>
 
-    <!-- Legend -->
-    <div class="calendar-legend">
-        <div class="legend-item">
-            <div class="l-dot" style="background: rgba(255,255,255,0.2)"></div><span class="l-txt">Libre</span>
-        </div>
-        <div class="legend-item">
-            <div class="l-dot" style="background: var(--sport-blue)"></div><span class="l-txt">Abierta</span>
-        </div>
-        <div class="legend-item">
-            <div class="l-dot" style="background: #ef4444"></div><span class="l-txt">Cerrada</span>
-        </div>
-        <div class="legend-item">
-            <div class="l-dot" style="background: #a3e635"></div><span class="l-txt">Mía</span>
+    <!-- Unified Match Modal (Bottom Sheet Style) -->
+    <div id="modal-match" class="modal-overlay">
+        <div class="modal-card glass-strong slide-up">
+            <div class="modal-header">
+                <div class="flex-col">
+                    <h3 class="modal-title text-accent" id="modal-titulo">RESERVA</h3>
+                    <span class="text-xs text-muted">Gestión de pista</span>
+                </div>
+                <button class="close-btn"
+                    onclick="document.getElementById('modal-match').classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body scroll-y" id="match-detail-area" style="max-height: 80vh;">
+                <!-- Content via JS -->
+            </div>
         </div>
     </div>
 
-    <!-- Match Modal Overlay (from ui-core/match-service) -->
-    <div id="modal-match" class="modal-overlay">
-        <div class="modal-sheet" id="match-detail-area"></div>
+    <!-- Premium User Picker Modal -->
+    <div id="modal-user-picker" class="modal-overlay">
+        <div class="modal-sheet">
+            <div class="modal-header-row mb-2">
+                <h3 class="modal-title">AÑADIR JUGADOR</h3>
+                <button class="btn-icon-glass sm"
+                    onclick="document.getElementById('modal-user-picker').classList.remove('active')"><i
+                        class="fas fa-times"></i></button>
+            </div>
+
+            <div class="p-4 pt-0 h-full flex-col">
+                <div class="search-bar-premium mb-4">
+                    <i class="fas fa-search text-muted"></i>
+                    <input type="text" placeholder="Buscar por nombre..." oninput="handleSelectorSearch(this.value)">
+                </div>
+
+                <div id="user-picker-list" class="flex-col gap-2 overflow-y-auto custom-scroll flex-1">
+                    <!-- Injected via JS -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="./js/calendario.js"></script>
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem } from './js/modules/theme-manager.js';
+        initThemeSystem();
+        initGalaxyBackground();
+    </script>
 </body>
 
 </html>

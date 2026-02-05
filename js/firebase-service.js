@@ -64,8 +64,8 @@ const db = initializeFirestore(app, {
 // Set default persistence
 setPersistence(auth, browserLocalPersistence).catch(console.error);
 
-// === AUTH EXPORTS ===
-export { auth, db, app, storage };
+// === FIREBASE EXPORTS ===
+export { auth, db, app, storage, serverTimestamp };
 
 export function observerAuth(callback) {
   return onAuthStateChanged(auth, callback);
@@ -160,4 +160,14 @@ export async function uploadProfilePhoto(uid, file) {
   const sRef = ref(storage, path);
   await uploadBytes(sRef, file);
   return getDownloadURL(sRef);
+}
+/**
+ * Presence System - Simple Version
+ */
+export async function updatePresence(uid) {
+  if (!uid) return;
+  const userRef = doc(db, "usuarios", uid);
+  return updateDoc(userRef, {
+    ultimoAcceso: serverTimestamp()
+  }).catch(() => {}); // Fail silently
 }

@@ -5,242 +5,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#0c0a1d">
+  <meta name="theme-color" content="#020617">
   <title>Padeluminatis Pro | Acceso Elite</title>
+  <meta name="description" content="Portal de acceso al circuito Padeluminatis">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="./css/core.css">
-  <style>
-    .auth-screen {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      position: relative;
-      z-index: 10;
-    }
-
-    .auth-container {
-      width: 100%;
-      max-width: 400px;
-      /* More translucent and elegant */
-      background: rgba(15, 23, 42, 0.15);
-      backdrop-filter: blur(25px) saturate(160%);
-      -webkit-backdrop-filter: blur(25px) saturate(160%);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 40px;
-      padding: 48px 32px;
-      box-shadow:
-        0 40px 100px -20px rgba(0, 0, 0, 0.7),
-        inset 0 1px 1px rgba(255, 255, 255, 0.03);
-      animation: authEntrance 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    @keyframes authEntrance {
-      from {
-        opacity: 0;
-        transform: translateY(30px) scale(0.95);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-    }
-
-    .auth-logo-box {
-      position: relative;
-      width: 100px;
-      height: 100px;
-      margin: 0 auto 24px;
-    }
-
-    .auth-logo {
-      width: 100%;
-      height: 100%;
-      border-radius: 28px;
-      overflow: hidden;
-      border: 2px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
-      animation: logoFloat 4s ease-in-out infinite;
-    }
-
-    @keyframes logoFloat {
-
-      0%,
-      100% {
-        transform: translateY(0) rotate(0deg);
-        filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.3));
-      }
-
-      50% {
-        transform: translateY(-10px) rotate(2deg);
-        filter: drop-shadow(0 0 25px rgba(59, 130, 246, 0.6));
-      }
-    }
-
-    .auth-title {
-      text-align: center;
-      margin-bottom: 32px;
-    }
-
-    .auth-title h1 {
-      font-family: var(--font-display);
-      font-weight: 900;
-      font-size: 1.8rem;
-      letter-spacing: -1px;
-      color: white;
-      text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
-    }
-
-    .auth-title p {
-      font-size: 0.7rem;
-      font-weight: 800;
-      color: var(--sport-blue);
-      text-transform: uppercase;
-      letter-spacing: 3px;
-      margin-top: 4px;
-    }
-
-    .input-group {
-      position: relative;
-      margin-bottom: 24px;
-    }
-
-    .password-wrapper {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-
-    .password-toggle {
-      position: absolute;
-      right: 16px;
-      color: rgba(255, 255, 255, 0.4);
-      cursor: pointer;
-      padding: 10px;
-      transition: color 0.2s;
-      z-index: 5;
-    }
-
-    .password-toggle:hover {
-      color: white;
-    }
-
-    /* Full Screen Spectacular Loader */
-    .spectacular-loader {
-      position: fixed;
-      inset: 0;
-      background: #020617;
-      z-index: 9999;
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .loader-glow {
-      position: absolute;
-      width: 300px;
-      height: 300px;
-      background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%);
-      animation: pulse-glow 2s infinite;
-    }
-
-    @keyframes pulse-glow {
-
-      0%,
-      100% {
-        transform: scale(1);
-        opacity: 0.5;
-      }
-
-      50% {
-        transform: scale(1.5);
-        opacity: 0.8;
-      }
-    }
-
-    .progress-container {
-      width: 240px;
-      position: relative;
-      z-index: 10;
-    }
-
-    .progress-bar-bg {
-      height: 4px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-      overflow: hidden;
-      margin-bottom: 16px;
-    }
-
-    .progress-bar-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, var(--sport-blue), var(--sport-green));
-      box-shadow: 0 0 20px var(--sport-blue);
-      transition: width 0.1s linear;
-    }
-
-    .progress-text {
-      font-family: var(--font-display);
-      font-weight: 800;
-      color: white;
-      font-size: 2.5rem;
-      text-align: center;
-    }
-
-    .loader-status {
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      color: var(--text-scnd);
-      margin-top: 8px;
-      text-align: center;
-    }
-
-    /* Real Google Button Colors */
-    .btn-google {
-      background: white;
-      color: #3c4043;
-      font-weight: 600;
-      border: none;
-      border-radius: 14px;
-      padding: 14px;
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    .btn-google:hover {
-      background: #f8f9fa;
-      transform: translateY(-2px);
-      box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
-    }
-
-    .google-icon {
-      width: 18px;
-      height: 18px;
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/design-system.css">
+  <link rel="stylesheet" href="./css/components-premium.css">
+  <link rel="stylesheet" href="./css/auth.css">
 </head>
 
 <body>
   <!-- Galactic Background -->
-  <div class="sport-bg">
-    <div class="bg-glow blue" style="top:-10%; left:-10%; opacity:0.3"></div>
-    <div class="bg-glow purple" style="bottom:-10%; right:-10%; opacity:0.3"></div>
-    <div class="bg-glow green"
-      style="top:40%; left:20%; width:40vw; height:40vw; background:var(--sport-green); opacity:0.1; filter:blur(120px)">
-    </div>
+  <div class="sport-bg"></div>
+  <div class="bg-glow blue" style="top:-10%; left:-10%; opacity:0.3"></div>
+  <div class="bg-glow purple" style="bottom:-10%; right:-10%; opacity:0.3"></div>
+  <div class="bg-glow green"
+    style="top:40%; left:20%; width:40vw; height:40vw; background:var(--sport-green); opacity:0.1; filter:blur(120px)">
   </div>
 
   <main class="auth-screen">
@@ -249,54 +32,47 @@
         <img src="./imagenes/Logojafs.png" alt="Logo" class="auth-logo">
       </div>
 
-      <div class="auth-title">
-        <h1>PADELUMINATIS</h1>
-        <p>Pro Circuit Portal</p>
+      <div class="auth-header">
+        <h1 class="auth-title">PADELUMINATIS</h1>
+        <p class="auth-subtitle">Mistral Homes</p>
       </div>
 
-      <form id="loginForm" class="flex-col">
+      <form id="loginForm" class="auth-form">
         <div class="input-group">
-          <label class="text-label ml-2 mb-2 block">Email de Jugador</label>
-          <input type="email" id="email" name="email" class="sport-input" autocomplete="username email"
-            placeholder="tu@email.com" required>
+          <label class="form-label mb-2 block">Email de Jugador</label>
+          <div class="input-icon-wrapper">
+            <i class="fas fa-envelope input-icon"></i>
+            <input type="email" id="email" name="email" class="form-input" autocomplete="username email"
+              placeholder="tu@email.com" required>
+          </div>
         </div>
 
         <div class="input-group">
-          <label class="text-label ml-2 mb-2 block">Contraseña</label>
-          <div class="password-wrapper">
-            <input type="password" id="password" name="password" class="sport-input" autocomplete="current-password"
+          <label class="form-label mb-2 block">Contraseña</label>
+          <div class="input-icon-wrapper">
+            <i class="fas fa-lock input-icon"></i>
+            <input type="password" id="password" name="password" class="form-input" autocomplete="current-password"
               placeholder="••••••••" required>
             <i class="fas fa-eye password-toggle" id="togglePassword"></i>
           </div>
         </div>
 
         <div class="flex-row between mt-2 mb-6">
-          <label class="flex-row gap-2 cursor-pointer">
+          <label class="flex-row gap-2 cursor-pointer items-center">
             <input type="checkbox" class="sport-checkbox">
-            <span class="text-xs text-scnd font-bold">Mantener sesión</span>
+            <span class="text-xs text-muted font-bold">Recordarme</span>
           </label>
-          <a href="recuperar.html" class="text-xs font-bold text-sport-blue">¿Clave perdida?</a>
+          <a href="recuperar.html" class="text-xs font-bold text-primary">¿Olvidaste la clave?</a>
         </div>
 
-        <button type="submit" class="btn-primary py-4">
-          ACCEDER AL CIRCUITO <i class="fas fa-chevron-right ml-2"></i>
-        </button>
-
-        <div class="flex-row between w-full mt-8 mb-6 opacity-30">
-          <div class="h-px flex-1 bg-white" style="height:1px"></div>
-          <span class="text-2xs font-bold mx-4">O CONTINUA CON</span>
-          <div class="h-px flex-1 bg-white" style="height:1px"></div>
-        </div>
-
-        <button type="button" id="googleLogin" class="btn-google mb-2">
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="google-icon">
-          Continuar con Google
+        <button type="submit" class="auth-btn auth-btn-primary">
+          ACCEDER AL CIRCUITO <i class="fas fa-arrow-right ml-2 text-xs"></i>
         </button>
       </form>
 
-      <div class="mt-8 text-center">
-        <p class="text-xs text-scnd">¿No eres miembro aún? <a href="registro.html"
-            class="font-bold text-white underline decoration-blue-500 underline-offset-4">Únete ahora</a></p>
+      <div class="auth-footer">
+        <p class="auth-footer-text">¿No eres miembro aún? <a href="registro.html" class="auth-footer-link">Únete
+            ahora</a></p>
       </div>
     </div>
   </main>
@@ -309,7 +85,6 @@
         <div id="progress-fill" class="progress-bar-fill"></div>
       </div>
       <div id="progress-number" class="progress-text">0%</div>
-      <div class="loader-status" id="loader-status">Sincronizando con el servidor...</div>
     </div>
     <div class="mt-12">
       <img src="./imagenes/Logojafs.png" style="width: 40px; opacity: 0.5;">

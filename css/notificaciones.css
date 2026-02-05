@@ -1,0 +1,193 @@
+/* =====================================================
+   PADELUMINATIS NOTIFICACIONES V7.0 - GALACTIC MATRIX
+   ===================================================== */
+
+.notif-page {
+  padding-bottom: 100px;
+}
+
+/* ===== PERMISSION CARD ===== */
+.permission-card {
+  background: linear-gradient(
+    135deg,
+    rgba(14, 165, 233, 0.1),
+    rgba(139, 92, 246, 0.1)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
+  padding: 24px;
+  margin-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  backdrop-filter: blur(10px);
+}
+
+.permission-icon {
+  width: 64px;
+  height: 64px;
+  background: rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: var(--primary);
+  position: relative;
+}
+
+.permission-pulse {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  opacity: 0.5;
+}
+
+@keyframes ping {
+  75%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.permission-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.permission-text {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ===== NOTIFICATION ITEM V7 ===== */
+.notif-item-v7 {
+  display: flex;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 12px;
+  position: relative;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.notif-item-v7:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateX(5px);
+  border-color: var(--primary);
+}
+
+.notif-item-v7.unread {
+  background: rgba(14, 165, 233, 0.05);
+  border-left: 3px solid var(--primary);
+}
+
+.notif-icon-v7 {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.notif-icon-v7.type-match {
+  background: rgba(14, 165, 233, 0.1);
+  color: var(--primary);
+}
+.notif-icon-v7.type-challenge {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--sport-green);
+}
+.notif-icon-v7.type-system {
+  background: rgba(139, 92, 246, 0.1);
+  color: var(--accent);
+}
+
+.notif-body {
+  flex: 1;
+  min-width: 0;
+}
+.notif-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+.notif-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+}
+.notif-time {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+.notif-msg {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.notif-actions-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.notif-btn-s {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.notif-btn-s.primary {
+  background: var(--primary);
+  color: #000;
+}
+.notif-btn-s.outline {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+}
+
+/* ===== FILTER ROWS ===== */
+.notif-filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  overflow-x: auto;
+  padding: 4px;
+}
+
+.n-filter-tab {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.n-filter-tab.active {
+  background: var(--primary);
+  color: #000;
+  box-shadow: 0 4px 15px var(--primary-glow);
+}

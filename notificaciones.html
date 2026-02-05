@@ -5,181 +5,88 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Padeluminatis | Alertas</title>
+    <meta name="theme-color" content="#020617">
+    <title>Notificaciones | Padeluminatis Pro</title>
+    <meta name="description" content="Tus alertas y notificaciones de Padeluminatis">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="./css/core.css">
-    <style>
-        .page-content {
-            padding: 90px 16px 110px;
-            overflow-y: auto;
-            height: 100vh;
-        }
-
-        .n-item {
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--glass-border);
-            border-radius: 18px;
-            padding: 16px;
-            margin-bottom: 12px;
-            display: flex;
-            gap: 15px;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            cursor: pointer;
-            position: relative;
-        }
-
-        .n-item.unread {
-            border-left: 4px solid var(--sport-blue);
-            background: rgba(59, 130, 246, 0.05);
-        }
-
-        .n-item:active {
-            transform: scale(0.98);
-        }
-
-        .n-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 12px;
-            background: rgba(0, 0, 0, 0.4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-            color: var(--sport-blue);
-            border: 1px solid var(--glass-border);
-            flex-shrink: 0;
-        }
-
-        .n-content {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .n-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 4px;
-        }
-
-        .n-title {
-            font-size: 0.9rem;
-            font-weight: 800;
-            color: white;
-            font-family: var(--font-display);
-        }
-
-        .n-time {
-            font-size: 0.6rem;
-            font-weight: 800;
-            color: var(--text-scnd);
-            text-transform: uppercase;
-        }
-
-        .n-body {
-            font-size: 0.75rem;
-            color: var(--text-scnd);
-            line-height: 1.4;
-        }
-
-        .permission-card {
-            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
-            border-radius: 20px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(139, 92, 246, 0.3);
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            align-items: center;
-            text-align: center;
-        }
-
-        .empty-state {
-            margin-top: 40px;
-            text-align: center;
-            opacity: 0.4;
-        }
-
-        .btn-chip {
-            padding: 8px 16px;
-            border-radius: 20px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: var(--text-scnd);
-            font-size: 0.7rem;
-            font-weight: 800;
-            cursor: pointer;
-            transition: all 0.2s;
-            white-space: nowrap;
-        }
-
-        .btn-chip.active {
-            background: var(--sport-blue);
-            color: white;
-            border-color: var(--sport-blue);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/layout.css">
+    <link rel="stylesheet" href="./css/components-premium.css">
+    <link rel="stylesheet" href="./css/themes.css">
+    <link rel="stylesheet" href="./css/notificaciones.css">
 </head>
 
 <body>
+    <!-- Galactic Background -->
+    <!-- Galactic Background -->
     <div class="sport-bg"></div>
 
-    <main class="page-content animate-up">
+    <!-- Header & Nav injected by JS -->
 
-        <div class="permission-card" id="permission-area">
-            <i class="fas fa-bell-concierge text-3xl text-sport-green mb-1"></i>
-            <h3 class="font-display font-black text-white">ACTIVA TUS ALERTAS</h3>
-            <p class="text-xs text-scnd">Recibe avisos de tus partidos, retos y mensajes aunque no estés en la App.</p>
-            <button class="btn-primary w-full py-3" id="btn-request-push">PERMITIR NOTIFICACIONES</button>
-        </div>
+    <main class="page-content notif-page">
 
-        <div class="flex-row between items-center mb-4 px-1">
-            <h2 class="font-display font-black text-lg text-white">BANDEJA DE ENTRADA</h2>
-            <div class="flex-row gap-2">
-                <button class="btn-ghost text-2xs font-bold text-red-400" id="btn-clear-all" title="Borrar Historial">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
-                <button class="btn-ghost text-2xs font-bold text-sport-blue" id="btn-read-all">MARCAR TODO</button>
+        <!-- Permission Card -->
+        <section class="permission-card animate-fade-in" id="permission-area">
+            <div class="permission-icon">
+                <i class="fas fa-bell"></i>
+                <div class="permission-pulse"></div>
             </div>
-        </div>
-
-        <div class="flex-row gap-2 mb-6 px-1 sticky top-0 bg-black/20 py-2" id="filter-tabs">
-            <button class="btn-chip active" data-filter="all">Todas</button>
-            <button class="btn-chip" data-filter="unread">No leídas</button>
-            <button class="btn-chip" data-filter="read">Leídas</button>
-        </div>
-
-        <div id="notif-list">
-            <div class="center py-10">
-                <div class="spinner-galaxy"></div>
+            <div class="permission-content">
+                <h3 class="permission-title">Activa tus Alertas</h3>
+                <p class="permission-text">Recibe avisos de partidos, retos y mensajes aunque no estés en la App.</p>
             </div>
-        </div>
+            <button class="btn btn-primary w-full" id="btn-request-push">
+                <i class="fas fa-bell-on"></i>
+                Permitir Notificaciones
+            </button>
+        </section>
+
+        <!-- Page Header -->
+        <section class="notif-header animate-fade-in" style="animation-delay: 0.1s;">
+            <div class="notif-header-row">
+                <h1 class="page-title">Bandeja de Entrada</h1>
+                <div class="notif-actions">
+                    <button class="action-btn danger" id="btn-clear-all" title="Borrar Historial">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                    <button class="action-btn primary" id="btn-read-all" title="Marcar todo como leído">
+                        <i class="fas fa-check-double"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Filter Tabs -->
+        <section class="filter-section animate-fade-in" style="animation-delay: 0.15s;">
+            <div class="filter-tabs" id="filter-tabs">
+                <button class="filter-tab active" data-filter="all">Todas</button>
+                <button class="filter-tab" data-filter="unread">No Leídas</button>
+                <button class="filter-tab" data-filter="read">Leídas</button>
+            </div>
+        </section>
+
+        <!-- Notifications List -->
+        <section class="notif-section animate-fade-in" style="animation-delay: 0.2s;">
+            <div id="notif-list" class="notif-list">
+                <!-- Loading State -->
+                <div class="notif-loading">
+                    <div class="spinner-neon"></div>
+                    <span>Cargando notificaciones...</span>
+                </div>
+            </div>
+        </section>
 
     </main>
 
     <script type="module">
-        import { initAppUI } from './js/ui-core.js';
-        import { initBackground, injectHeader, injectNavbar, setupModals } from './js/modules/ui-loader.js';
+        import { initAppUI, showToast } from './js/ui-core.js';
         import { auth, observerAuth, getDocument } from './js/firebase-service.js';
 
         document.addEventListener('DOMContentLoaded', async () => {
-            initBackground();
-            setupModals();
-
-            observerAuth(async (user) => {
-                if (!user) {
-                    window.location.href = 'index.html';
-                    return;
-                }
-                const userData = await getDocument('usuarios', user.uid);
-                await injectHeader(userData);
-                injectNavbar('notifications'); // Assuming this ID or adjusting logic
-            });
+            initAppUI('notifications');
 
             // Notification Permission Logic
             const btnPush = document.getElementById('btn-request-push');
@@ -194,11 +101,19 @@
                     const permission = await Notification.requestPermission();
                     if (permission === 'granted') {
                         permArea.innerHTML = `
-                            <i class="fas fa-check-circle text-3xl text-sport-green"></i>
-                            <h3 class="font-display font-black text-white uppercase">SISTEMA ACTIVO</h3>
-                            <p class="text-xs text-scnd">¡Perfecto! Te avisaremos de cualquier novedad importante.</p>
+                            <div class="permission-icon success">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="permission-content">
+                                <h3 class="permission-title">¡Sistema Activo!</h3>
+                                <p class="permission-text">Te avisaremos de cualquier novedad importante.</p>
+                            </div>
                         `;
+                        permArea.classList.add('success');
                         setTimeout(() => permArea.style.display = 'none', 3000);
+                        showToast('Notificaciones activadas', 'success');
+                    } else if (permission === 'denied') {
+                        showToast('Permisos de notificación denegados', 'error');
                     }
                 };
             } else {
@@ -207,6 +122,11 @@
         });
     </script>
     <script type="module" src="./js/notificaciones.js"></script>
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        initGalaxyBackground();
+    </script>
+
 </body>
 
 </html>

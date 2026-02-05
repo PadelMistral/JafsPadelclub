@@ -5,391 +5,113 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#0c0a1d">
+    <meta name="theme-color" content="#020617">
     <title>Historial | Padeluminatis Pro</title>
+    <meta name="description" content="Tu historial de partidos de pádel">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="./css/core.css">
-    <link rel="stylesheet" href="./css/mistral-ui.css">
-    <style>
-        .page-content {
-            padding: 95px 16px 120px;
-        }
-
-        /* Stats Summary */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-bottom: 25px;
-        }
-
-        .stat-card-mini {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 18px;
-            padding: 15px 10px;
-            text-align: center;
-            backdrop-filter: blur(10px);
-        }
-
-        .stat-val {
-            font-family: var(--font-display);
-            font-weight: 900;
-            font-size: 1.4rem;
-            color: white;
-            display: block;
-            line-height: 1;
-            margin-bottom: 4px;
-        }
-
-        .stat-lbl {
-            font-size: 0.55rem;
-            font-weight: 800;
-            color: var(--text-scnd);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        /* History Items */
-        .history-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .history-item {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 12px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            position: relative;
-            overflow: hidden;
-            backdrop-filter: blur(10px);
-        }
-
-        .history-item:hover {
-            transform: translateX(5px);
-            border-color: rgba(255, 255, 255, 0.15);
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .item-date-box {
-            width: 50px;
-            height: 50px;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 12px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .date-day {
-            font-family: var(--font-display);
-            font-weight: 900;
-            font-size: 1.2rem;
-            color: white;
-            line-height: 1;
-        }
-
-        .date-month {
-            font-size: 0.5rem;
-            font-weight: 800;
-            color: var(--text-scnd);
-            text-transform: uppercase;
-        }
-
-        .item-main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .item-score {
-            font-family: var(--font-display);
-            font-weight: 900;
-            font-size: 1.1rem;
-            letter-spacing: 1px;
-            color: white;
-        }
-
-        .item-type {
-            font-size: 0.6rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .item-side {
-            text-align: right;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-        }
-
-        .pts-badge {
-            font-family: var(--font-display);
-            font-weight: 900;
-            font-size: 1rem;
-        }
-
-        .res-badge {
-            font-size: 0.5rem;
-            font-weight: 900;
-            padding: 2px 6px;
-            border-radius: 4px;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-
-        .won {
-            border-left: 4px solid var(--sport-green);
-        }
-
-        .lost {
-            border-left: 4px solid #ef4444;
-        }
-
-        .res-won {
-            background: rgba(163, 230, 53, 0.1);
-            color: #a3e635;
-        }
-
-        .res-lost {
-            background: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
-        }
-
-        /* Filter Tab Enhancements */
-        .filter-tab {
-            padding: 8px 18px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            color: var(--text-scnd);
-            font-size: 0.75rem;
-            font-weight: 800;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            white-space: nowrap;
-        }
-
-        .filter-tab:hover {
-            background: rgba(255, 255, 255, 0.08);
-            color: white;
-            transform: translateY(-1px);
-        }
-
-        .filter-tab.active {
-            background: var(--sport-blue);
-            color: white;
-            border-color: var(--sport-blue);
-            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
-        }
-
-        .filter-tab[data-filter="won"].active {
-            background: var(--sport-green);
-            border-color: var(--sport-green);
-            box-shadow: 0 4px 15px rgba(163, 230, 53, 0.3);
-        }
-
-        .filter-tab[data-filter="lost"].active {
-            background: #f87171;
-            border-color: #f87171;
-            box-shadow: 0 4px 15px rgba(248, 113, 113, 0.3);
-        }
-
-        .filter-tab[data-filter="comp"].active {
-            background: var(--sport-purple);
-            border-color: var(--sport-purple);
-            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/layout.css">
+    <link rel="stylesheet" href="./css/components-premium.css">
+    <link rel="stylesheet" href="./css/themes.css">
+    <link rel="stylesheet" href="./css/historial.css">
 </head>
 
 <body>
+    <!-- Galactic Background -->
     <div class="sport-bg"></div>
 
-    <main class="page-content">
+    <!-- Header & Nav injected by JS -->
 
-        <div class="flex-col mb-8">
-            <h1 class="font-display font-black text-2xl text-white">HISTORIAL</h1>
-            <span class="text-[10px] font-black text-scnd tracking-widest uppercase">Tu trayectoria en el
-                circuito</span>
-        </div>
+    <main class="page-content history-page">
 
-        <!-- Stats -->
-        <div class="stats-grid">
-            <div class="stat-card-mini">
-                <span class="stat-val" id="st-played">-</span>
-                <span class="stat-lbl">Partidos</span>
+        <!-- Page Header -->
+        <section class="page-header animate-fade-in">
+            <div class="page-title-row">
+                <div>
+                    <h1 class="page-title">Historial</h1>
+                    <span class="page-subtitle">Tu trayectoria en el circuito</span>
+                </div>
+                <div class="header-badge">
+                    <i class="fas fa-chart-line"></i>
+                </div>
             </div>
-            <div class="stat-card-mini">
-                <span class="stat-val text-sport-green" id="st-wins">-</span>
-                <span class="stat-lbl">Victorias</span>
-            </div>
-            <div class="stat-card-mini">
-                <span class="stat-val text-sport-blue" id="st-wr">-</span>
-                <span class="stat-lbl">Winrate</span>
-            </div>
-        </div>
+        </section>
 
-        <!-- Filters -->
-        <div class="flex-row gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
-            <button class="filter-tab active" data-filter="all">Todos</button>
-            <button class="filter-tab" data-filter="won">Victorias</button>
-            <button class="filter-tab" data-filter="lost">Derrotas</button>
-            <button class="filter-tab" data-filter="comp">Retos ⚡</button>
-        </div>
-
-        <!-- List -->
-        <div id="history-container" class="history-list">
-            <div class="center py-20">
-                <div class="spinner-galaxy"></div>
+        <!-- Stats Summary -->
+        <section class="stats-grid animate-fade-in" style="animation-delay: 0.1s;">
+            <div class="stat-card-mini primary">
+                <div class="stat-icon"><i class="fas fa-gamepad"></i></div>
+                <span class="stat-value-mini" id="st-played">-</span>
+                <span class="stat-label-mini">Partidos</span>
             </div>
-        </div>
+            <div class="stat-card-mini success">
+                <div class="stat-icon"><i class="fas fa-trophy"></i></div>
+                <span class="stat-value-mini" id="st-wins">-</span>
+                <span class="stat-label-mini">Victorias</span>
+            </div>
+            <div class="stat-card-mini accent">
+                <div class="stat-icon"><i class="fas fa-percent"></i></div>
+                <span class="stat-value-mini" id="st-wr">-</span>
+                <span class="stat-label-mini">Winrate</span>
+            </div>
+        </section>
+
+        <!-- Filters & Sort -->
+        <section class="filter-section animate-fade-in" style="animation-delay: 0.15s;">
+            <div class="filter-row">
+                <div class="filter-tabs">
+                    <button class="filter-tab active" data-filter="all">Todos</button>
+                    <button class="filter-tab" data-filter="won">Ganados</button>
+                    <button class="filter-tab" data-filter="lost">Perdidos</button>
+                </div>
+                <div class="sort-dropdown">
+                    <select id="sort-matches" class="premium-select-v7">
+                        <option value="date-desc">Recientes primero</option>
+                        <option value="date-asc">Antiguos primero</option>
+                        <option value="name-asc">Por Rival (A-Z)</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- History List -->
+        <section class="history-section animate-fade-in" style="animation-delay: 0.2s;">
+            <div id="history-container" class="history-list">
+                <!-- Loading state -->
+                <div class="history-item skeleton-item">
+                    <div class="skeleton w-12 h-12 rounded-lg"></div>
+                    <div class="flex-col gap-2 flex-1">
+                        <div class="skeleton h-4 w-24"></div>
+                        <div class="skeleton h-3 w-16"></div>
+                    </div>
+                </div>
+                <div class="history-item skeleton-item">
+                    <div class="skeleton w-12 h-12 rounded-lg"></div>
+                    <div class="flex-col gap-2 flex-1">
+                        <div class="skeleton h-4 w-24"></div>
+                        <div class="skeleton h-3 w-16"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
     </main>
 
+    <!-- Match Detail Modal -->
+    <div id="modal-match-detail" class="modal-overlay bottom-sheet">
+        <div class="modal-sheet" id="match-detail-content">
+            <!-- Dynamic content -->
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="./js/historial.js"></script>
     <script type="module">
-        import { db, observerAuth, getDocument } from './js/firebase-service.js';
-        import { collection, query, where, getDocs, orderBy } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
-        import { initAppUI } from './js/ui-core.js';
-        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
-
-        let allMatches = [];
-        let currentUser = null;
-
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initAppUI('history');
-            initGalaxyBackground();
-
-            document.querySelectorAll('.filter-tab').forEach(btn => {
-                btn.onclick = () => {
-                    document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    renderMatches(btn.dataset.filter);
-                };
-            });
-        });
-
-        observerAuth(async (user) => {
-            if (!user) return;
-            currentUser = user;
-
-            const userData = await getDocument('usuarios', user.uid);
-
-            // Stats
-            document.getElementById('st-played').textContent = userData.partidosJugados || 0;
-            document.getElementById('st-wins').textContent = userData.victorias || 0;
-            const wr = userData.partidosJugados > 0 ? Math.round((userData.victorias / userData.partidosJugados) * 100) : 0;
-            document.getElementById('st-wr').textContent = wr + '%';
-
-            // Load Data
-            const [am, re, logs] = await Promise.all([
-                getDocs(query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", user.uid), where("estado", "==", "jugado"))),
-                getDocs(query(collection(db, "partidosReto"), where("jugadores", "array-contains", user.uid), where("estado", "==", "jugado"))),
-                getDocs(query(collection(db, "rankingLogs"), where("uid", "==", user.uid)))
-            ]);
-
-            const logMap = {};
-            logs.forEach(l => logMap[l.data().matchId] = l.data());
-
-            allMatches = [];
-            am.forEach(d => allMatches.push({ ...d.data(), id: d.id, isComp: false }));
-            re.forEach(d => allMatches.push({ ...d.data(), id: d.id, isComp: true }));
-
-            allMatches.forEach(m => {
-                const isT1 = m.jugadores.indexOf(currentUser.uid) < 2;
-                const sets = (m.resultado?.sets || '0-0').trim().split(/\s+/);
-
-                let t1S = 0, t2S = 0;
-                sets.forEach(s => {
-                    const [g1, g2] = s.split('-').map(Number);
-                    if (g1 > g2) t1S++; else if (g2 > g1) t2S++;
-                });
-                m.won = isT1 ? (t1S > t2S) : (t2S > t1S);
-                m.pts = logMap[m.id]?.diff || null;
-            });
-
-            allMatches.sort((a, b) => (b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha)) - (a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha)));
-            renderMatches('all');
-        });
-
-        async function renderMatches(filter) {
-            const container = document.getElementById('history-container');
-            let filtered = allMatches;
-            if (filter === 'won') filtered = allMatches.filter(m => m.won);
-            else if (filter === 'lost') filtered = allMatches.filter(m => !m.won);
-            else if (filter === 'comp') filtered = allMatches.filter(m => m.isComp);
-
-            if (filtered.length === 0) {
-                container.innerHTML = '<div class="center py-20 opacity-30 text-xs font-black uppercase">Sin registros en el circuito</div>';
-                return;
-            }
-
-            container.innerHTML = await Promise.all(filtered.map(async (m, i) => {
-                const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
-                const isAnulada = m.estado === 'anulado' || (m.estado === 'abierto' && date < new Date());
-                const result = isAnulada ? 'ANULADA' : (m.resultado?.sets || '0-0');
-                const creator = await getPlayerName(m.creador);
-
-                // Get teammate and rivals
-                const myIdx = m.jugadores.indexOf(currentUser.uid);
-
-                const teammateIdx = myIdx < 2 ? (myIdx === 0 ? 1 : 0) : (myIdx === 2 ? 3 : 2);
-                const rivalIdxs = myIdx < 2 ? [2, 3] : [0, 1];
-
-                const teammate = await getPlayerName(m.jugadores[teammateIdx]);
-                const rivals = await Promise.all(rivalIdxs.map(idx => getPlayerName(m.jugadores[idx])));
-
-                return `
-                    <div class="history-item ${isAnulada ? 'opacity-50' : (m.won ? 'won' : 'lost')} animate-up" style="animation-delay: ${i * 0.05}s">
-                        <div class="item-date-box">
-                            <span class="date-day">${date.getDate()}</span>
-                            <span class="date-month">${date.toLocaleDateString('es-ES', { month: 'short' })}</span>
-                            <span class="text-[7px] text-scnd font-black">${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}</span>
-                        </div>
-                        <div class="item-main">
-                            <div class="flex-row gap-2 items-center mb-1">
-                                <span class="item-score ${isAnulada ? 'text-red-400' : ''}">${result}</span>
-                                <span class="item-type ${m.isComp ? 'text-sport-green' : 'text-sport-blue'}">${m.isComp ? '⚡ RETO' : '🤝 AMISTOSO'}</span>
-                            </div>
-                            <div class="flex-col gap-0 text-[9px] text-scnd font-bold">
-                                <span>CON: ${teammate || '?'}</span>
-                                <span>VS: ${rivals[0] || '?'}${rivals[1] ? ' & ' + rivals[1] : ''}</span>
-                                <span class="mt-1 opacity-50">Reserva: ${creator}</span>
-                            </div>
-                        </div>
-                        <div class="item-side">
-                            <span class="res-badge ${isAnulada ? 'bg-red-500/10 text-red-500' : (m.won ? 'res-won' : 'res-lost')}">
-                                ${isAnulada ? 'Anulada' : (m.won ? 'Victoria' : 'Derrota')}
-                            </span>
-                            ${m.pts !== null && !isAnulada ? `
-                                <span class="pts-badge ${m.pts >= 0 ? 'text-sport-green' : 'text-red-400'}">${m.pts >= 0 ? '+' : ''}${m.pts} <small class="text-[8px] text-scnd">PTS</small></span>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
-            }));
-
-            async function getPlayerName(uid) {
-                if (!uid) return null;
-                if (uid.startsWith('GUEST_')) return uid.split('_')[1];
-                const d = await getDocument('usuarios', uid);
-                return (d?.nombreUsuario || d?.nombre || 'Jugador').split(' ')[0];
-            }
-
-        }
+        import { initThemeSystem } from './js/modules/theme-manager.js';
+        initThemeSystem();
     </script>
 </body>
 

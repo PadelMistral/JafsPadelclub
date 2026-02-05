@@ -5,434 +5,975 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Perfil Jugador | Padeluminatis Pro</title>
+    <meta name="theme-color" content="#020617">
+    <title>Perfil | Padeluminatis Pro</title>
+    <meta name="description" content="Tu perfil de jugador en Padeluminatis">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="./css/core.css">
-    <style>
-        .page-content {
-            padding: 85px 16px 120px;
-            overflow-y: auto;
-            height: 100vh;
-        }
-
-        .profile-header {
-            text-align: center;
-            padding: 20px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
-            border-radius: 24px;
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            margin-bottom: 20px;
-        }
-
-        .p-photo-container {
-            position: relative;
-            width: 100px;
-            margin: 0 auto 15px;
-        }
-
-        .p-photo {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            border: 4px solid var(--sport-blue);
-            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
-            overflow: hidden;
-        }
-
-        .edit-badge {
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-            color: white;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 3px solid var(--bg-app);
-            cursor: pointer;
-            box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4);
-            transition: all 0.3s;
-        }
-
-        .edit-badge:hover {
-            transform: scale(1.1);
-        }
-
-        .stat-grid {
-            display: grid;
-            grid-template-columns: 1fr 1px 1fr 1px 1fr;
-            background: rgba(0, 0, 0, 0.2);
-            padding: 15px;
-            border-radius: 16px;
-            margin-top: 20px;
-            align-items: center;
-        }
-
-        .separator {
-            width: 1px;
-            height: 30px;
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        /* Level Progress Bar */
-        .level-progress-container {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 20px;
-        }
-
-        .level-bar-wrap {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            height: 10px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-
-        .level-bar {
-            height: 100%;
-            background: linear-gradient(90deg, #3b82f6, #a3e635);
-            border-radius: 10px;
-            transition: width 0.5s ease;
-        }
-
-        .level-labels {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.65rem;
-            color: var(--text-scnd);
-        }
-
-        .list-group {
-            background: var(--glass-bg);
-            border-radius: 20px;
-            overflow: hidden;
-            border: 1px solid var(--glass-border);
-            margin-bottom: 16px;
-        }
-
-        .list-item {
-            padding: 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .list-item:hover {
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .list-item:last-child {
-            border-bottom: none;
-        }
-
-        .section-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 12px;
-            padding-left: 4px;
-        }
-
-        .section-header i {
-            color: var(--sport-blue);
-            font-size: 0.9rem;
-        }
-
-        /* Gear Card Enhanced */
-        .gear-card {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.05));
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            border-radius: 14px;
-            padding: 14px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-            transition: all 0.2s;
-        }
-
-        .gear-card:hover {
-            border-color: rgba(59, 130, 246, 0.4);
-        }
-
-        .gear-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 12px;
-        }
-
-        /* ELO Graph Placeholder */
-        .elo-graph {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 20px;
-            min-height: 120px;
-        }
-
-        /* Address Section */
-        .address-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 12px;
-        }
-
-        .address-input {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 12px;
-            color: white;
-            font-size: 0.85rem;
-            text-align: center;
-            width: 100%;
-        }
-
-        .address-input:focus {
-            outline: none;
-            border-color: var(--sport-blue);
-        }
-
-        .address-label {
-            font-size: 0.65rem;
-            color: var(--text-scnd);
-            text-transform: uppercase;
-            margin-bottom: 6px;
-            display: block;
-            text-align: center;
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/layout.css">
+    <link rel="stylesheet" href="./css/components-premium.css">
+    <link rel="stylesheet" href="./css/themes.css">
+    <link rel="stylesheet" href="./css/perfil.css">
 </head>
 
 <body>
+    <!-- Galactic Background -->
     <div class="sport-bg"></div>
 
-    <main class="page-content">
+    <!-- Header & Nav injected by JS -->
 
-        <div class="profile-header">
-            <div class="p-photo-container interact" onclick="document.getElementById('upload-photo').click()">
-                <div class="p-photo">
-                    <img id="p-avatar" src="./imagenes/default-avatar.png"
-                        style="width:100%; height:100%; object-fit:cover">
+    <main class="page-content profile-page">
+
+        <!-- Profile Hero Card -->
+        <section class="profile-hero animate-fade-in">
+            <div class="profile-hero-bg"></div>
+            <div class="profile-hero-content">
+                <!-- Avatar -->
+                <div class="profile-avatar-wrapper" onclick="document.getElementById('upload-photo').click()">
+                    <div class="profile-avatar">
+                        <img id="p-avatar" src="./imagenes/default-avatar.png" alt="Avatar">
+                        <div class="avatar-initial" id="avatar-fallback" style="display:none;">?</div>
+                    </div>
+                    <div class="avatar-edit-btn">
+                        <i class="fas fa-camera"></i>
+                    </div>
+                    <div class="avatar-ring"></div>
                 </div>
-                <div class="edit-badge"><i class="fas fa-camera"></i></div>
+                <input type="file" id="upload-photo" hidden accept="image/*">
+
+                <!-- Name & Badge -->
+                <h1 class="profile-name" id="p-name">Cargando...</h1>
+                <div class="profile-badge">
+                    <i class="fas fa-crown"></i>
+                    <span id="p-role">Atleta Pro</span>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="profile-stats">
+                    <div class="profile-stat">
+                        <span class="profile-stat-value" id="p-nivel">2.5</span>
+                        <span class="profile-stat-label">Nivel</span>
+                    </div>
+                    <div class="profile-stat-divider"></div>
+                    <div class="profile-stat highlight">
+                        <span class="profile-stat-value" id="p-puntos">0</span>
+                        <span class="profile-stat-label">Puntos</span>
+                    </div>
+                    <div class="profile-stat-divider"></div>
+                    <div class="profile-stat">
+                        <span class="profile-stat-value" id="p-winrate">0%</span>
+                        <span class="profile-stat-label">Winrate</span>
+                    </div>
+                </div>
             </div>
-            <input type="file" id="upload-photo" hidden accept="image/*">
-
-            <h2 id="p-name" class="font-display font-bold text-2xl text-white">CARGANDO...</h2>
-            <p id="p-role" class="text-blue-400 font-bold text-xs mt-1 uppercase tracking-widest">Atleta Pro</p>
-
-            <div class="stat-grid">
-                <div class="flex-col center">
-                    <span id="p-nivel" class="font-display font-bold text-xl text-sport-blue">2.5</span>
-                    <span class="text-label">Nivel</span>
-                </div>
-                <div class="separator"></div>
-                <div class="flex-col center">
-                    <span id="p-puntos" class="font-display font-bold text-xl text-sport-green">0</span>
-                    <span class="text-label">Puntos</span>
-                </div>
-                <div class="separator"></div>
-                <div class="flex-col center">
-                    <span id="p-winrate" class="font-display font-bold text-xl text-sport-orange">0%</span>
-                    <span class="text-label">Win %</span>
-                </div>
-            </div>
-        </div>
+        </section>
 
         <!-- Level Progress -->
-        <div class="level-progress-container">
-            <div class="flex-row between">
-                <span class="text-xs font-bold text-white">Progreso de Nivel</span>
-                <span class="text-xs font-bold text-sport-green" id="level-progress-text">+0 para subir</span>
-            </div>
-            <div class="level-bar-wrap">
-                <div class="level-bar" id="level-bar" style="width: 50%"></div>
-            </div>
-            <div class="level-labels">
-                <span id="level-lower">2.0</span>
-                <span id="level-current" class="text-sport-blue font-bold">Nivel 2.5</span>
-                <span id="level-upper">3.0</span>
-            </div>
-        </div>
-
-        <!-- ELO Evolution Graph -->
-        <div class="elo-graph">
-            <div class="flex-row between mb-2">
-                <span class="text-xs font-bold text-white"><i
-                        class="fas fa-chart-line mr-2 text-sport-purple"></i>Evolución ELO</span>
-                <span class="text-2xs text-scnd">Últimos 10 partidos</span>
-            </div>
-            <canvas id="elo-chart" height="80"></canvas>
-        </div>
-
-        <div class="flex-col gap-4">
-            <!-- Configuration -->
-            <div>
-                <div class="section-header">
-                    <i class="fas fa-cog"></i>
-                    <span class="text-label">Configuración</span>
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.1s;">
+            <div class="level-progress-card">
+                <div class="level-header">
+                    <div class="level-info">
+                        <i class="fas fa-signal"></i>
+                        <span>Progreso de Nivel</span>
+                    </div>
+                    <span class="level-next" id="level-progress-text">+0 para subir</span>
                 </div>
-                <div class="list-group">
-                    <div class="list-item">
-                        <span class="text-sm font-bold">Alias</span>
-                        <div class="flex-row">
-                            <input type="text" id="p-username-inp" class="sport-input"
-                                style="padding:5px 10px; text-align:right; border:none; background:transparent; font-weight:700; color:var(--sport-blue); max-width: 140px;"
-                                placeholder="Tu nombre...">
-                            <button class="btn-icon-circle" style="width:30px; height:30px; font-size:0.7rem"
-                                id="p-save-name"><i class="fas fa-check"></i></button>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <span class="text-sm font-bold">Teléfono</span>
-                        <div class="flex-row">
-                            <input type="tel" id="p-phone-inp" class="sport-input"
-                                style="padding:5px 10px; text-align:right; border:none; background:transparent; font-weight:700; color:var(--sport-green); max-width: 140px;"
-                                placeholder="600 000 000">
-                            <button class="btn-icon-circle"
-                                style="width:30px; height:30px; font-size:0.7rem; border-color: var(--sport-green); color: var(--sport-green);"
-                                id="p-save-phone"><i class="fas fa-check"></i></button>
-                        </div>
-                    </div>
-                    <div class="list-item" onclick="window.location.href='diario.html'">
-                        <span class="text-sm font-bold">Diario Táctico</span>
-                        <i class="fas fa-chevron-right text-scnd"></i>
-                    </div>
-                    <div class="list-item" onclick="window.location.href='historial.html'">
-                        <span class="text-sm font-bold">Historial Partidos</span>
-                        <i class="fas fa-chevron-right text-scnd"></i>
-                    </div>
+                <div class="level-bar-container">
+                    <div class="level-bar" id="level-bar" style="width: 50%"></div>
+                </div>
+                <div class="level-labels">
+                    <span id="level-lower">2.0</span>
+                    <span class="level-current" id="level-current">Nivel 2.5</span>
+                    <span id="level-upper">3.0</span>
                 </div>
             </div>
+        </section>
 
-            <!-- Address / Vivienda -->
-            <div>
-                <div class="section-header">
-                    <i class="fas fa-home"></i>
-                    <span class="text-label">Dirección</span>
-                </div>
-                <div class="list-group p-4">
-                    <div class="address-grid">
-                        <div>
-                            <span class="address-label">Bloque</span>
-                            <input type="text" id="addr-bloque" class="address-input" placeholder="-">
-                        </div>
-                        <div>
-                            <span class="address-label">Piso</span>
-                            <input type="text" id="addr-piso" class="address-input" placeholder="-">
-                        </div>
-                        <div>
-                            <span class="address-label">Puerta</span>
-                            <input type="text" id="addr-puerta" class="address-input" placeholder="-">
-                        </div>
+        <!-- ELO Graph -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.15s;">
+            <div class="section-header">
+                <h2 class="section-title">Evolución ELO</h2>
+                <span class="section-subtitle">Últimos 10 partidos</span>
+            </div>
+            <div class="elo-chart-card">
+                <canvas id="elo-chart" height="100"></canvas>
+            </div>
+        </section>
+
+        <!-- Stats Cards Grid -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.2s;">
+            <div class="section-header">
+                <h2 class="section-title">Estadísticas</h2>
+            </div>
+            <div class="profile-stats-grid">
+                <div class="stat-card-profile primary">
+                    <div class="stat-icon"><i class="fas fa-gamepad"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-val" id="stat-total-matches">0</span>
+                        <span class="stat-lbl">Partidos</span>
                     </div>
-                    <button class="btn-secondary mt-4 w-full" id="save-address">
-                        <i class="fas fa-save mr-2"></i>Guardar Dirección
+                </div>
+                <div class="stat-card-profile success">
+                    <div class="stat-icon"><i class="fas fa-trophy"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-val" id="stat-total-wins">0</span>
+                        <span class="stat-lbl">Victorias</span>
+                    </div>
+                </div>
+                <div class="stat-card-profile secondary">
+                    <div class="stat-icon"><i class="fas fa-fire"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-val" id="stat-streak">0</span>
+                        <span class="stat-lbl">Racha</span>
+                    </div>
+                </div>
+                <div class="stat-card-profile accent">
+                    <div class="stat-icon"><i class="fas fa-coins"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-val" id="stat-family-pts">0</span>
+                        <span class="stat-lbl">FamiliPts</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.25s;">
+            <div class="section-header">
+                <h2 class="section-title">Configuración</h2>
+            </div>
+            <div class="settings-card">
+                <div class="setting-item">
+                    <div class="setting-left">
+                        <i class="fas fa-user"></i>
+                        <span>Alias</span>
+                    </div>
+                    <div class="setting-right">
+                        <input type="text" id="p-username-inp" class="setting-input" placeholder="Tu nombre...">
+                        <button class="setting-save-btn" id="p-save-name">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-left">
+                        <i class="fas fa-phone"></i>
+                        <span>Teléfono</span>
+                    </div>
+                    <div class="setting-right">
+                        <input type="tel" id="p-phone-inp" class="setting-input" placeholder="600 000 000">
+                        <button class="setting-save-btn success" id="p-save-phone">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    </div>
+                </div>
+                <a href="diario.html" class="setting-item link">
+                    <div class="setting-left">
+                        <i class="fas fa-book-medical"></i>
+                        <span>Diario Táctico</span>
+                    </div>
+                    <i class="fas fa-chevron-right setting-arrow"></i>
+                </a>
+                <a href="historial.html" class="setting-item link">
+                    <div class="setting-left">
+                        <i class="fas fa-history"></i>
+                        <span>Historial Partidos</span>
+                    </div>
+                    <i class="fas fa-chevron-right setting-arrow"></i>
+                </a>
+            </div>
+        </section>
+
+        <!-- Address Section -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.3s;">
+            <div class="section-header">
+                <h2 class="section-title">Dirección</h2>
+            </div>
+            <div class="address-card">
+                <div class="address-grid">
+                    <div class="address-field">
+                        <label>Bloque</label>
+                        <input type="text" id="addr-bloque" placeholder="-">
+                    </div>
+                    <div class="address-field">
+                        <label>Piso</label>
+                        <input type="text" id="addr-piso" placeholder="-">
+                    </div>
+                    <div class="address-field">
+                        <label>Puerta</label>
+                        <input type="text" id="addr-puerta" placeholder="-">
+                    </div>
+                </div>
+                <button class="btn btn-secondary w-full mt-4" id="save-address">
+                    <i class="fas fa-save"></i>
+                    Guardar Dirección
+                </button>
+            </div>
+        </section>
+
+        <!-- Gear Section -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.35s;">
+            <div class="section-header">
+                <h2 class="section-title">Inventario de Palas</h2>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-sm btn-secondary" onclick="window.location.href='palas.html'">
+                        <i class="fas fa-microscope"></i> Lab
+                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="openGearModal()">
+                        <i class="fas fa-plus"></i> Añadir
                     </button>
                 </div>
             </div>
-
-            <!-- Inventory / Palas -->
-            <div>
-                <div class="section-header">
-                    <i class="fas fa-table-tennis"></i>
-                    <span class="text-label">Inventario de Palas</span>
-                </div>
-                <div id="gear-container">
-                    <!-- JS Feed -->
-                </div>
-                <button class="btn-primary mt-3 w-full" onclick="openGearModal()">
-                    <i class="fas fa-plus mr-2"></i>Añadir Pala
-                </button>
+            <div id="gear-container" class="gear-list">
+                <!-- Gear cards injected by JS -->
             </div>
+        </section>
 
-            <button class="btn-ghost text-red-400 mt-4" id="btn-logout" style="width:100%">
-                <i class="fas fa-sign-out-alt mr-2"></i>Cerrar Sesión
+        <!-- Theme Selector Section -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.35s;">
+            <div class="section-header">
+                <h2 class="section-title">Tema Visual</h2>
+                <span class="section-subtitle">Personaliza tu experiencia</span>
+            </div>
+            <div id="theme-selector-container" class="settings-card" style="padding: 16px;">
+                <!-- Theme options injected by JS -->
+            </div>
+        </section>
+
+        <!-- Logout -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.45s;">
+            <button class="btn btn-ghost btn-danger-text w-full" id="btn-logout">
+                <i class="fas fa-sign-out-alt"></i>
+                Cerrar Sesión
             </button>
-        </div>
+        </section>
 
     </main>
 
-    <!-- Enhanced Gear Modal -->
+    <!-- Gear Modal -->
     <div id="modal-gear" class="modal-overlay">
-        <div class="modal-sheet">
-            <div class="flex-row between mb-4">
-                <h3 class="font-display font-bold text-xl">Nueva Pala</h3>
-                <button class="btn-ghost" onclick="document.getElementById('modal-gear').classList.remove('active')">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">Nueva Pala</h3>
+                <button class="modal-close" onclick="document.getElementById('modal-gear').classList.remove('active')">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="flex-col gap-4">
-                <input type="text" id="gear-marca" class="sport-input"
-                    placeholder="Marca (Ej: Nox, Bullpadel, Adidas...)">
-                <input type="text" id="gear-modelo" class="sport-input"
-                    placeholder="Modelo (Ej: AT10 Genius, Hack 03...)">
-
-                <div class="section-header mt-2">
-                    <i class="fas fa-sliders"></i>
-                    <span class="text-label">Características</span>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Marca</label>
+                    <input type="text" id="gear-marca" class="input" placeholder="Ej: Nox, Bullpadel, Adidas...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Modelo</label>
+                    <input type="text" id="gear-modelo" class="input" placeholder="Ej: AT10 Genius, Hack 03...">
                 </div>
 
-                <div class="flex-row between">
-                    <span class="text-sm text-scnd">Potencia</span>
-                    <input type="range" id="gear-potencia" min="1" max="10" value="5" class="flex-1 ml-3">
-                    <span class="text-sm font-bold text-sport-orange ml-2" id="val-potencia">5</span>
-                </div>
-                <div class="flex-row between">
-                    <span class="text-sm text-scnd">Control</span>
-                    <input type="range" id="gear-control" min="1" max="10" value="5" class="flex-1 ml-3">
-                    <span class="text-sm font-bold text-sport-blue ml-2" id="val-control">5</span>
-                </div>
-                <div class="flex-row between">
-                    <span class="text-sm text-scnd">Manejabilidad</span>
-                    <input type="range" id="gear-manejo" min="1" max="10" value="5" class="flex-1 ml-3">
-                    <span class="text-sm font-bold text-sport-green ml-2" id="val-manejo">5</span>
+                <div class="divider"></div>
+
+                <div class="form-group">
+                    <label class="form-label">Características</label>
+
+                    <div class="range-group">
+                        <span class="range-label">Potencia</span>
+                        <input type="range" id="gear-potencia" min="1" max="10" value="5" class="form-range">
+                        <span class="range-value secondary" id="val-potencia">5</span>
+                    </div>
+
+                    <div class="range-group">
+                        <span class="range-label">Control</span>
+                        <input type="range" id="gear-control" min="1" max="10" value="5" class="form-range">
+                        <span class="range-value primary" id="val-control">5</span>
+                    </div>
+
+                    <div class="range-group">
+                        <span class="range-label">Manejabilidad</span>
+                        <input type="range" id="gear-manejo" min="1" max="10" value="5" class="form-range">
+                        <span class="range-value success" id="val-manejo">5</span>
+                    </div>
                 </div>
 
-                <select id="gear-forma" class="sport-input">
-                    <option value="">Selecciona Forma...</option>
-                    <option value="redonda">Redonda (Control)</option>
-                    <option value="lagrima">Lágrima (Equilibrada)</option>
-                    <option value="diamante">Diamante (Potencia)</option>
-                </select>
-
-                <select id="gear-peso" class="sport-input">
-                    <option value="">Selecciona Peso...</option>
-                    <option value="355-365">Ligera (355-365g)</option>
-                    <option value="365-375">Media (365-375g)</option>
-                    <option value="375-385">Pesada (375-385g)</option>
-                </select>
-
-                <div class="flex-row gap-3 mt-2">
-                    <button class="btn-secondary flex-1"
-                        onclick="document.getElementById('modal-gear').classList.remove('active')">Cancelar</button>
-                    <button class="btn-primary flex-1" onclick="savePala()">
-                        <i class="fas fa-save mr-2"></i>Guardar
-                    </button>
+                <div class="form-group">
+                    <label class="form-label">Forma</label>
+                    <select id="gear-forma" class="form-select">
+                        <option value="">Selecciona Forma...</option>
+                        <option value="redonda">Redonda (Control)</option>
+                        <option value="lagrima">Lágrima (Equilibrada)</option>
+                        <option value="diamante">Diamante (Potencia)</option>
+                    </select>
                 </div>
+
+                <div class="form-group">
+                    <label class="form-label">Peso</label>
+                    <select id="gear-peso" class="form-select">
+                        <option value="">Selecciona Peso...</option>
+                        <option value="355-365">Ligera (355-365g)</option>
+                        <option value="365-375">Media (365-375g)</option>
+                        <option value="375-385">Pesada (375-385g)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost"
+                    onclick="document.getElementById('modal-gear').classList.remove('active')">
+                    Cancelar
+                </button>
+                <button class="btn btn-primary" onclick="savePala()">
+                    <i class="fas fa-save"></i> Guardar
+                </button>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module" src="./js/perfil.js"></script>
+
+    <style>
+        /* Profile Page Specific Styles */
+        .profile-page {
+            padding: 80px 16px 100px;
+        }
+
+        /* Profile Hero */
+        .profile-hero {
+            position: relative;
+            text-align: center;
+            padding: var(--space-xl) var(--space-lg);
+            background: linear-gradient(145deg,
+                    rgba(0, 212, 255, 0.12) 0%,
+                    rgba(168, 85, 247, 0.08) 50%,
+                    rgba(255, 107, 53, 0.06) 100%);
+            border-radius: var(--radius-2xl);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            margin-bottom: var(--space-xl);
+            overflow: hidden;
+        }
+
+        .profile-hero-bg {
+            position: absolute;
+            top: -50%;
+            right: -30%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(0, 212, 255, 0.2) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .profile-hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Avatar */
+        .profile-avatar-wrapper {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            margin: 0 auto var(--space-lg);
+            cursor: pointer;
+        }
+
+        .profile-avatar {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            overflow: hidden;
+            background: var(--gradient-aurora);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 4px solid var(--primary);
+            box-shadow: 0 0 30px var(--primary-glow);
+        }
+
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .avatar-initial {
+            font-family: var(--font-display);
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .avatar-edit-btn {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 32px;
+            height: 32px;
+            background: var(--gradient-aurora);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 0.8rem;
+            border: 3px solid var(--bg-deep);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: var(--transition);
+        }
+
+        .profile-avatar-wrapper:hover .avatar-edit-btn {
+            transform: scale(1.1);
+        }
+
+        .avatar-ring {
+            position: absolute;
+            inset: -6px;
+            border: 2px solid rgba(0, 212, 255, 0.3);
+            border-radius: 50%;
+            animation: ringPulse 3s infinite;
+        }
+
+        @keyframes ringPulse {
+
+            0%,
+            100% {
+                opacity: 0.3;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.6;
+                transform: scale(1.05);
+            }
+        }
+
+        /* Profile Name */
+        .profile-name {
+            font-family: var(--font-display);
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: var(--space-xs);
+        }
+
+        .profile-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            padding: var(--space-xs) var(--space-md);
+            background: rgba(0, 212, 255, 0.15);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: var(--radius-full);
+            margin-bottom: var(--space-lg);
+        }
+
+        .profile-badge i {
+            color: var(--gold);
+            font-size: 0.65rem;
+        }
+
+        .profile-badge span {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Profile Stats */
+        .profile-stats {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: var(--space-lg);
+            background: rgba(0, 0, 0, 0.2);
+            padding: var(--space-lg);
+            border-radius: var(--radius-xl);
+        }
+
+        .profile-stat {
+            text-align: center;
+        }
+
+        .profile-stat-value {
+            display: block;
+            font-family: var(--font-display);
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .profile-stat.highlight .profile-stat-value {
+            color: var(--sport-green);
+        }
+
+        .profile-stat-label {
+            display: block;
+            font-size: 0.6rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        .profile-stat-divider {
+            width: 1px;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Section */
+        .profile-section {
+            margin-bottom: var(--space-xl);
+        }
+
+        .section-subtitle {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        /* Level Progress Card */
+        .level-progress-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-xl);
+            padding: var(--space-lg);
+        }
+
+        .level-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-md);
+        }
+
+        .level-info {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .level-info i {
+            color: var(--primary);
+        }
+
+        .level-next {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--sport-green);
+        }
+
+        .level-bar-container {
+            height: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+            margin: var(--space-md) 0;
+        }
+
+        .level-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--sport-green) 100%);
+            border-radius: inherit;
+            transition: width 0.8s ease;
+            position: relative;
+        }
+
+        .level-bar::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        .level-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .level-current {
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        /* ELO Chart Card */
+        .elo-chart-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-xl);
+            padding: var(--space-lg);
+        }
+
+        /* Profile Stats Grid */
+        .profile-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--space-md);
+        }
+
+        .stat-card-profile {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-md);
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            transition: var(--transition);
+        }
+
+        .stat-card-profile:hover {
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateY(-2px);
+        }
+
+        .stat-card-profile .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .stat-card-profile.primary .stat-icon {
+            background: rgba(0, 212, 255, 0.15);
+            color: var(--primary);
+        }
+
+        .stat-card-profile.success .stat-icon {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--sport-green);
+        }
+
+        .stat-card-profile.secondary .stat-icon {
+            background: rgba(255, 107, 53, 0.15);
+            color: var(--secondary);
+        }
+
+        .stat-card-profile.accent .stat-icon {
+            background: rgba(255, 215, 0, 0.15);
+            color: var(--gold);
+        }
+
+        .stat-card-profile .stat-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-card-profile .stat-val {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .stat-card-profile .stat-lbl {
+            font-size: 0.6rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        /* Settings Card */
+        .settings-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-lg);
+            border-bottom: 1px solid var(--border);
+            transition: var(--transition-fast);
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+
+        .setting-item.link:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .setting-left {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .setting-left i {
+            width: 20px;
+            text-align: center;
+            color: var(--primary);
+        }
+
+        .setting-right {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .setting-input {
+            background: transparent;
+            border: none;
+            padding: var(--space-xs);
+            color: var(--primary);
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-align: right;
+            max-width: 130px;
+        }
+
+        .setting-input:focus {
+            outline: none;
+        }
+
+        .setting-save-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: var(--radius-sm);
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            color: var(--primary);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .setting-save-btn:hover {
+            background: var(--primary);
+            color: #000;
+        }
+
+        .setting-save-btn.success {
+            background: rgba(34, 197, 94, 0.1);
+            border-color: rgba(34, 197, 94, 0.3);
+            color: var(--sport-green);
+        }
+
+        .setting-save-btn.success:hover {
+            background: var(--sport-green);
+            color: #000;
+        }
+
+        .setting-arrow {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+        }
+
+        /* Address Card */
+        .address-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-xl);
+            padding: var(--space-lg);
+        }
+
+        .address-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-md);
+        }
+
+        .address-field {
+            text-align: center;
+        }
+
+        .address-field label {
+            display: block;
+            font-size: 0.6rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: var(--space-xs);
+        }
+
+        .address-field input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-align: center;
+            transition: var(--transition-fast);
+        }
+
+        .address-field input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Gear List */
+        .gear-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .gear-card {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-lg);
+            background: linear-gradient(145deg, rgba(0, 212, 255, 0.08), transparent);
+            border: 1px solid rgba(0, 212, 255, 0.15);
+            border-radius: var(--radius-xl);
+            transition: var(--transition);
+        }
+
+        .gear-card:hover {
+            border-color: rgba(0, 212, 255, 0.3);
+            transform: translateX(4px);
+        }
+
+        .gear-icon {
+            width: 44px;
+            height: 44px;
+            background: var(--gradient-aurora);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            color: #fff;
+        }
+
+        .gear-info {
+            flex: 1;
+        }
+
+        .gear-name {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .gear-meta {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .gear-stats {
+            display: flex;
+            gap: var(--space-sm);
+        }
+
+        .gear-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: var(--space-xs) var(--space-sm);
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: var(--radius-sm);
+        }
+
+        .gear-stat-val {
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .gear-stat-lbl {
+            font-size: 0.5rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* Danger Button */
+        .btn-danger-text {
+            color: var(--danger) !important;
+        }
+
+        .btn-danger-text:hover {
+            background: rgba(239, 68, 68, 0.1) !important;
+        }
+
+        /* Range Group */
+        .range-group {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            margin-bottom: var(--space-md);
+        }
+
+        .range-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            min-width: 100px;
+        }
+
+        .range-value {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 700;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .range-value.primary {
+            color: var(--primary);
+        }
+
+        .range-value.secondary {
+            color: var(--secondary);
+        }
+
+        .range-value.success {
+            color: var(--sport-green);
+        }
+
+        /* Responsive */
+        @media (min-width: 768px) {
+            .profile-page {
+                max-width: 600px;
+                margin: 0 auto;
+            }
+
+            .profile-stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+    </style>
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem, renderThemeSelector } from './js/modules/theme-manager.js';
+
+        initThemeSystem();
+        initGalaxyBackground();
+
+        // Render theme selector once DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            renderThemeSelector('theme-selector-container');
+        });
+    </script>
 </body>
 
 </html>

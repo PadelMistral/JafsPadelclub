@@ -5,384 +5,160 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#0c0a1d">
-    <title>Padeluminatis Pro</title>
-    <meta name="description" content="Gestiona tus partidos de pádel, mejora tu ranking y conecta con otros jugadores.">
-    <link rel="manifest" href="manifest.json">
+    <title>Padeluminatis Pro V4</title>
+    <link rel="manifest" href="./manifest.json">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="./css/core.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/layout.css">
+    <link rel="stylesheet" href="./css/components-premium.css">
+    <link rel="stylesheet" href="./css/themes.css">
+    <link rel="stylesheet" href="./css/home.css">
 </head>
 
 <body>
-    <div class="sport-bg">
-        <div class="court-lines"></div>
-    </div>
+    <!-- Galactic Background -->
+    <div class="sport-bg"></div>
+    <!-- Scripts -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('SW registrado', reg))
+                .catch(err => console.log('SW error', err));
+        }
+    </script>
 
-    <!-- Header & Nav injected by JS -->
+    <!-- UI Loader will inject Header here -->
 
-    <main class="page-content">
+    <main class="page-content" style="padding-top: 80px; padding-bottom: 90px;">
+        <div class="container px-3">
 
-        <!-- Hero Stats Card -->
-        <section class="welcome-hero mb-6">
-            <div class="hero-blur"></div>
-            <div class="hero-main-content">
-                <div class="flex-row between items-center mb-6">
-                    <div class="flex-col">
-                        <span class="text-[10px] font-black tracking-[0.2em] text-sport-blue uppercase">Estado
-                            Pro</span>
-                        <h1 class="font-display font-black text-2xl text-white mt-1" id="user-name">...</h1>
-                    </div>
-                    <div class="flex-row gap-2">
-                        <div class="family-points-badge">
-                            <i class="fas fa-coins text-yellow-400 mr-2"></i>
-                            <span id="user-family-pts">0</span>
+            <!-- Welcome Section V4 Renovated -->
+            <div class="welcome-section-v4 animate-fade-in mb-4">
+                <div class="welcome-content-v4">
+                    <div class="welcome-info-left w-full">
+                        <span class="greeting-compact" id="greeting-text">HOLA JUGADOR</span>
+                        <div class="flex-row between items-end">
+                            <h2 id="user-name" class="username-v4">Cargando...</h2>
+                            <div class="rank-badge-simple">
+                                <i class="fas fa-crown text-yellow-400"></i>
+                                <span id="user-rank" class="font-black text-lg">PRO</span>
+                            </div>
                         </div>
-                        <div class="level-badge-hero">
-                            <span class="text-[8px] opacity-40">NV</span>
-                            <span id="user-level-val">2.5</span>
-                        </div>
                     </div>
                 </div>
 
-                <!-- AI Coach Bubble -->
-                <div class="ai-welcome-card" id="ai-welcome-msg">
-                    <div class="ai-avatar">
-                        <i class="fas fa-robot"></i>
-                        <div class="pulse-ring"></div>
+                <!-- Micro Stats Bar -->
+                <div class="stats-bar-v4 mt-4">
+                    <div class="m-stat-v4">
+                        <span class="v4-val" id="stat-pts">0</span>
+                        <span class="v4-lab">PUNTOS</span>
                     </div>
-                    <div class="ai-text">
-                        <span class="ai-label">COACH VIRTUAL</span>
-                        <p class="ai-quote">Analizando tus últimos partidos... ¡Hoy es buen día para entrenar el revés!
-                        </p>
+                    <div class="m-stat-v4">
+                        <span class="v4-val" id="stat-wins">0</span>
+                        <span class="v4-lab">VICTORIAS</span>
                     </div>
-                </div>
-
-                <!-- Quick Stats -->
-                <div class="quick-stats-grid">
-                    <div class="q-stat">
-                        <span class="q-val" id="stat-pts">0</span>
-                        <span class="q-lab">PUNTOS</span>
+                    <div class="m-stat-v4">
+                        <span class="v4-val" id="stat-level">0.0</span>
+                        <span class="v4-lab">NIVEL</span>
                     </div>
-                    <div class="q-stat highlight">
-                        <span class="q-val" id="user-rank">-</span>
-                        <span class="q-lab">RANKING</span>
+                    <div class="m-stat-v4">
+                        <span class="v4-val" id="stat-winrate">0%</span>
+                        <span class="v4-lab">% WINS</span>
                     </div>
-                    <div class="q-stat">
-                        <span class="q-val" id="stat-winrate">0%</span>
-                        <span class="q-lab">WINRATE</span>
+                    <div class="m-stat-v4">
+                        <span class="v4-val" id="stat-matches">0</span>
+                        <span class="v4-lab">JUGADOS</span>
                     </div>
                 </div>
             </div>
-        </section>
 
-        <!-- Achievements Mini Scroll -->
-        <section class="mb-6">
-            <h2 class="section-title mb-3">Tu Vitrina de Logros</h2>
-            <div class="achievements-scroll" id="achievements-list">
-                <!-- Inyectado por JS -->
-                <div class="ach-placeholder">Cargando vitrina...</div>
-            </div>
-        </section>
-
-        <!-- Last Match Result -->
-        <section id="last-match-box" class="mb-6" style="display:none">
-            <div class="sport-card result-card">
-                <div class="flex-row between">
-                    <span class="text-label">Último Partido</span>
-                    <span class="result-badge" id="last-result-badge">-</span>
+            <!-- AI Quick Access -->
+            <div class="ai-compact-v4 mt-3" id="ai-welcome-msg">
+                <div class="ai-eye">
+                    <i class="fas fa-robot animate-pulse"></i>
                 </div>
-                <div class="flex-row mt-3 gap-4">
-                    <div class="flex-col gap-0 flex-1">
-                        <span class="font-display font-black text-xl" id="last-score">0-0</span>
-                        <span class="text-2xs text-scnd" id="last-date">-</span>
-                    </div>
-                    <div class="flex-col gap-0 items-end">
-                        <span class="text-sm font-bold" id="last-pts-diff">+0</span>
-                        <span class="text-2xs text-scnd">puntos</span>
-                    </div>
+                <div class="ai-text-v4">
+                    <p class="ai-quote">Analizando tácticas...</p>
+                </div>
+                <i class="fas fa-chevron-right ml-auto opacity-30"></i>
+            </div>
+
+            <!-- Online Users (Injected Here) -->
+            <div id="online-users-bar" class="mt-3 px-2 flex-between" style="opacity: 0.8;">
+                <div class="flex-center gap-2">
+                    <div class="pulse-dot-green"></div>
+                    <span style="font-size: 0.65rem; font-weight: 800; color: var(--success); letter-spacing: 0.5px;">EN
+                        LÍNEA</span>
+                </div>
+                <div id="online-count-display"
+                    style="font-size: 0.65rem; font-weight: 800; color: #fff; background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 10px;">
+                    -- Jugadores
                 </div>
             </div>
-        </section>
+        </div>
 
-        <!-- XP Progress -->
-        <div id="xp-widget-container" class="mb-6"></div>
-
-        <!-- Next Match -->
-        <section class="mb-6">
-            <div class="flex-row between mb-3">
-                <h2 class="section-title">Próximo Partido</h2>
-                <button class="btn-ghost text-sport-green text-xs" onclick="window.location.href='calendario.html'">
-                    <i class="fas fa-plus mr-1"></i> Nuevo
-                </button>
+        <!-- Next Match Section -->
+        <section class="mb-4 glass-focus-container animate-fade-in" style="animation-delay: 0.2s;">
+            <div class="section-header-premium mb-2">
+                <h3 class="premium-title"><i class="fas fa-bolt text-accent mr-1"></i> TÚ PRÓXIMO PARTIDO</h3>
             </div>
             <div id="next-match-container">
-                <div class="sport-card">
-                    <div class="skeleton h-24 rounded-xl"></div>
-                </div>
+                <!-- JS Injects here -->
+                <div class="p-4 text-center text-muted text-xs">Cargando agenda...</div>
             </div>
         </section>
 
-        <!-- Smart Dashboard -->
-        <section class="mb-6">
-            <div class="flex-row between mb-3">
-                <h2 class="section-title">Dashboard Pro</h2>
-                <div id="quick-weather" class="text-[10px] font-black text-sport-blue uppercase">Cargando clima...</div>
+        <!-- Match Library / Feed -->
+        <section class="mb-5 glass-focus-container animate-fade-in" style="animation-delay: 0.3s;">
+            <div class="section-header-premium mb-3">
+                <h2 class="premium-title"><i class="fas fa-calendar-alt text-primary mr-1"></i> PRÓXIMAS PARTIDAS
+                </h2>
             </div>
 
-            <div id="weather-forecast-card" class="mb-4"></div>
+            <!-- Filters -->
+            <div class="filter-scroll-container mb-3">
+                <button class="filter-pill active" onclick="filterFeed('all')">📅 Todas</button>
+                <button class="filter-pill" onclick="filterFeed('open')">🔓 Abiertas</button>
+                <button class="filter-pill" onclick="filterFeed('closed')">🔒 Cerradas</button>
+            </div>
 
-            <div class="grid grid-cols-2 gap-3">
-                <div class="sport-card p-4 flex-col center cursor-pointer" onclick="window.location.href='diario.html'"
-                    style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), transparent);">
-                    <i class="fas fa-book-medical text-2xl text-sport-blue mb-2"></i>
-                    <span class="text-[9px] font-black uppercase text-white">Mi Bitácora</span>
-                    <span class="text-[7px] text-scnd opacity-60">Registrar sensaciones</span>
-                </div>
-                <div id="tip-box" class="sport-card p-4 flex-col center cursor-pointer"
-                    style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), transparent);">
-                    <div class="skeleton w-10 h-10 rounded-full"></div>
-                </div>
+            <div id="match-feed" class="matches-grid-compact">
+                <!-- JS Injects matches here -->
             </div>
         </section>
 
-
-        <!-- Match Feed -->
-        <section class="mb-6">
-            <div class="flex-row between mb-3">
-                <h2 class="section-title">Partidos Abiertos</h2>
-                <div class="filter-tabs" id="filter-tabs">
-                    <button class="filter-tab active" data-filter="all">Todos</button>
-                    <button class="filter-tab" data-filter="today">Hoy</button>
-                </div>
-            </div>
-            <div id="match-feed" class="flex-col gap-3">
-                <div class="sport-card">
-                    <div class="skeleton h-20 rounded-xl"></div>
-                </div>
-            </div>
-        </section>
-
+        </div>
     </main>
 
-    <!-- Match Modal -->
+    <!-- Universal Match Modal -->
     <div id="modal-match" class="modal-overlay">
-        <div class="modal-sheet" id="match-detail-area"></div>
+        <div class="modal-card glass-strong slide-up">
+            <div class="modal-header">
+                <div class="flex-col">
+                    <h3 class="modal-title text-accent" id="modal-titulo">DETALLES</h3>
+                    <span class="text-xs text-muted">Gestión de reserva</span>
+                </div>
+                <button class="close-btn" onclick="document.getElementById('modal-match').classList.remove('active')"><i
+                        class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body scroll-y" id="match-detail-area" style="max-height: 80vh; padding: 20px;">
+                <div class="flex-center py-5">
+                    <div class="spinner-neon"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <!-- Auth Guard & Logic -->
     <script type="module" src="./js/home-logic.js"></script>
-    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');</script>
-
-    <style>
-        .welcome-hero {
-            position: relative;
-            background: linear-gradient(135deg, #0f172a 0%, #17153a 100%);
-            border-radius: 32px;
-            padding: 30px 24px;
-            overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
-        }
-
-
-        .hero-blur {
-            position: absolute;
-            top: -50px;
-            right: -50px;
-            width: 200px;
-            height: 200px;
-            background: var(--sport-blue);
-            filter: blur(80px);
-            opacity: 0.2;
-            pointer-events: none;
-        }
-
-        .ai-welcome-card {
-            background: rgba(255, 255, 255, 0.04);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 20px;
-            padding: 18px;
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            margin-bottom: 24px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .ai-welcome-card:hover {
-            background: rgba(255, 255, 255, 0.08);
-            transform: translateY(-2px);
-            border-color: var(--sport-blue);
-        }
-
-
-        .ai-avatar {
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(135deg, var(--sport-purple), var(--sport-blue));
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.2rem;
-            position: relative;
-        }
-
-        .pulse-ring {
-            position: absolute;
-            inset: -2px;
-            border: 2px solid var(--sport-blue);
-            border-radius: 14px;
-            animation: pulse 2s infinite;
-            opacity: 0;
-        }
-
-        @keyframes pulse {
-            0% {
-                transform: scale(1);
-                opacity: 0.5;
-            }
-
-            100% {
-                transform: scale(1.3);
-                opacity: 0;
-            }
-        }
-
-        .ai-label {
-            display: block;
-            font-size: 0.55rem;
-            font-weight: 900;
-            color: var(--sport-blue);
-            letter-spacing: 2px;
-            margin-bottom: 4px;
-        }
-
-        .ai-quote {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.8);
-            line-height: 1.4;
-            font-weight: 500;
-        }
-
-        .family-points-badge {
-            background: rgba(255, 191, 0, 0.1);
-            border: 1px solid rgba(255, 191, 0, 0.2);
-            padding: 6px 12px;
-            border-radius: 12px;
-            color: #fbbf24;
-            display: flex;
-            align-items: center;
-            font-weight: 800;
-            font-size: 0.9rem;
-        }
-
-        .level-badge-hero {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            padding: 6px 10px;
-            border-radius: 12px;
-            color: var(--sport-blue);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            line-height: 1;
-            font-family: var(--font-display);
-            font-weight: 900;
-        }
-
-
-        .quick-stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-        }
-
-        .q-stat {
-            background: rgba(255, 255, 255, 0.03);
-            padding: 12px;
-            border-radius: 16px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .q-stat.highlight {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.2);
-        }
-
-        .q-val {
-            font-family: var(--font-display);
-            font-weight: 900;
-            font-size: 1.1rem;
-            color: white;
-        }
-
-        .q-lab {
-            font-size: 0.55rem;
-            font-weight: 700;
-            color: var(--text-scnd);
-            text-transform: uppercase;
-        }
-
-        .page-content {
-            padding: 100px 16px 100px;
-            overflow-y: auto;
-            height: 100vh;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        .achievements-scroll {
-            display: flex;
-            gap: 12px;
-            overflow-x: auto;
-            padding: 4px 4px 12px;
-            scrollbar-width: none;
-        }
-
-        .achievements-scroll::-webkit-scrollbar {
-            display: none;
-        }
-
-        .ach-card {
-            min-width: 100px;
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 16px;
-            padding: 16px 12px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            text-align: center;
-            opacity: 0.4;
-            filter: grayscale(1);
-        }
-
-        .ach-card.unlocked {
-            opacity: 1;
-            filter: none;
-            border-color: rgba(163, 230, 53, 0.3);
-            background: linear-gradient(180deg, rgba(163, 230, 53, 0.05), transparent);
-        }
-
-        .ach-icon {
-            font-size: 1.5rem;
-            color: var(--sport-green);
-        }
-
-        .ach-name {
-            font-size: 0.6rem;
-            font-weight: 800;
-            line-height: 1.2;
-            color: white;
-        }
-    </style>
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem } from './js/modules/theme-manager.js';
+        initThemeSystem();
+        initGalaxyBackground();
+    </script>
 </body>
 
 </html>

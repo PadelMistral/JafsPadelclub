@@ -1,0 +1,162 @@
+/* =====================================================
+   PADELUMINATIS DIARIO V7.0 - GALACTIC MATRIX
+   ===================================================== */
+
+.diary-page {
+  padding-bottom: 100px;
+}
+
+/* ===== DIARY STATS V7 ===== */
+.diary-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.d-stat-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 16px 8px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.d-stat-card:hover {
+  background: rgba(14, 165, 233, 0.05);
+  border-color: var(--primary);
+}
+
+.d-stat-val {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 950;
+  color: #fff;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.d-stat-lbl {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 900;
+}
+
+/* ===== ENTRY CARD V7 ===== */
+.entry-card-v7 {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 16px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.entry-card-v7:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: scale(1.01);
+}
+
+.e-header-v7 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.e-type-pill {
+  font-size: 0.65rem;
+  font-weight: 950;
+  padding: 4px 10px;
+  border-radius: 8px;
+  text-transform: uppercase;
+}
+
+.e-type-pill.tactica {
+  background: rgba(14, 165, 233, 0.1);
+  color: var(--primary);
+}
+.e-type-pill.mental {
+  background: rgba(139, 92, 246, 0.1);
+  color: var(--accent);
+}
+.e-type-pill.tecnica {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--sport-green);
+}
+
+.e-date-v7 {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.e-title-v7 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.e-desc-v7 {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.e-footer-v7 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 12px;
+}
+
+.e-mood-v7 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* ===== FLOATING ACTION BUTTON V7 ===== */
+.fab-diary-v7 {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  background: var(--primary);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #000;
+  box-shadow: 0 8px 16px var(--primary-glow);
+  z-index: 99;
+}
+
+/* ===== PREMIUM INPUTS V7 ===== */
+.p-input-v7 {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: #fff;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.p-input-v7:focus {
+  border-color: var(--primary);
+  background: rgba(0, 0, 0, 0.3);
+  outline: none;
+}

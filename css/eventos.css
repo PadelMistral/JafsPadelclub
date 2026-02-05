@@ -1,0 +1,168 @@
+/* =====================================================
+   PADELUMINATIS EVENTOS V7.0 - GALACTIC MATRIX
+   ===================================================== */
+
+.events-page {
+  padding-bottom: 100px;
+}
+
+/* ===== EVENT CARD V7 ===== */
+.event-card-v7 {
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
+  overflow: hidden;
+  margin-bottom: 24px;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.event-card-v7:hover {
+  transform: translateY(-8px) scale(1.02);
+  border-color: var(--primary);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.e-card-media {
+  height: 180px;
+  position: relative;
+  overflow: hidden;
+}
+
+.e-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.event-card-v7:hover .e-img {
+  transform: scale(1.1);
+}
+
+.e-type-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 0.65rem;
+  font-weight: 950;
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 2;
+}
+
+.e-type-badge.cyan {
+  background: rgba(14, 165, 233, 0.2);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+.e-type-badge.purple {
+  background: rgba(139, 92, 246, 0.2);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.e-type-badge.gold {
+  background: rgba(234, 179, 8, 0.2);
+  color: var(--sport-gold);
+  border: 1px solid var(--sport-gold);
+}
+
+.e-card-body {
+  padding: 20px;
+}
+
+.e-date-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.e-time,
+.e-calendar {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.e-title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 950;
+  color: #fff;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+
+.e-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 20px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.e-stats-row {
+  display: flex;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 12px;
+  border-radius: 16px;
+  margin-bottom: 20px;
+}
+
+.e-pill {
+  flex: 1;
+}
+
+.e-pill b {
+  display: block;
+  font-size: 1rem;
+  color: #fff;
+  font-family: var(--font-display);
+}
+
+.e-pill label {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+.e-footer .btn-join {
+  width: 100%;
+  background: var(--primary);
+  color: #000;
+  border: none;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.e-footer .btn-join:hover {
+  box-shadow: 0 0 20px var(--primary-glow);
+  transform: scale(1.02);
+}
+
+.e-footer .btn-full {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 900;
+}

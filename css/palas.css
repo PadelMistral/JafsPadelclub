@@ -1,0 +1,361 @@
+/* =====================================================
+   PADELUMINATIS PALAS V6.0 - GALACTIC EDITION
+   Equipment/Padel rackets page styling.
+   ===================================================== */
+
+/* ===== PAGE HEADER ===== */
+.palas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-xl);
+}
+
+.palas-title {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 2px;
+}
+
+/* ===== EQUIPMENT FILTERS ===== */
+.palas-filters {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+  overflow-x: auto;
+  padding-bottom: var(--space-sm);
+}
+
+.palas-filter {
+  flex-shrink: 0;
+  padding: 10px 20px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.palas-filter:hover {
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.palas-filter.active {
+  background: var(--primary);
+  color: #000;
+  border-color: var(--primary);
+}
+
+/* ===== ADD EQUIPMENT CARD ===== */
+.add-equipment-card {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 212, 255, 0.1),
+    rgba(168, 85, 247, 0.1)
+  );
+  border: 2px dashed var(--border-glow);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition);
+  margin-bottom: var(--space-2xl);
+}
+
+.add-equipment-card:hover {
+  border-color: var(--primary);
+  background: rgba(0, 212, 255, 0.15);
+}
+
+.add-equipment-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--primary-glow);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  margin: 0 auto var(--space-lg);
+}
+
+.add-equipment-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-xs);
+}
+
+.add-equipment-text {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* ===== EQUIPMENT GRID ===== */
+.equipment-list {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: var(--space-md);
+}
+
+@media (min-width: 480px) {
+  .equipment-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ===== EQUIPMENT CARD ===== */
+.equipment-item {
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.equipment-item:hover {
+  border-color: var(--border-light);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.equipment-item.active {
+  border-color: var(--sport-green);
+  box-shadow: 0 0 20px var(--sport-green-glow);
+}
+
+.equipment-item-image {
+  height: 140px;
+  background: linear-gradient(135deg, var(--bg-card), var(--bg-elevated));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.equipment-item-image i {
+  font-size: 3rem;
+  color: var(--text-dim);
+}
+
+.equipment-item-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: var(--space-md);
+}
+
+.equipment-active-badge {
+  position: absolute;
+  top: var(--space-md);
+  right: var(--space-md);
+  padding: 4px 10px;
+  background: var(--sport-green);
+  color: #000;
+  border-radius: var(--radius-full);
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.equipment-item-body {
+  padding: var(--space-lg);
+}
+
+.equipment-item-brand {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.equipment-item-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+}
+
+.equipment-item-specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.equipment-spec {
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.equipment-item-footer {
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.equipment-item-rating {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sport-gold);
+  font-size: 0.8rem;
+}
+
+.equipment-item-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.equipment-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.equipment-action-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* ===== EQUIPMENT DETAIL ===== */
+.equipment-detail-image {
+  height: 200px;
+  margin: calc(-1 * var(--space-xl)) calc(-1 * var(--space-xl)) var(--space-xl);
+  background: linear-gradient(135deg, var(--bg-card), var(--bg-elevated));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.equipment-detail-image i {
+  font-size: 5rem;
+  color: var(--text-dim);
+}
+
+.equipment-detail-brand {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: var(--space-xs);
+}
+
+.equipment-detail-name {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  margin-bottom: var(--space-lg);
+}
+
+.equipment-detail-specs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.equipment-spec-item {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  text-align: center;
+}
+
+.equipment-spec-label {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.equipment-spec-value {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.equipment-detail-description {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--space-xl);
+}
+
+.equipment-detail-rating {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.rating-stars {
+  display: flex;
+  gap: 4px;
+  color: var(--sport-gold);
+  font-size: 1.2rem;
+}
+
+.rating-value {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--text-primary);
+}
+
+.rating-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ===== EMPTY STATE ===== */
+.palas-empty {
+  text-align: center;
+  padding: var(--space-3xl) var(--space-xl);
+}
+
+.palas-empty-icon {
+  font-size: 3.5rem;
+  color: var(--text-dim);
+  margin-bottom: var(--space-lg);
+}
+
+.palas-empty-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.palas-empty-text {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}

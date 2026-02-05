@@ -1,6 +1,6 @@
 {
-  "name": "Padeluminatis Pro",
-  "short_name": "PadelPro",
+  "name": "Padeluminatis-Jafspadel",
+  "short_name": "PadelJafs",
   "start_url": "./home.html",
   "display": "standalone",
   "background_color": "#0f172a",

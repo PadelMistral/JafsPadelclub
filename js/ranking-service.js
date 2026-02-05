@@ -10,31 +10,39 @@ export function predictEloImpact({ myLevel, myPoints = 1000, partnerLevel, rival
     const myTeamAvg = (myLevel + partnerLevel) / 2;
     const rivalTeamAvg = (rival1Level + rival2Level) / 2;
     
-    // Dynamic K-Factor logic from Mistral
+    // Dynamic K-Factor based on Level
     let K = 32;
-    if (matchesPlayed < 30) K = 40; // New player bonus
-    if (myPoints >= 2400) K = 16;  // Pro stability
-    
-    // Streak Bonus
-    let streakMultiplier = 1.0;
-    if (streak >= 3) streakMultiplier = 1.2;
-    if (streak >= 5) streakMultiplier = 1.5;
-    if (streak >= 10) streakMultiplier = 2.0;
+    if (myLevel < 3.0) K = 40; // Beginners fluctuate more
+    if (myLevel >= 5.0) K = 16; // Pros stabilize
+    if (matchesPlayed < 20) K = 50; // New placement matches
 
-    // Margin of Victory Multiplier (Sets)
-    let marginMultiplier = 1.0;
-    if (setsDifference) {
-        marginMultiplier = Math.log(Math.abs(setsDifference) + 1) + 0.5;
-    }
-    
-    const levelToRating = (lvl) => 1000 + (lvl - 2.5) * 200;
+    // Score-based Multiplier (Sets)
+    let scoreMultiplier = 1.0;
+    if (setsDifference === 2) scoreMultiplier = 1.3; // Clean sweep 2-0 bonus
+
+    // Streak Bonus (Cap at 2.0x)
+    let streakMultiplier = 1.0;
+    if (streak >= 3) streakMultiplier = 1.1;
+    if (streak >= 5) streakMultiplier = 1.25;
+    if (streak >= 10) streakMultiplier = 1.5;
+
+    // Level Gap Multiplier (Underdog Boost)
+    const levelDiff = rivalTeamAvg - myTeamAvg;
+    let gapMultiplier = 1.0;
+    if (levelDiff > 0.5) gapMultiplier = 1.2 + (levelDiff * 0.2); // Winning against better players pays more
+
+    const levelToRating = (lvl) => 1000 + (lvl - 2.0) * 200; // Adjusted base
     const myRating = levelToRating(myTeamAvg);
     const rivalRating = levelToRating(rivalTeamAvg);
     
     const expectedScore = 1 / (1 + Math.pow(10, (rivalRating - myRating) / 400));
     
-    let winPoints = Math.round(K * (1 - expectedScore) * streakMultiplier * marginMultiplier);
+    // Win Points Calculation
+    let winPoints = Math.round(K * (1 - expectedScore) * streakMultiplier * scoreMultiplier * gapMultiplier);
+    
+    // Loss Points Calculation (Less penalizing for underdogs)
     let lossPoints = Math.round(K * (0 - expectedScore));
+    if (levelDiff > 0.5) lossPoints = Math.round(lossPoints * 0.7); // Loss forgiveness
     
     return {
         win: winPoints,
@@ -116,7 +124,13 @@ export async function processMatchResults(matchId, col, resultStr) {
                 victorias: newWins,
                 partidosJugados: (p.partidosJugados || 0) + 1,
                 rachaActual: newStreak,
-                xp: (p.xp || 0) + (didIWin ? 50 : 10)
+                xp: (p.xp || 0) + (didIWin ? 50 : 10),
+                lastMatchAnalysis: {
+                    won: didIWin,
+                    pointsDiff: finalDelta,
+                    opponentLevel: parseFloat(oppAvg.toFixed(2)),
+                    timestamp: new Date().toISOString()
+                }
             });
 
             // Log entry
@@ -139,8 +153,16 @@ export async function processMatchResults(matchId, col, resultStr) {
 
 function calculateLevelChange(myLvl, oppAvg, won) {
     const diff = oppAvg - myLvl;
-    let base = 0.02;
-    if (won && diff > 0) base += (diff * 0.02); // Gain more vs better players
-    if (!won && diff < 0) base += (Math.abs(diff) * 0.02); // Lose more vs worse players
-    return won ? base : -base;
+    let base = 0.05; // Increased base movement
+    
+    if (won) {
+        if (diff > 0) base += (diff * 0.1); // Big boost for beating better players
+        else base += (diff * 0.01); // Minimal gain for beating worse players
+    } else {
+        if (diff < 0) base += (Math.abs(diff) * 0.1); // Big drop for losing to worse players
+        else base -= (diff * 0.02); // Small drop for losing to better players
+    }
+    
+    // Cap changes
+    return won ? Math.min(base, 0.25) : Math.max(-base, -0.25);
 }

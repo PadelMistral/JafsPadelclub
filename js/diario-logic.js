@@ -1,18 +1,14 @@
-// diario-logic.js - Player Journal Core (v12.0)
+// diario-logic.js - Premium Diary V7.0
 import { auth, db, subscribeDoc, updateDocument, getDocument } from './firebase-service.js';
 import { initAppUI, showToast } from './ui-core.js';
-import { initGalaxyBackground } from './modules/galaxy-bg.js';
 
-initAppUI('perfil');
-initGalaxyBackground();
+initAppUI('profile');
 
 document.addEventListener('DOMContentLoaded', async () => {
     const journalList = document.getElementById('journal-list');
     const modal = document.getElementById('modal-entry');
-    const btnNew = document.getElementById('btn-new-entry');
     const btnSave = document.getElementById('btn-save-entry');
     const moodBox = document.getElementById('mood-box');
-    const notesInp = document.getElementById('entry-notes');
     
     let selectedMood = 'Normal';
     let currentUser = null;
@@ -21,7 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Handle Match ID from Param
     const urlParams = new URLSearchParams(window.location.search);
     const mId = urlParams.get('matchId');
-    if (mId) {
+    if (mId && modal) {
         modal.classList.add('active');
         loadLinkedMatch(mId);
     }
@@ -30,29 +26,44 @@ document.addEventListener('DOMContentLoaded', async () => {
         const match = await getDocument('partidosReto', id) || await getDocument('partidosAmistosos', id);
         if (match) {
             const infoBox = document.getElementById('linked-match-info');
-            infoBox.classList.remove('hidden');
-            document.getElementById('txt-match-date').textContent = match.fecha?.toDate ? match.fecha.toDate().toLocaleDateString() : 'Partido Anterior';
-            document.getElementById('txt-match-type').textContent = match.resultado ? 'CON RESULTADO' : 'SIN RESULTADO';
-            document.getElementById('inp-match-id').value = id;
-            document.getElementById('inp-tipo').value = 'Partido';
+            if (infoBox) {
+                infoBox.classList.remove('hidden');
+                document.getElementById('txt-match-date').textContent = match.fecha?.toDate ? match.fecha.toDate().toLocaleDateString() : 'Partido Anterior';
+                document.getElementById('txt-match-type').textContent = match.resultado ? 'CON RESULTADO' : 'SIN RESULTADO';
+                document.getElementById('inp-match-id').value = id;
+                document.getElementById('inp-tipo').value = 'Partido';
+                // Try to pre-fill result if available
+                if (match.resultado?.sets) document.getElementById('entry-notes').value = `Resultado: ${match.resultado.sets}\n\n`;
+            }
         }
     }
 
-    // Mood toggle
-    moodBox.querySelectorAll('.mood-item').forEach(btn => {
-        btn.onclick = () => {
-            moodBox.querySelectorAll('.mood-item').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            selectedMood = btn.dataset.mood;
-        };
-    });
+    // Mood Selector
+    if (moodBox) {
+        moodBox.querySelectorAll('.mood-btn').forEach(btn => {
+            btn.onclick = () => {
+                moodBox.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedMood = btn.dataset.mood;
+            };
+        });
+    }
 
-    // Range value syncing
-    ['defensa', 'volea', 'ataque', 'fisico'].forEach(id => {
-        const inp = document.getElementById(`inp-${id}`);
-        const val = document.getElementById(`val-${id}`);
-        if (inp && val) inp.oninput = () => val.textContent = inp.value;
-    });
+    // Expanded Skill Buttons Logic
+    window.toggleSkillChip = (el) => {
+        const states = ['none', 'good', 'bad'];
+        let curr = el.dataset.state || 'none';
+        let nextIdx = (states.indexOf(curr) + 1) % states.length;
+        let next = states[nextIdx];
+        
+        el.dataset.state = next;
+        el.className = 'chip-item ' + (next !== 'none' ? next : '');
+        const icon = el.querySelector('i');
+        
+        if (next === 'good') icon.className = 'fas fa-check-circle';
+        else if (next === 'bad') icon.className = 'fas fa-times-circle';
+        else icon.className = 'fas fa-circle-dot';
+    };
 
     auth.onAuthStateChanged(user => {
         if (user) {
@@ -61,80 +72,178 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (data) {
                     userData = data;
                     renderJournal(data.diario || []);
+                    updateStats(data.diario || []);
                 }
             });
         }
     });
 
-    btnSave.onclick = async () => {
-        if (!currentUser) return;
-        
-        const entry = {
-            fecha: new Date().toISOString(),
-            tipo: document.getElementById('inp-tipo').value,
-            sensaciones: selectedMood,
-            pala: document.getElementById('inp-pala').value.trim() || 'Desconocida',
-            pista: document.getElementById('inp-pista').value.trim() || '-',
-            defensa: parseInt(document.getElementById('inp-defensa').value),
-            volea: parseInt(document.getElementById('inp-volea').value),
-            ataque: parseInt(document.getElementById('inp-ataque').value),
-            fisico: parseInt(document.getElementById('inp-fisico').value),
-            mejorGolpe: document.getElementById('inp-golpe').value.trim(),
-            rivalDificil: document.getElementById('inp-rival').value.trim(),
-            comentarios: notesInp.value.trim(),
-            matchId: document.getElementById('inp-match-id').value || null
-        };
-
-        const updatedJournal = [...(userData.diario || []), entry];
-        
-        try {
-            btnSave.disabled = true;
-            btnSave.textContent = "GUARDANDO...";
-            await updateDocument("usuarios", currentUser.uid, { diario: updatedJournal });
-            // Family Points Reward for journaling
-            const currentFP = userData.familyPoints || 0;
-            await updateDocument("usuarios", currentUser.uid, { familyPoints: currentFP + 10 });
+    if (btnSave) {
+        btnSave.onclick = async () => {
+            if (!currentUser) return;
             
-            showToast("AGENDA ACTUALIZADA", "+10 FP Ganados", "success");
-            modal.classList.remove('active');
-            window.history.replaceState({}, document.title, window.location.pathname);
-        } catch (e) {
-            showToast("ERROR", "Fallo al guardar", "error");
-        } finally {
-            btnSave.disabled = false;
-            btnSave.textContent = "GUARDAR EN BITÁCORA";
+            const entry = {
+                id: Date.now().toString(),
+                fecha: new Date().toISOString(),
+                tipo: document.getElementById('inp-tipo')?.value || 'Nota',
+                sensaciones: selectedMood,
+                detalles: {
+                    pala: document.getElementById('inp-pala')?.value.trim() || '-',
+                    pista: document.getElementById('inp-pista')?.value.trim() || '-',
+                    rival: document.getElementById('inp-rival')?.value.trim() || ''
+                },
+                valoracion: {
+                    defensa: parseInt(document.getElementById('inp-defensa')?.value || 5),
+                    volea: parseInt(document.getElementById('inp-volea')?.value || 5),
+                    ataque: parseInt(document.getElementById('inp-ataque')?.value || 5),
+                    fisico: parseInt(document.getElementById('inp-fisico')?.value || 5)
+                },
+                comentarios: document.getElementById('entry-notes')?.value.trim() || '',
+                tacticalBalance: getTacticalBalance(),
+                matchId: document.getElementById('inp-match-id')?.value || null
+            };
+
+            const updatedJournal = [...(userData?.diario || []), entry];
+            
+            try {
+                btnSave.disabled = true;
+                btnSave.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+                
+                await updateDocument("usuarios", currentUser.uid, { diario: updatedJournal });
+                
+                // Achievement trigger for journaling
+                if (updatedJournal.length === 1) showToast("Logro", "Primera entrada en tu diario 📖", "success");
+                if (updatedJournal.length === 10) showToast("Logro", "Analista Táctico (10 entradas) 🧠", "success");
+
+                showToast("¡GUARDADO!", "Nueva entrada en tu bitácora", "success");
+                modal?.classList.remove('active');
+                resetForm();
+                
+                // AI Learning trigger (Simulated)
+                // In a real backend, this would trigger an embedding update
+            } catch (e) {
+                console.error(e);
+                showToast("Error", "No se pudo guardar", "error");
+            } finally {
+                btnSave.disabled = false;
+                btnSave.innerHTML = '<i class="fas fa-save"></i> Guardar Entrada';
+            }
+        };
+    }
+
+    function getTacticalBalance() {
+        const chips = document.querySelectorAll('.chip-item');
+        const balance = {};
+        chips.forEach(c => {
+            if (c.dataset.state !== 'none') balance[c.dataset.skill] = c.dataset.state;
+        });
+        return balance;
+    }
+
+    function resetForm() {
+        const notes = document.getElementById('entry-notes');
+        if (notes) notes.value = '';
+        ['pala', 'pista', 'rival'].forEach(id => {
+            const inp = document.getElementById(`inp-${id}`);
+            if (inp) inp.value = '';
+        });
+        document.querySelectorAll('.chip-item').forEach(c => {
+            c.dataset.state = 'none';
+            c.className = 'chip-item';
+            c.querySelector('i').className = 'fas fa-circle-dot';
+        });
+    }
+
+    function updateStats(entries) {
+        if (document.getElementById('stat-entries')) document.getElementById('stat-entries').textContent = entries.length;
+        
+        let streak = 0;
+        // Simple streak logic (consecutive days with entries)
+        let lastDate = null;
+        [...entries].reverse().forEach(e => {
+            const d = new Date(e.fecha).toDateString();
+            if (!lastDate) { streak = 1; lastDate = d; }
+            else if (d === lastDate) {} // Same day
+            else {
+                const diff = (new Date(lastDate) - new Date(d)) / (1000 * 60 * 60 * 24);
+                if (diff <= 1.5) { streak++; lastDate = d; }
+                else return;
+            }
+        });
+        
+        if (document.getElementById('stat-streak')) document.getElementById('stat-streak').textContent = streak > 0 ? (streak > 2 ? '🔥 '+streak : streak) : 0;
+        
+        const moods = entries.map(e => e.sensaciones);
+        if (moods.length > 0) {
+            const counts = moods.reduce((a,b) => { a[b] = (a[b] || 0) + 1; return a; }, {});
+            const topMood = Object.keys(counts).reduce((a,b) => counts[a] > counts[b] ? a : b);
+            if (document.getElementById('stat-avg-mood')) document.getElementById('stat-avg-mood').textContent = topMood;
         }
-    };
+    }
 
     function renderJournal(entries) {
         if (!journalList) return;
         if (entries.length === 0) {
-            journalList.innerHTML = '<div class="center flex-col py-10 opacity-30"><i class="fas fa-book mb-4 text-3xl"></i><span>Diario vacío</span></div>';
+            journalList.innerHTML = `
+                <div class="empty-state text-center py-20 opacity-30">
+                    <i class="fas fa-book-reader text-4xl mb-4"></i>
+                    <p>Tu diario está vacío. Empieza a registrar para mejorar.</p>
+                </div>
+            `;
             return;
         }
 
+        const moodEmojis = { 'Mal': '😡', 'Cansado': '😫', 'Normal': '😐', 'Bien': '😎', 'Genial': '🔥' };
+
         journalList.innerHTML = [...entries].reverse().map((e, idx) => {
             const date = new Date(e.fecha);
+            const typeClass = e.tipo?.toLowerCase() || 'tactica';
+            const comments = e.comentarios || '';
+            const preview = comments.length > 60 ? comments.substring(0, 60) + '...' : comments;
+            
+            // Handle legacy structure
+            const vals = e.valoracion || {
+                defensa: e.defensa, volea: e.volea, ataque: e.ataque, fisico: e.fisico
+            };
+
             return `
-                <div class="sport-card animate-up" style="animation-delay: ${idx * 0.05}s">
-                    <div class="flex-row between mb-4">
-                        <div class="flex-col">
-                            <span class="text-xs font-black text-white">${date.toLocaleDateString().toUpperCase()}</span>
-                            <span class="text-[9px] text-scnd uppercase">${e.tipo}</span>
+                <article class="entry-card-v7 stagger-item" style="animation-delay: ${idx * 0.05}s">
+                    <div class="e-header-v7">
+                        <span class="e-type-pill ${typeClass}">${e.tipo || 'Nota'}</span>
+                        <span class="e-date-v7">${date.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short' })}</span>
+                    </div>
+                    
+                    <div class="e-content-v7">
+                        ${comments ? `<p class="e-desc-v7">"${preview}"</p>` : ''}
+                        
+                        <div class="stats-row-v5 mb-3">
+                            <div class="s-box"><span>DEF</span><b>${vals.defensa || '-'}</b></div>
+                            <div class="s-box"><span>VOL</span><b>${vals.volea || '-'}</b></div>
+                            <div class="s-box"><span>ATK</span><b>${vals.ataque || '-'}</b></div>
+                            <div class="s-box"><span>FIS</span><b>${vals.fisico || '-'}</b></div>
                         </div>
-                        <span class="status-badge badge-blue text-[10px]">${e.sensaciones.toUpperCase()}</span>
                     </div>
-                    <div class="grid grid-cols-2 gap-4 mb-4">
-                        <div class="flex-col"><span class="text-[8px] text-scnd font-black">PALA</span><span class="text-xs font-bold text-white">${e.pala}</span></div>
-                        <div class="flex-col"><span class="text-[8px] text-scnd font-black">PISTA</span><span class="text-xs font-bold text-white">${e.pista}</span></div>
+                    
+                    <div class="e-footer-v7">
+                        <div class="e-mood-v7">${moodEmojis[e.sensaciones] || '😐'} <span>${e.sensaciones || 'Normal'}</span></div>
+                        ${renderBalance(e.tacticalBalance)}
                     </div>
-                    <div class="flex-row gap-2 mb-4 bg-white/5 p-2 rounded-lg justify-around">
-                        ${['defensa','volea','ataque','fisico'].map(s => `<div class="text-center"><div class="text-[7px] text-scnd font-black uppercase">${s}</div><div class="text-xs font-black text-sport-blue">${e[s]}</div></div>`).join('')}
-                    </div>
-                    ${e.comentarios ? `<p class="text-xs text-scnd italic border-l-2 border-white/10 pl-3 leading-relaxed">"${e.comentarios}"</p>` : ''}
-                    ${e.matchId ? `<div class="mt-3 text-[9px] text-sport-blue font-bold"><i class="fas fa-link mr-1"></i> PARTIDO VINCULADO</div>` : ''}
-                </div>
+                </article>
             `;
         }).join('');
+    }
+
+    function renderBalance(balance) {
+        if (!balance || Object.keys(balance).length === 0) return '';
+        // Limit to 3 items to avoid clutter
+        const keys = Object.keys(balance).slice(0, 3);
+        const html = keys.map(k => {
+            const v = balance[k];
+            const color = v === 'good' ? 'text-green-400' : 'text-red-400';
+            const icon = v === 'good' ? 'check' : 'times';
+            return `<span class="text-[9px] font-black uppercase ${color} flex items-center gap-1"><i class="fas fa-${icon}"></i> ${k}</span>`;
+        }).join('<span class="opacity-20 mx-1">|</span>');
+        
+        return `<div class="flex items-center">${html} ${Object.keys(balance).length > 3 ? '<span class="text-[8px] opacity-50 ml-1">+</span>' : ''}</div>`;
     }
 });

@@ -5,100 +5,116 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#0c0a1d">
-    <title>Padeluminatis - Ranking</title>
+    <meta name="theme-color" content="#020617">
+    <title>Ranking | Padeluminatis Pro</title>
+    <meta name="description" content="Clasificación ELO del circuito Padeluminatis">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="./css/core.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/layout.css">
+    <link rel="stylesheet" href="./css/components-premium.css">
+    <link rel="stylesheet" href="./css/themes.css">
+    <link rel="stylesheet" href="./css/ranking.css">
 </head>
 
 <body>
+    <!-- Galactic Background -->
     <div class="sport-bg"></div>
 
-    <main class="page-content">
+    <!-- Header & Nav injected by JS -->
 
-        <!-- My Position Card -->
-        <section class="my-rank-card mb-6">
+    <main class="page-content ranking-page">
+
+        <!-- Podium (First) -->
+        <div class="ranking-podium-container animate-fade-in">
+            <!-- Silver (Rank 2) -->
+            <div class="podium-card rank-2" onclick="viewProfile(window.podiumData[1]?.id)">
+                <div class="podium-pos">2</div>
+                <div class="podium-avatar" id="p-av-2"></div>
+                <span class="podium-name" id="p-name-2">...</span>
+                <span class="podium-pts" id="p-pts-2">0</span>
+            </div>
+            <!-- Gold (Rank 1) -->
+            <div class="podium-card rank-1" onclick="viewProfile(window.podiumData[0]?.id)">
+                <div class="podium-pos">1</div>
+                <div class="podium-avatar" id="p-av-1"></div>
+                <span class="podium-name" id="p-name-1">...</span>
+                <span class="podium-pts" id="p-pts-1">0</span>
+            </div>
+            <!-- Bronze (Rank 3) -->
+            <div class="podium-card rank-3" onclick="viewProfile(window.podiumData[2]?.id)">
+                <div class="podium-pos">3</div>
+                <div class="podium-avatar" id="p-av-3"></div>
+                <span class="podium-name" id="p-name-3">...</span>
+                <span class="podium-pts" id="p-pts-3">0</span>
+            </div>
+        </div>
+
+        <!-- Full Leaderboard Table (Second) -->
+        <section class="leaderboard-section animate-fade-in" style="animation-delay: 0.1s;">
+            <div class="section-header">
+                <h2 class="section-title">Clasificación General</h2>
+            </div>
+
+            <!-- Table Headers -->
+            <div class="lb-header-row">
+                <span class="lb-h-rank">#</span>
+                <span class="lb-h-player">JUGADOR</span>
+                <span class="lb-h-level">NIVEL</span>
+                <span class="lb-h-stats">STATS</span>
+                <span class="lb-h-pts">ELO</span>
+            </div>
+
+            <div id="lb-list" class="leaderboard-list">
+                <!-- Skeleton rows while loading -->
+                <div class="lb-row skeleton-entry">
+                    <div class="skeleton w-8 h-8 rounded-lg"></div>
+                    <div class="flex-col gap-1 flex-1">
+                        <div class="skeleton h-4 w-32"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- My Position Card (Third) -->
+        <section class="my-rank-card animate-fade-in" style="animation-delay: 0.2s;">
             <div class="rank-glow"></div>
             <div class="rank-content">
-                <div class="flex-row between items-start">
-                    <div class="flex-col gap-1">
-                        <span class="text-2xs font-bold text-white/50 uppercase tracking-widest">Tu Posición</span>
-                        <div class="flex-row gap-2 items-baseline">
+                <div class="rank-header">
+                    <div class="rank-position-area">
+                        <span class="rank-label">Tu Posición Actual</span>
+                        <div class="rank-position-row">
                             <span class="rank-number" id="my-rank">#-</span>
-                            <span class="rank-trend up" id="rank-trend"><i class="fas fa-arrow-up"></i> 2</span>
+                            <span class="rank-trend up" id="rank-trend"><i class="fas fa-arrow-up"></i> -</span>
                         </div>
                     </div>
-                    <div class="flex-col items-end gap-1">
-                        <span class="text-2xs font-bold text-white/50 uppercase">Puntos</span>
-                        <span class="font-display font-black text-2xl text-white" id="my-pts">0</span>
+                    <div class="rank-points-area">
+                        <span class="rank-label">Puntos ELO</span>
+                        <span class="rank-points" id="my-pts">0</span>
                     </div>
                 </div>
 
-                <div class="level-bar mt-4">
-                    <div class="level-fill" id="level-fill" style="width: 50%"></div>
-                    <div class="flex-row between mt-2">
-                        <span class="text-2xs font-bold text-white/40">Nivel <span id="my-level">2.5</span></span>
-                        <span class="text-2xs font-bold text-sport-green" id="level-next">→ 2.6</span>
+                <div class="level-progress-row">
+                    <div class="level-bar">
+                        <div class="level-fill" id="level-fill" style="width: 50%"></div>
+                    </div>
+                    <div class="level-labels">
+                        <span class="level-current">Nivel <span id="my-level">2.5</span></span>
+                        <span class="level-next" id="level-next">→ 2.6</span>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Podium -->
-        <section class="podium mb-6">
-            <div class="podium-col seat-2" onclick="viewProfile(podiumData[1]?.id)">
-                <span class="podium-rank">2</span>
-                <div class="podium-avatar" id="p-av-2"></div>
-                <div class="podium-block">
-                    <span class="podium-name" id="p-name-2">...</span>
-                    <span class="podium-pts" id="p-pts-2">0</span>
-                </div>
+        <!-- Points History (Fourth) -->
+        <section class="history-section animate-fade-in" style="animation-delay: 0.3s;">
+            <div class="section-header">
+                <h2 class="section-title">Historial de Puntos</h2>
             </div>
-
-            <div class="podium-col seat-1" onclick="viewProfile(podiumData[0]?.id)">
-                <i class="fas fa-crown crown"></i>
-                <span class="podium-rank gold">1</span>
-                <div class="podium-avatar gold" id="p-av-1"></div>
-                <div class="podium-block gold">
-                    <span class="podium-name gold" id="p-name-1">...</span>
-                    <span class="podium-pts gold" id="p-pts-1">0</span>
-                </div>
-            </div>
-
-            <div class="podium-col seat-3" onclick="viewProfile(podiumData[2]?.id)">
-                <span class="podium-rank">3</span>
-                <div class="podium-avatar" id="p-av-3"></div>
-                <div class="podium-block">
-                    <span class="podium-name" id="p-name-3">...</span>
-                    <span class="podium-pts" id="p-pts-3">0</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- Match History Breakdown -->
-        <section class="mb-6">
-            <div class="flex-row between mb-3">
-                <h2 class="section-title">Tu Historial de Puntos</h2>
-                <span class="text-2xs text-scnd">Últimos 10</span>
-            </div>
-            <div id="points-history" class="flex-col gap-2">
-                <div class="sport-card">
-                    <div class="skeleton h-16 rounded-xl"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Full Leaderboard -->
-        <section>
-            <h2 class="section-title mb-3">Clasificación General</h2>
-            <div id="lb-list" class="flex-col gap-2">
-                <div class="sport-card">
-                    <div class="skeleton h-14 rounded-xl"></div>
-                </div>
-                <div class="sport-card">
-                    <div class="skeleton h-14 rounded-xl"></div>
-                </div>
+            <div id="points-history" class="history-list">
+                <!-- Loaded by JS -->
             </div>
         </section>
 
@@ -115,372 +131,13 @@
     </div>
 
     <script type="module" src="./js/ranking.js"></script>
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem } from './js/modules/theme-manager.js';
+        initThemeSystem();
+        initGalaxyBackground();
+    </script>
 
-    <style>
-        .page-content {
-            padding: 90px 16px 110px;
-            overflow-y: auto;
-            height: 100vh;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        .section-title {
-            font-family: var(--font-display);
-            font-weight: 700;
-            font-size: 1rem;
-            color: white;
-        }
-
-        /* My Rank Card */
-        .my-rank-card {
-            background: linear-gradient(135deg, #312e81 0%, #4c1d95 50%, #6d28d9 100%);
-            border-radius: 24px;
-            padding: 24px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .rank-glow {
-            position: absolute;
-            top: -50px;
-            right: -50px;
-            width: 200px;
-            height: 200px;
-            background: radial-gradient(circle, rgba(163, 230, 53, 0.3) 0%, transparent 60%);
-            filter: blur(40px);
-        }
-
-        .rank-content {
-            position: relative;
-            z-index: 1;
-        }
-
-        .rank-number {
-            font-family: var(--font-display);
-            font-weight: 900;
-            font-size: 3rem;
-            color: white;
-            line-height: 1;
-            text-shadow: 0 0 30px rgba(163, 230, 53, 0.3);
-        }
-
-        .rank-trend {
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.7rem;
-            font-weight: 700;
-        }
-
-        .rank-trend.up {
-            background: rgba(163, 230, 53, 0.2);
-            color: #a3e635;
-        }
-
-        .rank-trend.down {
-            background: rgba(239, 68, 68, 0.2);
-            color: #f87171;
-        }
-
-        .level-bar {
-            height: 6px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        .level-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #a3e635, #3b82f6);
-            border-radius: 3px;
-            transition: width 1s ease;
-        }
-
-        /* Podium */
-        .podium {
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            gap: 8px;
-            padding: 20px 10px 0;
-        }
-
-        .podium-col {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            position: relative;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .podium-col:hover {
-            transform: scale(1.03);
-        }
-
-        .podium-rank {
-            position: absolute;
-            top: -8px;
-            background: rgba(255, 255, 255, 0.1);
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
-            font-weight: 800;
-            color: var(--text-scnd);
-            z-index: 5;
-        }
-
-        .podium-rank.gold {
-            background: linear-gradient(135deg, #fbbf24, #f59e0b);
-            color: #0f172a;
-            width: 30px;
-            height: 30px;
-            font-size: 0.8rem;
-            box-shadow: 0 0 15px rgba(251, 191, 36, 0.5);
-        }
-
-        .crown {
-            position: absolute;
-            top: -35px;
-            font-size: 1.5rem;
-            color: #fbbf24;
-            animation: crownBounce 2s infinite;
-            text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
-        }
-
-        @keyframes crownBounce {
-
-            0%,
-            100% {
-                transform: translateY(0) rotate(-5deg);
-            }
-
-            50% {
-                transform: translateY(-5px) rotate(5deg);
-            }
-        }
-
-        .podium-avatar {
-            width: 55px;
-            height: 55px;
-            border-radius: 50%;
-            border: 3px solid rgba(255, 255, 255, 0.15);
-            background: var(--sport-dark);
-            margin-bottom: -20px;
-            z-index: 3;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            color: white;
-        }
-
-        .podium-avatar.gold {
-            width: 70px;
-            height: 70px;
-            border-color: #fbbf24;
-            margin-bottom: -25px;
-            box-shadow: 0 0 25px rgba(251, 191, 36, 0.3);
-        }
-
-        .podium-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .podium-block {
-            width: 100%;
-            border-radius: 16px 16px 0 0;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-bottom: none;
-            padding: 28px 8px 16px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .seat-1 .podium-block {
-            height: 120px;
-        }
-
-        .seat-2 .podium-block {
-            height: 90px;
-        }
-
-        .seat-3 .podium-block {
-            height: 70px;
-        }
-
-        .podium-block.gold {
-            background: linear-gradient(180deg, rgba(251, 191, 36, 0.1), rgba(0, 0, 0, 0.2));
-            border-color: rgba(251, 191, 36, 0.2);
-        }
-
-        .podium-name {
-            font-size: 0.7rem;
-            font-weight: 700;
-            color: var(--text-scnd);
-            text-align: center;
-            max-width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .podium-name.gold {
-            color: #fbbf24;
-            font-size: 0.8rem;
-        }
-
-        .podium-pts {
-            font-family: var(--font-display);
-            font-weight: 800;
-            font-size: 1.1rem;
-            color: white;
-        }
-
-        .podium-pts.gold {
-            font-size: 1.3rem;
-        }
-
-        /* Points History Entry */
-        .history-entry {
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: 14px;
-            padding: 14px 16px;
-            display: grid;
-            grid-template-columns: auto 1fr auto;
-            gap: 14px;
-            align-items: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .history-entry:hover {
-            border-color: rgba(139, 92, 246, 0.3);
-            transform: translateX(4px);
-        }
-
-        .history-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-        }
-
-        .history-icon.win {
-            background: rgba(163, 230, 53, 0.15);
-            color: #a3e635;
-        }
-
-        .history-icon.loss {
-            background: rgba(239, 68, 68, 0.15);
-            color: #f87171;
-        }
-
-        .history-pts {
-            font-family: var(--font-display);
-            font-weight: 800;
-            font-size: 1.1rem;
-        }
-
-        .history-pts.positive {
-            color: #a3e635;
-        }
-
-        .history-pts.negative {
-            color: #f87171;
-        }
-
-        /* Leaderboard Entry */
-        .lb-entry {
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: 14px;
-            padding: 12px 16px;
-            display: grid;
-            grid-template-columns: 35px 1fr auto;
-            gap: 12px;
-            align-items: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .lb-entry:hover {
-            border-color: rgba(255, 255, 255, 0.15);
-            transform: translateX(4px);
-        }
-
-        .lb-entry.me {
-            background: rgba(139, 92, 246, 0.1);
-            border-color: rgba(139, 92, 246, 0.3);
-        }
-
-        .lb-rank {
-            font-family: var(--font-display);
-            font-weight: 800;
-            font-size: 1rem;
-            color: var(--text-scnd);
-        }
-
-        .lb-entry.me .lb-rank {
-            color: #c4b5fd;
-        }
-
-        /* Medal Styles */
-        .gold-lb {
-            border-color: rgba(251, 191, 36, 0.4) !important;
-            background: linear-gradient(90deg, rgba(251, 191, 36, 0.1), transparent) !important;
-        }
-
-        .silver-lb {
-            border-color: rgba(148, 163, 184, 0.4) !important;
-            background: linear-gradient(90deg, rgba(148, 163, 184, 0.1), transparent) !important;
-        }
-
-        .bronze-lb {
-            border-color: rgba(180, 83, 9, 0.4) !important;
-            background: linear-gradient(90deg, rgba(180, 83, 9, 0.1), transparent) !important;
-        }
-
-        .gold-lb .lb-rank {
-            color: #fbbf24;
-        }
-
-        .silver-lb .lb-rank {
-            color: #94a3b8;
-        }
-
-        .bronze-lb .lb-rank {
-            color: #b45309;
-        }
-
-        .gold-lb .leaderboard-avatar {
-            border-color: #fbbf24 !important;
-        }
-
-        .silver-lb .leaderboard-avatar {
-            border-color: #94a3b8 !important;
-        }
-
-        .bronze-lb .leaderboard-avatar {
-            border-color: #b45309 !important;
-        }
-    </style>
 </body>
 
 </html>

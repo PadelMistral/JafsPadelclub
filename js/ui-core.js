@@ -11,10 +11,10 @@ export function initAppUI(activePageName) {
     const path = window.location.pathname.toLowerCase();
     const isPublic = PUBLIC_PAGES.some(p => path.includes(p)) || path.endsWith('/') || path === '';
 
-    // Only inject UI in PRIVATE pages
+    // Only inject UI in PRIVATE pages if not already present
     if (!isPublic) {
-        injectHeader();
-        injectNavbar(activePageName || 'home');
+        // We defer injection to the Auth state to have user data
+        console.log("Private page detected:", path);
     }
 
     observerAuth(async (user) => {
@@ -32,9 +32,16 @@ export function initAppUI(activePageName) {
             
             // Fill data
             try {
+                const { injectHeader, injectNavbar, updateHeader } = await import('./modules/ui-loader.js');
                 const userData = await getDocument("usuarios", user.uid);
+                
+                // Always inject for private pages
+                if (!isPublic) {
+                    injectHeader(userData);
+                    injectNavbar(activePageName || 'home');
+                }
+
                 if (userData) {
-                    const { updateHeader } = await import('./modules/ui-loader.js');
                     updateHeader(userData);
                     listenToGlobalNotifs(user.uid);
                 }
@@ -52,13 +59,19 @@ export function initAppUI(activePageName) {
 }
 
 function listenToGlobalNotifs(uid) {
-    const dot = document.getElementById('notif-dot');
-    if (!dot) return;
+    const badge = document.getElementById('notif-badge');
+    if (!badge) return;
     
     subscribeCol("notificaciones", (list) => {
-        const unread = list.filter(n => !n.read).length;
-        dot.style.display = unread > 0 ? 'block' : 'none';
-    }, [['uid', '==', uid]]);
+        const unread = list.filter(n => !n.leido && !n.read).length;
+        if (unread > 0) {
+            badge.style.display = 'flex';
+            badge.textContent = unread > 9 ? '9+' : unread;
+            badge.classList.add('animate-pulse');
+        } else {
+            badge.style.display = 'none';
+        }
+    }, [['destinatario', '==', uid]]);
 }
 
 /**

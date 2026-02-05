@@ -1,144 +1,505 @@
-/* calendar.css - Pro Schedule Grid */
+/* =====================================================
+   PADELUMINATIS CALENDAR V6.0 - GALACTIC EDITION
+   Calendar page with Matrix grid styling.
+   ===================================================== */
 
-.schedule-wrapper {
+/* ===== CALENDAR CONTROLS ===== */
+.cal-controls-v5 {
   display: flex;
-  flex-direction: column;
-  height: calc(100vh - 155px); /* Header + Nav offset */
-  width: 100vw;
-  background: var(--bg-app);
-  overflow: hidden;
-  position: relative;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-lg);
 }
 
-.calendar-header {
+.cal-clock-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cal-clock-box #current-time-v5 {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--primary);
+  text-shadow: 0 0 10px var(--primary-glow);
+}
+
+.cal-clock-box #current-date-v5 {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.cal-week-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.btn-cal-nav {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-cal-nav:hover {
+  background: var(--primary);
+  color: #000;
+  border-color: var(--primary);
+}
+
+.cal-week-info {
+  text-align: center;
+}
+
+.cal-week-info h2 {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cal-week-info span {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.cal-location-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.loc-city {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.loc-city i {
+  color: var(--sport-green);
+  margin-right: 4px;
+}
+
+.loc-sub {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+}
+
+/* ===== CALENDAR WRAPPER ===== */
+.calendar-wrapper-v5 {
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-md);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ===== CALENDAR GRID V5 ===== */
+.calendar-grid-v5 {
+  min-width: 600px;
+}
+
+/* Grid Header */
+.grid-header-v5 {
   display: grid;
   grid-template-columns: 50px repeat(7, 1fr);
-  border-bottom: 1px solid var(--glass-border);
-  background: var(--sport-card);
+  gap: 4px;
+  margin-bottom: var(--space-sm);
   position: sticky;
   top: 0;
   z-index: 10;
+  background: var(--bg-glass);
+  padding-bottom: var(--space-sm);
 }
 
-.cal-day-col {
-  padding: 12px 0;
+.corner-header-v5 {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--space-xs);
+  font-size: 0.6rem;
+  color: var(--text-dim);
+}
+
+.day-header-v5 {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  padding: var(--space-sm);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  transition: var(--transition);
+}
+
+.day-header-v5 .d-name {
+  font-size: 0.55rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.day-header-v5 .d-num {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.day-header-v5.today {
+  background: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 0 20px var(--primary-glow);
+}
+
+.day-header-v5.today .d-name,
+.day-header-v5.today .d-num {
+  color: #000;
+}
+
+/* Grid Body */
+.grid-body-v5 {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
 }
 
-.cal-day-name {
-  font-size: 0.65rem;
-  color: var(--text-scnd);
-  font-weight: 600;
-}
-.cal-day-num {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--text-main);
-}
-
-.cal-day-col.today {
-  background: rgba(59, 130, 246, 0.1);
-  border-bottom: 3px solid var(--sport-blue);
-}
-.cal-day-col.today .cal-day-num {
-  color: var(--sport-blue);
-}
-
-.schedule-body {
-  overflow-y: auto;
-  flex: 1;
-  background-image: linear-gradient(
-    rgba(255, 255, 255, 0.03) 1px,
-    transparent 1px
-  );
-  background-size: 100% 60px; /* Hour height */
-}
-
-.time-grid-row {
+/* Time Row */
+.time-row-v5 {
   display: grid;
   grid-template-columns: 50px repeat(7, 1fr);
-  height: 60px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  gap: 4px;
+  min-height: 52px;
 }
 
-.time-label {
-  font-size: 0.7rem;
-  color: var(--text-scnd);
-  text-align: center;
-  transform: translateY(-8px); /* Align with grid line */
-  background: var(--bg-app);
-  height: 20px;
-}
-
-.time-slot {
-  position: relative;
-  border-right: 1px solid rgba(255, 255, 255, 0.03);
-  transition: background 0.2s;
-}
-
-.time-slot:hover {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-/* Booking Chips */
-.booking-chip {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: 2px;
-  right: 2px;
-  border-radius: 6px;
-  padding: 4px;
+.time-col-v5 {
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  font-size: 0.6rem;
-  font-weight: 700;
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  justify-content: center;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+  padding-right: var(--space-xs);
+}
+
+/* Slot V5 */
+.slot-v5 {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xs);
   cursor: pointer;
-  transition: transform 0.2s;
-  z-index: 5;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+  min-height: 60px;
 }
 
-.booking-chip:active {
-  transform: scale(0.95);
-}
-
-.chip-open {
-  background: rgba(255, 255, 255, 0.05); /* Ghost/Empty */
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  color: var(--text-scnd);
-}
-
-.chip-my {
-  background: var(--sport-blue);
-  color: white;
-  border: none;
-}
-
-.chip-comp {
-  background: var(--sport-green); /* Competition/Reto */
-  color: #0f172a;
-}
-
-.chip-full {
-  background: var(--sport-card);
-  border: 1px solid var(--glass-border);
-  color: var(--text-scnd);
-}
-
-.weather-badge {
+.slot-weather {
   position: absolute;
-  bottom: 2px;
-  right: 2px;
-  font-size: 0.55rem;
-  color: var(--text-scnd);
+  top: 2px;
+  right: 4px;
   display: flex;
   align-items: center;
   gap: 2px;
+  font-size: 0.5rem;
+  font-weight: 800;
+  color: var(--secondary);
+  opacity: 0.8;
+}
+
+.slot-weather i {
+  font-size: 0.55rem;
+}
+
+.slot-v5:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-light);
+  transform: translateY(-2px);
+  z-index: 5;
+}
+
+/* Slot States */
+.slot-v5.libre {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.slot-v5.libre:hover {
+  border-color: var(--primary);
+}
+
+.slot-v5.abierta {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: var(--primary);
+  animation: slotPulse 2s ease-in-out infinite;
+}
+
+@keyframes slotPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--primary-glow);
+  }
+  50% {
+    box-shadow: 0 0 15px var(--primary-glow);
+  }
+}
+
+.slot-v5.cerrada {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  opacity: 0.7;
+}
+
+.slot-v5.propia {
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.2),
+    rgba(34, 197, 94, 0.1)
+  );
+  border-color: var(--sport-green);
+  box-shadow: inset 0 0 15px var(--sport-green-glow);
+}
+
+.slot-v5.past {
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.slot-v5.past * {
+  opacity: 0.5;
+}
+
+/* Slot Content */
+.slot-chip-v5 {
+  font-size: 0.55rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.slot-v5.abierta .slot-chip-v5 {
+  color: var(--primary);
+}
+
+.slot-v5.cerrada .slot-chip-v5 {
+  color: var(--sport-red);
+}
+
+.slot-v5.propia .slot-chip-v5 {
+  color: var(--sport-green);
+}
+
+.slot-info-v5 {
+  font-size: 0.5rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Break Row */
+.break-v5 {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 4px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.02);
+  padding: var(--space-sm);
+  margin: var(--space-sm) 0;
+  border-radius: var(--radius-sm);
+}
+
+/* ===== CALENDAR LEGEND ===== */
+.cal-legend-v5 {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-xl);
+  padding: var(--space-md);
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-top: var(--space-md);
+}
+
+.legend-item-v5 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.legend-item-v5 .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-sm);
+}
+
+.legend-item-v5 .dot.libre {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-light);
+}
+
+.legend-item-v5 .dot.abierta {
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary-glow);
+}
+
+.legend-item-v5 .dot.cerrada {
+  background: var(--sport-red);
+}
+
+.legend-item-v5 .dot.propia {
+  background: var(--sport-green);
+  box-shadow: 0 0 8px var(--sport-green-glow);
+}
+
+.legend-item-v5 .label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ===== CALENDAR HINT ===== */
+.cal-hint-v5 {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.cal-hint-v5 i {
+  margin-right: var(--space-xs);
+}
+
+/* ===== SELECTOR CARD ===== */
+.selector-card {
+  max-width: 450px;
+}
+
+.users-list-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-sm);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.user-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.user-option:hover {
+  background: var(--bg-elevated);
+  border-color: var(--primary);
+}
+
+.user-option.selected {
+  background: var(--primary-glow);
+  border-color: var(--primary);
+}
+
+.user-option-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.user-option-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-option-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-option-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-option-level {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Search Wrap */
+.search-wrap {
+  position: relative;
+}
+
+.search-wrap i {
+  position: absolute;
+  left: var(--space-md);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+}
+
+.search-wrap input {
+  padding-left: 40px;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 640px) {
+  .cal-controls-v5 {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-sm);
+  }
+
+  .cal-location-box {
+    display: none;
+  }
+
+  .cal-legend-v5 {
+    flex-wrap: wrap;
+    gap: var(--space-md);
+  }
 }
