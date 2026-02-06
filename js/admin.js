@@ -470,7 +470,12 @@ window.deleteMatch = async (id, col) => {
 async function saveResult(id, col, result) {
     try {
         await updateDocument(col, id, { resultado: { sets: result }, estado: 'jugado' });
-        showToast('Partido finalizado', 'success');
+        
+        // Trigger Ranking Update
+        const { processMatchResults } = await import('./ranking-service.js');
+        await processMatchResults(id, col, result);
+        
+        showToast('Partido finalizado y puntos procesados', 'success');
         document.getElementById('modal-edit-match').classList.remove('active');
         loadData();
     } catch (e) {
@@ -524,6 +529,37 @@ window.saveConfig = () => {
     showToast('Configuración guardada', 'success');
 };
 
-window.recalculateAllRankings = () => showToast('Función en desarrollo', 'info');
-window.resetAllStreaks = () => showToast('Función en desarrollo', 'info');
+window.recalculateAllRankings = async () => {
+    if (!confirm('¿Seguro que quieres REINICIAR los puntos de TODOS los usuarios según su nivel?')) return;
+    
+    try {
+        showToast('Procesando', 'Reiniciando ranking galáctico...', 'info');
+        const snap = await getDocs(collection(db, "usuarios"));
+        const batch = writeBatch(db);
+        
+        snap.docs.forEach(d => {
+            const u = d.data();
+            const level = u.nivel || 2.5;
+            const newPoints = Math.round(1000 + (level - 2.5) * 400);
+            batch.update(d.ref, { puntosRanking: newPoints });
+        });
+        
+        await batch.commit();
+        showToast('¡Hecho!', 'Puntos reiniciados correctamente', 'success');
+        await loadData();
+    } catch(e) {
+        console.error(e);
+        showToast('Error', 'Fallo al procesar el lote', 'error');
+    }
+};
+
+window.resetAllStreaks = async () => {
+    if (!confirm('¿Reiniciar rachas de todos los usuarios?')) return;
+    const snap = await getDocs(collection(db, "usuarios"));
+    const batch = writeBatch(db);
+    snap.docs.forEach(d => batch.update(d.ref, { rachaActual: 0 }));
+    await batch.commit();
+    showToast('Rachas reiniciadas', 'success');
+};
+
 window.clearOldMatches = () => showToast('Función en desarrollo', 'info');
