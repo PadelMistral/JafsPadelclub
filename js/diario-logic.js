@@ -1,6 +1,7 @@
 // diario-logic.js - Premium Diary V7.0
 import { auth, db, subscribeDoc, updateDocument, getDocument } from './firebase-service.js';
 import { initAppUI, showToast } from './ui-core.js';
+import { getDetailedWeather } from './external-data.js';
 
 initAppUI('profile');
 
@@ -28,12 +29,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             const infoBox = document.getElementById('linked-match-info');
             if (infoBox) {
                 infoBox.classList.remove('hidden');
-                document.getElementById('txt-match-date').textContent = match.fecha?.toDate ? match.fecha.toDate().toLocaleDateString() : 'Partido Anterior';
+                const date = match.fecha?.toDate ? match.fecha.toDate() : new Date(match.fecha);
+                document.getElementById('txt-match-date').textContent = date.toLocaleDateString();
                 document.getElementById('txt-match-type').textContent = match.resultado ? 'CON RESULTADO' : 'SIN RESULTADO';
                 document.getElementById('inp-match-id').value = id;
                 document.getElementById('inp-tipo').value = 'Partido';
-                // Try to pre-fill result if available
-                if (match.resultado?.sets) document.getElementById('entry-notes').value = `Resultado: ${match.resultado.sets}\n\n`;
+                
+                // Fetch player names for context
+                const playerNames = await Promise.all((match.jugadores || []).map(async uid => {
+                    if (uid.startsWith('GUEST_')) return uid.split('_')[1] + ' (Inv)';
+                    const u = await getDocument('usuarios', uid);
+                    return u ? (u.nombreUsuario || u.nombre) : 'Desconocido';
+                }));
+
+                const team1 = playerNames.slice(0, 2).join(' & ') || 'T1';
+                const team2 = playerNames.slice(2, 4).join(' & ') || 'T2';
+                
+                // Pre-fill rich notes for AI learning
+                let aiNotes = `ANÁLISIS DE PARTIDO (${date.toLocaleDateString()})\n`;
+                aiNotes += `--------------------------------\n`;
+                aiNotes += `EQUIPOS:\n1. ${team1}\n2. ${team2}\n`;
+                if (match.resultado?.sets) aiNotes += `RESULTADO: ${match.resultado.sets}\n`;
+                aiNotes += `--------------------------------\n`;
+                aiNotes += `\n[SENSACIONES TÉCNICAS]\n- Mi desempeño:\n- Puntos clave:\n- Errores tácticos:\n\n[NOTAS PARA LA IA]\n`;
+                
+                document.getElementById('entry-notes').value = aiNotes;
             }
         }
     }
@@ -81,7 +101,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnSave) {
         btnSave.onclick = async () => {
             if (!currentUser) return;
-            
+
+            // Snapshot de clima y estado de pista en el momento de guardar
+            let weatherSnapshot = null;
+            try {
+                const w = await getDetailedWeather();
+                if (w && w.current) {
+                    const { calculateCourtCondition } = await import('./services/ai-service.js');
+                    const cond = calculateCourtCondition(
+                        w.current.temperature_2m,
+                        w.current.rain,
+                        w.current.wind_speed_10m
+                    );
+                    weatherSnapshot = {
+                        temperature: w.current.temperature_2m,
+                        rain: w.current.rain,
+                        windSpeed: w.current.wind_speed_10m,
+                        condition: cond.condition,
+                        advice: cond.advice
+                    };
+                }
+            } catch (_) {
+                // Si la API falla no bloqueamos el guardado
+            }
+
             const entry = {
                 id: Date.now().toString(),
                 fecha: new Date().toISOString(),
@@ -100,7 +143,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 },
                 comentarios: document.getElementById('entry-notes')?.value.trim() || '',
                 tacticalBalance: getTacticalBalance(),
-                matchId: document.getElementById('inp-match-id')?.value || null
+                matchId: document.getElementById('inp-match-id')?.value || null,
+                contextoClima: weatherSnapshot
             };
 
             const updatedJournal = [...(userData?.diario || []), entry];

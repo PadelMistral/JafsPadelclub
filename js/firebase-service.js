@@ -101,12 +101,15 @@ export async function loginWithGoogle() {
     const userRef = doc(db, "usuarios", user.uid);
     const snap = await getDoc(userRef);
     if (!snap.exists()) {
+        const defaultLevel = 2.5;
+        const basePoints = Math.round(1000 + (defaultLevel - 2.0) * 200);
+
         await setDoc(userRef, {
             nombre: user.displayName,
             email: user.email,
             fotoURL: user.photoURL,
-            nivel: 2.5,
-            puntosRanking: 1000,
+            nivel: defaultLevel,
+            puntosRanking: basePoints,
             victorias: 0,
             partidosJugados: 0,
             rachaActual: 0,

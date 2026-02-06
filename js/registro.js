@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const door = document.getElementById('r-door').value.trim() || '';
             const pass = document.getElementById('r-pass').value;
             const pass2 = document.getElementById('r-pass2').value;
-            const lvl = parseFloat(document.getElementById('r-lvl').value);
+            let lvl = parseFloat(document.getElementById('r-lvl').value);
 
             // Validation
             if (pass !== pass2) return showToast("Error clave", "Las claves no coinciden.", "warning");
@@ -43,7 +43,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const creds = await createUserWithEmailAndPassword(auth, email, pass);
                 const uid = creds.user.uid;
 
-                // 3. Create Firestore Profile
+                // 3. Normalizar nivel y calcular puntos iniciales según nivel
+                if (isNaN(lvl)) lvl = 2.5;
+                const basePoints = Math.round(1000 + (lvl - 2.5) * 400);
+
+                // 4. Create Firestore Profile
                 await setDoc(doc(db, "usuarios", uid), {
                     uid,
                     nombre: name,
@@ -56,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         puerta: door
                     },
                     nivel: lvl,
-                    puntosRanking: 1000,
+                    puntosRanking: basePoints,
                     partidosJugados: 0,
                     victorias: 0,
                     rachaActual: 0,

@@ -1,932 +1,288 @@
 /* =====================================================
-   PADELUMINATIS THEMES V2.0 - Multi-Universe Edition
-   8 Stunning Themes with DRASTIC visual changes
+   PADELUMINATIS THEMES V5.0 - CLEAN & PROFESSIONAL
+   Refined visual styles, backgrounds and responsive layouts
    ===================================================== */
 
-/* ===== BASE THEME VARIABLES (Galactic Default) ===== */
 :root {
   --theme-font: "Rajdhani", sans-serif;
-  --theme-radius: 16px;
-  --theme-radius-sm: 8px;
-  --theme-radius-lg: 24px;
-  --theme-radius-full: 9999px;
+  --theme-radius: 24px;
+  --theme-radius-sm: 12px;
+  --theme-radius-lg: 32px;
   --theme-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-  --theme-border-width: 1px;
-  --theme-card-bg: rgba(15, 23, 42, 0.6);
 }
 
-/* ===== THEME: GALACTIC (Default) ===== */
+/* ===== THEME: GALACTIC (Defecto) - Estelar & Neon ===== */
 [data-theme="galactic"] {
-  --bg-void: #000000;
-  --bg-deep: #020617;
-  --bg-space: #030712;
-  --bg-card: rgba(15, 23, 42, 0.6);
-  --bg-glass: rgba(15, 23, 42, 0.75);
+  --bg-void: #020617;
   --bg-surface: rgba(2, 6, 23, 0.95);
-
   --primary: #c6ff00;
   --primary-glow: rgba(198, 255, 0, 0.5);
   --secondary: #00d4ff;
-  --accent: #a855f7;
-
-  --sport-green: #22c55e;
-  --sport-gold: #ffd700;
-  --sport-red: #ef4444;
-
   --text-primary: #ffffff;
-  --text-secondary: #e2e8f0;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
-
-  --border: rgba(255, 255, 255, 0.08);
-  --border-light: rgba(255, 255, 255, 0.15);
-
-  --theme-font: "Rajdhani", sans-serif;
-  --theme-radius: 16px;
-  --theme-radius-sm: 8px;
-  --theme-radius-lg: 24px;
-  --theme-glow-1: rgba(0, 212, 255, 0.08);
-  --theme-glow-2: rgba(168, 85, 247, 0.08);
 }
 
-/* ===== THEME: WINTER (Ice Kingdom) ===== */
+/* ===== THEME: WINTER (Picos Nevados) - Frío & Cristalino ===== */
 [data-theme="winter"] {
-  --bg-void: #0a1628;
-  --bg-deep: #0f2847;
-  --bg-space: #1a3a5c;
-  --bg-card: rgba(30, 80, 120, 0.5);
-  --bg-glass: rgba(20, 60, 100, 0.7);
-  --bg-surface: rgba(15, 40, 70, 0.9);
-
-  --primary: #7dd3fc;
-  --primary-glow: rgba(125, 211, 252, 0.5);
-  --secondary: #a5f3fc;
-  --accent: #c4b5fd;
-
-  --sport-green: #6ee7b7;
-  --sport-gold: #fde68a;
-  --sport-red: #fca5a5;
-
-  --text-primary: #f0f9ff;
-  --text-secondary: #bae6fd;
-  --text-muted: #7dd3fc;
-  --text-dim: #38bdf8;
-
-  --border: rgba(186, 230, 253, 0.2);
-  --border-light: rgba(186, 230, 253, 0.4);
-
-  --theme-font: "Segoe UI", sans-serif;
-  --theme-radius: 20px;
-  --theme-radius-sm: 12px;
-  --theme-radius-lg: 28px;
-  --theme-glow-1: rgba(125, 211, 252, 0.2);
-  --theme-glow-2: rgba(196, 181, 253, 0.15);
-}
-
-[data-theme="winter"] .sport-bg {
-  background: linear-gradient(180deg, #0f2847 0%, #1e3a5f 100%) !important;
-  overflow: hidden;
-}
-
-/* Snow Effect */
-[data-theme="winter"] .sport-bg::before,
-[data-theme="winter"] .sport-bg::after {
-  content: "";
-  position: absolute;
-  top: -650px;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image:
-    radial-gradient(4px 4px at 100px 50px, #fff, transparent),
-    radial-gradient(6px 6px at 200px 150px, #fff, transparent),
-    radial-gradient(3px 3px at 300px 250px, #fff, transparent),
-    radial-gradient(4px 4px at 400px 350px, #fff, transparent),
-    radial-gradient(6px 6px at 500px 100px, #fff, transparent),
-    radial-gradient(3px 3px at 50px 200px, #fff, transparent),
-    radial-gradient(4px 4px at 150px 300px, #fff, transparent),
-    radial-gradient(6px 6px at 250px 400px, #fff, transparent),
-    radial-gradient(3px 3px at 350px 500px, #fff, transparent);
-  background-size: 650px 650px;
-  animation: snow 3s linear infinite;
-  opacity: 0.3;
-}
-
-[data-theme="winter"] .sport-bg::after {
-  margin-left: -250px;
-  opacity: 0.2;
-  animation-duration: 6s;
-  animation-direction: reverse;
-  filter: blur(1px);
-}
-
-@keyframes snow {
-  to {
-    transform: translateY(650px);
-  }
-}
-
-[data-theme="winter"] .sport-bg::before {
-  background:
-    radial-gradient(
-      circle at 20% 20%,
-      rgba(186, 230, 253, 0.25) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      circle at 80% 80%,
-      rgba(196, 181, 253, 0.2) 0%,
-      transparent 50%
-    ) !important;
-  filter: blur(100px) !important;
-}
-
-[data-theme="winter"] .star {
-  background: #e0f2fe !important;
-  box-shadow: 0 0 10px rgba(186, 230, 253, 1) !important;
-}
-
-[data-theme="winter"] .shooting-star {
-  background: linear-gradient(90deg, #7dd3fc, transparent) !important;
-}
-
-[data-theme="winter"] .app-header,
-[data-theme="winter"] .bottom-nav {
-  backdrop-filter: blur(30px) saturate(200%) !important;
-  background: rgba(15, 40, 70, 0.85) !important;
-}
-
-[data-theme="winter"] .app-header {
-  background: rgba(255, 255, 255, 0.1) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
-  backdrop-filter: blur(10px) !important;
-}
-
-[data-theme="winter"] .sport-card,
-[data-theme="winter"] .settings-card,
-[data-theme="winter"] .level-progress-card {
-  border-radius: 20px !important;
-  border: 1px solid rgba(125, 211, 252, 0.3) !important;
-}
-
-/* ===== THEME: ARCADE (Retro 80s Synthwave) ===== */
-[data-theme="arcade"] {
-  --bg-void: #0d0221;
-  --bg-deep: #1a0533;
-  --bg-space: #2d0a4e;
-  --bg-card: rgba(45, 10, 78, 0.7);
-  --bg-glass: rgba(30, 5, 50, 0.85);
-  --bg-surface: rgba(13, 2, 33, 0.95);
-
-  --primary: #ff00ff;
-  --primary-glow: rgba(255, 0, 255, 0.6);
-  --secondary: #00ffff;
-  --accent: #ffff00;
-
-  --sport-green: #00ff00;
-  --sport-gold: #ffff00;
-  --sport-red: #ff0066;
-
-  --text-primary: #ffffff;
-  --text-secondary: #ff99ff;
-  --text-muted: #cc66ff;
-  --text-dim: #9933ff;
-
-  --border: rgba(255, 0, 255, 0.4);
-  --border-light: rgba(0, 255, 255, 0.5);
-
-  --theme-font: "Press Start 2P", "Rajdhani", monospace;
-  --theme-radius: 4px;
-  --theme-radius-sm: 2px;
-  --theme-radius-lg: 8px;
-  --theme-glow-1: rgba(255, 0, 255, 0.3);
-  --theme-glow-2: rgba(0, 255, 255, 0.25);
-}
-
-/* ===== THEME: ARCADE (Retro Grid) ===== */
-[data-theme="arcade"] .sport-bg {
-  background: #0d0221 !important;
-  perspective: 100vh;
-}
-
-[data-theme="arcade"] .sport-bg::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background:
-    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
-    linear-gradient(
-      90deg,
-      rgba(255, 0, 0, 0.06),
-      rgba(0, 255, 0, 0.02),
-      rgba(0, 0, 255, 0.06)
-    );
-  background-size:
-    100% 2px,
-    3px 100%;
-  pointer-events: none;
-  z-index: 10;
-}
-
-[data-theme="arcade"] .sport-bg::before {
-  content: "";
-  position: absolute;
-  bottom: -30%;
-  left: -50%;
-  width: 200%;
-  height: 100%;
-  background-image:
-    linear-gradient(
-      0deg,
-      transparent 24%,
-      rgba(255, 0, 255, 0.3) 25%,
-      rgba(255, 0, 255, 0.3) 26%,
-      transparent 27%,
-      transparent 74%,
-      rgba(255, 0, 255, 0.3) 75%,
-      rgba(255, 0, 255, 0.3) 76%,
-      transparent 77%,
-      transparent
-    ),
-    linear-gradient(
-      90deg,
-      transparent 24%,
-      rgba(255, 0, 255, 0.3) 25%,
-      rgba(255, 0, 255, 0.3) 26%,
-      transparent 27%,
-      transparent 74%,
-      rgba(255, 0, 255, 0.3) 75%,
-      rgba(255, 0, 255, 0.3) 76%,
-      transparent 77%,
-      transparent
-    );
-  background-size: 50px 50px;
-  transform: rotateX(60deg);
-  animation: gridMove 3s linear infinite;
-}
-
-@keyframes gridMove {
-  0% {
-    transform: rotateX(60deg) translateY(0);
-  }
-  100% {
-    transform: rotateX(60deg) translateY(50px);
-  }
-}
-
-/* ===== THEME: OCEAN (Deep Sea Waves) ===== */
-[data-theme="ocean"] .sport-bg {
-  background: linear-gradient(180deg, #001220 0%, #004060 100%) !important;
-  overflow: hidden;
-}
-
-[data-theme="ocean"] .sport-bg::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 200px;
-  background: rgba(6, 182, 212, 0.1);
-  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
-  transform: scaleX(1.5);
-  animation: wave 8s ease-in-out infinite alternate;
-}
-
-[data-theme="ocean"] .sport-bg::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -20px;
-  height: 180px;
-  background: rgba(6, 182, 212, 0.15);
-  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
-  transform: scaleX(1.2);
-  animation: wave 6s ease-in-out infinite alternate-reverse;
-}
-
-@keyframes wave {
-  0% {
-    transform: scaleX(1.5) translateY(0);
-  }
-  100% {
-    transform: scaleX(1.3) translateY(20px);
-  }
-}
-
-[data-theme="arcade"] .star {
-  background: #ff00ff !important;
-  box-shadow: 0 0 8px #ff00ff !important;
-  border-radius: 0 !important;
-}
-
-[data-theme="arcade"] .app-header,
-[data-theme="arcade"] .bottom-nav {
-  border: 2px solid #ff00ff !important;
-  box-shadow:
-    0 0 20px rgba(255, 0, 255, 0.5),
-    inset 0 0 20px rgba(255, 0, 255, 0.1) !important;
-}
-
-[data-theme="arcade"] .sport-card,
-[data-theme="arcade"] .settings-card {
-  border-radius: 4px !important;
-  border: 2px solid #ff00ff !important;
-  box-shadow: 4px 4px 0 #00ffff !important;
-}
-
-[data-theme="arcade"] .btn-primary {
-  border-radius: 4px !important;
-  box-shadow: 3px 3px 0 #00ffff !important;
-  text-transform: uppercase !important;
-  letter-spacing: 2px !important;
-}
-
-[data-theme="arcade"] h1,
-[data-theme="arcade"] h2,
-[data-theme="arcade"] h3 {
-  text-shadow:
-    2px 2px 0 #ff00ff,
-    -2px -2px 0 #00ffff !important;
-}
-
-/* ===== THEME: FANTASY (Enchanted Forest) ===== */
-[data-theme="fantasy"] {
-  --bg-void: #0a1a0a;
-  --bg-deep: #0f2a12;
-  --bg-space: #1a3d1f;
-  --bg-card: rgba(26, 61, 31, 0.6);
-  --bg-glass: rgba(15, 42, 18, 0.8);
-  --bg-surface: rgba(10, 26, 10, 0.95);
-
-  --primary: #a3e635;
-  --primary-glow: rgba(163, 230, 53, 0.5);
-  --secondary: #fbbf24;
-  --accent: #f472b6;
-
-  --sport-green: #4ade80;
-  --sport-gold: #fcd34d;
-  --sport-red: #fb7185;
-
-  --text-primary: #ecfccb;
-  --text-secondary: #bef264;
-  --text-muted: #84cc16;
-  --text-dim: #65a30d;
-
-  --border: rgba(163, 230, 53, 0.25);
-  --border-light: rgba(163, 230, 53, 0.4);
-
-  --theme-font: "Cinzel", "Rajdhani", serif;
+  --bg-void: #0f172a;
+  --bg-surface: rgba(255, 255, 255, 0.95);
+  --primary: #0ea5e9;
+  --primary-glow: rgba(14, 165, 233, 0.4);
+  --secondary: #7dd3fc;
+  --text-primary: #0369a1;
+  --theme-font: "Montserrat", sans-serif;
   --theme-radius: 24px;
-  --theme-radius-sm: 16px;
-  --theme-radius-lg: 32px;
-  --theme-glow-1: rgba(163, 230, 53, 0.2);
-  --theme-glow-2: rgba(251, 191, 36, 0.15);
 }
-
-[data-theme="fantasy"] .sport-bg {
-  background: linear-gradient(180deg, #0a1a0a 0%, #1a3d1f 100%) !important;
+/* Background Winter: Montañas y Nieve */
+[data-theme="winter"] .sport-bg {
+  background: linear-gradient(to bottom, #1e3a8a, #7dd3fc, #ffffff) !important;
+  opacity: 1 !important;
 }
-
-[data-theme="fantasy"] .sport-bg::before {
+[data-theme="winter"] .sport-bg::before {
   content: "";
   position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(
-      circle at 10% 10%,
-      rgba(163, 230, 53, 0.1) 0%,
-      transparent 40%
-    ),
-    radial-gradient(
-      circle at 90% 90%,
-      rgba(251, 191, 36, 0.1) 0%,
-      transparent 40%
-    );
-  animation: fantasyGlow 10s ease-in-out infinite alternate;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 60%;
+  background:
+    radial-gradient(ellipse at 20% 100%, #ffffff 20%, transparent 40%),
+    radial-gradient(ellipse at 50% 100%, #e0f2fe 30%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, #ffffff 20%, transparent 40%);
+  filter: blur(10px);
+  z-index: 1;
 }
-
-@keyframes fantasyGlow {
-  to {
-    opacity: 0.5;
-    filter: hue-rotate(30deg);
+/* Falling Snow */
+[data-theme="winter"] .sport-bg::after {
+  content: "❄";
+  font-size: 20px;
+  color: white;
+  position: absolute;
+  top: -20px;
+  text-shadow: 0 0 10px white;
+  opacity: 0.5;
+  animation: snowfall 5s linear infinite;
+  width: 100%;
+  text-align: center;
+  word-spacing: 50px;
+}
+@keyframes snowfall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    transform: translateY(100vh) rotate(360deg);
   }
 }
-
-[data-theme="fantasy"] .star {
-  background: #fef08a !important;
-  box-shadow: 0 0 12px rgba(254, 240, 138, 1) !important;
-  animation-duration: 4s !important;
+[data-theme="winter"] .sport-card {
+  border: 1px solid rgba(14, 165, 233, 0.2) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: #1e3a8a !important;
+  box-shadow: 0 8px 30px rgba(14, 165, 233, 0.15) !important;
 }
 
-[data-theme="fantasy"] .app-header {
-  background: rgba(10, 26, 10, 0.8) !important;
-  border-bottom: 2px solid #a3e635;
-  border-radius: 0 0 24px 24px !important;
-}
-
-[data-theme="fantasy"] .bottom-nav {
-  background: rgba(15, 42, 18, 0.9) !important;
-  border: 1px solid rgba(163, 230, 53, 0.3) !important;
-}
-
-[data-theme="fantasy"] .sport-card,
-[data-theme="fantasy"] .settings-card {
-  border-radius: 24px !important;
-  border: 1px solid rgba(163, 230, 53, 0.25) !important;
-  background: linear-gradient(
-    145deg,
-    rgba(26, 61, 31, 0.6),
-    rgba(15, 42, 18, 0.8)
-  ) !important;
-}
-
-/* ===== THEME: NEON (Cyberpunk City) ===== */
-[data-theme="neon"] {
-  --bg-void: #0a0a0a;
-  --bg-deep: #121212;
-  --bg-space: #1a1a1a;
-  --bg-card: rgba(30, 30, 30, 0.8);
-  --bg-glass: rgba(20, 20, 20, 0.9);
-  --bg-surface: rgba(10, 10, 10, 0.98);
-
-  --primary: #39ff14;
-  --primary-glow: rgba(57, 255, 20, 0.6);
-  --secondary: #ff073a;
-  --accent: #00f0ff;
-
-  --sport-green: #39ff14;
-  --sport-gold: #ffea00;
-  --sport-red: #ff073a;
-
-  --text-primary: #ffffff;
-  --text-secondary: #e0e0e0;
-  --text-muted: #888888;
-  --text-dim: #555555;
-
-  --border: rgba(57, 255, 20, 0.4);
-  --border-light: rgba(57, 255, 20, 0.6);
-
-  --theme-font: "Orbitron", "Rajdhani", sans-serif;
-  --theme-radius: 0px;
-  --theme-radius-sm: 0px;
-  --theme-radius-lg: 0px;
-  --theme-glow-1: rgba(57, 255, 20, 0.3);
-  --theme-glow-2: rgba(255, 7, 58, 0.2);
-}
-
-[data-theme="neon"] .sport-bg {
-  background: #050505 !important;
-}
-
-[data-theme="neon"] .sport-bg::before {
-  background:
-    radial-gradient(
-      circle at 10% 90%,
-      rgba(57, 255, 20, 0.25) 0%,
-      transparent 40%
-    ),
-    radial-gradient(
-      circle at 90% 10%,
-      rgba(255, 7, 58, 0.2) 0%,
-      transparent 40%
-    ) !important;
-}
-
-[data-theme="neon"] .sport-bg::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
-    linear-gradient(
-      90deg,
-      rgba(255, 0, 0, 0.03),
-      rgba(0, 255, 0, 0.01),
-      rgba(0, 0, 255, 0.03)
-    );
-  background-size:
-    100% 3px,
-    3px 100%;
-  z-index: 1000;
-  pointer-events: none;
-}
-
-[data-theme="neon"] .star {
-  background: #39ff14 !important;
-  box-shadow: 0 0 15px rgba(57, 255, 20, 1) !important;
-  border-radius: 0 !important;
-}
-
-[data-theme="neon"] .app-header {
-  border: 1px solid #39ff14 !important;
-  box-shadow: 0 0 15px rgba(57, 255, 20, 0.4) !important;
-  margin: 10px;
-  width: calc(100% - 20px) !important;
-  border-radius: 4px !important;
-}
-
-[data-theme="neon"] .bottom-nav {
-  background: rgba(10, 10, 10, 0.95) !important;
-  border: 1px solid #39ff14 !important;
-  box-shadow: 0 0 30px rgba(57, 255, 20, 0.3) !important;
-}
-
-[data-theme="neon"] .sport-card,
-[data-theme="neon"] .settings-card {
-  border-radius: 0 !important;
-  border: 1px solid #39ff14 !important;
-  box-shadow: 0 0 15px rgba(57, 255, 20, 0.2) !important;
-}
-
-[data-theme="neon"] .btn-primary {
-  border-radius: 0 !important;
-  border: 1px solid #39ff14 !important;
-  box-shadow: 0 0 10px rgba(57, 255, 20, 0.5) !important;
-}
-
-/* ===== THEME: SUNSET (Warm Horizon) ===== */
-[data-theme="sunset"] {
-  --bg-void: #1a0a0a;
-  --bg-deep: #2d1515;
-  --bg-space: #451a1a;
-  --bg-card: rgba(69, 26, 26, 0.6);
-  --bg-glass: rgba(45, 21, 21, 0.8);
-  --bg-surface: rgba(26, 10, 10, 0.95);
-
-  --primary: #f97316;
-  --primary-glow: rgba(249, 115, 22, 0.5);
-  --secondary: #fbbf24;
-  --accent: #ec4899;
-
-  --sport-green: #84cc16;
-  --sport-gold: #fbbf24;
-  --sport-red: #ef4444;
-
-  --text-primary: #fff7ed;
-  --text-secondary: #fed7aa;
-  --text-muted: #fdba74;
-  --text-dim: #fb923c;
-
-  --border: rgba(249, 115, 22, 0.3);
-  --border-light: rgba(249, 115, 22, 0.5);
-
-  --theme-font: "Poppins", "Rajdhani", sans-serif;
-  --theme-radius: 20px;
-  --theme-radius-sm: 12px;
-  --theme-radius-lg: 28px;
-}
-
-[data-theme="sunset"] .sport-bg {
-  background: linear-gradient(180deg, #1a0a0a 0%, #451a1a 100%) !important;
-}
-
-[data-theme="sunset"] .sport-bg::before {
-  content: "";
-  position: absolute;
-  top: 10%;
-  left: 50%;
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, #f97316 0%, transparent 70%);
-  transform: translateX(-50%);
-  opacity: 0.3;
-  filter: blur(50px);
-}
-
-[data-theme="sunset"] .star {
-  background: #fbbf24 !important;
-  box-shadow: 0 0 8px rgba(251, 191, 36, 0.8) !important;
-}
-
-[data-theme="sunset"] .app-header {
-  background: rgba(69, 26, 26, 0.6) !important;
-  backdrop-filter: blur(20px) !important;
-  border-bottom: 1px solid rgba(249, 115, 22, 0.3);
-}
-
-/* ===== THEME: OCEAN (Deep Sea) ===== */
+/* ===== THEME: OCEAN (Profundidades) - Agua en Movimiento ===== */
 [data-theme="ocean"] {
   --bg-void: #001220;
-  --bg-deep: #002030;
-  --bg-space: #003050;
-  --bg-card: rgba(0, 48, 80, 0.6);
-  --bg-glass: rgba(0, 32, 48, 0.8);
-  --bg-surface: rgba(0, 18, 32, 0.95);
-
+  --bg-surface: rgba(0, 32, 48, 0.95);
   --primary: #06b6d4;
   --primary-glow: rgba(6, 182, 212, 0.5);
   --secondary: #0ea5e9;
-  --accent: #8b5cf6;
-
-  --sport-green: #14b8a6;
-  --sport-gold: #fbbf24;
-  --sport-red: #f43f5e;
-
   --text-primary: #ecfeff;
-  --text-secondary: #a5f3fc;
-  --text-muted: #67e8f9;
-  --text-dim: #22d3ee;
-
-  --border: rgba(6, 182, 212, 0.3);
-  --border-light: rgba(6, 182, 212, 0.5);
-
-  --theme-font: "Inter", "Rajdhani", sans-serif;
-  --theme-radius: 16px;
-  --theme-radius-sm: 8px;
-  --theme-radius-lg: 24px;
+  --theme-font: "Poppins", sans-serif;
 }
-
+/* Background Ocean: Ondas de Agua */
 [data-theme="ocean"] .sport-bg {
-  background: linear-gradient(
-    180deg,
-    #003050 0%,
-    #002030 50%,
-    #001220 100%
-  ) !important;
+  background: #002030 !important;
 }
-
 [data-theme="ocean"] .sport-bg::before {
-  background:
-    radial-gradient(
-      circle at 30% 70%,
-      rgba(6, 182, 212, 0.2) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      circle at 70% 30%,
-      rgba(139, 92, 246, 0.15) 0%,
-      transparent 50%
-    ) !important;
-}
-
-/* ===== THEME: MINIMAL (Clean White) ===== */
-[data-theme="minimal"] {
-  --bg-void: #f8fafc;
-  --bg-deep: #f1f5f9;
-  --bg-space: #e2e8f0;
-  --bg-card: rgba(255, 255, 255, 0.9);
-  --bg-glass: rgba(255, 255, 255, 0.95);
-  --bg-surface: rgba(248, 250, 252, 0.98);
-
-  --primary: #0f172a;
-  --primary-glow: rgba(15, 23, 42, 0.2);
-  --secondary: #475569;
-  --accent: #6366f1;
-
-  --sport-green: #16a34a;
-  --sport-gold: #ca8a04;
-  --sport-red: #dc2626;
-
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
-  --text-dim: #94a3b8;
-
-  --border: rgba(15, 23, 42, 0.1);
-  --border-light: rgba(15, 23, 42, 0.2);
-
-  --theme-font: "Inter", "Rajdhani", sans-serif;
-  --theme-radius: 12px;
-  --theme-radius-sm: 6px;
-  --theme-radius-lg: 16px;
-}
-
-[data-theme="minimal"] .sport-bg {
+  content: "";
+  position: absolute;
+  inset: 0;
   background: linear-gradient(
     180deg,
-    #e2e8f0 0%,
-    #f1f5f9 50%,
-    #f8fafc 100%
-  ) !important;
+    rgba(0, 182, 212, 0.1) 0%,
+    rgba(0, 32, 48, 0.3) 100%
+  );
+  animation: waterPulse 8s ease-in-out infinite alternate;
+}
+@keyframes waterPulse {
+  0% {
+    transform: scale(1);
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    transform: scale(1.1);
+    filter: hue-rotate(20deg);
+  }
+}
+[data-theme="ocean"] .sport-card {
+  border-radius: 24px !important;
+  border: 1px solid rgba(6, 182, 212, 0.3) !important;
+  box-shadow: 0 0 30px rgba(6, 182, 212, 0.1) !important;
 }
 
-[data-theme="minimal"] .sport-bg::before,
-[data-theme="minimal"] .sport-bg::after {
+/* ===== THEME: ARCADE (Retro Circuit) - Grid & Scanlines ===== */
+[data-theme="arcade"] {
+  --bg-void: #0d0221;
+  --bg-surface: #1a0533;
+  --primary: #ff00ff;
+  --primary-glow: rgba(255, 0, 255, 0.8);
+  --secondary: #00ffff;
+  --text-primary: #ffff00;
+  --theme-font: "Press Start 2P", cursive;
+  --theme-radius: 4px;
+}
+/* Background Arcade: Retro Grid */
+[data-theme="arcade"] .sport-bg {
+  background: #0d0221 !important;
+  perspective: 1000px;
+}
+[data-theme="arcade"] .sport-bg::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 200%;
+  height: 100%;
+  left: -50%;
+  background:
+    linear-gradient(transparent 70%, #ff00ff 100%),
+    linear-gradient(90deg, transparent 48%, #ff00ff 50%, transparent 52%);
+  background-size:
+    100% 40px,
+    40px 100%;
+  transform: rotateX(60deg) translateY(0);
+  animation: arcadeMove 3s linear infinite;
+}
+@keyframes arcadeMove {
+  to {
+    transform: rotateX(60deg) translateY(40px);
+  }
+}
+[data-theme="arcade"] .sport-card {
+  border: 2px solid #ff00ff !important;
+  box-shadow: 4px 4px 0 #00ffff !important;
+  font-family: "Rajdhani", sans-serif; /* Fallback for readability */
+}
+[data-theme="arcade"] h1,
+[data-theme="arcade"] h2,
+[data-theme="arcade"] h3 {
+  font-family: "Press Start 2P", cursive !important;
+}
+
+/* HIDE GALAXY ELEMENTS IN OTHER THEMES */
+[data-theme="winter"] .starfield,
+[data-theme="winter"] .cosmic-dust,
+[data-theme="winter"] .nebula,
+[data-theme="ocean"] .starfield,
+[data-theme="ocean"] .cosmic-dust,
+[data-theme="ocean"] .nebula,
+[data-theme="arcade"] .starfield,
+[data-theme="arcade"] .cosmic-dust,
+[data-theme="arcade"] .nebula,
+[data-theme="neon"] .starfield,
+[data-theme="neon"] .cosmic-dust,
+[data-theme="neon"] .nebula {
   display: none !important;
 }
 
-[data-theme="minimal"] .starfield {
-  display: none !important;
-}
-
-[data-theme="minimal"] .app-header,
-[data-theme="minimal"] .bottom-nav {
-  background: rgba(255, 255, 255, 0.95) !important;
-  border-color: rgba(15, 23, 42, 0.1) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
-}
-
-[data-theme="minimal"] .sport-card,
-[data-theme="minimal"] .settings-card {
-  background: #fff !important;
-  border: 1px solid rgba(15, 23, 42, 0.1) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
-}
-
-/* ===== GLOBAL THEME TRANSITIONS ===== */
-body,
-.sport-bg,
-.app-header,
-.bottom-nav,
-.page-content,
-.sport-card,
-.settings-card,
-.btn-primary,
-.btn-secondary {
-  transition: all 0.5s ease;
-}
-
-/* Apply theme font globally */
+/* GLOBALS & RESPONSIVNESS */
 body {
   font-family: var(--theme-font) !important;
+  background-color: var(--bg-void);
+  color: var(--text-primary);
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-x: hidden;
+  width: 100%;
 }
 
-/* Apply theme radius to common elements */
-.sport-card,
-.settings-card,
-.modal-card,
-.modal-sheet {
-  border-radius: var(--theme-radius) !important;
-}
-
-.btn,
-.btn-primary,
-.btn-secondary {
-  border-radius: var(--theme-radius-sm) !important;
-}
-
-/* ===== THEME SELECTOR STYLES ===== */
-.theme-selector-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.theme-option {
+/* Ensure centering and responsiveness */
+.container,
+.auth-screen,
+.page-content {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 12px 6px;
-  background: var(--bg-card);
-  border: 2px solid var(--border);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.theme-option:hover {
-  border-color: var(--primary);
-  transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
-}
-
-.theme-option.active {
-  border-color: var(--primary);
-  background: linear-gradient(135deg, var(--theme-glow-1), var(--theme-glow-2));
-  box-shadow: 0 0 20px var(--primary-glow);
-}
-
-.theme-preview {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  margin-bottom: 6px;
+  width: 100%;
+  max-width: 600px; /* Better width for cards */
+  margin: 0 auto;
   position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
+  z-index: 2;
 }
 
-.theme-preview.galactic {
-  background: linear-gradient(135deg, #020617, #0f172a, #c6ff00);
-}
-.theme-preview.winter {
-  background: linear-gradient(135deg, #0f2847, #7dd3fc, #ffffff);
-}
-.theme-preview.arcade {
-  background: linear-gradient(135deg, #0d0221, #ff00ff, #00ffff);
-}
-.theme-preview.fantasy {
-  background: linear-gradient(135deg, #0f2a12, #1a3d1f, #a3e635);
-}
-.theme-preview.neon {
-  background: linear-gradient(135deg, #0a0a0a, #39ff14, #ff073a);
-}
-.theme-preview.sunset {
-  background: linear-gradient(135deg, #1a0a0a, #f97316, #ec4899);
-}
-.theme-preview.ocean {
-  background: linear-gradient(135deg, #001220, #06b6d4, #8b5cf6);
-}
-.theme-preview.minimal {
-  background: linear-gradient(135deg, #f8fafc, #e2e8f0, #0f172a);
+/* Removed restrictive .sport-card styles */
+
+.sport-card {
+  width: 100%;
+  background: var(--bg-surface);
+  border-radius: var(--theme-radius);
 }
 
-.theme-name {
-  font-size: 0.55rem;
-  font-weight: 800;
-  text-transform: uppercase;
+/* Header & Nav Adjustments */
+.app-header {
+  width: 100% !important;
+  max-width: 600px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+.bottom-nav {
+  width: 100% !important;
+  max-width: 600px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+/* Typography Improvements */
+h1,
+h2,
+h3 {
   letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  text-align: center;
+  text-transform: uppercase;
+  font-weight: 800;
 }
 
-.theme-option.active .theme-name {
-  color: var(--primary);
+.auth-subtitle {
+  font-weight: 600;
+  opacity: 0.8;
 }
 
-/* Mobile Responsiveness */
-@media (max-width: 480px) {
-  .theme-selector-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-  }
-  .theme-preview {
-    width: 36px;
-    height: 36px;
-  }
-  .theme-name {
-    font-size: 0.5rem;
-  }
-}
-
-/* ===== THEME: MATRIX ELITE (Code Rain Edition) ===== */
-[data-theme="matrix"] {
-  --bg-void: #000800;
-  --bg-deep: #001000;
-  --bg-space: #001a00;
-  --bg-card: rgba(0, 20, 0, 0.7);
-  --bg-glass: rgba(0, 15, 0, 0.9);
-  --bg-surface: #000800;
-
-  --primary: #00ff41;
-  --primary-glow: rgba(0, 255, 65, 0.5);
-  --secondary: #008f11;
-  --accent: #d4af37;
-
-  --sport-green: #00ff41;
-  --sport-gold: #d4af37;
-  --sport-red: #ff3131;
-
-  --text-primary: #00ff41;
-  --text-secondary: #008f11;
-  --text-muted: #003b00;
-  --text-dim: #001a00;
-
-  --border: rgba(0, 255, 65, 0.3);
-  --border-light: rgba(0, 255, 65, 0.6);
-
-  --theme-font: "JetBrains Mono", "Rajdhani", monospace;
-  --theme-radius: 2px;
-}
-
-[data-theme="matrix"] .sport-bg {
-  background: black !important;
-}
-
-[data-theme="matrix"] .sport-bg::before {
-  content: "01011001010101 10101010 011010 10101010 10101010 10101010 10101010 10101010 10101010 10101010 10101010 10101010 10101010 10101010 10101010";
-  position: absolute;
+/* Modal Fixes */
+.modal-overlay {
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  color: #00ff41;
-  font-family: monospace;
-  font-size: 10px;
-  line-height: 1;
-  word-break: break-all;
-  opacity: 0.15;
-  animation: matrixRain 20s linear infinite;
-  white-space: pre-wrap;
-  z-index: 0;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
-@keyframes matrixRain {
-  from {
-    transform: translateY(-100%);
-  }
-  to {
-    transform: translateY(0);
-  }
+.modal-overlay.active {
+  display: flex;
+  opacity: 1;
 }
 
-[data-theme="matrix"] .sport-card {
-  border: 1px solid #00ff41 !important;
-  box-shadow: 0 0 15px rgba(0, 255, 65, 0.3) !important;
-  background: rgba(0, 10, 0, 0.95) !important;
+.modal-dialog-centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100% - 1rem);
 }
 
-[data-theme="matrix"] .btn-primary {
-  background: #00ff41 !important;
-  color: #000 !important;
-  font-weight: 900 !important;
-  box-shadow: 0 0 20px #00ff41 !important;
+.modal-card {
+  background: #111827; /* Dark by default */
+  width: 95%;
+  max-width: 500px;
+  max-height: 90vh;
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }

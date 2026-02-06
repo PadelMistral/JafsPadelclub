@@ -1,13 +1,29 @@
-// js/modules/theme-manager.js - Galactic Theme System V2.0
-const THEMES = ['galactic', 'winter', 'arcade', 'fantasy', 'neon', 'sunset', 'ocean', 'minimal'];
+// js/modules/theme-manager.js - Theme System V7.0
+// Sistema de temas con 8 identidades visuales únicas
+
+const THEMES = ['galactic', 'winter', 'ocean', 'arcade', 'minimal', 'futuristic', 'elegant', 'creative'];
 const STORAGE_KEY = 'padeluminatis_theme';
+
+/**
+ * Theme metadata for UI display
+ */
+const THEME_DATA = [
+    { id: 'galactic', name: 'Galáctica', icon: '🌌', desc: 'Espacial y neón' },
+    { id: 'winter', name: 'Invierno', icon: '❄️', desc: 'Frío y cristalino' },
+    { id: 'ocean', name: 'Océano', icon: '🌊', desc: 'Profundidades marinas' },
+    { id: 'arcade', name: 'Arcade', icon: '🕹️', desc: 'Retro gaming' },
+    { id: 'minimal', name: 'Minimal', icon: '⬜', desc: 'Limpio y moderno' },
+    { id: 'futuristic', name: 'Cyber', icon: '💚', desc: 'Neón futurista' },
+    { id: 'elegant', name: 'Elegante', icon: '✨', desc: 'Lujo oscuro' },
+    { id: 'creative', name: 'Creativo', icon: '🎨', desc: 'Gradientes vivos' }
+];
 
 /**
  * Initialize theme system - call on every page load
  */
 export function initThemeSystem() {
     const savedTheme = localStorage.getItem(STORAGE_KEY) || 'galactic';
-    applyTheme(savedTheme);
+    applyTheme(savedTheme, false);
     
     // Listen for theme changes from other tabs
     window.addEventListener('storage', (e) => {
@@ -19,10 +35,16 @@ export function initThemeSystem() {
 
 /**
  * Apply a theme to the document
+ * @param {string} themeName - Theme identifier
+ * @param {boolean} save - Whether to persist to localStorage
  */
 export function applyTheme(themeName, save = true) {
     if (!THEMES.includes(themeName)) themeName = 'galactic';
     
+    // Add transition class for smooth theme change
+    document.documentElement.classList.add('theme-transitioning');
+    
+    // Apply the theme
     document.documentElement.setAttribute('data-theme', themeName);
     
     if (save) {
@@ -32,33 +54,45 @@ export function applyTheme(themeName, save = true) {
     // Update selector UI if present
     updateSelectorUI(themeName);
     
+    // Remove transition class after animation
+    setTimeout(() => {
+        document.documentElement.classList.remove('theme-transitioning');
+    }, 500);
+    
     console.log(`🎨 Theme applied: ${themeName}`);
 }
 
 /**
  * Get current theme
+ * @returns {string} Current theme identifier
  */
 export function getCurrentTheme() {
     return localStorage.getItem(STORAGE_KEY) || 'galactic';
 }
 
 /**
+ * Get all available themes with metadata
+ * @returns {Array} Array of theme objects
+ */
+export function getAvailableThemes() {
+    return THEME_DATA;
+}
+
+/**
  * Update the visual state of the theme selector
+ * @param {string} activeTheme - Currently active theme
  */
 function updateSelectorUI(activeTheme) {
     const options = document.querySelectorAll('.theme-option');
     options.forEach(opt => {
         const theme = opt.dataset.theme;
-        if (theme === activeTheme) {
-            opt.classList.add('active');
-        } else {
-            opt.classList.remove('active');
-        }
+        opt.classList.toggle('active', theme === activeTheme);
     });
 }
 
 /**
  * Render the theme selector component
+ * @param {string} containerId - ID of container element
  */
 export function renderThemeSelector(containerId) {
     const container = document.getElementById(containerId);
@@ -66,23 +100,13 @@ export function renderThemeSelector(containerId) {
     
     const current = getCurrentTheme();
     
-    const themeData = [
-        { id: 'galactic', name: 'Galáctica', icon: '🌌' },
-        { id: 'winter', name: 'Invierno', icon: '❄️' },
-        { id: 'arcade', name: 'Arcade', icon: '🕹️' },
-        { id: 'fantasy', name: 'Fantasía', icon: '🧙' },
-        { id: 'neon', name: 'Neón', icon: '💚' },
-        { id: 'sunset', name: 'Atardecer', icon: '🌅' },
-        { id: 'ocean', name: 'Océano', icon: '🌊' },
-        { id: 'minimal', name: 'Minimal', icon: '⬜' }
-    ];
-    
     container.innerHTML = `
         <div class="theme-selector-grid">
-            ${themeData.map(t => `
+            ${THEME_DATA.map(t => `
                 <div class="theme-option ${t.id === current ? 'active' : ''}" 
                      data-theme="${t.id}"
-                     onclick="window.setTheme('${t.id}')">
+                     onclick="window.setTheme('${t.id}')"
+                     title="${t.desc}">
                     <div class="theme-preview ${t.id}">${t.icon}</div>
                     <span class="theme-name">${t.name}</span>
                 </div>
@@ -90,7 +114,7 @@ export function renderThemeSelector(containerId) {
         </div>
     `;
     
-    // Expose global function
+    // Expose global function for onclick handlers
     window.setTheme = (theme) => {
         applyTheme(theme);
     };

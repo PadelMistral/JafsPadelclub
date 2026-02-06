@@ -94,10 +94,10 @@
   --gradient-aurora: linear-gradient(
     135deg,
     #00efff 0%,
-    #b06bfd 50%,
-    #ff7b4d 100%
+    #c6ff00 50%,
+    #ffffff 100%
   );
-  --gradient-neon: linear-gradient(135deg, #00efff 0%, #d500f9 100%);
+  --gradient-neon: linear-gradient(135deg, #c6ff00 0%, #00efff 100%);
   --gradient-gold: linear-gradient(135deg, #f1c40f 0%, #f39c12 100%);
   --gradient-fire: linear-gradient(135deg, #e67e22 0%, #e74c3c 100%);
   --gradient-cosmic: linear-gradient(180deg, #120b2e 0%, #020617 100%);

@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const nextLevel = currentLevel + 0.5;
         const prevLevel = currentLevel - 0.5;
         
-        // Progress within current level bracket
+        // Progress within current level bracket (0.5 units)
         const progress = ((nivel - currentLevel) / 0.5) * 100;
         
         const bar = document.getElementById('level-bar');
@@ -105,7 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (bar) bar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
         
         if (progressText) {
-            const pointsNeeded = Math.round((0.5 - (nivel - currentLevel)) * 100);
+            // Since 0.1 level = 40 pts, and bracket is 0.5 level = 200 pts
+            const pointsNeeded = Math.round((0.5 - (nivel - currentLevel)) * 400); 
             if (progress >= 90) {
                 progressText.textContent = '¡Casi subes!';
                 progressText.classList.add('text-sport-green');

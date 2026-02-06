@@ -117,7 +117,7 @@ export async function injectNavbar(activePage) {
         home: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
         ranking: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M5 20v-8h4v8"/><path d="M15 20v-5h4v5"/><path d="M10 20v-11h4v11"/></svg>`,
         calendar: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
-        events: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+        events: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
         history: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`
     };
 
@@ -125,7 +125,7 @@ export async function injectNavbar(activePage) {
         { id: 'home', icon: icons.home, label: 'Inicio', link: 'home.html', color: 'blue' },
         { id: 'ranking', icon: icons.ranking, label: 'Ranking', link: 'puntosRanking.html', color: 'gold' },
         { id: 'calendar', icon: icons.calendar, label: 'Reservar', link: 'calendario.html', center: true },
-        { id: 'events', icon: icons.events, label: 'Retos', link: 'eventos.html', color: 'magenta' },
+        { id: 'events', icon: icons.events, label: 'Diario', link: 'diario.html', color: 'magenta' },
         { id: 'history', icon: icons.history, label: 'Historial', link: 'historial.html', color: 'cyan' }
     ];
 
@@ -151,6 +151,13 @@ export async function injectNavbar(activePage) {
     }).join('');
 
     document.body.appendChild(nav);
+    
+    // Presence Heartbeat
+    if (auth.currentUser) {
+        const { updatePresence } = await import('../firebase-service.js');
+        updatePresence(auth.currentUser.uid);
+        setInterval(() => updatePresence(auth.currentUser.uid), 5 * 60 * 1000); // Every 5 mins
+    }
     
     // Initialize AI Coach Chat (creates its own FAB)
     try {

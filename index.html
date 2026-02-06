@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="./css/auth.css">
 </head>
 
-<body>
+<body style="overflow: hidden; height: 100dvh;">
   <!-- Galactic Background -->
   <div class="sport-bg"></div>
   <div class="bg-glow blue" style="top:-10%; left:-10%; opacity:0.3"></div>
@@ -28,18 +28,20 @@
 
   <main class="auth-screen">
     <div id="login-form-card" class="auth-container">
+      <div class="auth-card-glow"></div>
+
       <div class="auth-logo-box">
-        <img src="./imagenes/Logojafs.png" alt="Logo" class="auth-logo">
+        <img src="./imagenes/Logojafs.png" alt="Logo" class="auth-logo" style="border-radius: 24px;">
       </div>
 
       <div class="auth-header">
         <h1 class="auth-title">PADELUMINATIS</h1>
-        <p class="auth-subtitle">Mistral Homes</p>
+        <p class="auth-subtitle tracking-[5px]">Mistral Homes Elite</p>
       </div>
 
       <form id="loginForm" class="auth-form">
         <div class="input-group">
-          <label class="form-label mb-2 block">Email de Jugador</label>
+          <label class="form-label">Email de Jugador</label>
           <div class="input-icon-wrapper">
             <i class="fas fa-envelope input-icon"></i>
             <input type="email" id="email" name="email" class="form-input" autocomplete="username email"
@@ -48,7 +50,7 @@
         </div>
 
         <div class="input-group">
-          <label class="form-label mb-2 block">Contraseña</label>
+          <label class="form-label">Contraseña</label>
           <div class="input-icon-wrapper">
             <i class="fas fa-lock input-icon"></i>
             <input type="password" id="password" name="password" class="form-input" autocomplete="current-password"
@@ -57,22 +59,24 @@
           </div>
         </div>
 
-        <div class="flex-row between mt-2 mb-6">
+        <div class="flex-row between items-center mt-2 mb-4">
           <label class="flex-row gap-2 cursor-pointer items-center">
             <input type="checkbox" class="sport-checkbox">
-            <span class="text-xs text-muted font-bold">Recordarme</span>
+            <span class="text-[10px] text-muted font-bold uppercase tracking-wider">Recordarme</span>
           </label>
-          <a href="recuperar.html" class="text-xs font-bold text-primary">¿Olvidaste la clave?</a>
+          <a href="recuperar.html" class="text-[10px] font-black text-primary uppercase tracking-wider">¿Olvidaste la
+            clave?</a>
         </div>
 
-        <button type="submit" class="auth-btn auth-btn-primary">
-          ACCEDER AL CIRCUITO <i class="fas fa-arrow-right ml-2 text-xs"></i>
+        <button type="submit" class="btn-auth-premium">
+          <span>ENTRAR AL CIRCUITO</span>
+          <i class="fas fa-chevron-right text-xs opacity-50"></i>
         </button>
       </form>
 
       <div class="auth-footer">
-        <p class="auth-footer-text">¿No eres miembro aún? <a href="registro.html" class="auth-footer-link">Únete
-            ahora</a></p>
+        <p class="auth-footer-text">¿No eres miembro aún? <a href="registro.html" class="auth-footer-link">ÚNETE
+            AHORA</a></p>
       </div>
     </div>
   </main>
@@ -84,10 +88,7 @@
       <div class="progress-bar-bg">
         <div id="progress-fill" class="progress-bar-fill"></div>
       </div>
-      <div id="progress-number" class="progress-text">0%</div>
-    </div>
-    <div class="mt-12">
-      <img src="./imagenes/Logojafs.png" style="width: 40px; opacity: 0.5;">
+      <div id="loader-status" class="progress-text">Iniciando...</div>
     </div>
   </div>
 

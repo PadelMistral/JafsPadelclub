@@ -175,18 +175,34 @@ function renderSlot(date, hour) {
     let state = 'free';
     let label = 'Libre';
     let sub = '';
+    let extraIcon = '';
 
     if (match) {
         const isMine = match.jugadores?.includes(currentUser.uid);
         const count = match.jugadores?.length || 0;
         const isFull = count >= 4;
+        const isPlayed = match.estado === 'jugado';
         
-        if (isMine) state = 'propia';
-        else if (isFull) state = 'cerrada';
-        else state = 'abierta';
+        if (isPlayed) {
+            state = 'jugado';
+            label = 'JUGADO';
+            sub = match.resultado?.sets || 'VER RES';
+            if (isMine) {
+                // Check if diary exists
+                const hasDiary = userData?.diario?.some(e => e.matchId === match.id);
+                if (!hasDiary) {
+                    label = 'DIARIO';
+                    extraIcon = '<i class="fas fa-exclamation-triangle pulse-warning absolute top-1 right-1 text-[10px] text-yellow-400"></i>';
+                }
+            }
+        } else {
+            if (isMine) state = 'propia';
+            else if (isFull) state = 'cerrada';
+            else state = 'abierta';
 
-        label = isMine ? 'MÍA' : (isFull ? 'LLENO' : 'UNIRSE');
-        sub = isFull ? 'PARTIDA CERRADA' : `${4 - count} HUECOS`;
+            label = isMine ? 'MÍA' : (isFull ? 'LLENO' : 'UNIRSE');
+            sub = isFull ? 'PARTIDA CERRADA' : `${4 - count} HUECOS`;
+        }
     }
 
     // Weather logic
@@ -203,7 +219,8 @@ function renderSlot(date, hour) {
     }
 
     return `
-        <div class="slot-v5 ${state} ${isPast ? 'past' : ''}" onclick="handleSlot('${dStr}', '${hour}', '${match?.id || ''}', '${match?.col || ''}')">
+        <div class="slot-v5 ${state} ${isPast ? 'past' : ''} relative" onclick="handleSlot('${dStr}', '${hour}', '${match?.id || ''}', '${match?.col || ''}')">
+            ${extraIcon}
             ${weatherHtml}
             <span class="slot-chip-v5">${label}</span>
             <span class="slot-info-v5">${sub}</span>

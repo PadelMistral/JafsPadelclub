@@ -27,8 +27,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 // Use central login helper (supports Username or Email)
-                await login(identifier, password);
-                startSpectacularLoading();
+                const userCred = await login(identifier, password);
+                const userDoc = await getDocument('usuarios', userCred.user.uid);
+                const userName = userDoc?.nombreUsuario || userDoc?.nombre || 'LEYENDA';
+                startSpectacularLoading(userName);
             } catch (err) {
                 console.error("Login fail:", err);
                 let msg = "Acceso denegado. Revisa tus datos.";
@@ -43,7 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
         googleBtn.onclick = async () => {
             try {
                 const user = await loginWithGoogle();
-                if (user) startSpectacularLoading();
+                if (user) {
+                    const userDoc = await getDocument('usuarios', user.uid);
+                    const userName = userDoc?.nombreUsuario || userDoc?.nombre || 'LEYENDA';
+                    startSpectacularLoading(userName);
+                }
             } catch (err) {
                 if (err.code !== 'auth/popup-closed-by-user') {
                     showToast('Falla en Google', 'No se pudo sincronizar.', 'error');
@@ -53,10 +59,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-function startSpectacularLoading() {
+function startSpectacularLoading(userName) {
     const loader = document.getElementById('master-loader');
     const fill = document.getElementById('progress-fill');
-    const text = document.getElementById('progress-number');
     const status = document.getElementById('loader-status');
     const loginCard = document.getElementById('login-form-card');
 
@@ -69,7 +74,7 @@ function startSpectacularLoading() {
         "Sincronizando con la red...",
         "Cargando estadísticas...",
         "Preparando pista central...",
-        "Bienvenido, Leyenda."
+        `BIENVENIDO, ${userName.toUpperCase()}`
     ];
 
     const interval = setInterval(() => {
@@ -78,14 +83,15 @@ function startSpectacularLoading() {
             progress = 100;
             clearInterval(interval);
             setTimeout(() => {
+                // Set flag to show welcome on home just once
+                localStorage.setItem('first_login_welcome', userName);
                 window.location.href = 'home.html';
-            }, 500);
+            }, 800);
         }
 
         fill.style.width = `${progress}%`;
-        text.textContent = `${progress}%`;
         
         const msgIdx = Math.min(Math.floor(progress / 20), messages.length - 1);
         status.textContent = messages[msgIdx];
-    }, 40);
+    }, 45);
 }

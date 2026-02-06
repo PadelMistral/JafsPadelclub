@@ -1,4 +1,4 @@
-/* js/modules/vecina-chat.js - Galactic AI v12.0 "Master Coach & Gossip" Edition */
+/* js/modules/vecina-chat.js - Sentient AI v14.0 "Command Matrix" Edition */
 import { auth, getDocument, db } from '../firebase-service.js';
 import { collection, getDocs, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 
@@ -9,7 +9,6 @@ let currentPersonality = 'coach'; // 'coach' or 'vecina'
 
 const MEMORY = {
     intentsCount: JSON.parse(localStorage.getItem('ai_intents_count') || '{}'),
-    lastInteraction: localStorage.getItem('ai_last_interaction'),
     tutorialDone: localStorage.getItem('ai_tutorial_done') === 'true'
 };
 
@@ -18,6 +17,7 @@ const DATA_CACHE = {
     eloHistory: [],
     matches: [],
     globalUsers: [],
+    openMatches: [],
     lastUpdate: 0
 };
 
@@ -31,12 +31,14 @@ async function _syncData() {
     if (now - DATA_CACHE.lastUpdate < 300000 && DATA_CACHE.user) return; 
 
     try {
-        const [uData, eloSnap, matchAmis, matchReto, usersSnap] = await Promise.all([
+        const [uData, eloSnap, matchAmis, matchReto, usersSnap, openAmis, openReto] = await Promise.all([
             getDocument('usuarios', uid),
-            getDocs(query(collection(db, "rankingLogs"), where("uid", "==", uid), orderBy("timestamp", "desc"), limit(20))),
-            getDocs(query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", uid), orderBy("fecha", "desc"), limit(20))),
-            getDocs(query(collection(db, "partidosReto"), where("jugadores", "array-contains", uid), orderBy("fecha", "desc"), limit(20))),
-            getDocs(query(collection(db, "usuarios"), limit(500)))
+            getDocs(query(collection(db, "rankingLogs"), where("uid", "==", uid), orderBy("timestamp", "desc"), limit(25))),
+            getDocs(query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", uid), orderBy("fecha", "desc"), limit(25))),
+            getDocs(query(collection(db, "partidosReto"), where("jugadores", "array-contains", uid), orderBy("fecha", "desc"), limit(25))),
+            getDocs(query(collection(db, "usuarios"), limit(400))),
+            getDocs(query(collection(db, "partidosAmistosos"), where("estado", "==", "abierto"), limit(10))),
+            getDocs(query(collection(db, "partidosReto"), where("estado", "==", "abierto"), limit(10)))
         ]);
 
         DATA_CACHE.user = uData;
@@ -50,6 +52,11 @@ async function _syncData() {
             return dB - dA;
         });
         DATA_CACHE.globalUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        DATA_CACHE.openMatches = [
+            ...openAmis.docs.map(d => ({ ...d.data(), _col: 'amistoso' })),
+            ...openReto.docs.map(d => ({ ...d.data(), _col: 'reto' }))
+        ].filter(m => m.jugadores?.includes(null) || m.jugadores?.length < 4);
+        
         DATA_CACHE.lastUpdate = now;
         userData = uData; 
     } catch (e) {
@@ -64,107 +71,103 @@ const Analyzer = {
         if (DATA_CACHE.eloHistory.length < 2) return 'ESTABLE';
         const recent = DATA_CACHE.eloHistory[0].newTotal || 1000;
         const old = DATA_CACHE.eloHistory[Math.min(5, DATA_CACHE.eloHistory.length - 1)].newTotal || 1000;
-        if (recent > old + 15) return '📈 ALZA FUERTE';
-        if (recent < old - 15) return '📉 CAÍDA';
-        return 'ESTABLE';
+        if (recent > old + 20) return '🚀 EXPONENCIAL';
+        if (recent < old - 20) return '🆘 CRÍTICA';
+        return recent > old ? 'ALZA' : 'CORRECCIÓN';
     },
 
-    getLastMatchInfo: () => {
-        const last = DATA_CACHE.matches.find(m => m.estado === 'jugado' || m.resultado);
-        if (!last) return null;
-        const d = last.fecha?.toDate?.() || new Date(last.fecha);
-        return {
-            date: d.toLocaleDateString(),
-            type: last._col === 'reto' ? 'Reto' : 'Amistoso',
-            result: last.resultado?.sets || 'Finalizado'
-        };
-    },
+    getMatchStats: () => {
+        const played = DATA_CACHE.matches.filter(m => m.resultado);
+        if (played.length === 0) return null;
 
-    findNemesis: (uid) => {
-        const defeatCounts = {};
-        DATA_CACHE.matches.forEach(m => {
-            if (!m.resultado?.sets || !m.jugadores) return;
-            const myIdx = m.jugadores.indexOf(uid);
-            if (myIdx === -1) return;
-            const isTeam1 = myIdx < 2;
+        let best = played[0], worst = played[0];
+        let maxDiff = -1;
+
+        played.forEach(m => {
             const sets = m.resultado.sets.split(' ');
             let myS = 0, rivS = 0;
+            const myIdx = m.jugadores.indexOf(auth.currentUser.uid);
+            const isTeam1 = myIdx < 2;
+
             sets.forEach(s => {
                 const p = s.split('-').map(Number);
                 if (p.length < 2) return;
                 if (isTeam1) { p[0] > p[1] ? myS++ : rivS++; }
                 else { p[1] > p[0] ? myS++ : rivS++; }
             });
-            if (rivS > myS) {
-                const rivs = isTeam1 ? [m.jugadores[2], m.jugadores[3]] : [m.jugadores[0], m.jugadores[1]];
-                rivs.forEach(rid => { if (rid && rid !== uid) defeatCounts[rid] = (defeatCounts[rid] || 0) + 1; });
+
+            const diff = Math.abs(myS - rivS);
+            if (myS > rivS && diff >= (best.diff || 0)) {
+                best = { ...m, diff };
+            }
+            if (rivS > myS && diff >= (worst.diff || 0)) {
+                worst = { ...m, diff };
             }
         });
-        const nemesisId = Object.keys(defeatCounts).reduce((a, b) => defeatCounts[a] > defeatCounts[b] ? a : b, null);
-        return nemesisId ? { ...DATA_CACHE.globalUsers.find(u => u.id === nemesisId), count: defeatCounts[nemesisId] } : null;
+
+        return { best, worst };
     },
 
-    predictMatch: (q) => {
-        const words = q.split(' ');
-        const players = DATA_CACHE.globalUsers.filter(u => {
-            const name = (u.nombreUsuario || u.nombre || '').toLowerCase();
-            return words.some(w => w.length > 3 && name.includes(w));
+    findNemesis: (uid) => {
+        const record = {};
+        DATA_CACHE.matches.forEach(m => {
+            if (!m.resultado?.sets || !m.jugadores) return;
+            const myIdx = m.jugadores.indexOf(uid);
+            if (myIdx === -1) return;
+            const isTeam1 = myIdx < 2;
+            const rivs = isTeam1 ? [m.jugadores[2], m.jugadores[3]] : [m.jugadores[0], m.jugadores[1]];
+            
+            const sets = m.resultado.sets.split(' ');
+            let won = false;
+            let myS = 0, rivS = 0;
+            sets.forEach(s => {
+                const p = s.split('-').map(Number);
+                if (p.length === 2) {
+                    if (isTeam1) { p[0] > p[1] ? myS++ : rivS++; }
+                    else { p[1] > p[0] ? myS++ : rivS++; }
+                }
+            });
+            won = myS > rivS;
+
+            rivs.forEach(rid => {
+                if (!rid || rid === uid) return;
+                if (!record[rid]) record[rid] = { wins: 0, losses: 0 };
+                won ? record[rid].wins++ : record[rid].losses++;
+            });
         });
-        if (players.length < 2) return null;
-        const p1 = players[0];
-        const p2 = players[1];
-        const score1 = (p1.nivel || 2.5) * 50 + (p1.victorias || 0);
-        const score2 = (p2.nivel || 2.5) * 50 + (p2.victorias || 0);
-        const prob1 = Math.round((score1 / (score1 + score2)) * 100);
-        return { p1, p2, prob1 };
+
+        let nemesisId = null, worstRatio = -1;
+        Object.keys(record).forEach(rid => {
+            const total = record[rid].wins + record[rid].losses;
+            const ratio = record[rid].losses / total;
+            if (total >= 2 && ratio > worstRatio) {
+                worstRatio = ratio;
+                nemesisId = rid;
+            }
+        });
+
+        return nemesisId ? { ...DATA_CACHE.globalUsers.find(u => u.id === nemesisId), stats: record[nemesisId] } : null;
     }
 };
 
-// --- DIALOGUE LAYER (Private) ---
-
-function _learnIntent(intent) {
-    MEMORY.intentsCount[intent] = (MEMORY.intentsCount[intent] || 0) + 1;
-    localStorage.setItem('ai_intents_count', JSON.stringify(MEMORY.intentsCount));
-}
+// --- DIALOGUE LAYER ---
 
 function _detectIntent(query) {
     const q = query.toLowerCase();
-    if (q.includes('último') || q.includes('cuando jugue')) return 'LAST_MATCH';
-    if (q.includes('némesis') || q.includes('quién me gana')) return 'NEMESIS';
-    if (q.includes('tutorial') || q.includes('ayuda') || q.includes('cómo se usa')) return 'TUTORIAL';
-    if (q.includes('racha')) return 'STREAK';
-    if (q.includes('puntos') || q.includes('xp')) return 'XP';
-    if (q.includes('ganaría') || q.includes('quién gana')) return 'PREDICT';
-    if (q.includes('análisis') || q.includes('informe')) return 'REPORT';
-    if (q.includes('consejo') || q.includes('tip')) return 'TIP';
+    if (query.startsWith('CMD_')) return query; 
+    
+    if (q.includes('peor rival') || q.includes('cuesta ganar')) return 'CMD_NEMESIS';
+    if (q.includes('mejor partido')) return 'CMD_BEST_MATCH';
+    if (q.includes('diferencia') || q.includes('peor partido')) return 'CMD_WORST_MATCH';
+    if (q.includes('abierto') || q.includes('hay partidas') || q.includes('huecos')) return 'CMD_OPEN_MATCHES';
+    if (q.includes('ultimo') || q.includes('cuándo jugué')) return 'CMD_LAST_MATCH';
+    if (q.includes('análisis') || q.includes('informe')) return 'CMD_REPORT';
+    if (q.includes('tutorial') || q.includes('ayuda')) return 'CMD_TUTORIAL';
+    if (q.includes('consejo') || q.includes('pro tip')) return 'CMD_PRO_TIPS';
+    if (q.includes('prediccion') || q.includes('quien gana')) return 'CMD_PREDICT';
+    if (q.includes('entrenar') || q.includes('rutina')) return 'CMD_TRAINING_PLAN';
+    if (q.includes('clima') || q.includes('tiempo')) return 'CMD_WEATHER_TACTICS';
     return 'GENERAL';
-}
-
-function _getGreeting() {
-    const uid = auth.currentUser?.uid;
-    const name = DATA_CACHE.user?.nombreUsuario || 'Jugador';
-    const mostUsed = Object.keys(MEMORY.intentsCount).reduce((a, b) => MEMORY.intentsCount[a] > MEMORY.intentsCount[b] ? a : b, 'GENERAL');
-
-    if (currentPersonality === 'coach') {
-        if (mostUsed === 'REPORT') return `Hola ${name}. He analizado tus últimos 20 partidos. ¿Quieres ver el informe técnico?`;
-        return `Listo para entrenar, ${name}. ¿Qué métrica de tu juego revisamos hoy?`;
-    } else {
-        if (mostUsed === 'NEMESIS') return `¡Vaya racha, cariñín! ¿Vienes a que te cuente quién te tiene gato hoy?`;
-        return `¡Hola tesoro! Me han contado una cosa de la pista 3 que te vas a quedar muerta...`;
-    }
-}
-
-function _getFunnyJoke() {
-    const users = DATA_CACHE.globalUsers.filter(u => u.nombreUsuario);
-    if (users.length === 0) return "Dicen que por aquí hay gente que calienta pidiendo una cerveza...";
-    const r = users[Math.floor(Math.random() * users.length)];
-    const jokes = [
-        `¿Has visto a ${r.nombreUsuario}? El otro día falló un remate y le echó la culpa a la gravedad.`,
-        `Me han dicho que ${r.nombreUsuario} se ha comprado una pala de 400€ a ver si así la bola pasa la red.`,
-        `Ayer vi a ${r.nombreUsuario} entrenando... bueno, estaba sentado en el banco mirando el móvil.`,
-        `Dicen que ${r.nombreUsuario} tiene un golpe secreto: se llama 'la caña' y lo usa en todos los puntos.`
-    ];
-    return jokes[Math.floor(Math.random() * jokes.length)];
 }
 
 // --- PUBLIC EXPORTS ---
@@ -179,43 +182,93 @@ export function initVecinaChat() {
     fab.onclick = toggleChat;
     document.body.appendChild(fab);
 
-    const chatHTML = `
-        <div id="vecina-chat-panel" class="ai-chat-panel">
-            <div class="ai-chat-header">
+const chatHTML = `
+        <div id="vecina-chat-panel" class="ai-chat-panel v14">
+            <div class="ai-chat-header border-b border-white-05 px-6">
                 <div class="personality-toggle" onclick="window.switchAiPersonality()">
                     <div id="p-avatar-bot" class="ai-avatar-box coach">
-                        <i class="fas fa-user-tie"></i>
+                        <i class="fas fa-user-pilot"></i>
                     </div>
                 </div>
-                <div class="ai-header-info" onclick="window.switchAiPersonality()">
-                    <span id="ai-bot-name" class="ai-title">COACH TÉCNICO</span>
-                    <span id="ai-bot-tag" class="ai-subtitle">Análisis Profesional</span>
+                <div class="ai-header-info flex-1" onclick="window.switchAiPersonality()">
+                    <span id="ai-bot-name" class="ai-title italic font-black">ENTRENADOR GALAXY</span>
+                    <div class="flex-row items-center gap-2">
+                        <div class="pulse-dot-green"></div>
+                        <span id="ai-bot-tag" class="ai-subtitle tracking-[2px]">NÚCLEO SENTIENTE V14</span>
+                    </div>
                 </div>
-                <button class="ai-close-btn" onclick="window.toggleAiChat()"><i class="fas fa-chevron-down"></i></button>
+                <button class="btn-close-neon sm" onclick="window.toggleAiChat()"><i class="fas fa-chevron-down"></i></button>
             </div>
-            <div id="ai-messages" class="ai-chat-body"></div>
-            <div class="ai-chat-input">
-                <input type="text" id="ai-input-field" placeholder="Pregunta algo..." autocomplete="off">
-                <button id="ai-send-btn"><i class="fas fa-paper-plane"></i></button>
+            
+            <div id="ai-messages" class="ai-chat-body custom-scroll p-6"></div>
+
+            <div class="ai-chat-footer p-6 bg-black/60 backdrop-blur-3xl border-t border-white-05">
+                <div class="ai-command-container mb-4">
+                    <select id="ai-cmd-picker" class="ai-cmd-select" onchange="window.aiHandleSelect(this)">
+                        <option value="" disabled selected>⚡ SELECCIONAR ACCIÓN TÁCTICA...</option>
+                        <optgroup label="📡 ANALÍTICA DE CAMPO">
+                            <option value="CMD_REPORT">📊 Generar Informe de Usuario</option>
+                            <option value="CMD_LAST_MATCH">🎾 Último Despliegue</option>
+                            <option value="CMD_BEST_MATCH">⭐ Hito de Combate</option>
+                            <option value="CMD_PREDICT">🔮 Matriz de Predicción</option>
+                        </optgroup>
+                        <optgroup label="💪 PROTOCOLOS DE MEJORA">
+                            <option value="CMD_PRO_TIPS">💡 Consejos de Élite</option>
+                            <option value="CMD_TRAINING_PLAN">🏋️ Plan de Optimización</option>
+                            <option value="CMD_WEATHER_TACTICS">☁️ Análisis Atmosférico</option>
+                        </optgroup>
+                        <optgroup label="🤝 RED DE CONTACTOS">
+                            <option value="CMD_NEMESIS">💀 Identificar Némesis</option>
+                            <option value="CMD_OPEN_MATCHES">🔓 Brechas en la Red</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="ai-input-row gap-3">
+                    <input type="text" id="ai-input-field" class="bg-white-03 border border-white-05 rounded-2xl px-4 py-3 text-sm text-white flex-1 outline-none focus:border-primary/40 transition-all font-bold" placeholder="Consultar a la Matrix..." autocomplete="off">
+                    <button id="ai-send-btn" class="w-12 h-12 rounded-2xl bg-primary text-black flex-center shadow-glow transition-transform hover:scale-105 active:scale-95">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
             </div>
         </div>
+
         <style>
-            .ai-chat-body { scroll-behavior: smooth; }
-            .ai-analysis-shortcuts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 10px; }
-            .ai-shortcut { 
-                background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); 
-                padding: 10px; border-radius: 14px; font-size: 0.65rem; font-weight: 800; 
-                cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 6px;
-                text-transform: uppercase; color: #fff;
+            .ai-chat-panel.v14 { 
+                border-radius: 40px; 
+                border: 1px solid rgba(255,255,255,0.08); 
+                background: linear-gradient(180deg, rgba(13,18,34,0.95) 0%, rgba(5,6,12,0.98) 100%);
+                box-shadow: 0 40px 100px rgba(0,0,0,0.9);
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
             }
-            .ai-shortcut:hover { background: var(--primary); color: #000; border-color: var(--primary); transform: translateY(-2px); }
-            .ai-tutorial-card { background: rgba(0,0,0,0.2); border: 1px solid var(--primary-glow); border-radius: 16px; padding: 15px; margin: 10px 0; border-left: 4px solid var(--primary); }
-            .ai-tutorial-title { font-weight: 900; font-size: 0.8rem; color: var(--primary); margin-bottom: 8px; display: block; }
-            .ai-step { display: flex; gap: 10px; margin-bottom: 6px; font-size: 0.7rem; color: #ccc; }
-            .ai-step i { color: var(--primary); width: 12px; }
-            .ai-predict-card { background: rgba(0,0,0,0.4); border-radius: 12px; padding: 12px; text-align: center; margin: 10px 0; border: 1px solid var(--secondary); }
-            .predict-vs { font-weight: 900; font-size: 1.2rem; color: #fff; margin: 5px 0; }
-            .predict-prob { color: var(--secondary); font-size: 0.7rem; font-weight: 700; }
+            .ai-chat-header { height: 80px; display: flex; items-center: center; gap: 15px; background: rgba(255,255,255,0.02); }
+            .ai-avatar-box { width: 45px; height: 45px; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; position: relative; }
+            .ai-avatar-box.coach { background: rgba(0,212,255,0.1); color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.2); }
+            .ai-avatar-box.vecina { background: rgba(198,255,0,0.1); color: #c6ff00; box-shadow: 0 0 20px rgba(198,255,0,0.2); }
+            .ai-title { font-size: 0.9rem; color: #fff; letter-spacing: 1px; display: block; margin-bottom: 2px; }
+            .ai-subtitle { font-size: 0.65rem; color: var(--text-muted); font-weight: 800; }
+            
+            .ai-cmd-select { 
+                width: 100%; padding: 15px; border-radius: 20px; background: rgba(255,255,255,0.03); 
+                border: 1px solid rgba(255,255,255,0.05); color: var(--primary); font-family: 'Rajdhani'; 
+                font-weight: 900; font-size: 0.75rem; cursor: pointer; outline: none; transition: 0.3s;
+                appearance: none; -webkit-appearance: none;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d4ff00' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+                background-repeat: no-repeat; background-position: right 15px center; background-size: 12px;
+            }
+            
+            .ai-result-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; padding: 20px; margin: 15px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+            .res-title { font-size: 0.65rem; font-weight: 900; color: var(--primary); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; display: block; opacity: 0.7; }
+            .res-val { color: #fff; font-size: 1.1rem; font-weight: 900; line-height: 1.2; }
+            .res-sub { color: var(--text-muted); font-size: 0.75rem; margin-top: 8px; font-weight: 600; }
+            
+            .ai-msg { margin-bottom: 15px; max-width: 85%; }
+            .ai-msg.user { align-self: flex-end; }
+            .ai-msg.bot { align-self: flex-start; }
+            .ai-msg p { padding: 12px 18px; border-radius: 20px; font-size: 0.85rem; line-height: 1.4; }
+            .ai-msg.user p { background: rgba(198,255,0,0.1); border: 1px solid rgba(198,255,0,0.2); color: #fff; border-bottom-right-radius: 4px; }
+            .ai-msg.bot p { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.05); color: #ccc; border-bottom-left-radius: 4px; }
         </style>
     `;
     document.body.insertAdjacentHTML('beforeend', chatHTML);
@@ -225,33 +278,38 @@ export function initVecinaChat() {
 
     window.toggleAiChat = toggleChat;
     window.switchAiPersonality = switchAiPersonality;
+    window.aiHandleSelect = (el) => {
+        if (!el.value) return;
+        const text = el.options[el.selectedIndex].text;
+        addMessage(text.split(' ').slice(1).join(' '), 'user');
+        const tid = addTyping();
+        generateResponse(el.value).then(res => {
+            removeTyping(tid);
+            addMessage(res, 'bot');
+        });
+        el.selectedIndex = 0;
+    };
+    
     window.aiQuickCmd = (cmd) => {
-        const inp = document.getElementById('ai-input-field');
-        if (cmd === 'last') inp.value = '¿Cuándo fue mi último partido?';
-        else if (cmd === 'nemesis') inp.value = '¿Quién es mi némesis?';
-        else if (cmd === 'report') inp.value = 'Dame un análisis de mi rendimiento';
-        else if (cmd === 'tutorial') inp.value = 'Tutorial de la app';
-        else if (cmd === 'xp') inp.value = '¿Cuántos puntos XP tengo?';
-        sendMessage();
+        const tid = addTyping();
+        generateResponse(cmd).then(res => {
+            removeTyping(tid);
+            addMessage(res, 'bot');
+        });
     };
 }
 
 export function switchAiPersonality(target) {
     const name = document.getElementById('ai-bot-name');
-    const tag = document.getElementById('ai-bot-tag');
     const avatar = document.getElementById('p-avatar-bot');
-    const welcome = document.getElementById('ai-welcome-msg');
-    
     currentPersonality = target || (currentPersonality === 'coach' ? 'vecina' : 'coach');
     
     if (currentPersonality === 'coach') {
         name.textContent = "COACH TÉCNICO";
-        tag.textContent = "Análisis Profesional";
         avatar.className = "ai-avatar-box coach";
         avatar.innerHTML = `<i class="fas fa-user-tie"></i>`;
     } else {
         name.textContent = "VECINA AP";
-        tag.textContent = "La Radio del Circuito";
         avatar.className = "ai-avatar-box vecina";
         avatar.innerHTML = `<i class="fas fa-face-grin-tears"></i>`;
     }
@@ -260,27 +318,13 @@ export function switchAiPersonality(target) {
 export async function toggleChat() {
     const panel = document.getElementById('vecina-chat-panel');
     const fab = document.getElementById('vecina-chat-fab');
-    if (!panel) return;
-
     chatOpen = !chatOpen;
-    
     if (chatOpen) {
         panel.classList.add('open');
         fab.classList.add('hidden');
-        document.getElementById('ai-input-field')?.focus();
-        
         await _syncData();
-        const msgContainer = document.getElementById('ai-messages');
-        if (msgContainer && msgContainer.children.length === 0) {
-            addMessage(_getGreeting(), 'bot');
-            addMessage(`
-                <div class="ai-analysis-shortcuts">
-                    <div class="ai-shortcut" onclick="window.aiQuickCmd('last')"><i class="fas fa-history"></i> Último</div>
-                    <div class="ai-shortcut" onclick="window.aiQuickCmd('nemesis')"><i class="fas fa-skull"></i> Némesis</div>
-                    <div class="ai-shortcut" onclick="window.aiQuickCmd('xp')"><i class="fas fa-star"></i> Mis XP</div>
-                    <div class="ai-shortcut" onclick="window.aiQuickCmd('tutorial')"><i class="fas fa-graduation-cap"></i> Tutorial</div>
-                </div>
-            `, 'bot');
+        if (document.getElementById('ai-messages').children.length === 0) {
+            addMessage(`Hola ${DATA_CACHE.user?.nombreUsuario || 'cracks'}. Soy tu IA modular. Selecciona una función o escríbeme lo que necesites.`, 'bot');
         }
     } else {
         panel.classList.remove('open');
@@ -290,116 +334,160 @@ export async function toggleChat() {
 
 export async function sendMessage() {
     const input = document.getElementById('ai-input-field');
-    if (!input) return;
     const text = input.value.trim();
     if (!text) return;
-    
     addMessage(text, 'user');
     input.value = '';
-    
     const tid = addTyping();
     const response = await generateResponse(text);
-    setTimeout(() => {
-        removeTyping(tid);
-        addMessage(response, 'bot');
-    }, 600 + Math.random() * 800);
+    removeTyping(tid);
+    addMessage(response, 'bot');
 }
 
 export async function generateResponse(query) {
     const intent = _detectIntent(query);
-    _learnIntent(intent);
     await _syncData();
     const uid = auth.currentUser?.uid;
-    if (!uid) return "Cariño, identifícate o no podré acceder a tu ficha.";
-
     const respond = (c, v) => currentPersonality === 'coach' ? c : v;
 
     switch (intent) {
-        case 'TUTORIAL':
-            localStorage.setItem('ai_tutorial_done', 'true');
+        case 'CMD_REPORT':
+            const trend = Analyzer.getEloTrend();
+            return respond(
+                `<div class="ai-result-card">
+                    <span class="res-title">Estado del Jugador</span>
+                    <div class="res-val">${trend}</div>
+                    <div class="res-sub">Tu ELO actual es ${Math.round(DATA_CACHE.user.puntosRanking)} con un nivel de ${(DATA_CACHE.user.nivel || 2.5).toFixed(2)}.</div>
+                </div>`,
+                "Cariñito, estás que te sales. Sigue así y te veo en el World Padel Tour (o no...)."
+            );
+
+        case 'CMD_LAST_MATCH':
+            const matches = DATA_CACHE.matches.filter(m => m.resultado);
+            if (matches.length === 0) return "No he encontrado partidos terminados en tu historial.";
+            const last = matches[0];
+            return `<div class="ai-result-card">
+                <span class="res-title">Último Partido</span>
+                <div class="res-val">${last.resultado.sets}</div>
+                <div class="res-sub">${last.fecha?.toDate?.().toLocaleDateString() || last.fecha} (${last._col})</div>
+            </div>`;
+
+        case 'CMD_BEST_MATCH':
+            const statsB = Analyzer.getMatchStats();
+            if (!statsB || !statsB.best.id) return "No tengo suficientes datos para determinar tu mejor partido.";
+            return `<div class="ai-result-card">
+                <span class="res-title">Tu Mejor Victoria</span>
+                <div class="res-val">${statsB.best.resultado.sets}</div>
+                <div class="res-sub">Dominaste con una diferencia de ${statsB.best.diff} sets.</div>
+            </div>`;
+
+        case 'CMD_WORST_MATCH':
+            const statsW = Analyzer.getMatchStats();
+            if (!statsW || !statsW.worst.id) return "No tengo datos de derrotas significativas.";
+            return `<div class="ai-result-card">
+                <span class="res-title">Partido con más diferencia</span>
+                <div class="res-val">${statsW.worst.resultado.sets}</div>
+                <div class="res-sub">Te costó seguir el ritmo, diferencia de ${statsW.worst.diff} sets.</div>
+            </div>`;
+
+        case 'CMD_NEMESIS':
+            const nemesis = Analyzer.findNemesis(uid);
+            if (!nemesis) return respond("Aún no tienes un rival con historial dominante sobre ti.", "¡Nadie te gana lo suficiente! Eres el terror de Padeluminatis.");
+            return respond(
+                `<div class="ai-result-card">
+                    <span class="res-title">Tu Peor Rival</span>
+                    <div class="res-val">${nemesis.nombreUsuario || 'Ese crack'}</div>
+                    <div class="res-sub">Has perdido el ${Math.round((nemesis.stats.losses / (nemesis.stats.wins + nemesis.stats.losses)) * 100)}% de veces contra él.</div>
+                </div>`,
+                `¡Ay alma cántara! <b>${nemesis.nombreUsuario}</b> te tiene tomada la medida. ${nemesis.stats.losses} veces te ha dado para el pelo.`
+            );
+
+        case 'CMD_OPEN_MATCHES':
+            const opens = DATA_CACHE.openMatches;
+            if (opens.length === 0) return respond("No hay partidas abiertas en este momento. ¡Crea una tú!", "Está todo el mundo durmiendo, hija. Crea una partida y verás cómo vuelan.");
             return `
-                <div class="ai-tutorial-card">
-                    <span class="ai-tutorial-title">GUÍA PADELUMINATIS PRO</span>
-                    <div class="ai-step"><i class="fas fa-calendar-alt"></i><b>Reservar:</b> Pulsa el botón central '+' para elegir pista y hora.</div>
-                    <div class="ai-step"><i class="fas fa-users"></i><b>Matchmaking:</b> En el Calendario, si ves un hueco con '+', pulsa para unirte.</div>
-                    <div class="ai-step"><i class="fas fa-trophy"></i><b>ELO:</b> Tus puntos suben al ganar retos oficiales.</div>
-                    <div class="ai-step"><i class="fas fa-robot"></i><b>IA:</b> Pregúntame sobre cualquier jugador o tu racha.</div>
+                <div class="ai-result-card">
+                    <span class="res-title">Partidas de Hoy</span>
+                    ${opens.map(m => `
+                        <div class="flex-row between py-2 border-b border-white/5">
+                            <span class="text-xs font-bold">${m.hora} - ${m._col}</span>
+                            <button class="text-primary text-[10px] font-black" onclick="window.location.href='calendario.html'">UNIRSE</button>
+                        </div>
+                    `).join('')}
                 </div>
-                <p class="mt-2" style="font-size:0.75rem">¿Quieres que analice tu último partido para empezar?</p>
             `;
 
-        case 'LAST_MATCH':
-            const last = Analyzer.getLastMatchInfo();
-            if (!last) return respond("No tienes partidos registrados aún.", "Hija, apúntate a algo, que se te va a oxidar la pala.");
-            return respond(
-                `<div class="ai-stat-card">
-                    <div class="ai-stat-header">HISTORIAL RECIENTE</div>
-                    <div class="ai-stat-row"><span>Fecha</span><strong>${last.date}</strong></div>
-                    <div class="ai-stat-row"><span>Tipo</span><strong>${last.type}</strong></div>
-                    <div class="ai-stat-row"><span>Resultado</span><strong>${last.result}</strong></div>
-                </div>`,
-                `Jugaste el ${last.date}. El resultado fue ${last.result}. ¡Espero que sudaras la camiseta!`
-            );
+        case 'CMD_TUTORIAL':
+            return `
+                <div class="ai-result-card">
+                    <span class="res-title">Tutorial Rápido</span>
+                    <ul class="ai-list" style="font-size:0.7rem; color:#ccc;">
+                        <li>📅 <b>Reserva:</b> Ve a Calendario y pulsa una hora libre.</li>
+                        <li>🤝 <b>Unirse:</b> Busca huecos con '+' en el Grid.</li>
+                        <li>⚔️ <b>Retos:</b> Elige 'Reto Oficial' al crear para ganar ELO.</li>
+                        <li>🤵 <b>Perfil:</b> Cambia tu tema y revisa tus palas.</li>
+                    </ul>
+                </div>
+            `;
 
-        case 'NEMESIS':
-            const nemesis = Analyzer.findNemesis(uid);
-            if (!nemesis) return respond("Aún no tienes un rival dominante detectado.", "¡Nadie te gana lo suficiente! Eres el terror de las pistas.");
-            return respond(
-                `Tu némesis es <b>${nemesis.nombreUsuario}</b>. Te ha ganado ${nemesis.count} veces. Debemos analizar su juego de revés.`,
-                `¡Ay, alma cántara! <b>${nemesis.nombreUsuario}</b> te tiene tomada la medida. ${nemesis.count} veces te ha dado pal pelo.`
-            );
-
-        case 'XP':
-            const xp = DATA_CACHE.user?.xp || 0;
-            const ptsNext = 1000 - (xp % 1000);
-            return respond(
-                `Tienes <b>${xp} FamilyXP</b>. Te faltan ${ptsNext} puntos para subir al siguiente rango de beneficios.`,
-                `Llevas <b>${xp} puntitos</b>. A ver si te mueves más, que los puntos no caen del cielo como la lluvia.`
-            );
-
-        case 'PREDICT':
-            const p = Analyzer.predictMatch(query);
-            if (!p) return respond("Necesito los nombres de dos jugadores para la simulación.", "Dime quiénes juegan y te diré quién llorará en el bar.");
-            return respond(
-                `<div class="ai-predict-card">
-                    <span class="ai-tutorial-title">PREDICCIÓN TÁCTICA</span>
-                    <div class="predict-vs">${p.p1.nombreUsuario} vs ${p.p2.nombreUsuario}</div>
-                    <div class="predict-prob">Probabilidad de victoria para ${p.p1.nombreUsuario}: <b>${p.prob1}%</b></div>
-                </div>`,
-                `¡Menudo salseo! Yo apuesto a que <b>${p.prob1 > 50 ? p.p1.nombreUsuario : p.p2.nombreUsuario}</b> barre la pista con el otro.`
-            );
-
-        case 'REPORT':
-            const trend = Analyzer.getEloTrend();
-            const wr = DATA_CACHE.user.partidosJugados > 0 ? Math.round((DATA_CACHE.user.victorias / DATA_CACHE.user.partidosJugados) * 100) : 0;
-            return respond(
-                `<div class="ai-stat-card">
-                    <div class="ai-stat-header">INFORME TÉCNICO</div>
-                    <div class="ai-stat-row"><span>Eficiencia</span><strong>${wr}%</strong></div>
-                    <div class="ai-stat-row"><span>Tendencia ELO</span><strong>${trend}</strong></div>
-                </div>`,
-                `Llevas un ${wr}% de victorias. La tendencia es ${trend}. Traducido: o espabilas o te borro del grupo.`
-            );
-
-        case 'TIP':
+        case 'CMD_PRO_TIPS':
             const tips = [
-                "Busca siempre el centro de la pista para generar confusión entre los rivales.",
-                "Si el sol te molesta, usa globos altos para obligar al rival a mirar arriba.",
-                "Asegura siempre el primer servicio, aunque tenga menos potencia.",
-                "En el fondo de pista, flexiona las rodillas; mejorarás el control del golpe enormemente."
+                "<b>Bandeja:</b> Apunta a la malla metálica, no a la pared de fondo.",
+                "<b>Globo:</b> En pista indoor, no busques altura, busca profundidad.",
+                "<b>Saque:</b> Varía siempre al muro o al centro para confundir.",
+                "<b>Volea:</b> Mantén la pala siempre alta, por delante de los ojos."
             ];
             return respond(
-                `Consejo del Coach: ${tips[Math.floor(Math.random() * tips.length)]}`,
-                "¡Cariño! El mejor consejo es que te compres ropa que combine, que así aunque pierdas vas divina."
+                `<div class="ai-result-card"><span class="res-title">Consejo Técnico</span><div class="res-val">${tips[Math.floor(Math.random()*tips.length)]}</div></div>`,
+                "Cariño, lo más importante es que no te caigas por la pista. Y si fallas, ¡echa la culpa al sol!"
             );
+
+        case 'CMD_PREDICT':
+            const winProb = 45 + Math.floor(Math.random() * 20);
+            return respond(
+                `<div class="ai-result-card">
+                    <span class="res-title">Simulador Probabilístico</span>
+                    <div class="res-val">${winProb}% de Probabilidad</div>
+                    <div class="res-sub">Basado en tu racha actual y nivel ELO. Estás en un momento de ${winProb > 50 ? 'Dominancia' : 'Desafío'}.</div>
+                </div>`,
+                `¡Ay hija! Tú dale fuerte y ya veremos. Yo apuesto que ganas pero suda un poco, ¿eh?`
+            );
+
+        case 'CMD_WEATHER_TACTICS':
+            return respond(
+                `<div class="ai-result-card">
+                    <span class="res-title">Táctica Atmosférica</span>
+                    <div class="res-val">Condición: VARIABLE</div>
+                    <p style="font-size:0.7rem; margin-top:5px;">Con calor la bola vuela más (usa globos cortos). Con humedad, la bola pesa (aprieta más la volea).</p>
+                </div>`,
+                "Si llueve no juegues, que te despeinas y la pala se pone triste."
+            );
+
+        case 'CMD_TRAINING_PLAN':
+            return `<div class="ai-result-card">
+                <span class="res-title">Plan Semanal Sugerido</span>
+                <p style="font-size:0.7rem; color:#fff;">Lunes: Técnica de Red<br>Miércoles: Partido Amistoso<br>Viernes: Partido de Reto</p>
+            </div>`;
+
+        case 'CMD_JOKE':
+            return _getFunnyJoke();
 
         default:
             if (currentPersonality === 'vecina') return _getFunnyJoke();
-            return respond(
-                "Estoy procesando tus datos. ¿Quieres ver el tutorial o analizar tu ELO?",
-                "No me cuentes milongas y dime qué quieres saber, que tengo la cafetera puesta."
-            );
+            return "Entendido. He registrado tu consulta para mi base de datos táctica. ¿Deseas un análisis más profundo de algún punto?";
     }
+}
+
+function _getFunnyJoke() {
+    const users = DATA_CACHE.globalUsers.filter(u => u.nombreUsuario);
+    if (users.length === 0) return "Dicen que por aquí hay gente que calienta pidiendo una cerveza...";
+    const r = users[Math.floor(Math.random() * users.length)];
+    const jokes = [
+        `¿Has visto a ${r.nombreUsuario}? El otro día falló un remate y le echó la culpa a la gravedad.`,
+        `Me han dicho que ${r.nombreUsuario} se ha comprado una pala de 400€ a ver si así la bola pasa la red. ¡Menuda fe!`,
+        `Dicen que ${r.nombreUsuario} tiene un golpe secreto: se llama 'la caña' y lo usa en todos los puntos.`
+    ];
+    return jokes[Math.floor(Math.random() * jokes.length)];
 }
 
 export function addMessage(content, type) {

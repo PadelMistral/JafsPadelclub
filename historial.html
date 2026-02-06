@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="./css/layout.css">
     <link rel="stylesheet" href="./css/components-premium.css">
     <link rel="stylesheet" href="./css/themes.css">
+    <link rel="stylesheet" href="./css/dynamic-elements.css">
     <link rel="stylesheet" href="./css/historial.css">
 </head>
 
@@ -61,17 +62,27 @@
 
         <!-- Filters & Sort -->
         <section class="filter-section animate-fade-in" style="animation-delay: 0.15s;">
-            <div class="filter-row">
-                <div class="filter-tabs">
-                    <button class="filter-tab active" data-filter="all">Todos</button>
-                    <button class="filter-tab" data-filter="won">Ganados</button>
-                    <button class="filter-tab" data-filter="lost">Perdidos</button>
+            <div class="filter-row mb-4">
+                <div class="filter-tabs custom-scroll">
+                    <button class="filter-tab active" data-filter="mine">Mis Partidos</button>
+                    <button class="filter-tab" data-filter="all">Global</button>
+                    <button class="filter-tab" data-filter="won">Victorias</button>
+                    <button class="filter-tab" data-filter="lost">Derrotas</button>
+                    <button class="filter-tab" data-filter="canceled">Anuladas</button>
+                </div>
+            </div>
+
+            <div class="flex-row gap-4 items-center mb-6">
+                <div class="search-box-v7 flex-1">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="user-search" placeholder="Filtrar por jugador..."
+                        class="bg-transparent border-none text-white text-sm outline-none w-full font-bold">
                 </div>
                 <div class="sort-dropdown">
                     <select id="sort-matches" class="premium-select-v7">
-                        <option value="date-desc">Recientes primero</option>
-                        <option value="date-asc">Antiguos primero</option>
-                        <option value="name-asc">Por Rival (A-Z)</option>
+                        <option value="date-desc">Recientes</option>
+                        <option value="date-asc">Antiguos</option>
+                        <option value="name-asc">Rival (A-Z)</option>
                     </select>
                 </div>
             </div>

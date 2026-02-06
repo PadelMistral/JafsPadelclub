@@ -49,6 +49,13 @@ const WELCOME_PHRASES = [
   "Respira, visualiza y ejecuta. 🧘‍♂️",
 ];
 
+function calculateBasePoints(level) {
+  const l = parseFloat(level) || 2.5;
+  const pts = Math.round(1000 + (l - 2.5) * 400);
+  console.log(`Calculando puntos base para nivel ${l}: ${pts}`);
+  return pts;
+}
+
 // Real Online Count Logic - Only counts users active in the last 15 minutes
 async function injectOnlineCount() {
   try {
@@ -62,13 +69,97 @@ async function injectOnlineCount() {
     const onlineCount = snap.size || 1;
 
     const el = document.getElementById("online-count-display");
+    const elLibrary = document.getElementById("online-count-library");
     if (el) {
-      el.innerHTML = `${onlineCount} Jugadores`;
+      el.innerHTML = `${onlineCount} JUGADORES ONLINE`;
+      el.style.cursor = 'pointer';
+      el.onclick = () => window.showOnlineUsers();
+    }
+    if (elLibrary) {
+      elLibrary.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-sport-green animate-pulse"></span> ${onlineCount} ONLINE`;
     }
   } catch (e) {
     console.error("Error detecting online players:", e);
   }
 }
+
+// Show Online Users Modal (Elite Rebirth v7.0)
+window.showOnlineUsers = async () => {
+    const threshold = new Date(Date.now() - 15 * 60 * 1000);
+    const q = query(
+      collection(db, "usuarios"),
+      where("ultimoAcceso", ">", threshold),
+      limit(50),
+    );
+    const snap = await getDocs(q);
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.innerHTML = `
+        <div class="modal-sheet">
+            <!-- Glass Header -->
+            <div class="modal-header">
+                <div class="flex-col">
+                    <div class="flex-row items-center gap-2 mb-1">
+                        <div class="pulse-dot-green"></div>
+                        <h3 class="modal-title">SALA COMÚN</h3>
+                    </div>
+                    <span class="text-[9px] text-muted font-black tracking-[0.2em] uppercase">${snap.size} OPERATIVOS CONECTADOS</span>
+                </div>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="modal-body custom-scroll">
+                <div class="flex-col gap-3">
+                    ${snap.docs.map(d => {
+                        const u = d.data();
+                        const photo = u.fotoPerfil || u.fotoURL || './imagenes/default-avatar.png';
+                        const isMe = u.uid === currentUser?.uid || d.id === currentUser?.uid;
+                        const lvl = (u.nivel || 2.5).toFixed(1);
+                        const isOnline = true; // By query definition
+                        
+                        return `
+                            <div class="flex-row items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-primary/20 transition-all cursor-pointer group ${isMe ? 'bg-primary/10 border-primary/20 shadow-glow-sm' : ''}" 
+                                 onclick="window.viewProfile('${u.uid || d.id}')">
+                                
+                                <div class="relative flex-shrink-0">
+                                    <div class="absolute -inset-1 bg-gradient-to-r ${isMe ? 'from-primary to-accent' : 'from-slate-700 to-slate-800'} rounded-full blur-sm opacity-20 group-hover:opacity-100 transition duration-500"></div>
+                                    <img src="${photo}" class="relative w-12 h-12 rounded-full object-cover border-2 ${isMe ? 'border-primary' : 'border-white/10'}">
+                                    <div class="absolute bottom-0 right-0 w-3 h-3 bg-sport-green rounded-full border-2 border-slate-900 shadow-glow"></div>
+                                </div>
+
+                                <div class="flex-col flex-1">
+                                    <span class="text-[13px] font-black text-white italic uppercase tracking-tighter ${isMe ? 'text-primary' : ''}">
+                                        ${u.nombreUsuario || u.nombre || 'Jugador'} ${isMe ? '<span class="text-[9px] opacity-70 ml-1">(TÚ)</span>' : ''}
+                                    </span>
+                                    <div class="flex-row items-center gap-2">
+                                        <div class="flex-row items-center gap-1 bg-white/5 px-1.5 py-0.5 rounded-md">
+                                            <span class="text-[8px] text-muted font-black">NV</span>
+                                            <span class="text-[10px] text-primary font-black">${lvl}</span>
+                                        </div>
+                                        <span class="text-[9px] text-muted font-black uppercase tracking-widest opacity-40">${u.rol || 'Jugador'}</span>
+                                    </div>
+                                </div>
+
+                                <i class="fas fa-chevron-right text-[10px] text-muted group-hover:text-primary transition-colors"></i>
+                            </div>
+                        `;
+                    }).join('')}
+                    ${snap.empty ? '<div class="text-center text-xs text-muted py-10 font-bold uppercase tracking-widest opacity-30">Silencio absoluto en la Matrix...</div>' : ''}
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <span class="text-[10px] text-muted font-bold italic opacity-60">Selecciona un perfil para sincronizar datos.</span>
+            </div>
+        </div>
+    `;
+    
+    overlay.addEventListener('click', (e) => { if(e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+};
 
 document.addEventListener("DOMContentLoaded", () => {
   initAppUI("home");
@@ -97,6 +188,16 @@ document.addEventListener("DOMContentLoaded", () => {
       subscribeDoc("usuarios", user.uid, (data) => {
         userData = data;
         updateDashboard(data);
+
+        // Personalized welcome toast after spectacular loader
+        const welcomeName = localStorage.getItem('first_login_welcome');
+        if (welcomeName) {
+            setTimeout(() => {
+                showToast(`¡BIENVENIDO, ${welcomeName.toUpperCase()}!`, "Tu panel de control está listo. ¡A dominar la pista!", "success");
+                localStorage.removeItem('first_login_welcome');
+            }, 1000);
+        }
+
         // Ensure header is updated with role/info
         injectHeader(data);
         injectNavbar("home");
@@ -158,19 +259,20 @@ async function updateDashboard(data) {
   if (greetingEl) greetingEl.textContent = greet;
 
   // Stats
-  const pts = data.puntosRanking || 1000;
   const wins = data.victorias || 0;
   const played = data.partidosJugados || 0;
   const level = (data.nivel || 2.5).toFixed(1);
   const winrate = played > 0 ? Math.round((wins / played) * 100) : 0;
 
+  // Points & Rank Status
+  const currentPts = data.puntosRanking !== undefined ? data.puntosRanking : calculateBasePoints(data.nivel);
   const ptsEl = document.getElementById("stat-pts");
   const winsEl = document.getElementById("stat-wins");
   const matchesEl = document.getElementById("stat-matches");
   const wrEl = document.getElementById("stat-winrate");
   const lvlEl = document.getElementById("stat-level");
 
-  if (ptsEl) countUp(ptsEl, pts);
+  if (ptsEl) countUp(ptsEl, Math.round(currentPts)); // Round points for display
   if (winsEl) winsEl.textContent = wins;
   if (matchesEl) matchesEl.textContent = played;
   if (wrEl) wrEl.textContent = `${winrate}%`;
@@ -403,56 +505,61 @@ async function renderNextMatch(match) {
 
   container.innerHTML = `
         <div class="next-match-card-v5 ${isFull ? "full" : "open"} animate-up" onclick="openMatch('${match.id}', '${match.col}')">
-            <div class="nm-top-row">
-                <div class="nm-badge-pro ${match.isComp ? "reto" : "amistoso"}">
-                    <i class="fas ${match.isComp ? "fa-bolt" : "fa-handshake"}"></i>
-                    <span>${match.isComp ? "RETO POR PUNTOS" : "AMISTOSO"}</span>
-                </div>
-                <div class="nm-weather-v5">${weatherHtml}</div>
-            </div>
-
-            <div class="nm-main-v5">
-                <div class="nm-date-box">
-                    <span class="d-num">${date.getDate()}</span>
-                    <span class="d-month">${date.toLocaleDateString("es-ES", { month: "short" }).toUpperCase()}</span>
-                    <span class="d-hour">${date.getHours()}:${date.getMinutes().toString().padStart(2, "0")}</span>
+            
+            <!-- Top Header -->
+            <div class="flex-row between items-center mb-5 border-b border-white/10 pb-3">
+                <div class="flex-col">
+                    <div class="flex-row items-baseline gap-1">
+                         <span class="text-3xl font-black text-white italic tracking-tighter">${date.getHours()}:${date.getMinutes().toString().padStart(2, "0")}</span>
+                         <span class="text-[10px] font-bold text-white opacity-50">HRS</span>
+                    </div>
+                    <span class="text-[10px] font-black text-accent uppercase tracking-[2px]">${date.toLocaleDateString("es-ES", { weekday:'long', day:'numeric' })}</span>
                 </div>
                 
-                <div class="nm-vs-layout">
-                    <div class="team-v5 left">
-                        <div class="p-chip-v5 ${match.jugadores[0] ? "filled" : "empty"}">${players[0]}</div>
-                        <div class="p-chip-v5 ${match.jugadores[1] ? "filled" : "empty"}">${players[1]}</div>
+                <div class="flex-col items-end gap-1">
+                    <div class="nm-badge-pro small ${match.isComp ? "reto" : "amistoso"}">
+                        <span>${match.isComp ? "RETO" : "AMISTOSO"}</span>
                     </div>
-                    <div class="vs-divider-v5">
-                        <div class="vs-circle">VS</div>
-                        <div class="vs-glow"></div>
+                    <!-- Small Weather Pill -->
+                    <div class="flex-row items-center gap-1 bg-black/40 px-2 py-0.5 rounded-full border border-white/5">
+                        <i class="fas fa-temperature-half text-[10px] text-gray-400"></i>
+                         <span class="text-[10px] font-bold text-gray-300">Clima</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VS Layout -->
+            <div class="nm-main-v5 mb-5 relative">
+                <div class="nm-vs-layout large-vs">
+                    <div class="team-v5 left">
+                        <div class="p-chip-v5 large ${match.jugadores[0] ? "filled" : "empty"}">${players[0]}</div>
+                        <div class="p-chip-v5 large ${match.jugadores[1] ? "filled" : "empty"}">${players[1]}</div>
+                    </div>
+                     <!-- Centered VS -->
+                    <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+                        <div class="vs-circle large shadow-xl border-4 border-[#0a0a0a] bg-black">VS</div>
                     </div>
                     <div class="team-v5 right">
-                        <div class="p-chip-v5 ${match.jugadores[2] ? "filled" : "empty"}">${players[2]}</div>
-                        <div class="p-chip-v5 ${match.jugadores[3] ? "filled" : "empty"}">${players[3]}</div>
+                        <div class="p-chip-v5 large ${match.jugadores[2] ? "filled" : "empty"}">${players[2]}</div>
+                        <div class="p-chip-v5 large ${match.jugadores[3] ? "filled" : "empty"}">${players[3]}</div>
                     </div>
                 </div>
             </div>
 
-            <div class="nm-ai-insight">
-                <i class="fas fa-brain animate-pulse"></i>
-                <p>${aiInsight}</p>
-            </div>
-
-            <div class="nm-footer-v5">
+            <!-- Footer Info -->
+             <div class="flex-row between items-end">
                 <div class="nm-org-info">
-                   <i class="fas fa-crown"></i>
-                   <span>ORGANIZA <b>${creator.toUpperCase()}</b></span>
+                   <div class="flex-row items-center gap-2 mb-1">
+                        <img src="./imagenes/Logojafs.png" class="w-4 h-4 opacity-50">
+                        <span class="text-[9px] font-black text-accent uppercase tracking-widest">ORGANIZADOR</span>
+                   </div>
+                   <span class="text-sm font-bold text-white">${creator.toUpperCase()}</span>
                 </div>
-                <div class="nm-slots-info">
-                     ${isFull ? '<span class="text-white font-black">PISTA COMPLETA</span>' : `<span class="text-primary font-black">QUEDAN ${4 - match.jugadores.length} HUECOS</span>`}
-                </div>
-            </div>
-            
-            <div class="nm-interaction-hint">
-                <span>Toca para ver detalles y chat</span>
-                <i class="fas fa-chevron-right"></i>
-            </div>
+
+                <button class="bg-accent/10 hover:bg-accent/20 border border-accent/30 text-accent rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all">
+                    VER DETALLES <i class="fas fa-arrow-right ml-1"></i>
+                </button>
+             </div>
         </div>
     `;
 }

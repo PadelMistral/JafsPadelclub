@@ -46,7 +46,7 @@
 .btn-cal-nav {
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-md);
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
   color: var(--text-muted);
@@ -288,8 +288,8 @@
 
 .slot-v5.past {
   background: rgba(0, 0, 0, 0.4);
-  opacity: 0.4;
-  pointer-events: none;
+  opacity: 0.6;
+  pointer-events: auto;
 }
 
 .slot-v5.past * {
