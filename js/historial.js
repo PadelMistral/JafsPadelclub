@@ -1,8 +1,8 @@
-// historial.js - Match History Logic
+﻿// historial.js - Match History Logic
 import { auth, db, observerAuth, getDocument } from './firebase-service.js';
 import { collection, getDocs, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast } from './ui-core.js';
-import { injectHeader, injectNavbar, initBackground, setupModals } from './modules/ui-loader.js';
+import { injectHeader, injectNavbar, initBackground, setupModals } from './modules/ui-loader.js?v=6.5';
 
 let currentUser = null;
 let allMatches = [];
@@ -51,9 +51,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Load Global Data
         const [snapA, snapR, snapU] = await Promise.all([
-            getDocs(collection(db, "partidosAmistosos")),
-            getDocs(collection(db, "partidosReto")),
-            getDocs(collection(db, "usuarios"))
+            window.getDocsSafe(collection(db, "partidosAmistosos")),
+            window.getDocsSafe(collection(db, "partidosReto")),
+            window.getDocsSafe(collection(db, "usuarios"))
         ]);
 
         snapU.forEach(d => {
@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Auto-detect "Anulada" if time passed and not played/abierto with holes
             const isExpired = matchDate.getTime() + (150 * 60 * 1000) < Date.now(); // 2.5 hours after
-            const isMissingPlayers = m.jugadores?.some(uid => !uid) || (m.jugadores?.length < 4);
+            const isMissingPlayers = (m.jugadores || []).filter(id => id).length < 4;
             const isAutoCanceled = (m.estado === 'abierto' || !m.estado) && isExpired && isMissingPlayers;
             const finalStatus = (m.estado === 'anulado' || isAutoCanceled) ? 'anulado' : (m.estado || 'abierto');
 
@@ -222,7 +222,7 @@ async function showMatchDetail(m) {
     modal.classList.add('active');
 
     // Fetch points logs
-    const logsSnap = await getDocs(query(collection(db, "rankingLogs"), where("matchId", "==", m.id)));
+    const logsSnap = await window.getDocsSafe(query(collection(db, "rankingLogs"), where("matchId", "==", m.id)));
     const logs = {};
     logsSnap.forEach(doc => logs[doc.data().uid] = doc.data());
 
@@ -263,7 +263,7 @@ async function showMatchDetail(m) {
             <!-- Score Display -->
             <div class="match-score-display text-center py-6">
                 <span class="score-value block font-black text-4xl text-white tracking-[4px] font-display mb-2 drop-shadow-lg">${m.resultado?.sets || '0-0'}</span>
-                <span class="badge ${m.isComp ? 'badge-warning' : 'badge-primary'}">${m.isComp ? '⚡ RETO OFICIAL' : '🤝 AMISTOSO'}</span>
+                <span class="badge ${m.isComp ? 'badge-warning' : 'badge-primary'}">${m.isComp ? ' RETO OFICIAL' : ' AMISTOSO'}</span>
             </div>
 
             <!-- Court View -->
@@ -304,9 +304,10 @@ function generateMatchNarrative(m, p, logs, diary) {
     const result = (m.resultado?.sets || '').trim();
     const sets = result.split(/\s+/);
     
-    // Team names
-    const t1 = `<b>${p[0].name}</b> y <b>${p[1].name}</b>`;
-    const t2 = `<b>${p[2].name}</b> y <b>${p[3].name}</b>`;
+    const safeName = (idx) => p?.[idx]?.name || `Jugador ${idx + 1}`;
+    // Team names (2v2)
+    const t1 = `<b>${safeName(0)}</b> y <b>${safeName(1)}</b>`;
+    const t2 = `<b>${safeName(2)}</b> y <b>${safeName(3)}</b>`;
     
     // Parse sets to find winner
     let t1Sets = 0, t2Sets = 0;
@@ -325,8 +326,8 @@ function generateMatchNarrative(m, p, logs, diary) {
     const t1Won = t1Sets > t2Sets;
     const winners = t1Won ? t1 : t2;
     const losers = t1Won ? t2 : t1;
-    const winnerPlayers = t1Won ? [p[0].name, p[1].name] : [p[2].name, p[3].name];
-    const loserPlayers = t1Won ? [p[2].name, p[3].name] : [p[0].name, p[1].name];
+    const winnerPlayers = t1Won ? [safeName(0), safeName(1)] : [safeName(2), safeName(3)];
+    const loserPlayers = t1Won ? [safeName(2), safeName(3)] : [safeName(0), safeName(1)];
 
     const isSweep = Math.abs(t1Sets - t2Sets) >= 2 && (t1Sets === 0 || t2Sets === 0);
     const isClose = maxDiff <= 2 || sets.some(s => s.includes('7-5') || s.includes('7-6'));
@@ -378,3 +379,7 @@ function renderPlayerCard(p, log, teamIdx) {
         </div>
     `;
 }
+
+
+
+

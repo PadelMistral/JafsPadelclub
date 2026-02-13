@@ -1,4 +1,4 @@
-/* =====================================================
+﻿/* =====================================================
    PADELUMINATIS LAYOUT V6.0 - GALACTIC MATRIX EDITION
    Header, Navigation, Page Structure, Loaders & Toasts.
    This is the SHARED layout for ALL pages.
@@ -11,11 +11,7 @@
   left: 0;
   right: 0;
   height: 65px;
-  background: linear-gradient(
-    180deg,
-    rgba(2, 6, 23, 0.98) 0%,
-    rgba(2, 6, 23, 0.9) 100%
-  );
+  background: var(--header-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
@@ -182,11 +178,7 @@
   left: 0;
   right: 0;
   height: 72px;
-  background: linear-gradient(
-    180deg,
-    rgba(2, 6, 23, 0.95) 0%,
-    rgba(2, 6, 23, 0.99) 100%
-  );
+  background: var(--nav-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--border);
@@ -196,6 +188,21 @@
   justify-content: space-around;
   padding: 0 8px;
   padding-bottom: env(safe-area-inset-bottom, 8px);
+}
+
+/* Global spacing between cards */
+.page-content > section,
+.page-content > .container > section,
+.page-content > .container > div {
+  margin-bottom: 0;
+}
+.page-content .sport-card,
+.page-content .premium-card,
+.page-content .stat-card,
+.page-content .panel-card,
+.page-content .entry-node-v9,
+.page-content .notif-item-v5 {
+  margin-bottom: 14px;
 }
 
 .nav-item {
@@ -396,6 +403,15 @@
   overflow-x: hidden;
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.page-content > * + * {
+  margin-top: 16px;
+}
+.page-content .container > * + * {
+  margin-top: 16px;
 }
 
 @media (min-width: 768px) {
@@ -423,6 +439,95 @@
 
 .container-fluid {
   width: 100%;
+}
+
+/* ===== GLOBAL POLISH ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+img, video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+body {
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  font-family: var(--theme-font, var(--font-base, "Rajdhani", sans-serif));
+}
+.flex-row,
+.flex-between,
+.flex-col {
+  min-width: 0;
+}
+.flex-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.flex-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.flex-between,
+.between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.text-ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sport-card,
+.premium-card,
+.panel-card,
+.stat-card,
+.leaderboard-card-v9,
+.status-card-v9,
+.level-progress-card,
+.elo-chart-card,
+.radar-card-v9,
+.settings-card,
+.notif-item-v5,
+.entry-node-v9,
+.feed-match-card-v7,
+.next-match-card-premium,
+.match-card,
+.history-card,
+.modal-card,
+.modal-sheet {
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+}
+
+@media (max-width: 480px) {
+  .sport-card,
+  .premium-card,
+  .panel-card,
+  .stat-card,
+  .leaderboard-card-v9,
+  .status-card-v9,
+  .level-progress-card,
+  .elo-chart-card,
+  .radar-card-v9,
+  .settings-card,
+  .notif-item-v5,
+  .entry-node-v9,
+  .feed-match-card-v7,
+  .next-match-card-premium,
+  .match-card,
+  .history-card,
+  .modal-card,
+  .modal-sheet {
+    border-radius: 16px;
+  }
 }
 
 .px-3 {
@@ -574,38 +679,22 @@
 
 .toast.success {
   border-color: var(--sport-green);
-  background: linear-gradient(
-    135deg,
-    rgba(34, 197, 94, 0.15),
-    rgba(15, 23, 42, 0.95)
-  );
+  background: var(--header-bg);
 }
 
 .toast.error {
   border-color: var(--sport-red);
-  background: linear-gradient(
-    135deg,
-    rgba(239, 68, 68, 0.15),
-    rgba(15, 23, 42, 0.95)
-  );
+  background: var(--header-bg);
 }
 
 .toast.warning {
   border-color: var(--sport-gold);
-  background: linear-gradient(
-    135deg,
-    rgba(245, 158, 11, 0.15),
-    rgba(15, 23, 42, 0.95)
-  );
+  background: var(--header-bg);
 }
 
 .toast.info {
   border-color: var(--primary);
-  background: linear-gradient(
-    135deg,
-    rgba(0, 212, 255, 0.15),
-    rgba(15, 23, 42, 0.95)
-  );
+  background: var(--header-bg);
 }
 
 .toast-icon {
@@ -751,11 +840,7 @@
 }
 
 .stat-card.highlight {
-  background: linear-gradient(
-    135deg,
-    rgba(0, 212, 255, 0.15) 0%,
-    rgba(168, 85, 247, 0.1) 100%
-  );
+  background: var(--header-bg);
   border-color: var(--primary);
 }
 
@@ -993,3 +1078,6 @@
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+
+

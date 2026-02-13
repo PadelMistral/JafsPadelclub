@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -7,12 +7,13 @@
         content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#020617">
     <title>Registro | Padeluminatis Pro</title>
-    <meta name="description" content="Únete al circuito Padeluminatis">
+    <meta name="description" content="nete al circuito Padeluminatis">
     <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/themes.css">
     <link rel="stylesheet" href="./css/components-premium.css">
     <link rel="stylesheet" href="./css/auth.css">
 </head>
@@ -122,10 +123,12 @@
     </main>
 
     <script type="module">
-        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js?v=6.5';
+        import { initThemeSystem } from './js/modules/theme-manager.js?v=6.5';
+        initThemeSystem();
         initGalaxyBackground();
     </script>
-    <script type="module" src="./js/registro.js"></script>
+    <script type="module" src="./js/registro.js?v=6.5"></script>
     <script>
         const r = document.getElementById('r-lvl');
         const v = document.getElementById('r-lvl-val');
@@ -146,9 +149,15 @@
         }
     </style>
     <script type="module">
-        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js?v=6.5';
         initGalaxyBackground();
     </script>
 </body>
 
 </html>
+
+
+
+
+
+

@@ -1,0 +1,120 @@
+/* css/ranking-recommendations.css */
+
+.recommendations-section {
+  margin-bottom: 32px;
+}
+
+.rivals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.rival-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.rival-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+/* Color Coding Stripe */
+.rival-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--text-muted);
+  opacity: 0.3;
+}
+
+.rival-card.type-hard::before {
+  background: var(--sport-red);
+  opacity: 1;
+}
+.rival-card.type-challenge::before {
+  background: var(--sport-orange);
+  opacity: 1;
+}
+.rival-card.type-balanced::before {
+  background: var(--sport-green);
+  opacity: 1;
+}
+.rival-card.type-easy::before {
+  background: var(--sport-blue);
+  opacity: 1;
+}
+
+.rival-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rival-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.rival-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.rival-name {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+.rival-meta {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-weight: 700;
+}
+
+.rival-stats {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.win-prob {
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text-dim);
+}
+
+.risk-reward-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  text-transform: uppercase;
+  color: #fff;
+}

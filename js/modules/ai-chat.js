@@ -1,4 +1,4 @@
-/* js/modules/ai-chat.js - Advanced AI Bot */
+﻿/* js/modules/ai-chat.js - Advanced AI Bot */
 import { showToast } from '../ui-core.js';
 
 let isOpen = false;
@@ -79,3 +79,5 @@ function generateAIResponse(input) {
     if (lower.includes('ganar')) return "Para ganar, necesitas paciencia. El pádel es un juego de errores, no de aciertos.";
     return "Interesante. ¿Puedes darme más detalles sobre esa situación de juego?";
 }
+
+

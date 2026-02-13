@@ -1,4 +1,4 @@
-// eventos.js - Events System V4.0
+﻿// eventos.js - Events System V4.0
 import { db, observerAuth, subscribeCol } from './firebase-service.js';
 import { initAppUI, showToast } from './ui-core.js';
 import { collection, getDocs, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadEvents() {
         try {
             // Try to fetch from Firebase
-            const snap = await getDocs(collection(db, "eventos"));
+            const snap = await window.getDocsSafe(collection(db, "eventos"));
             allEvents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             
             // If no events found, add sample data
@@ -163,3 +163,9 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast("Inscripción próximamente disponible", "info");
     };
 });
+
+
+
+
+
+

@@ -359,3 +359,16 @@
   font-size: 0.9rem;
   color: var(--text-muted);
 }
+
+/* Advanced polish */
+.palas-grid,
+.rackets-grid,
+.palas-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.pala-card,
+.racket-card {
+  padding: 16px;
+}

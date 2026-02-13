@@ -1,8 +1,14 @@
-/* js/login.js - Unified Auth & Spectacular Neutral Entrance */
-import { login, loginWithGoogle } from './firebase-service.js';
+﻿import { login, loginWithGoogle, getDocument, observerAuth, auth } from './firebase-service.js';
 import { showToast } from './ui-core.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Check if already logged in
+    observerAuth((user) => {
+        if (user) {
+            window.location.href = 'home.html';
+        }
+    });
+
     const loginForm = document.getElementById('loginForm');
     const googleBtn = document.getElementById('googleLogin');
     const togglePass = document.getElementById('togglePassword');
@@ -22,21 +28,41 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const identifier = document.getElementById('email').value.trim();
             const password = passInp.value;
+            const submitBtn = loginForm.querySelector('button[type="submit"]');
 
             if (!identifier || !password) return;
+
+            // Feedback: Disable button and show loading
+            const originalBtnContent = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<span>ACCEDIENDO...</span><i class="fas fa-spinner fa-spin text-xs opacity-50"></i>`;
 
             try {
                 // Use central login helper (supports Username or Email)
                 const userCred = await login(identifier, password);
                 const userDoc = await getDocument('usuarios', userCred.user.uid);
+                
+                // AUDIT: Check Approval Status
+                const isApproved = userDoc?.status === 'approved' || userDoc?.aprobado === true; 
+                if (!isApproved && userDoc?.rol !== 'Admin') {
+                    await auth.signOut();
+                    showToast('Acceso Restringido', 'Tu cuenta está pendiente de aprobación.', 'warning');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnContent;
+                    return;
+                }
+
                 const userName = userDoc?.nombreUsuario || userDoc?.nombre || 'LEYENDA';
                 startSpectacularLoading(userName);
             } catch (err) {
                 console.error("Login fail:", err);
-                let msg = "Acceso denegado. Revisa tus datos.";
-                if (err.code === 'auth/user-not-found') msg = "El usuario no existe.";
-                if (err.code === 'auth/wrong-password') msg = "Contraseña incorrecta.";
+                let msg = getFriendlyErrorMessage(err.code);
+                
                 showToast('Acceso Denegado', msg, 'error');
+                
+                // Restore button
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnContent;
             }
         };
     }
@@ -47,6 +73,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const user = await loginWithGoogle();
                 if (user) {
                     const userDoc = await getDocument('usuarios', user.uid);
+                    
+                    // AUDIT: Check Approval Status
+                    const isApproved = userDoc?.status === 'approved' || userDoc?.aprobado === true;
+                    if (!isApproved && userDoc?.rol !== 'Admin') {
+                        await auth.signOut();
+                        showToast('Acceso Restringido', 'Tu cuenta está pendiente de aprobación.', 'warning');
+                        return;
+                    }
+
                     const userName = userDoc?.nombreUsuario || userDoc?.nombre || 'LEYENDA';
                     startSpectacularLoading(userName);
                 }
@@ -95,3 +130,27 @@ function startSpectacularLoading(userName) {
         status.textContent = messages[msgIdx];
     }, 45);
 }
+
+/**
+ * Maps Firebase Auth error codes to human-friendly Spanish messages.
+ */
+function getFriendlyErrorMessage(code) {
+    console.log("Firebase Error Code:", code);
+    switch (code) {
+        case 'auth/user-not-found': 
+        case 'auth/invalid-email':
+            return 'El correo o usuario no existe.';
+        case 'auth/wrong-password': 
+            return 'La contraseña no es correcta.';
+        case 'auth/invalid-credential': 
+            return 'Credenciales incorrectas. Revisa tus datos.';
+        case 'auth/too-many-requests': 
+            return 'Cuenta temporalmente bloqueada. Prueba en unos minutos.';
+        case 'auth/network-request-failed':
+            return 'Sin conexión. Revisa tu internet.';
+        default: 
+            return 'Error de acceso: No se pudo conectar con el Circuito.';
+    }
+}
+
+

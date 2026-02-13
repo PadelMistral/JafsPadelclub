@@ -1,4 +1,4 @@
-/* js/modules/ui-loader.js - Dynamic Layout Injection v5.0 */
+﻿/* js/modules/ui-loader.js - Dynamic Layout Injection v5.0 */
 import { getDocument, auth, subscribeCol } from '../firebase-service.js';
 import { initThemeSystem } from './theme-manager.js';
 
@@ -12,16 +12,15 @@ const PUBLIC_PAGES = ['index.html', 'registro.html', 'recuperar.html'];
  */
 function isPublicPage() {
     const path = window.location.pathname.toLowerCase();
-    // If it ends with home.html, calendario.html, etc it is NOT public
-    const privates = ['home.html', 'calendario.html', 'diario.html', 'perfil.html', 'admin.html', 'notificaciones.html', 'historial.html', 'eventos.html', 'palas.html', 'puntosranking.html'];
-    if (privates.some(p => path.includes(p))) return false;
+    const publicPages = ['index.html', 'registro.html', 'recuperar.html', 'terms.html', 'privacy.html'];
     
-    // Fallback: if it includes any public name
-    if (PUBLIC_PAGES.some(page => path.includes(page))) return true;
+    // If it's explicitly public
+    if (publicPages.some(p => path.includes(p))) return true;
     
-    // Root is public (login)
+    // Root is public
     if (path === '/' || path.endsWith('/') || path === '') return true;
     
+    // Otherwise it's private
     return false;
 }
 
@@ -114,19 +113,19 @@ export async function injectNavbar(activePage) {
     nav.className = 'bottom-nav';
     
     const icons = {
-        home: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
-        ranking: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M5 20v-8h4v8"/><path d="M15 20v-5h4v5"/><path d="M10 20v-11h4v11"/></svg>`,
-        calendar: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
-        events: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
-        history: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`
+        home: `<i class="fas fa-house-chimney-window"></i>`,
+        ranking: `<i class="fas fa-ranking-star"></i>`,
+        calendar: `<i class="fas fa-calendar-days"></i>`,
+        events: `<i class="fas fa-book-open"></i>`,
+        history: `<i class="fas fa-clock-rotate-left"></i>`
     };
 
     const items = [
-        { id: 'home', icon: icons.home, label: 'Inicio', link: 'home.html', color: 'blue' },
+        { id: 'home', icon: icons.home, label: 'Inicio', link: 'home.html', color: 'cyan' },
         { id: 'ranking', icon: icons.ranking, label: 'Ranking', link: 'puntosRanking.html', color: 'gold' },
-        { id: 'calendar', icon: icons.calendar, label: 'Reservar', link: 'calendario.html', center: true },
-        { id: 'events', icon: icons.events, label: 'Diario', link: 'diario.html', color: 'magenta' },
-        { id: 'history', icon: icons.history, label: 'Historial', link: 'historial.html', color: 'cyan' }
+        { id: 'calendar', icon: icons.calendar, label: 'Pistas', link: 'calendario.html', center: true },
+        { id: 'events', icon: `<i class="fas fa-book-open"></i>`, label: 'Diario', link: 'diario.html', color: 'magenta' },
+        { id: 'history', icon: icons.history, label: 'Historial', link: 'historial.html', color: 'lime' }
     ];
 
 
@@ -134,7 +133,7 @@ export async function injectNavbar(activePage) {
         if (item.center) {
             return `
                 <a href="${item.link}" class="nav-item center-item ${activePage === item.id ? 'active' : ''}">
-                    <div class="nav-icon-wrap">
+                    <div class="nav-icon-wrap shadow-glow-primary">
                         ${item.icon}
                     </div>
                 </a>
@@ -154,14 +153,14 @@ export async function injectNavbar(activePage) {
     
     // Presence Heartbeat
     if (auth.currentUser) {
-        const { updatePresence } = await import('../firebase-service.js');
+        const { updatePresence } = await import('../firebase-service.js?v=6.5');
         updatePresence(auth.currentUser.uid);
         setInterval(() => updatePresence(auth.currentUser.uid), 5 * 60 * 1000); // Every 5 mins
     }
     
     // Initialize AI Coach Chat (creates its own FAB)
     try {
-        const { initVecinaChat } = await import('./vecina-chat.js');
+        const { initVecinaChat } = await import('./vecina-chat.js?v=6.5');
         initVecinaChat();
     } catch(e) {
         console.log('AI Chat not available:', e);
@@ -172,7 +171,7 @@ export async function injectNavbar(activePage) {
  * Initialize Galaxy Background using centralized module
  */
 export async function initBackground() {
-    const { initGalaxyBackground } = await import('./galaxy-bg.js');
+    const { initGalaxyBackground } = await import('./galaxy-bg.js?v=6.5');
     initGalaxyBackground();
 }
 
@@ -190,7 +189,7 @@ export function setupModals() {
 /**
  * Loading Manager with Session Storage to avoid repeat on Home
  */
-export function showLoading(message = 'Iniciando Sistemas...', force = false) {
+export function showLoading(message = 'Sincronizando Circuito...', force = false) {
     if (!force && sessionStorage.getItem('initial_load_done')) return;
     
     let loader = document.getElementById('global-loader');

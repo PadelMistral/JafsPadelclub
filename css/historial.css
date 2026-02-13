@@ -6,9 +6,16 @@
 /* ===== HISTORY STATS ===== */
 .history-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: var(--space-md);
   margin-bottom: var(--space-2xl);
+}
+
+/* Advanced polish */
+.history-grid,
+.history-list,
+.history-card {
+  gap: 12px;
 }
 
 .history-stat-card {

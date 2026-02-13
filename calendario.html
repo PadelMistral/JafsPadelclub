@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -12,12 +12,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="./css/design-system.css">
-    <link rel="stylesheet" href="./css/layout.css">
-    <link rel="stylesheet" href="./css/components-premium.css">
+    <!-- Core Bundle: design-system + layout + components-premium + themes + dynamic-elements -->
+    <link rel="stylesheet" href="./css/core-bundle.css">
     <link rel="stylesheet" href="./css/themes.css">
-    <link rel="stylesheet" href="./css/dynamic-elements.css">
     <link rel="stylesheet" href="./css/calendar.css">
+    <!-- Premium V7 Styles (New Design - High Priority) -->
+    <link rel="stylesheet" href="./css/premium-v7.css">
 </head>
 
 <body>
@@ -128,13 +128,19 @@
         </div>
     </div>
 
-    <script type="module" src="./js/calendario.js"></script>
+    <script type="module" src="./js/calendario.js?v=6.5"></script>
     <script type="module">
-        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
-        import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js?v=6.5';
+        import { initThemeSystem } from './js/modules/theme-manager.js?v=6.5';
         initThemeSystem();
         initGalaxyBackground();
     </script>
 </body>
 
 </html>
+
+
+
+
+
+

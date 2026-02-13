@@ -1,102 +1,198 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport"
-    content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#020617">
-  <title>Padeluminatis Pro | Acceso Elite</title>
-  <meta name="description" content="Portal de acceso al circuito Padeluminatis">
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./css/design-system.css">
-  <link rel="stylesheet" href="./css/components-premium.css">
-  <link rel="stylesheet" href="./css/auth.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#020617">
+    <title>Acceso | Padeluminatis Pro</title>
+    <meta name="description" content="Accede al circuito Padeluminatis">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/design-system.css">
+    <link rel="stylesheet" href="./css/themes.css">
+    <link rel="stylesheet" href="./css/components-premium.css">
+    <link rel="stylesheet" href="./css/auth.css">
 </head>
 
-<body style="overflow: hidden; height: 100dvh;">
-  <!-- Galactic Background -->
-  <div class="sport-bg"></div>
-  <div class="bg-glow blue" style="top:-10%; left:-10%; opacity:0.3"></div>
-  <div class="bg-glow purple" style="bottom:-10%; right:-10%; opacity:0.3"></div>
-  <div class="bg-glow green"
-    style="top:40%; left:20%; width:40vw; height:40vw; background:var(--sport-green); opacity:0.1; filter:blur(120px)">
-  </div>
+<body class="body-auth">
+    <div class="sport-bg"></div>
 
-  <main class="auth-screen">
-    <div id="login-form-card" class="auth-container">
-      <div class="auth-card-glow"></div>
-
-      <div class="auth-logo-box">
-        <img src="./imagenes/Logojafs.png" alt="Logo" class="auth-logo" style="border-radius: 24px;">
-      </div>
-
-      <div class="auth-header">
-        <h1 class="auth-title">PADELUMINATIS</h1>
-        <p class="auth-subtitle tracking-[5px]">Mistral Homes Elite</p>
-      </div>
-
-      <form id="loginForm" class="auth-form">
-        <div class="input-group">
-          <label class="form-label">Email de Jugador</label>
-          <div class="input-icon-wrapper">
-            <i class="fas fa-envelope input-icon"></i>
-            <input type="email" id="email" name="email" class="form-input" autocomplete="username email"
-              placeholder="tu@email.com" required>
-          </div>
+    <div id="master-loader" class="master-loader" style="display:none;">
+        <div class="loader-box">
+            <img src="./imagenes/Logojafs.png" class="loader-logo" alt="Padeluminatis">
+            <div class="loader-bar">
+                <div id="progress-fill" class="loader-bar-fill"></div>
+            </div>
+            <div id="loader-status" class="loader-status">Sincronizando acceso...</div>
         </div>
-
-        <div class="input-group">
-          <label class="form-label">Contraseña</label>
-          <div class="input-icon-wrapper">
-            <i class="fas fa-lock input-icon"></i>
-            <input type="password" id="password" name="password" class="form-input" autocomplete="current-password"
-              placeholder="••••••••" required>
-            <i class="fas fa-eye password-toggle" id="togglePassword"></i>
-          </div>
-        </div>
-
-        <div class="flex-row between items-center mt-2 mb-4">
-          <label class="flex-row gap-2 cursor-pointer items-center">
-            <input type="checkbox" class="sport-checkbox">
-            <span class="text-[10px] text-muted font-bold uppercase tracking-wider">Recordarme</span>
-          </label>
-          <a href="recuperar.html" class="text-[10px] font-black text-primary uppercase tracking-wider">¿Olvidaste la
-            clave?</a>
-        </div>
-
-        <button type="submit" class="btn-auth-premium">
-          <span>ENTRAR AL CIRCUITO</span>
-          <i class="fas fa-chevron-right text-xs opacity-50"></i>
-        </button>
-      </form>
-
-      <div class="auth-footer">
-        <p class="auth-footer-text">¿No eres miembro aún? <a href="registro.html" class="auth-footer-link">ÚNETE
-            AHORA</a></p>
-      </div>
     </div>
-  </main>
 
-  <!-- Full Screen espectacular Loader -->
-  <div id="master-loader" class="spectacular-loader">
-    <div class="loader-glow"></div>
-    <div class="progress-container">
-      <div class="progress-bar-bg">
-        <div id="progress-fill" class="progress-bar-fill"></div>
-      </div>
-      <div id="loader-status" class="progress-text">Iniciando...</div>
-    </div>
-  </div>
+    <main class="auth-screen">
+        <div class="auth-card animate-fade-in" id="login-form-card">
+            <div class="auth-card-glow"></div>
+            <div class="auth-header">
+                <div class="auth-logo-box">
+                    <img src="./imagenes/Logojafs.png" class="auth-logo" alt="Padeluminatis">
+                </div>
+                <h1 class="auth-title">ACCESO</h1>
+                <p class="auth-subtitle">Sincroniza tu ficha</p>
+            </div>
 
-  <script type="module" src="./js/login.js"></script>
-  <script type="module">
-    import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
-    initGalaxyBackground();
-  </script>
+            <form id="loginForm" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">Email o Alias</label>
+                    <div class="input-icon-wrapper">
+                        <input type="text" id="email" autocomplete="username" placeholder="correo@ejemplo.com o Alias">
+                        <i class="fas fa-user input-icon"></i>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">contraseña</label>
+                    <div class="input-icon-wrapper">
+                        <input type="password" id="password" autocomplete="current-password" placeholder="••••••••">
+                        <i class="fas fa-lock input-icon"></i>
+                        <i class="fas fa-eye toggle-pass" id="togglePassword"></i>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg w-full">
+                    <i class="fas fa-shield-halved"></i> Acceder
+                </button>
+            </form>
+
+            <div class="auth-divider">
+                <span>o</span>
+            </div>
+
+            <button type="button" id="googleLogin" class="btn btn-ghost w-full">
+                <i class="fab fa-google"></i> Continuar con Google
+            </button>
+
+            <div class="auth-footer">
+                <a href="recuperar.html" class="auth-link">¿Olvidaste tu contraseña?</a>
+                <div class="auth-sep"></div>
+                <a href="registro.html" class="auth-link">Crear nueva ficha</a>
+            </div>
+        </div>
+    </main>
+
+    <style>
+        .master-loader {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(2, 6, 23, 0.96);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loader-box {
+            width: min(320px, 80vw);
+            background: rgba(15, 23, 42, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 28px;
+            text-align: center;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+        }
+
+        .loader-logo {
+            width: 72px;
+            height: 72px;
+            object-fit: contain;
+            margin-bottom: 16px;
+            filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.5));
+        }
+
+        .loader-bar {
+            width: 100%;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            margin: 10px 0 12px;
+        }
+
+        .loader-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #22d3ee);
+            border-radius: 999px;
+            transition: width 0.2s ease;
+        }
+
+        .loader-status {
+            font-size: 0.7rem;
+            color: #cbd5f5;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .toggle-pass {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+        }
+
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0;
+            color: rgba(255, 255, 255, 0.35);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .auth-divider::before,
+        .auth-divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #fff;
+        }
+
+        .auth-footer {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .auth-sep {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+    </style>
+
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js?v=6.5';
+        import { initThemeSystem } from './js/modules/theme-manager.js?v=6.5';
+        initThemeSystem();
+        initGalaxyBackground();
+    </script>
+    <script type="module" src="./js/login.js?v=6.5"></script>
 </body>
 
 </html>
+
+
+
+
+
+

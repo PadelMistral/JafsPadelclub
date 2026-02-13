@@ -1,9 +1,9 @@
-/* =====================================================
-   PADELUMINATIS NOTIFICATIONS LOGIC V5.0
+﻿/* =====================================================
+   PADELUMINATIS NOTIFICATIONS LOGIC V5.1
    ===================================================== */
 
 import { auth, db, observerAuth, subscribeCol, updateDocument } from './firebase-service.js';
-import { collection, deleteDoc, doc, getDocs, query, where, writeBatch } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import { collection, deleteDoc, doc, query, where, writeBatch } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast } from './ui-core.js';
 
 let currentUser = null;
@@ -11,21 +11,24 @@ let allNotifs = [];
 
 document.addEventListener('DOMContentLoaded', () => {
     initAppUI('notifications');
-    
+
     observerAuth((user) => {
         if (!user) {
             window.location.href = 'index.html';
             return;
         }
         currentUser = user;
-        
-        subscribeCol("notificaciones", (list) => {
-            allNotifs = list.sort((a,b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
-            renderList();
-        }, [['destinatario', '==', user.uid]]);
+
+        subscribeCol(
+            'notificaciones',
+            (list) => {
+                allNotifs = list.sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
+                renderList();
+            },
+            [['destinatario', '==', user.uid]]
+        );
     });
 
-    // Actions
     document.getElementById('btn-read-all')?.addEventListener('click', markAllAsRead);
     document.getElementById('btn-clear-all')?.addEventListener('click', clearAllNotifications);
 });
@@ -34,26 +37,30 @@ async function markAllAsRead() {
     if (!currentUser || allNotifs.length === 0) return;
     const batch = writeBatch(db);
     allNotifs.filter(n => !n.leido).forEach(n => {
-        const ref = doc(db, "notificaciones", n.id);
+        const ref = doc(db, 'notificaciones', n.id);
         batch.update(ref, { leido: true, read: true });
     });
     try {
         await batch.commit();
         showToast('¡Hecho!', 'Todas las notificaciones marcadas como leídas', 'success');
-    } catch(e) { console.error(e); }
+    } catch (e) {
+        console.error(e);
+    }
 }
 
 async function clearAllNotifications() {
     if (!confirm('¿Estás seguro de que quieres borrar todas las notificaciones?')) return;
     const batch = writeBatch(db);
     allNotifs.forEach(n => {
-        const ref = doc(db, "notificaciones", n.id);
+        const ref = doc(db, 'notificaciones', n.id);
         batch.delete(ref);
     });
     try {
         await batch.commit();
         showToast('Historial Limpio', 'Se han borrado todas las notificaciones', 'info');
-    } catch(e) { console.error(e); }
+    } catch (e) {
+        console.error(e);
+    }
 }
 
 function renderList() {
@@ -72,7 +79,7 @@ function renderList() {
     }
 
     container.innerHTML = allNotifs.map(n => {
-        const date = n.timestamp?.toDate() || new Date();
+        const date = n.timestamp?.toDate?.() || new Date();
         const iconInfo = getIconInfo(n.tipo);
         const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
         const dateStr = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).toUpperCase();
@@ -89,14 +96,18 @@ function renderList() {
                     </div>
                     <p class="ni-msg-v5">${n.mensaje || ''}</p>
                 </div>
+                <div class="ni-actions-v5" onclick="event.stopPropagation(); deleteNotification('${n.id}')">
+                    <i class="fas fa-trash-can opacity-20 hover:opacity-100 hover:text-red-500 transition-all"></i>
+                </div>
             </div>
         `;
     }).join('');
 }
 
 function getIconInfo(type) {
-    switch(type) {
+    switch (type) {
         case 'match_invite': return { icon: 'fa-envelope-open-text' };
+        case 'match_join': return { icon: 'fa-user-plus' };
         case 'match_result': return { icon: 'fa-trophy' };
         case 'reto': return { icon: 'fa-bolt' };
         case 'info': return { icon: 'fa-circle-info' };
@@ -105,7 +116,17 @@ function getIconInfo(type) {
 }
 
 window.handleNotifClick = async (id, link) => {
-    const ref = doc(db, "notificaciones", id);
     await updateDocument('notificaciones', id, { leido: true, read: true });
     if (link) window.location.href = link;
 };
+
+window.deleteNotification = async (id) => {
+    if (!confirm('¿Borrar esta notificación?')) return;
+    try {
+        await deleteDoc(doc(db, 'notificaciones', id));
+        showToast('Borrado', 'Notificación eliminada', 'info');
+    } catch (e) {
+        console.error(e);
+    }
+};
+

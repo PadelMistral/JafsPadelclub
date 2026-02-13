@@ -1,4 +1,4 @@
-/* js/modules/gamification.js - Leveling & Progress System (v2.0) */
+﻿/* js/modules/gamification.js - Leveling & Progress System (v2.0) */
 
 /**
  * Calculates XP and Gamification Level based on stats.
@@ -288,3 +288,5 @@ export function renderAchievements(containerId, userData) {
         `;
     }).join('');
 }
+
+

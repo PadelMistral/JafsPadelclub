@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -11,13 +11,12 @@
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./css/design-system.css">
-    <link rel="stylesheet" href="./css/layout.css">
-    <link rel="stylesheet" href="./css/components-premium.css">
+    <!-- Core Bundle: design-system + layout + components-premium + themes + dynamic-elements -->
+    <link rel="stylesheet" href="./css/core-bundle.css">
     <link rel="stylesheet" href="./css/themes.css">
-    <link rel="stylesheet" href="./css/dynamic-elements.css">
     <link rel="stylesheet" href="./css/perfil.css">
+    <!-- Premium V7 Styles (New Design - High Priority) -->
+    <link rel="stylesheet" href="./css/premium-v7.css">
 </head>
 
 <body>
@@ -77,18 +76,49 @@
             <div class="level-progress-card">
                 <div class="level-header">
                     <div class="level-info">
-                        <i class="fas fa-signal"></i>
+                        <i class="fas fa-signal text-primary"></i>
                         <span>Progreso de Nivel</span>
                     </div>
-                    <span class="level-next" id="level-progress-text">+0 para subir</span>
+                    <span class="level-next font-black text-primary" id="level-progress-text">Cargando...</span>
                 </div>
-                <div class="level-bar-container">
-                    <div class="level-bar" id="level-bar" style="width: 50%"></div>
+                <div class="level-bar-container-v9">
+                    <div class="level-fill-v9" id="level-bar" style="width: 50%"></div>
+                    <div class="level-marker-v9" style="left: 0%"></div>
                 </div>
                 <div class="level-labels">
                     <span id="level-lower">2.0</span>
-                    <span class="level-current" id="level-current">Nivel 2.5</span>
+                    <span class="level-current" id="level-current">CARGANDO...</span>
                     <span id="level-upper">3.0</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ENTIRE NEW COMPETITIVE SECTION -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.12s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-hand-fist text-accent mr-2"></i>GÉNESIS TÁCTICA</h2>
+            </div>
+            <div class="nexus-grid-v9">
+                <div class="nexus-item-v9 gold">
+                    <i class="fas fa-skull-crossbones n-icon"></i>
+                    <div class="n-info">
+                        <span class="n-lbl">NÉMESIS</span>
+                        <span class="n-val" id="profile-nemesis">---</span>
+                    </div>
+                </div>
+                <div class="nexus-item-v9 cyan">
+                    <i class="fas fa-crown n-icon"></i>
+                    <div class="n-info">
+                        <span class="n-lbl">VÍCTIMA</span>
+                        <span class="n-val" id="profile-victim">---</span>
+                    </div>
+                </div>
+                <div class="nexus-item-v9 magenta">
+                    <i class="fas fa-user-group n-icon"></i>
+                    <div class="n-info">
+                        <span class="n-lbl">SOCIO FIEL</span>
+                        <span class="n-val" id="profile-partner">---</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -104,39 +134,138 @@
             </div>
         </section>
 
+        <!-- ELITE STATS (NEW) -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.18s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-atom text-cyan-400 mr-2"></i>ESTADÍSTICAS ELITE</h2>
+            </div>
+
+            <!-- Positional ELO -->
+            <div class="stat-grid-v10 mb-4">
+                <div class="stat-item-v10">
+                    <span class="stat-label">ELO DRIVE</span>
+                    <span class="text-xl font-black text-white" id="elo-drive">---</span>
+                </div>
+                <div class="stat-item-v10">
+                    <span class="stat-label">ELO REVÉS</span>
+                    <span class="text-xl font-black text-white" id="elo-reves">---</span>
+                </div>
+                <div class="stat-item-v10">
+                    <span class="stat-label">INDOOR</span>
+                    <span class="text-xl font-black text-white" id="elo-indoor">---</span>
+                </div>
+                <div class="stat-item-v10">
+                    <span class="stat-label">OUTDOOR</span>
+                    <span class="text-xl font-black text-white" id="elo-outdoor">---</span>
+                </div>
+            </div>
+
+            <!-- Advanced Meters -->
+            <div class="cfg-group-v9 mb-4">
+                <div class="flex-between mb-1">
+                    <span class="text-[9px] font-black tracking-widest text-primary">CONSISTENCIA</span>
+                    <span class="text-[9px] font-black text-white" id="val-consistency">50/100</span>
+                </div>
+                <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                    <div class="h-full bg-primary" id="bar-consistency" style="width: 50%"></div>
+                </div>
+            </div>
+            <div class="cfg-group-v9 mb-4">
+                <div class="flex-between mb-1">
+                    <span class="text-[9px] font-black tracking-widest text-sport-gold">BAJO PRESIÓN</span>
+                    <span class="text-[9px] font-black text-white" id="val-pressure">50/100</span>
+                </div>
+                <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                    <div class="h-full bg-sport-gold" id="bar-pressure" style="width: 50%"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- RIVAL INTELLIGENCE DASHBOARD (PHASE 3) -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.20s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-crosshairs text-red-500 mr-2"></i>RIVAL INTELLIGENCE</h2>
+            </div>
+            <!-- Mock Content Container - Will be populated by JS -->
+            <div id="rival-intel-dashboard" class="journal-card-v10">
+                <div class="text-center opacity-50 text-[10px] font-black uppercase">
+                    Selecciona un rival para ver análisis
+                </div>
+            </div>
+        </section>
+        </section>
+
+        <!-- Tactical Balance Radar -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.1s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-microchip text-primary mr-2"></i>ADN TÁCTICO</h2>
+                <span class="section-subtitle">Balance de habilidades</span>
+            </div>
+            <div class="radar-card-v9">
+                <canvas id="tactical-radar-chart"></canvas>
+            </div>
+        </section>
+
+        <!-- Predictive Intelligence & Profile (NEW) -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.22s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-brain text-purple-400 mr-2"></i>INTELIGENCIA ADAPTATIVA</h2>
+            </div>
+            <div id="ai-profile-insights" class="grid grid-cols-2 gap-3 mb-4">
+                <!-- Injected via JS -->
+                <div class="loading-matrix text-center py-4 col-span-2">
+                    <div class="spinner-neon mb-2"></div>
+                </div>
+            </div>
+
+            <div class="section-header mt-4">
+                <h2 class="section-title">AUTOMATIZACIONES</h2>
+            </div>
+            <div id="ai-automations" class="flex flex-col gap-2">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+
+        <!-- Achievements / Hall of Fame -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.15s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-medal text-sport-gold mr-2"></i>SALA DE TROFEOS</h2>
+                <span id="achv-count-label" class="text-[10px] font-black opacity-40 uppercase">0 DESBLOQUEADOS</span>
+            </div>
+            <div id="achievements-grid" class="achievements-grid-v9">
+                <!-- Achievements injected by JS -->
+                <div class="loading-ach text-center py-10 opacity-30">
+                    <div class="spinner-neon mb-2"></div>
+                    <span class="text-[9px] font-black tracking-widest">SINCRONIZANDO LOGROS...</span>
+                </div>
+            </div>
+        </section>
+
         <!-- Stats Cards Grid -->
         <section class="profile-section animate-fade-in" style="animation-delay: 0.2s;">
             <div class="section-header">
-                <h2 class="section-title">Estadísticas</h2>
+                <h2 class="section-title">Métricas de Rendimiento</h2>
             </div>
-            <div class="profile-stats-grid">
-                <div class="stat-card-profile primary">
-                    <div class="stat-icon"><i class="fas fa-gamepad"></i></div>
-                    <div class="stat-info">
-                        <span class="stat-val" id="stat-total-matches">0</span>
-                        <span class="stat-lbl">Partidos</span>
-                    </div>
+            <div class="profile-stats-grid-v9">
+                <div class="stat-card-v9 cyan">
+                    <span class="s-lbl">PARTIDOS</span>
+                    <span class="s-val" id="stat-total-matches">0</span>
+                    <div class="s-icon"><i class="fas fa-gamepad"></i></div>
                 </div>
-                <div class="stat-card-profile success">
-                    <div class="stat-icon"><i class="fas fa-trophy"></i></div>
-                    <div class="stat-info">
-                        <span class="stat-val" id="stat-total-wins">0</span>
-                        <span class="stat-lbl">Victorias</span>
-                    </div>
+                <div class="stat-card-v9 gold">
+                    <span class="s-lbl">VICTORIAS</span>
+                    <span class="s-val" id="stat-total-wins">0</span>
+                    <div class="s-icon"><i class="fas fa-trophy"></i></div>
                 </div>
-                <div class="stat-card-profile secondary">
-                    <div class="stat-icon"><i class="fas fa-fire"></i></div>
-                    <div class="stat-info">
-                        <span class="stat-val" id="stat-streak">0</span>
-                        <span class="stat-lbl">Racha</span>
-                    </div>
+                <div class="stat-card-v9 magenta">
+                    <span class="s-lbl">RACHA</span>
+                    <span class="s-val" id="stat-streak">0</span>
+                    <div class="s-icon"><i class="fas fa-fire"></i></div>
                 </div>
-                <div class="stat-card-profile accent">
-                    <div class="stat-icon"><i class="fas fa-coins"></i></div>
-                    <div class="stat-info">
-                        <span class="stat-val" id="stat-family-pts">0</span>
-                        <span class="stat-lbl">FamiliPts</span>
-                    </div>
+                <div class="stat-card-v9 lime">
+                    <span class="s-lbl">EFICACIA</span>
+                    <span class="s-val" id="stat-winrate">0%</span>
+                    <div class="s-icon"><i class="fas fa-percent"></i></div>
                 </div>
             </div>
         </section>
@@ -158,34 +287,47 @@
                             <i class="fas fa-check"></i>
                         </button>
                     </div>
+                    <!-- Weight Input -->
+                    <div class="setting-item">
+                        <div class="setting-left">
+                            <i class="fas fa-weight"></i>
+                            <span>Peso (Kg)</span>
+                        </div>
+                        <div class="setting-right">
+                            <input type="number" id="p-weight-inp" class="setting-input" placeholder="00"
+                                style="width: 80px;">
+                            <button class="setting-save-btn success" id="p-save-weight">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-left">
+                            <i class="fas fa-phone"></i>
+                            <span>Teléfono</span>
+                        </div>
+                        <div class="setting-right">
+                            <input type="tel" id="p-phone-inp" class="setting-input" placeholder="600 000 000">
+                            <button class="setting-save-btn success" id="p-save-phone">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <a href="diario.html" class="setting-item link">
+                        <div class="setting-left">
+                            <i class="fas fa-book-medical"></i>
+                            <span>Diario Táctico</span>
+                        </div>
+                        <i class="fas fa-chevron-right setting-arrow"></i>
+                    </a>
+                    <a href="historial.html" class="setting-item link">
+                        <div class="setting-left">
+                            <i class="fas fa-history"></i>
+                            <span>Historial Partidos</span>
+                        </div>
+                        <i class="fas fa-chevron-right setting-arrow"></i>
+                    </a>
                 </div>
-                <div class="setting-item">
-                    <div class="setting-left">
-                        <i class="fas fa-phone"></i>
-                        <span>Teléfono</span>
-                    </div>
-                    <div class="setting-right">
-                        <input type="tel" id="p-phone-inp" class="setting-input" placeholder="600 000 000">
-                        <button class="setting-save-btn success" id="p-save-phone">
-                            <i class="fas fa-check"></i>
-                        </button>
-                    </div>
-                </div>
-                <a href="diario.html" class="setting-item link">
-                    <div class="setting-left">
-                        <i class="fas fa-book-medical"></i>
-                        <span>Diario Táctico</span>
-                    </div>
-                    <i class="fas fa-chevron-right setting-arrow"></i>
-                </a>
-                <a href="historial.html" class="setting-item link">
-                    <div class="setting-left">
-                        <i class="fas fa-history"></i>
-                        <span>Historial Partidos</span>
-                    </div>
-                    <i class="fas fa-chevron-right setting-arrow"></i>
-                </a>
-            </div>
         </section>
 
         <!-- Address Section -->
@@ -330,642 +472,12 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script type="module" src="./js/perfil.js"></script>
+    <script type="module" src="./js/perfil.js?v=6.5"></script>
 
-    <style>
-        /* Profile Page Specific Styles */
-        .profile-page {
-            padding: 80px 16px 100px;
-        }
 
-        /* Profile Hero */
-        .profile-hero {
-            position: relative;
-            text-align: center;
-            padding: var(--space-xl) var(--space-lg);
-            background: linear-gradient(145deg,
-                    rgba(0, 212, 255, 0.12) 0%,
-                    rgba(168, 85, 247, 0.08) 50%,
-                    rgba(255, 107, 53, 0.06) 100%);
-            border-radius: var(--radius-2xl);
-            border: 1px solid rgba(0, 212, 255, 0.2);
-            margin-bottom: var(--space-xl);
-            overflow: hidden;
-        }
-
-        .profile-hero-bg {
-            position: absolute;
-            top: -50%;
-            right: -30%;
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(0, 212, 255, 0.2) 0%, transparent 60%);
-            pointer-events: none;
-        }
-
-        .profile-hero-content {
-            position: relative;
-            z-index: 2;
-        }
-
-        /* Avatar */
-        .profile-avatar-wrapper {
-            position: relative;
-            width: 100px;
-            height: 100px;
-            margin: 0 auto var(--space-lg);
-            cursor: pointer;
-        }
-
-        .profile-avatar {
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            overflow: hidden;
-            background: var(--gradient-aurora);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 4px solid var(--primary);
-            box-shadow: 0 0 30px var(--primary-glow);
-        }
-
-        .profile-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .avatar-initial {
-            font-family: var(--font-display);
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #fff;
-        }
-
-        .avatar-edit-btn {
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 32px;
-            height: 32px;
-            background: var(--gradient-aurora);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-size: 0.8rem;
-            border: 3px solid var(--bg-deep);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            transition: var(--transition);
-        }
-
-        .profile-avatar-wrapper:hover .avatar-edit-btn {
-            transform: scale(1.1);
-        }
-
-        .avatar-ring {
-            position: absolute;
-            inset: -6px;
-            border: 2px solid rgba(0, 212, 255, 0.3);
-            border-radius: 50%;
-            animation: ringPulse 3s infinite;
-        }
-
-        @keyframes ringPulse {
-
-            0%,
-            100% {
-                opacity: 0.3;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: 0.6;
-                transform: scale(1.05);
-            }
-        }
-
-        /* Profile Name */
-        .profile-name {
-            font-family: var(--font-display);
-            font-size: 1.6rem;
-            font-weight: 700;
-            color: #fff;
-            margin-bottom: var(--space-xs);
-        }
-
-        .profile-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: var(--space-xs);
-            padding: var(--space-xs) var(--space-md);
-            background: rgba(0, 212, 255, 0.15);
-            border: 1px solid rgba(0, 212, 255, 0.3);
-            border-radius: var(--radius-full);
-            margin-bottom: var(--space-lg);
-        }
-
-        .profile-badge i {
-            color: var(--gold);
-            font-size: 0.65rem;
-        }
-
-        .profile-badge span {
-            font-size: 0.65rem;
-            font-weight: 700;
-            color: var(--primary);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        /* Profile Stats */
-        .profile-stats {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: var(--space-lg);
-            background: rgba(0, 0, 0, 0.2);
-            padding: var(--space-lg);
-            border-radius: var(--radius-xl);
-        }
-
-        .profile-stat {
-            text-align: center;
-        }
-
-        .profile-stat-value {
-            display: block;
-            font-family: var(--font-display);
-            font-size: 1.4rem;
-            font-weight: 700;
-            color: #fff;
-            line-height: 1;
-        }
-
-        .profile-stat.highlight .profile-stat-value {
-            color: var(--sport-green);
-        }
-
-        .profile-stat-label {
-            display: block;
-            font-size: 0.6rem;
-            font-weight: 700;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-top: 4px;
-        }
-
-        .profile-stat-divider {
-            width: 1px;
-            height: 30px;
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        /* Section */
-        .profile-section {
-            margin-bottom: var(--space-xl);
-        }
-
-        .section-subtitle {
-            font-size: 0.65rem;
-            color: var(--text-muted);
-        }
-
-        /* Level Progress Card */
-        .level-progress-card {
-            background: var(--bg-glass);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-xl);
-            padding: var(--space-lg);
-        }
-
-        .level-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: var(--space-md);
-        }
-
-        .level-info {
-            display: flex;
-            align-items: center;
-            gap: var(--space-sm);
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: #fff;
-        }
-
-        .level-info i {
-            color: var(--primary);
-        }
-
-        .level-next {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--sport-green);
-        }
-
-        .level-bar-container {
-            height: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: var(--radius-full);
-            overflow: hidden;
-            margin: var(--space-md) 0;
-        }
-
-        .level-bar {
-            height: 100%;
-            background: linear-gradient(90deg, var(--primary) 0%, var(--sport-green) 100%);
-            border-radius: inherit;
-            transition: width 0.8s ease;
-            position: relative;
-        }
-
-        .level-bar::after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-            animation: shimmer 2s infinite;
-        }
-
-        .level-labels {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.65rem;
-            color: var(--text-muted);
-        }
-
-        .level-current {
-            color: var(--primary);
-            font-weight: 700;
-        }
-
-        /* ELO Chart Card */
-        .elo-chart-card {
-            background: var(--bg-glass);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-xl);
-            padding: var(--space-lg);
-        }
-
-        /* Profile Stats Grid */
-        .profile-stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: var(--space-md);
-        }
-
-        .stat-card-profile {
-            display: flex;
-            align-items: center;
-            gap: var(--space-md);
-            padding: var(--space-md);
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            transition: var(--transition);
-        }
-
-        .stat-card-profile:hover {
-            background: rgba(255, 255, 255, 0.06);
-            transform: translateY(-2px);
-        }
-
-        .stat-card-profile .stat-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: var(--radius-md);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1rem;
-        }
-
-        .stat-card-profile.primary .stat-icon {
-            background: rgba(0, 212, 255, 0.15);
-            color: var(--primary);
-        }
-
-        .stat-card-profile.success .stat-icon {
-            background: rgba(34, 197, 94, 0.15);
-            color: var(--sport-green);
-        }
-
-        .stat-card-profile.secondary .stat-icon {
-            background: rgba(255, 107, 53, 0.15);
-            color: var(--secondary);
-        }
-
-        .stat-card-profile.accent .stat-icon {
-            background: rgba(255, 215, 0, 0.15);
-            color: var(--gold);
-        }
-
-        .stat-card-profile .stat-info {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .stat-card-profile .stat-val {
-            font-family: var(--font-display);
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #fff;
-            line-height: 1;
-        }
-
-        .stat-card-profile .stat-lbl {
-            font-size: 0.6rem;
-            font-weight: 700;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            margin-top: 2px;
-        }
-
-        /* Settings Card */
-        .settings-card {
-            background: var(--bg-glass);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-xl);
-            overflow: hidden;
-        }
-
-        .setting-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: var(--space-lg);
-            border-bottom: 1px solid var(--border);
-            transition: var(--transition-fast);
-            text-decoration: none;
-            color: inherit;
-        }
-
-        .setting-item:last-child {
-            border-bottom: none;
-        }
-
-        .setting-item.link:hover {
-            background: rgba(255, 255, 255, 0.03);
-        }
-
-        .setting-left {
-            display: flex;
-            align-items: center;
-            gap: var(--space-md);
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #fff;
-        }
-
-        .setting-left i {
-            width: 20px;
-            text-align: center;
-            color: var(--primary);
-        }
-
-        .setting-right {
-            display: flex;
-            align-items: center;
-            gap: var(--space-sm);
-        }
-
-        .setting-input {
-            background: transparent;
-            border: none;
-            padding: var(--space-xs);
-            color: var(--primary);
-            font-weight: 700;
-            font-size: 0.9rem;
-            text-align: right;
-            max-width: 130px;
-        }
-
-        .setting-input:focus {
-            outline: none;
-        }
-
-        .setting-save-btn {
-            width: 28px;
-            height: 28px;
-            border-radius: var(--radius-sm);
-            background: rgba(0, 212, 255, 0.1);
-            border: 1px solid rgba(0, 212, 255, 0.3);
-            color: var(--primary);
-            font-size: 0.7rem;
-            cursor: pointer;
-            transition: var(--transition-fast);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .setting-save-btn:hover {
-            background: var(--primary);
-            color: #000;
-        }
-
-        .setting-save-btn.success {
-            background: rgba(34, 197, 94, 0.1);
-            border-color: rgba(34, 197, 94, 0.3);
-            color: var(--sport-green);
-        }
-
-        .setting-save-btn.success:hover {
-            background: var(--sport-green);
-            color: #000;
-        }
-
-        .setting-arrow {
-            color: var(--text-dim);
-            font-size: 0.8rem;
-        }
-
-        /* Address Card */
-        .address-card {
-            background: var(--bg-glass);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-xl);
-            padding: var(--space-lg);
-        }
-
-        .address-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: var(--space-md);
-        }
-
-        .address-field {
-            text-align: center;
-        }
-
-        .address-field label {
-            display: block;
-            font-size: 0.6rem;
-            font-weight: 700;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: var(--space-xs);
-        }
-
-        .address-field input {
-            width: 100%;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            padding: var(--space-md);
-            color: #fff;
-            font-size: 0.9rem;
-            font-weight: 600;
-            text-align: center;
-            transition: var(--transition-fast);
-        }
-
-        .address-field input:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-
-        /* Gear List */
-        .gear-list {
-            display: flex;
-            flex-direction: column;
-            gap: var(--space-md);
-        }
-
-        .gear-card {
-            display: flex;
-            align-items: center;
-            gap: var(--space-md);
-            padding: var(--space-lg);
-            background: linear-gradient(145deg, rgba(0, 212, 255, 0.08), transparent);
-            border: 1px solid rgba(0, 212, 255, 0.15);
-            border-radius: var(--radius-xl);
-            transition: var(--transition);
-        }
-
-        .gear-card:hover {
-            border-color: rgba(0, 212, 255, 0.3);
-            transform: translateX(4px);
-        }
-
-        .gear-icon {
-            width: 44px;
-            height: 44px;
-            background: var(--gradient-aurora);
-            border-radius: var(--radius-md);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.1rem;
-            color: #fff;
-        }
-
-        .gear-info {
-            flex: 1;
-        }
-
-        .gear-name {
-            font-size: 0.9rem;
-            font-weight: 700;
-            color: #fff;
-        }
-
-        .gear-meta {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-        }
-
-        .gear-stats {
-            display: flex;
-            gap: var(--space-sm);
-        }
-
-        .gear-stat {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: var(--space-xs) var(--space-sm);
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: var(--radius-sm);
-        }
-
-        .gear-stat-val {
-            font-family: var(--font-display);
-            font-size: 0.9rem;
-            font-weight: 700;
-            line-height: 1;
-        }
-
-        .gear-stat-lbl {
-            font-size: 0.5rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-        }
-
-        /* Danger Button */
-        .btn-danger-text {
-            color: var(--danger) !important;
-        }
-
-        .btn-danger-text:hover {
-            background: rgba(239, 68, 68, 0.1) !important;
-        }
-
-        /* Range Group */
-        .range-group {
-            display: flex;
-            align-items: center;
-            gap: var(--space-md);
-            margin-bottom: var(--space-md);
-        }
-
-        .range-label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            min-width: 100px;
-        }
-
-        .range-value {
-            font-family: var(--font-display);
-            font-size: 1rem;
-            font-weight: 700;
-            min-width: 24px;
-            text-align: center;
-        }
-
-        .range-value.primary {
-            color: var(--primary);
-        }
-
-        .range-value.secondary {
-            color: var(--secondary);
-        }
-
-        .range-value.success {
-            color: var(--sport-green);
-        }
-
-        /* Responsive */
-        @media (min-width: 768px) {
-            .profile-page {
-                max-width: 600px;
-                margin: 0 auto;
-            }
-
-            .profile-stats-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
-    </style>
     <script type="module">
-        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
-        import { initThemeSystem, renderThemeSelector } from './js/modules/theme-manager.js';
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js?v=6.5';
+        import { initThemeSystem, renderThemeSelector } from './js/modules/theme-manager.js?v=6.5';
 
         initThemeSystem();
         initGalaxyBackground();

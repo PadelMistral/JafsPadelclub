@@ -1,8 +1,15 @@
-// ui-core.js - Unified Application Guard & Portal Management (v2.0)
+﻿// ui-core.js - Unified Application Guard & Portal Management (v2.0)
 import { observerAuth, getDocument, subscribeCol } from './firebase-service.js';
-import { injectHeader, injectNavbar } from './modules/ui-loader.js';
+import { injectHeader, injectNavbar } from './modules/ui-loader.js?v=6.5';
 
 const PUBLIC_PAGES = ['index.html', 'registro.html', 'recuperar.html'];
+
+if (typeof window !== 'undefined' && !window.viewProfile) {
+    window.viewProfile = (uid) => {
+        if (!uid) return;
+        window.location.href = `perfil.html?uid=${uid}`;
+    };
+}
 
 /**
  * Shared UI Initialization
@@ -14,25 +21,40 @@ export function initAppUI(activePageName) {
     // Only inject UI in PRIVATE pages if not already present
     if (!isPublic) {
         // We defer injection to the Auth state to have user data
-        console.log("Private page detected:", path);
+        // Immediate protection
+        document.body.style.opacity = '0';
+        document.body.style.pointerEvents = 'none';
+    }
+
+    let authResolved = false;
+    // Safety net: if auth never resolves, at least render the shell
+    if (!isPublic) {
+        setTimeout(() => {
+            if (!authResolved) {
+                console.warn("Auth did not resolve in time. Showing UI shell.");
+                document.body.style.opacity = '1';
+                document.body.style.pointerEvents = 'auto';
+            }
+        }, 4000);
     }
 
     observerAuth(async (user) => {
+        authResolved = true;
         console.log("Auth State Changed. User:", !!user, "Path:", path);
 
         if (user) {
+            document.body.style.opacity = '1';
+            document.body.style.pointerEvents = 'auto';
             // Logged in user on index/login -> Redirect to Home
-            if (isPublic && !path.includes('registro.html') && !path.includes('recuperar.html')) {
-                const loader = document.getElementById('master-loader');
-                if (!loader || loader.style.display !== 'flex') {
-                    console.log("Redirecting to home (Logged in)");
-                    window.location.href = 'home.html';
-                }
+            if (isPublic && !path.includes('registro.html') && !path.includes('recuperar.html') && !path.includes('terms.html')) {
+                console.log("Redirecting to home (Logged in)");
+                window.location.href = 'home.html';
+                return;
             }
             
             // Fill data
             try {
-                const { injectHeader, injectNavbar, updateHeader } = await import('./modules/ui-loader.js');
+                const { injectHeader, injectNavbar, updateHeader } = await import('./modules/ui-loader.js?v=6.5');
                 const userData = await getDocument("usuarios", user.uid);
                 
                 // Always inject for private pages
@@ -113,7 +135,7 @@ export function showToast(title, body, type = 'info') {
  */
 export function countUp(el, target, duration = 2000) {
     if (!el) return;
-    const endValue = parseFloat(target);
+    const endValue = Number(target);
     if (isNaN(endValue)) { el.textContent = target; return; }
 
     let startTime = null;
@@ -126,3 +148,4 @@ export function countUp(el, target, duration = 2000) {
     }
     requestAnimationFrame(animation);
 }
+

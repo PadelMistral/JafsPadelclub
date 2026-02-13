@@ -1,4 +1,4 @@
-/* js/palas.js - Padel Lab Core V4.0 */
+﻿/* js/palas.js - Padel Lab Core V4.0 */
 import { auth, db, getDocument, subscribeCol, updateDocument } from './firebase-service.js';
 import { initAppUI, showToast } from './ui-core.js';
 import { collection, addDoc, getDocs, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadPalas() {
         try {
-            const snap = await getDocs(collection(db, "palas"));
+            const snap = await window.getDocsSafe(collection(db, "palas"));
             allPalas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             
             // Add default palas if empty
@@ -153,13 +153,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     function getBalanceLabel(balance) {
-        const labels = { 'Low': '⚖️ Bajo', 'Mid': '⚖️ Medio', 'High': '⚡ Alto' };
+        const labels = { 'Low': '-️ Bajo', 'Mid': '-️ Medio', 'High': ' Alto' };
         return labels[balance] || balance;
     }
 
     async function fetchSensations(palaName) {
         try {
-            const snap = await getDocs(query(collection(db, "usuarios")));
+            const snap = await window.getDocsSafe(query(collection(db, "usuarios")));
             let sens = [];
             snap.forEach(doc => {
                 const journal = doc.data().diario || [];
@@ -213,3 +213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 });
+
+
+
+

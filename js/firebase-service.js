@@ -1,7 +1,6 @@
-// firebase-service.js - Core Services (v6.0)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-app.js";
+﻿// firebase-service.js - Core Services (v6.0)
+import { app, auth, db, storage } from "./firebase-init.js";
 import {
-  getAuth,
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
@@ -12,7 +11,6 @@ import {
   sendPasswordResetEmail,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js";
 import {
-  getFirestore,
   collection,
   doc,
   getDoc,
@@ -27,39 +25,12 @@ import {
   onSnapshot,
   serverTimestamp,
   increment,
-  initializeFirestore,
-  persistentLocalCache,
-  persistentSingleTabManager
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import {
-  getStorage,
   ref,
   uploadBytes,
   getDownloadURL,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-storage.js";
-
-// === FIREBASE CONFIG ===
-const firebaseConfig = {
-  apiKey: "AIzaSyA7Q90torM2Hvjidd5A3K2R90btsgt-d94",
-  authDomain: "padeluminatis.firebaseapp.com",
-  projectId: "padeluminatis",
-  storageBucket: "padeluminatis.appspot.com",
-  messagingSenderId: "40241508403",
-  appId: "1:40241508403:web:c4d3bbd19370dcf3173346",
-  measurementId: "G-079Q6DEQCG",
-};
-
-// Initialize App
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const storage = getStorage(app);
-
-// Modern Firestore Cache initialization
-const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentSingleTabManager(),
-  }),
-});
 
 // Set default persistence
 setPersistence(auth, browserLocalPersistence).catch(console.error);
@@ -126,23 +97,63 @@ export function logout() {
 
 // === FIRESTORE EXPORTS ===
 export async function getDocument(col, id) {
-  const snap = await getDoc(doc(db, col, id));
-  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  try {
+    const snap = await getDoc(doc(db, col, id));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  } catch (err) {
+    console.error("Firestore getDocument error:", err);
+    return null;
+  }
+}
+
+export async function getDocsSafe(q, label = "") {
+  try {
+    return await getDocs(q);
+  } catch (err) {
+    if (typeof window !== "undefined") {
+      window.__dataErrors = window.__dataErrors || [];
+      window.__dataErrors.push({ label, code: err?.code || "unknown" });
+    }
+    return { empty: true, docs: [], forEach: () => {}, size: 0, _errorCode: err?.code || "unknown" };
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.getDocsSafe = getDocsSafe;
 }
 
 export function subscribeDoc(col, id, callback) {
-  return onSnapshot(doc(db, col, id), (s) =>
-    callback(s.exists() ? { id: s.id, ...s.data() } : null),
+  return onSnapshot(
+    doc(db, col, id),
+    (s) => callback(s.exists() ? { id: s.id, ...s.data() } : null),
+    (err) => {
+      if (typeof window !== "undefined") {
+        window.__dataErrors = window.__dataErrors || [];
+        window.__dataErrors.push({ label: `doc:${col}`, code: err?.code || "unknown" });
+      }
+    },
   );
 }
 
-export function subscribeCol(col, callback, filters = [], orders = [], limitCount = null) {
+export async function subscribeCol(col, callback, filters = [], orders = [], limitCount = null) {
   let q = collection(db, col);
   filters.forEach((f) => (q = query(q, where(f[0], f[1], f[2]))));
   orders.forEach((o) => (q = query(q, orderBy(o[0], o[1]))));
   if (limitCount) q = query(q, limit(limitCount));
-  return onSnapshot(q, (s) =>
-    callback(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+  const warm = await getDocsSafe(q, `${col}`);
+  if (warm?._errorCode === "failed-precondition") {
+    callback([]);
+    return () => {};
+  }
+  return onSnapshot(
+    q,
+    (s) => callback(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => {
+      if (typeof window !== "undefined") {
+        window.__dataErrors = window.__dataErrors || [];
+        window.__dataErrors.push({ label: `col:${col}`, code: err?.code || "unknown" });
+      }
+    },
   );
 }
 
@@ -174,3 +185,4 @@ export async function updatePresence(uid) {
     ultimoAcceso: serverTimestamp()
   }).catch(() => {}); // Fail silently
 }
+

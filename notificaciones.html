@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -11,13 +11,12 @@
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./css/design-system.css">
-    <link rel="stylesheet" href="./css/layout.css">
-    <link rel="stylesheet" href="./css/components-premium.css">
+    <!-- Core Bundle: design-system + layout + components-premium + themes + dynamic-elements -->
+    <link rel="stylesheet" href="./css/core-bundle.css">
     <link rel="stylesheet" href="./css/themes.css">
-    <link rel="stylesheet" href="./css/dynamic-elements.css">
     <link rel="stylesheet" href="./css/notificaciones.css">
+    <!-- Premium V7 Styles (New Design - High Priority) -->
+    <link rel="stylesheet" href="./css/premium-v7.css">
 </head>
 
 <body>
@@ -50,11 +49,12 @@
             <div class="notif-header-row">
                 <h1 class="page-title">Bandeja de Entrada</h1>
                 <div class="notif-actions">
-                    <button class="action-btn danger" id="btn-clear-all" title="Borrar Historial">
-                        <i class="fas fa-trash-alt"></i>
+                    <button class="action-btn danger shadow-glow-red" id="btn-clear-all" title="Borrar Todo">
+                        <i class="fas fa-trash-can-sparkles"></i>
+                        <span class="text-[9px] font-black uppercase tracking-widest ml-2">Borrar todo</span>
                     </button>
-                    <button class="action-btn primary" id="btn-read-all" title="Marcar todo como leído">
-                        <i class="fas fa-check-double"></i>
+                    <button class="action-btn primary shadow-glow-primary" id="btn-read-all" title="Marcar leídos">
+                        <i class="fas fa-eye"></i>
                     </button>
                 </div>
             </div>
@@ -71,11 +71,13 @@
 
         <!-- Notifications List -->
         <section class="notif-section animate-fade-in" style="animation-delay: 0.2s;">
-            <div id="notif-list" class="notif-list">
-                <!-- Loading State -->
-                <div class="notif-loading">
-                    <div class="spinner-neon"></div>
-                    <span>Cargando notificaciones...</span>
+            <div class="glass-notif-container">
+                <div id="notif-list" class="notif-list">
+                    <!-- Loading State -->
+                    <div class="notif-loading">
+                        <div class="spinner-neon"></div>
+                        <span>Cargando notificaciones...</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -83,8 +85,8 @@
     </main>
 
     <script type="module">
-        import { initAppUI, showToast } from './js/ui-core.js';
-        import { auth, observerAuth, getDocument } from './js/firebase-service.js';
+        import { initAppUI, showToast } from './js/ui-core.js?v=6.5';
+        import { auth, observerAuth, getDocument } from './js/firebase-service.js?v=6.5';
 
         document.addEventListener('DOMContentLoaded', async () => {
             initAppUI('notifications');
@@ -122,12 +124,17 @@
             }
         });
     </script>
-    <script type="module" src="./js/notificaciones.js"></script>
+    <script type="module" src="./js/notificaciones.js?v=6.5"></script>
     <script type="module">
-        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js?v=6.5';
         initGalaxyBackground();
     </script>
 
 </body>
 
 </html>
+
+
+
+
+

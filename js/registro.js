@@ -1,4 +1,4 @@
-// registro.js - Definitive Identity Generation
+﻿// registro.js - Definitive Identity Generation
 import { auth, db } from './firebase-service.js';
 import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js";
 import { doc, setDoc, getDocs, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 // 1. Check if username is taken
                 const q = query(collection(db, "usuarios"), where("nombreUsuario", "==", user));
-                const snap = await getDocs(q);
+                const snap = await window.getDocsSafe(q);
                 if (!snap.empty) {
                     setLoading(false);
                     return showToast("ID Ocupado", "Este identificador ya está en uso.", "error");
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // 3. Normalizar nivel y calcular puntos iniciales según nivel
                 if (isNaN(lvl)) lvl = 2.5;
-                const basePoints = Math.round(1000 + (lvl - 2.5) * 400);
+                const basePoints = Math.round(1000 + (lvl - 2.0) * 200);
 
                 // 4. Create Firestore Profile
                 await setDoc(doc(db, "usuarios", uid), {
@@ -65,14 +65,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     victorias: 0,
                     rachaActual: 0,
                     rol: 'Jugador',
-                    aprobado: true, 
+                    status: 'pending', 
                     diario: [],
                     fotoURL: '',
                     createdAt: serverTimestamp()
                 });
 
-                showToast("Éxito", "Identidad sincronizada con la Matrix.", "success");
-                setTimeout(() => window.location.href = 'home.html', 1500);
+                showToast("Solicitud Enviada", "Tu identidad está en revisión por el Consejo.", "info");
+                setTimeout(() => window.location.href = 'index.html', 2500);
 
             } catch (err) {
                 console.error(err);
@@ -94,3 +94,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+

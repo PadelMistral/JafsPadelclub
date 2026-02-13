@@ -1,17 +1,17 @@
-/* =====================================================
-   PADELUMINATIS CALENDAR ENGINE V5.0
+﻿/* =====================================================
+   PADELUMINATIS CALENDAR ENGINE V7.0
    Mistral-Inspired Modern Matrix Logic.
    ===================================================== */
 
 import { db, auth, observerAuth, subscribeDoc, getDocument, subscribeCol } from './firebase-service.js';
 import { collection, getDocs, query, orderBy, limit, where, addDoc, doc, getDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast, countUp } from './ui-core.js';
+import { renderMatchDetail, renderCreationForm } from './match-service.js';
 
 let currentUser = null;
 let userData = null;
 let currentWeekOffset = 0;
 let allMatches = [];
-let allUsersMap = {};
 let weeklyWeather = null;
 
 async function fetchWeeklyWeather() {
@@ -25,7 +25,7 @@ const HOURS = [
     { start: "08:00", end: "09:30" },
     { start: "09:30", end: "11:00" },
     { start: "11:00", end: "12:30" },
-    { start: "12:30", end: "14:00" }, // Break after this
+    { start: "12:30", end: "14:00" }, 
     { start: "14:30", end: "16:00" },
     { start: "16:00", end: "17:30" },
     { start: "17:30", end: "19:00" },
@@ -38,35 +38,33 @@ document.addEventListener('DOMContentLoaded', () => {
     startClock();
     
     observerAuth(async (user) => {
-        if (!user) {
-            window.location.href = 'index.html';
-            return;
+        try {
+            if (!user) {
+                window.location.href = 'index.html';
+                return;
+            }
+            currentUser = user;
+            
+            // Initial data load
+            const uData = await getDocument('usuarios', user.uid);
+            userData = uData || {};
+            
+            // Sync matches from both collections
+            subscribeCol("partidosAmistosos", () => syncMatches());
+            subscribeCol("partidosReto", () => syncMatches());
+            
+            syncMatches(); // Initial trigger
+        } catch (e) {
+            console.error('Calendar init error:', e);
+            renderGrid();
         }
-        currentUser = user;
-        
-        // Initial data load
-        const [uData, usersSnap] = await Promise.all([
-            getDocument('usuarios', user.uid),
-            getDocs(collection(db, 'usuarios'))
-        ]);
-        
-        userData = uData;
-        usersSnap.forEach(d => allUsersMap[d.id] = d.data());
-        
-        // Sync matches from both collections
-        subscribeCol("partidosAmistosos", (list) => {
-            syncMatches();
-        });
-        subscribeCol("partidosReto", (list) => {
-            syncMatches();
-        });
-        
-        syncMatches(); // Initial trigger
     });
 
     // Navigation setup
-    document.getElementById('btn-prev').onclick = () => { currentWeekOffset--; renderGrid(); };
-    document.getElementById('btn-next').onclick = () => { currentWeekOffset++; renderGrid(); };
+    const btnPrev = document.getElementById('btn-prev');
+    if (btnPrev) btnPrev.onclick = () => { currentWeekOffset--; renderGrid(); };
+    const btnNext = document.getElementById('btn-next');
+    if (btnNext) btnNext.onclick = () => { currentWeekOffset++; renderGrid(); };
 });
 
 function startClock() {
@@ -86,17 +84,23 @@ function startClock() {
 }
 
 async function syncMatches() {
-    const [snapA, snapR] = await Promise.all([
-        getDocs(collection(db, "partidosAmistosos")),
-        getDocs(collection(db, "partidosReto"))
-    ]);
-    
-    allMatches = [];
-    snapA.forEach(d => allMatches.push({ id: d.id, col: 'partidosAmistosos', ...d.data() }));
-    snapR.forEach(d => allMatches.push({ id: d.id, col: 'partidosReto', isComp: true, ...d.data() }));
-    
-    await fetchWeeklyWeather();
-    renderGrid();
+    try {
+        const [snapA, snapR] = await Promise.all([
+            window.getDocsSafe(collection(db, "partidosAmistosos")),
+            window.getDocsSafe(collection(db, "partidosReto"))
+        ]);
+        
+        allMatches = [];
+        snapA.forEach(d => allMatches.push({ id: d.id, col: 'partidosAmistosos', ...d.data() }));
+        snapR.forEach(d => allMatches.push({ id: d.id, col: 'partidosReto', isComp: true, ...d.data() }));
+        
+        await fetchWeeklyWeather();
+        renderGrid();
+    } catch (e) {
+        console.error('Calendar sync error:', e);
+        allMatches = [];
+        renderGrid();
+    }
 }
 
 function renderGrid() {
@@ -113,8 +117,10 @@ function renderGrid() {
     endOfWeek.setDate(startOfWeek.getDate() + 6);
 
     // Update labels
-    document.getElementById('week-range-text').textContent = `${startOfWeek.getDate()} - ${endOfWeek.getDate()}`;
-    document.getElementById('month-year-text').textContent = `${startOfWeek.toLocaleDateString('es-ES', {month: 'long', year: 'numeric'})}`.toUpperCase();
+    const weekLabel = document.getElementById('week-range-text');
+    const monthLabel = document.getElementById('month-year-text');
+    if (weekLabel) weekLabel.textContent = `${startOfWeek.getDate()} - ${endOfWeek.getDate()}`;
+    if (monthLabel) monthLabel.textContent = `${startOfWeek.toLocaleDateString('es-ES', {month: 'long', year: 'numeric'})}`.toUpperCase();
 
     let html = `
         <div class="grid-header-v5">
@@ -150,6 +156,7 @@ function renderGrid() {
     });
 
     container.innerHTML = html + `</div>`;
+    focusToday();
 }
 
 function renderSlot(date, hour) {
@@ -158,28 +165,32 @@ function renderSlot(date, hour) {
     const day = date.getDate().toString().padStart(2, '0');
     const dStr = `${year}-${month}-${day}`;
 
+    const [h, min] = hour.split(':').map(Number);
+    const slotTime = new Date(date);
+    slotTime.setHours(h, min, 0, 0);
+    const slotEnd = new Date(slotTime);
+    slotEnd.setMinutes(slotEnd.getMinutes() + 90);
+
     const match = allMatches.find(m => {
         const mDate = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
+        if (Number.isNaN(mDate.getTime())) return false;
         const mYear = mDate.getFullYear();
         const mMonth = (mDate.getMonth() + 1).toString().padStart(2, '0');
         const mDay = mDate.getDate().toString().padStart(2, '0');
         const mDStr = `${mYear}-${mMonth}-${mDay}`;
-        const mHStr = `${mDate.getHours().toString().padStart(2, '0')}:${mDate.getMinutes().toString().padStart(2, '0')}`;
-        return mDStr === dStr && mHStr === hour;
+        if (mDStr !== dStr) return false;
+        const mTime = mDate.getTime();
+        return mTime >= slotTime.getTime() && mTime < slotEnd.getTime();
     });
-
-    const [h, min] = hour.split(':').map(Number);
-    const slotTime = new Date(date);
-    slotTime.setHours(h, min, 0, 0);
-    const isPast = slotTime < new Date();
+    const isPast = slotEnd < new Date();
     let state = 'free';
     let label = 'Libre';
     let sub = '';
     let extraIcon = '';
 
     if (match) {
-        const isMine = match.jugadores?.includes(currentUser.uid);
-        const count = match.jugadores?.length || 0;
+        const isMine = !!currentUser && match.jugadores?.includes(currentUser.uid);
+        const count = (match.jugadores || []).filter(id => id).length;
         const isFull = count >= 4;
         const isPlayed = match.estado === 'jugado';
         
@@ -188,7 +199,6 @@ function renderSlot(date, hour) {
             label = 'JUGADO';
             sub = match.resultado?.sets || 'VER RES';
             if (isMine) {
-                // Check if diary exists
                 const hasDiary = userData?.diario?.some(e => e.matchId === match.id);
                 if (!hasDiary) {
                     label = 'DIARIO';
@@ -214,7 +224,8 @@ function renderSlot(date, hour) {
             const code = weeklyWeather.daily.weather_code[dayIdx];
             const temp = Math.round(weeklyWeather.daily.temperature_2m_max[dayIdx]);
             const icon = getIconFromCode(code);
-            weatherHtml = `<div class="slot-weather"><i class="fas ${icon}"></i> <span>${temp}°</span></div>`;
+            const wx = getWeatherStateFromCode(code);
+            weatherHtml = `<div class="slot-weather ${wx}"><i class="fas ${icon}"></i> <span>${temp}°</span></div>`;
         }
     }
 
@@ -228,8 +239,17 @@ function renderSlot(date, hour) {
     `;
 }
 
+function getWeatherStateFromCode(code) {
+    if (code === 0) return "sunny";
+    if (code <= 3) return "cloudy";
+    if (code <= 48) return "cloudy";
+    if (code <= 82) return "rainy";
+    if (code <= 99) return "rainy";
+    return "cloudy";
+}
+
 function getIconFromCode(code) {
-    if (code === 0) return 'fa-sun text-yellow-400';
+    if (code === 0) return 'fa-sun text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]';
     if (code <= 3) return 'fa-cloud-sun text-orange-300';
     if (code <= 48) return 'fa-smog text-gray-400';
     if (code <= 67) return 'fa-cloud-rain text-blue-400';
@@ -239,20 +259,27 @@ function getIconFromCode(code) {
     return 'fa-cloud text-gray-400';
 }
 
+// Global Handlers
 window.handleSlot = async (date, hour, id, col) => {
     const modal = document.getElementById('modal-match');
     const area = document.getElementById('match-detail-area');
     const title = document.getElementById('modal-titulo');
     
-    modal.classList.add('active');
-    area.innerHTML = '<div class="p-10 text-center"><div class="spinner-neon mx-auto"></div></div>';
-    title.textContent = id ? 'DETALLES PARTIDA' : 'NUEVA RESERVA';
+    if(!modal || !area) return;
 
-    const { renderMatchDetail, renderCreationForm } = await import('./match-service.js');
-    if (id) {
-        await renderMatchDetail(area, id, col, currentUser, userData);
-    } else {
-        await renderCreationForm(area, date, hour, currentUser, userData);
+    modal.classList.add('active');
+    area.innerHTML = '<div class="center py-20"><div class="spinner-galaxy"></div></div>';
+    if(title) title.textContent = id ? 'DETALLES DE MISIÓN' : 'NUEVO DESPLIEGUE';
+
+    try {
+        if (id) {
+            await renderMatchDetail(area, id, col, currentUser, userData);
+        } else {
+            await renderCreationForm(area, date, hour, currentUser, userData);
+        }
+    } catch(e) {
+        console.error("Render error:", e);
+        area.innerHTML = '<div class="center p-10 opacity-50">Error de carga</div>';
     }
 };
 
@@ -265,34 +292,45 @@ window.handleSelectorSearch = (val) => {
     });
 };
 
+// Adapter for match-service.js calling convention
+window.openPlayerSelector = async (mid, col, extra) => {
+    // extra contains {idx: 1}
+    window.openUserPicker(extra.idx);
+};
+
 window.openUserPicker = async (slotIndex) => {
     const picker = document.getElementById('modal-user-picker');
     const list = document.getElementById('user-picker-list');
+    if(!picker || !list) return;
+
     picker.classList.add('active');
     picker.dataset.slotIndex = slotIndex;
     
     // Load users if empty
     if (!list.innerHTML.trim()) {
-        list.innerHTML = '<div class="spinner-neon mx-auto mt-10"></div>';
-        const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
-        const snap = await getDocs(collection(db, "usuarios"));
-        
-        list.innerHTML = snap.docs.map(d => {
-            const u = d.data();
-            const photo = u.fotoPerfil || u.fotoURL || './imagenes/default-avatar.png';
-            return `
-                <div class="u-item-list-v5" onclick="selectUserForSlot('${d.id}', '${u.nombreUsuario || 'Jugador'}', '${photo}')">
-                    <div class="u-item-left">
-                        <div class="u-avatar-v5"><img src="${photo}"></div>
-                        <div class="flex-col">
-                            <span class="u-name-v5">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
-                            <span class="u-lvl-v5">Nivel ${(u.nivel || 2.5).toFixed(2)}</span>
+        list.innerHTML = '<div class="center py-10"><div class="spinner-galaxy"></div></div>';
+        try {
+            const snap = await window.getDocsSafe(query(collection(db, "usuarios"), limit(50)));
+            list.innerHTML = snap.docs.map(d => {
+                const u = d.data();
+                const photo = u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png';
+                // Remove redundant quote in onClick
+                return `
+                    <div class="u-item-list-v5" onclick="selectUserForSlot('${d.id}', '${u.nombreUsuario || u.nombre || 'Jugador'}', '${photo}')">
+                        <div class="u-item-left">
+                            <div class="u-avatar-v5"><img src="${photo}"></div>
+                            <div class="flex-col">
+                                <span class="u-name-v5">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
+                                <span class="u-lvl-v5">Nivel ${(u.nivel || 2.5).toFixed(2)}</span>
+                            </div>
                         </div>
+                        <div class="u-add-btn"><i class="fas fa-plus"></i></div>
                     </div>
-                    <div class="u-add-btn"><i class="fas fa-plus"></i></div>
-                </div>
-            `;
-        }).join('');
+                `;
+            }).join('');
+        } catch(e) {
+            list.innerHTML = '<div class="center p-10">Error al cargar agentes.</div>';
+        }
     }
 };
 
@@ -300,27 +338,50 @@ window.selectUserForSlot = (uid, name, photo) => {
     const picker = document.getElementById('modal-user-picker');
     const idx = picker.dataset.slotIndex;
     
-    // Dispatch custom event or callback to match-service logic
-    // But since match-service handles the render, we need a bridge.
-    // For now we update the DOM directly if it exists in the open form
-    const slotEl = document.querySelector(`.player-slot-court[data-index="${idx}"]`);
+    // Update global state for creation
+    if (window._initialJugadores) {
+        window._initialJugadores[idx] = uid;
+    }
+
+    // Update V7 DOM in match-service creation form
+    const slotEl = document.getElementById(`slot-${idx}-wrap`);
     if (slotEl) {
-        slotEl.classList.add('filled');
-        slotEl.dataset.uid = uid;
+        slotEl.className = 'p-slot-v7 active';
+        slotEl.removeAttribute('onclick');
         slotEl.innerHTML = `
-            <div class="p-avatar"><img src="${photo}" style="width:100%;height:100%;object-fit:cover;"></div>
-            <span class="p-name">${name}</span>
-            <div class="remove-slot-btn" onclick="event.stopPropagation(); clearSlot('${idx}')">×</div>
+            <div class="p-img-box">
+                <img src="${photo}">
+            </div>
+            <span class="p-badge" style="color:var(--primary); border-color:var(--primary)">2.5</span>
+            <span class="text-[8px] font-black uppercase text-white tracking-widest mt-1 truncate w-16 text-center">${name}</span>
+            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px]" onclick="event.stopPropagation(); clearSlot('${idx}')"><i class="fas fa-times"></i></button>
         `;
     }
     picker.classList.remove('active');
 };
 
 window.clearSlot = (idx) => {
-    const slotEl = document.querySelector(`.player-slot-court[data-index="${idx}"]`);
+    // Update global state
+    if (window._initialJugadores) {
+        window._initialJugadores[idx] = null;
+    }
+
+    const slotEl = document.getElementById(`slot-${idx}-wrap`);
     if (slotEl) {
-        slotEl.classList.remove('filled');
-        slotEl.dataset.uid = "";
-        slotEl.innerHTML = `<i class="fas fa-plus opacity-30 text-2xl"></i>`;
+        slotEl.className = 'p-slot-v7 pointer';
+        slotEl.setAttribute('onclick', `window.openPlayerSelector('NEW', 'amistoso', {idx:${idx}})`);
+        slotEl.innerHTML = `
+            <div class="p-img-box empty" style="border:1px dashed rgba(255,255,255,0.2)">
+                <i class="fas fa-plus text-white opacity-50"></i>
+            </div>
+            <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-3">VACÍO</span>
+        `;
     }
 };
+
+function focusToday() {
+    setTimeout(() => {
+        const todayHeader = document.querySelector('.day-header-v5.today');
+        if (todayHeader) todayHeader.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }, 200);
+}

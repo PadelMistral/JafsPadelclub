@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -11,247 +11,420 @@
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./css/design-system.css">
-    <link rel="stylesheet" href="./css/layout.css">
-    <link rel="stylesheet" href="./css/components-premium.css">
+    <!-- Core Bundle: design-system + layout + components-premium + themes + dynamic-elements -->
+    <link rel="stylesheet" href="./css/core-bundle.css">
     <link rel="stylesheet" href="./css/themes.css">
-    <link rel="stylesheet" href="./css/dynamic-elements.css">
     <link rel="stylesheet" href="./css/diario.css">
+    <!-- Premium V7 Styles (New Design - High Priority) -->
+    <link rel="stylesheet" href="./css/premium-v7.css">
+    <link rel="stylesheet" href="./css/galactic-overrides.css">
+    <style>
+        /* Wizard specific styles */
+        .wizard-step {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .wizard-step.active {
+            display: block;
+            opacity: 1;
+        }
+
+        .wizard-progress {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+        }
+
+        .w-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .w-bar.active {
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--primary);
+        }
+
+        .w-bar.passed {
+            background: var(--sport-green);
+        }
+
+        .stat-grid-v10 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat-item-v10 {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            padding: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .rival-tag-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .r-tag {
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            font-size: 10px;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .r-tag.active {
+            background: rgba(var(--primary-rgb), 0.2);
+            border-color: var(--primary);
+            color: white;
+        }
+    </style>
 </head>
 
 <body>
-    <!-- Galactic Background -->
     <!-- Galactic Background -->
     <div class="sport-bg"></div>
 
     <!-- Header & Nav injected by JS -->
 
-    <main class="page-content diary-page">
+    <main class="page-content diary-page-v9">
 
-        <!-- Page Header -->
-        <section class="diary-header animate-fade-in">
-            <div class="diary-title-area">
-                <h1 class="page-title"><i class="fas fa-book-medical"></i> Diario Táctico</h1>
-                <span class="page-subtitle">Tu bitácora personal de evolución</span>
+        <!-- Page Header: Command Pulse -->
+        <section class="diary-header-v9 animate-fade-in">
+            <div class="h-glow"></div>
+            <div class="header-main-v9">
+                <div class="title-wrap-v9">
+                    <h1 class="font-display font-black text-4xl italic tracking-tighter uppercase">
+                        Elite <span class="text-primary italic glow-text-blue">Journal</span>
+                    </h1>
+                    <span class="text-[10px] font-black tracking-[5px] uppercase opacity-60 text-sport-green">
+                        <i class="fas fa-microchip mr-1"></i> Padeluminatis Circuit v9.0
+                    </span>
+                </div>
+
+                <div class="pulse-stats-v9">
+                    <div class="p-stat">
+                        <span class="p-val" id="stat-entries">0</span>
+                        <span class="p-lbl">BITS</span>
+                    </div>
+                    <div class="p-stat">
+                        <span class="p-val" id="stat-streak">0</span>
+                        <span class="p-lbl">FIRE</span>
+                    </div>
+                </div>
             </div>
         </section>
 
-        <!-- Quick Actions -->
-        <section class="diary-actions animate-fade-in" style="animation-delay: 0.1s;">
-            <button class="btn btn-primary flex-1"
-                onclick="document.getElementById('modal-entry').classList.add('active')">
-                <i class="fas fa-plus"></i> Nueva Entrada
+        <!-- Dynamic Control Bar -->
+        <section class="diary-controls-v9 animate-up" style="animation-delay: 0.1s;">
+            <button class="btn-create-v9" onclick="window.openWizard()">
+                <div class="btn-inner">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>NUEVO REPORTE</span>
+                </div>
+                <div class="btn-bg"></div>
             </button>
-            <button class="btn btn-ghost flex-1" onclick="showAIAnalysis()">
-                <i class="fas fa-robot"></i> Análisis IA
+            <button class="btn-ai-v9" onclick="showAIAnalysis()">
+                <i class="fas fa-brain-circuit"></i>
+                <span>ANALIZAR MATRIX</span>
             </button>
         </section>
 
-        <!-- Stats Overview -->
-        <section class="diary-stats animate-fade-in" style="animation-delay: 0.15s;">
-            <div class="stat-pill">
-                <i class="fas fa-pencil"></i>
-                <span id="stat-entries">0</span>
-                <label>Entradas</label>
+        <!-- Main Journal Flow -->
+        <section class="journal-flow-v9 animate-up" style="animation-delay: 0.2s;">
+            <div class="flow-header-v9">
+                <span class="text-[10px] font-black tracking-widest uppercase py-4">Sincronizaciones Recientes</span>
+                <div class="h-line"></div>
             </div>
-            <div class="stat-pill">
-                <i class="fas fa-fire"></i>
-                <span id="stat-streak">0</span>
-                <label>Racha</label>
-            </div>
-            <div class="stat-pill">
-                <i class="fas fa-star"></i>
-                <span id="stat-avg-mood">-</span>
-                <label>Ánimo</label>
-            </div>
-        </section>
 
-        <!-- Journal Entries -->
-        <section class="journal-section animate-fade-in" style="animation-delay: 0.2s;">
-            <div class="section-header">
-                <h2 class="section-title">Últimas Entradas</h2>
-            </div>
-            <div id="journal-list" class="journal-list">
-                <!-- Loading -->
-                <div class="journal-loading">
-                    <div class="spinner-neon"></div>
-                    <span>Cargando bitácora...</span>
+            <div id="journal-list" class="journal-grid-v9">
+                <div class="loading-matrix text-center py-20">
+                    <div class="spinner-neon mb-4"></div>
+                    <span class="text-xs font-black tracking-widest opacity-50">SINCRONIZANDO CANALES...</span>
                 </div>
             </div>
         </section>
 
     </main>
 
-    <!-- Entry Modal -->
+    <!-- Entry Wizard Modal -->
     <div id="modal-entry" class="modal-overlay">
-        <div class="modal-card modal-lg">
-            <div class="modal-header">
-                <h3 class="modal-title">Reporte de Sesión</h3>
-                <button class="modal-close" onclick="document.getElementById('modal-entry').classList.remove('active')">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <!-- Mood Selector -->
-                <div class="form-group">
-                    <label class="form-label">¿Cómo te sentiste?</label>
-                    <div class="mood-grid" id="mood-box">
-                        <button class="mood-btn" data-mood="Mal">
-                            <i class="fas fa-sad-tear"></i>
-                            <span>Mal</span>
-                        </button>
-                        <button class="mood-btn" data-mood="Cansado">
-                            <i class="fas fa-tired"></i>
-                            <span>Cansado</span>
-                        </button>
-                        <button class="mood-btn active" data-mood="Normal">
-                            <i class="fas fa-meh"></i>
-                            <span>Normal</span>
-                        </button>
-                        <button class="mood-btn" data-mood="Bien">
-                            <i class="fas fa-smile"></i>
-                            <span>Bien</span>
-                        </button>
-                        <button class="mood-btn" data-mood="Genial">
-                            <i class="fas fa-grin-stars"></i>
-                            <span>Genial</span>
+        <div class="modal-sheet-v7" style="height: 90vh; max-height: 800px;">
+
+            <div class="sheet-header-v7">
+                <div class="flex-col w-full">
+                    <div class="flex-row between items-center mb-4">
+                        <span class="text-[9px] font-black text-primary tracking-widest uppercase">Protocolo de
+                            Entrada</span>
+                        <button class="btn-icon-glass" onclick="window.closeWizard()">
+                            <i class="fas fa-times"></i>
                         </button>
                     </div>
-                </div>
-
-                <div class="divider"></div>
-
-                <!-- Session Type -->
-                <div class="form-group">
-                    <label class="form-label">Tipo de Sesión</label>
-                    <select id="inp-tipo" class="form-select">
-                        <option value="Partido">Partido de Competición</option>
-                        <option value="Amistoso">Partido Amistoso</option>
-                        <option value="Entrenamiento">Sesión de Entrenamiento</option>
-                        <option value="Clase">Clase con Monitor</option>
-                        <option value="Fisico">Entrenamiento Físico</option>
-                        <option value="Nota">Nota Personal / Reflexión</option>
-                    </select>
-                </div>
-
-                <!-- Linked Match -->
-                <div id="linked-match-info" class="linked-match hidden">
-                    <div class="linked-match-label">
-                        <i class="fas fa-link"></i> Partido Vinculado
+                    <div class="wizard-progress">
+                        <div class="w-bar active" id="wb-1"></div>
+                        <div class="w-bar" id="wb-2"></div>
+                        <div class="w-bar" id="wb-3"></div>
+                        <div class="w-bar" id="wb-4"></div>
+                        <div class="w-bar" id="wb-5"></div>
                     </div>
-                    <div class="linked-match-detail">
-                        <span id="txt-match-date">...</span>
-                        <span class="badge badge-primary" id="txt-match-type">...</span>
-                    </div>
-                    <input type="hidden" id="inp-match-id">
-                </div>
-
-                <!-- Config Inputs -->
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Pala Usada</label>
-                        <input type="text" id="inp-pala" class="input" placeholder="Ej: Nox AT10">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Club / Pista</label>
-                        <input type="text" id="inp-pista" class="input" placeholder="Ej: Pista 1">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group pb-4">
-                        <label class="form-label">Rival / Pareja</label>
-                        <input type="text" id="inp-rival" class="input" placeholder="Nombres">
-                    </div>
-                </div>
-
-                <div class="divider"></div>
-
-                <!-- NEW: Tactical Skill Chips -->
-                <div class="form-group">
-                    <label class="form-label">Balance Táctico (¿Qué tal hoy?)</label>
-                    <div class="skill-chips-grid" id="skill-chips-container">
-                        <div class="chip-item" data-skill="Bandeja" data-state="none" onclick="toggleSkillChip(this)">
-                            <i class="fas fa-circle-dot"></i> <span>Bandeja</span>
-                        </div>
-                        <div class="chip-item" data-skill="Volea" data-state="none" onclick="toggleSkillChip(this)">
-                            <i class="fas fa-circle-dot"></i> <span>Volea</span>
-                        </div>
-                        <div class="chip-item" data-skill="Remate" data-state="none" onclick="toggleSkillChip(this)">
-                            <i class="fas fa-circle-dot"></i> <span>Remate</span>
-                        </div>
-                        <div class="chip-item" data-skill="Saque" data-state="none" onclick="toggleSkillChip(this)">
-                            <i class="fas fa-circle-dot"></i> <span>Saque</span>
-                        </div>
-                        <div class="chip-item" data-skill="Defensa" data-state="none" onclick="toggleSkillChip(this)">
-                            <i class="fas fa-circle-dot"></i> <span>Defensa</span>
-                        </div>
-                        <div class="chip-item" data-skill="Revés" data-state="none" onclick="toggleSkillChip(this)">
-                            <i class="fas fa-circle-dot"></i> <span>Revés</span>
-                        </div>
-                    </div>
-                    <p class="text-[8px] opacity-40 mt-1 italic">* Haz clic para alternar: Neutro > Bien (Verde) > Mal
-                        (Rojo)</p>
-                </div>
-
-                <div class="divider"></div>
-
-                <!-- Skill Sliders -->
-                <div class="form-group">
-                    <label class="form-label">Valoración por Áreas</label>
-                    <div class="skill-sliders">
-                        <div class="skill-row">
-                            <span class="skill-label">Defensa</span>
-                            <input type="range" id="inp-defensa" class="form-range" min="1" max="10" value="5">
-                            <span class="skill-value primary" id="val-defensa">5</span>
-                        </div>
-                        <div class="skill-row">
-                            <span class="skill-label">Volea</span>
-                            <input type="range" id="inp-volea" class="form-range" min="1" max="10" value="5">
-                            <span class="skill-value secondary" id="val-volea">5</span>
-                        </div>
-                        <div class="skill-row">
-                            <span class="skill-label">Ataque</span>
-                            <input type="range" id="inp-ataque" class="form-range" min="1" max="10" value="5">
-                            <span class="skill-value success" id="val-ataque">5</span>
-                        </div>
-                        <div class="skill-row">
-                            <span class="skill-label">Físico</span>
-                            <input type="range" id="inp-fisico" class="form-range" min="1" max="10" value="5">
-                            <span class="skill-value accent" id="val-fisico">5</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Notes -->
-                <div class="form-group">
-                    <label class="form-label">Notas Tácticas</label>
-                    <textarea id="entry-notes" class="input textarea" rows="3"
-                        placeholder="Observaciones, puntos a mejorar, estrategias que funcionaron..."></textarea>
+                    <h3 class="text-xl font-black italic uppercase tracking-tighter" id="wizard-title">Contexto Global
+                    </h3>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-ghost"
-                    onclick="document.getElementById('modal-entry').classList.remove('active')">
-                    Cancelar
-                </button>
-                <button class="btn btn-primary" id="btn-save-entry">
-                    <i class="fas fa-save"></i> Guardar Entrada
-                </button>
+
+            <div class="sheet-body-v7 custom-scroll" style="padding-bottom: 80px;">
+
+                <!-- STEP 1: CONTEXTO -->
+                <div id="step-1" class="wizard-step active">
+                    <div class="cfg-grid-v9 mb-6">
+                        <div class="cfg-group-v9">
+                            <label class="cfg-label-v7">TIPO DE SESIÓN</label>
+                            <select id="inp-tipo" class="select-v9">
+                                <option value="Partido">Partido ELO</option>
+                                <option value="Amistoso">Amistoso</option>
+                                <option value="Entrenamiento">Entrenamiento</option>
+                                <option value="Torneo">Torneo Oficial</option>
+                            </select>
+                        </div>
+                        <div class="cfg-group-v9">
+                            <label class="cfg-label-v7">HORA DEL DÍA</label>
+                            <select id="inp-hora" class="select-v9">
+                                <option value="mañana">Mañana (08-12)</option>
+                                <option value="mediodia">Mediodía (12-16)</option>
+                                <option value="tarde">Tarde (16-20)</option>
+                                <option value="noche">Noche (20-00)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="cfg-grid-v9 mb-6">
+                        <div class="cfg-group-v9">
+                            <label class="cfg-label-v7">SUPERFICIE</label>
+                            <div class="segmented-v9" id="surface-selector">
+                                <button class="seg-node-v9 active" data-val="indoor">INDOOR</button>
+                                <button class="seg-node-v9" data-val="outdoor">OUTDOOR</button>
+                            </div>
+                        </div>
+                        <div class="cfg-group-v9">
+                            <label class="cfg-label-v7">TIPO DE PISTA</label>
+                            <select id="inp-court-type" class="select-v9">
+                                <option value="cristal">Cristal Estándar</option>
+                                <option value="panoramica">Panorámica WPT</option>
+                                <option value="muro">Muro (Old School)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="linked-match-info" class="link-hook-v9 hidden mb-6">
+                        <div class="hook-glow"></div>
+                        <div class="flex-row between items-center">
+                            <div class="flex-row items-center gap-3">
+                                <div class="hook-icon"><i class="fas fa-link"></i></div>
+                                <div class="flex-col">
+                                    <span class="text-[9px] font-black opacity-50">VÍNCULO DETECTADO</span>
+                                    <span id="txt-match-date" class="text-xs font-bold">--/--/--</span>
+                                    <span id="txt-result" class="text-[10px] text-sport-gold font-mono"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="inp-match-id">
+                    </div>
+                </div>
+
+                <!-- STEP 2: ALINEACIÓN Y RIVAL -->
+                <div id="step-2" class="wizard-step">
+                    <div class="cfg-group-v9 mb-6">
+                        <label class="cfg-label-v7">TU POSICIÓN</label>
+                        <div class="segmented-v9" id="pos-selector">
+                            <button class="seg-node-v9 active" data-val="reves">REVÉS</button>
+                            <button class="seg-node-v9" data-val="drive">DRIVE</button>
+                        </div>
+                    </div>
+
+                    <div class="cfg-group-v9 mb-6">
+                        <label class="cfg-label-v7">TIPO DE RIVALES (ESTILO)</label>
+                        <div class="rival-tag-grid" id="rival-tags">
+                            <div class="r-tag" onclick="this.classList.toggle('active')">Agresivos</div>
+                            <div class="r-tag" onclick="this.classList.toggle('active')">Defensivos</div>
+                            <div class="r-tag" onclick="this.classList.toggle('active')">Globeros</div>
+                            <div class="r-tag" onclick="this.classList.toggle('active')">Bandejeros</div>
+                            <div class="r-tag" onclick="this.classList.toggle('active')">Tácticos</div>
+                            <div class="r-tag" onclick="this.classList.toggle('active')">Irregulares</div>
+                            <div class="r-tag" onclick="this.classList.toggle('active')">Nevera</div>
+                        </div>
+                    </div>
+
+                    <div class="cfg-group-v9 mb-6">
+                        <label class="cfg-label-v7">JUGADORES (OPCIONAL)</label>
+                        <input type="text" id="inp-partner" class="input-v9 mb-2" placeholder="Tu compañero...">
+                        <input type="text" id="inp-rival1" class="input-v9 mb-2" placeholder="Rival 1...">
+                        <input type="text" id="inp-rival2" class="input-v9" placeholder="Rival 2...">
+                    </div>
+                </div>
+
+                <!-- STEP 3: METRICAS -->
+                <div id="step-3" class="wizard-step">
+                    <label class="cfg-label-v7 mb-4">ESTADÍSTICAS ESTIMADAS</label>
+
+                    <div class="stat-grid-v10 mb-6">
+                        <div class="stat-item-v10">
+                            <span class="stat-label">Winners</span>
+                            <div class="flex-row gap-2 items-center">
+                                <button class="btn-icon-xs" onclick="stepCount('winners', -1)"><i
+                                        class="fas fa-minus"></i></button>
+                                <span class="text-xl font-black text-sport-green" id="val-winners">0</span>
+                                <button class="btn-icon-xs" onclick="stepCount('winners', 1)"><i
+                                        class="fas fa-plus"></i></button>
+                            </div>
+                        </div>
+                        <div class="stat-item-v10">
+                            <span class="stat-label">Errores No Forzados</span>
+                            <div class="flex-row gap-2 items-center">
+                                <button class="btn-icon-xs" onclick="stepCount('ue', -1)"><i
+                                        class="fas fa-minus"></i></button>
+                                <span class="text-xl font-black text-sport-red" id="val-ue">0</span>
+                                <button class="btn-icon-xs" onclick="stepCount('ue', 1)"><i
+                                        class="fas fa-plus"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cfg-group-v9 mb-6">
+                        <label class="cfg-label-v7">% PUNTOS GANADOS (ESTIMADO)</label>
+                        <div class="stat-item-v10 w-full mb-2">
+                            <span class="stat-label">EN LA RED (VOLEA/REMATE)</span>
+                            <input type="range" id="rng-net" class="w-full form-range" min="0" max="100" value="50"
+                                oninput="document.getElementById('lbl-net').innerText=this.value+'%'">
+                            <span class="text-xs font-bold text-right block" id="lbl-net">50%</span>
+                        </div>
+                        <div class="stat-item-v10 w-full">
+                            <span class="stat-label">DESDE EL FONDO</span>
+                            <input type="range" id="rng-back" class="w-full form-range" min="0" max="100" value="50"
+                                oninput="document.getElementById('lbl-back').innerText=this.value+'%'">
+                            <span class="text-xs font-bold text-right block" id="lbl-back">50%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 4: BIOMETRÍA -->
+                <div id="step-4" class="wizard-step">
+                    <label class="cfg-label-v7 mb-4">ESTADO DEL JUGADOR</label>
+
+                    <div class="sliders-v9 mb-6">
+                        <div class="sl-item">
+                            <div class="flex-between mb-2">
+                                <span class="sl-label">ENERGÍA FÍSICA</span>
+                                <span class="sl-val" id="val-fisico">5</span>
+                            </div>
+                            <input type="range" id="inp-fisico" min="1" max="10" value="5" class="sl-range fisico">
+                        </div>
+                        <div class="sl-item">
+                            <div class="flex-between mb-2">
+                                <span class="sl-label">CONCENTRACIÓN</span>
+                                <span class="sl-val" id="val-mental">5</span>
+                            </div>
+                            <input type="range" id="inp-mental" min="1" max="10" value="5" class="sl-range mental">
+                        </div>
+                        <div class="sl-item">
+                            <div class="flex-between mb-2">
+                                <span class="sl-label">CONFIANZA</span>
+                                <span class="sl-val" id="val-confianza">5</span>
+                            </div>
+                            <input type="range" id="inp-confianza" min="1" max="10" value="5" class="sl-range tactica">
+                        </div>
+                    </div>
+
+                    <div class="cfg-group-v9">
+                        <label class="cfg-label-v7">BIOMETRÍA EMOCIONAL</label>
+                        <div class="mood-matrix-v9" id="mood-box">
+                            <button class="mood-face" data-mood="Frustrado"><i
+                                    class="fas fa-face-angry"></i><span>Frustrado</span></button>
+                            <button class="mood-face" data-mood="Cansado"><i
+                                    class="fas fa-face-tired"></i><span>Cansado</span></button>
+                            <button class="mood-face active" data-mood="Normal"><i
+                                    class="fas fa-face-meh"></i><span>Normal</span></button>
+                            <button class="mood-face" data-mood="Motivado"><i
+                                    class="fas fa-fire"></i><span>Motivado</span></button>
+                            <button class="mood-face" data-mood="Fluido"><i
+                                    class="fas fa-bolt"></i><span>Fluido</span></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 5: ANALISIS -->
+                <div id="step-5" class="wizard-step">
+                    <div class="cfg-group-v9 mb-6">
+                        <label class="cfg-label-v7">CLAVES TÁCTICAS</label>
+                        <input type="text" id="inp-key-moment" class="input-v9 mb-3"
+                            placeholder="Momento clave del partido...">
+                        <input type="text" id="inp-damage-received" class="input-v9 mb-3"
+                            placeholder="¿Qué te hizo más daño?">
+                        <input type="text" id="inp-damage-inflicted" class="input-v9"
+                            placeholder="¿Qué les hizo daño a ellos?">
+                    </div>
+
+                    <div class="cfg-group-v9 mb-4">
+                        <label class="cfg-label-v7">NOTAS LIBRES</label>
+                        <textarea id="entry-notes" class="area-v9" rows="4"
+                            placeholder="Análisis profundo..."></textarea>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Wizard Footer Action -->
+            <div class="sheet-footer-v7 absolute bottom-0 w-full left-0 p-6 bg-cosmic border-t border-white/5 z-10">
+                <div class="flex-row gap-4 w-full">
+                    <button class="btn-cancel-v9 flex-1" id="btn-prev" onclick="window.wizardPrev()"
+                        style="display:none">ATRÁS</button>
+                    <button class="btn-save-v9 flex-[2]" id="btn-next" onclick="window.wizardNext()">
+                        <span id="btn-next-text">SIGUIENTE</span>
+                        <i class="fas fa-chevron-right" id="btn-next-icon"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
-    <script type="module" src="./js/diario-logic.js"></script>
-    <script type="module" src="./js/diario.js"></script>
+    <script type="module" src="./js/diario-logic.js?v=6.5"></script>
     <script type="module">
-        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
-        import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js?v=6.5';
+        import { initThemeSystem } from './js/modules/theme-manager.js?v=6.5';
         initThemeSystem();
         initGalaxyBackground();
     </script>
-
+    <script>
+        // quick helper for counters
+        window.stepCount = (id, delta) => {
+            const el = document.getElementById('val-' + id);
+            if (el) {
+                let v = parseInt(el.innerText) + delta;
+                if (v < 0) v = 0;
+                el.innerText = v;
+            }
+        }
+    </script>
 </body>
 
 </html>

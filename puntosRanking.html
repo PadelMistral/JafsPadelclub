@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -20,7 +20,7 @@
 </head>
 
 <body>
-    <!-- Galactic Background -->
+    <!-- Galactic Background --> 
     <div class="sport-bg"></div>
 
     <!-- Header & Nav injected by JS -->
@@ -132,10 +132,11 @@
         <div class="modal-sheet" id="match-breakdown-area"></div>
     </div>
 
-    <script type="module" src="./js/ranking.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module" src="./js/ranking.js?v=6.5"></script>
     <script type="module">
-        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
-        import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js?v=6.5';
+        import { initThemeSystem } from './js/modules/theme-manager.js?v=6.5';
         initThemeSystem();
         initGalaxyBackground();
     </script>
@@ -143,3 +144,4 @@
 </body>
 
 </html>
+

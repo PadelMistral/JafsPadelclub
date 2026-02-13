@@ -1,7 +1,7 @@
-// js/modules/theme-manager.js - Theme System V7.0
+﻿// js/modules/theme-manager.js - Theme System V7.0
 // Sistema de temas con 8 identidades visuales únicas
 
-const THEMES = ['galactic', 'winter', 'ocean', 'arcade', 'minimal', 'futuristic', 'elegant', 'creative'];
+const THEMES = ['galactic', 'winter', 'ocean', 'arcade', 'minimal', 'neon', 'matrix', 'sunset', 'elegant'];
 const STORAGE_KEY = 'padeluminatis_theme';
 
 /**
@@ -13,9 +13,10 @@ const THEME_DATA = [
     { id: 'ocean', name: 'Océano', icon: '🌊', desc: 'Profundidades marinas' },
     { id: 'arcade', name: 'Arcade', icon: '🕹️', desc: 'Retro gaming' },
     { id: 'minimal', name: 'Minimal', icon: '⬜', desc: 'Limpio y moderno' },
-    { id: 'futuristic', name: 'Cyber', icon: '💚', desc: 'Neón futurista' },
-    { id: 'elegant', name: 'Elegante', icon: '✨', desc: 'Lujo oscuro' },
-    { id: 'creative', name: 'Creativo', icon: '🎨', desc: 'Gradientes vivos' }
+    { id: 'neon', name: 'Cyber', icon: '⚡', desc: 'Neón futurista' },
+    { id: 'matrix', name: 'Circuito', icon: '🧬', desc: 'Códigos del Circuito' },
+    { id: 'sunset', name: 'Sunset', icon: '🌅', desc: 'Atardecer cálido' },
+    { id: 'elegant', name: 'Elegante', icon: '✨', desc: 'Lujo dorado' }
 ];
 
 /**
@@ -119,3 +120,7 @@ export function renderThemeSelector(containerId) {
         applyTheme(theme);
     };
 }
+
+
+
+

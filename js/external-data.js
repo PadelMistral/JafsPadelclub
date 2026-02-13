@@ -1,4 +1,4 @@
-/* js/external-data.js - External APIs Service v2.0 */
+﻿/* js/external-data.js - External APIs Service v2.0 */
 
 /**
  * Fetches "Padel Tip of the Day"
@@ -21,8 +21,8 @@ export async function getDailyTip() {
  */
 export async function getDetailedWeather() {
     try {
-        // Location hardcoded for the club area (latitude=39.49, longitude=-0.39)
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=39.49&longitude=-0.39&current=temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=10`;
+        // Location refined for Valencia Benicalap (latitude=39.4938, longitude=-0.3896)
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=39.4938&longitude=-0.3896&current=temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=10`;
         const res = await fetch(url);
         const data = await res.json();
         return data;
@@ -39,8 +39,8 @@ export async function getDetailedWeather() {
 export async function getWeatherForMatch(dateString, hour) {
     try {
         const date = new Date(dateString);
-        const lat = 39.49;
-        const lon = -0.39;
+        const lat = 39.4938;
+        const lon = -0.3896;
         const YYYYMMDD = date.toISOString().split('T')[0];
         
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,rain,showers,snowfall,wind_speed_10m&start_date=${YYYYMMDD}&end_date=${YYYYMMDD}`;
@@ -59,3 +59,5 @@ export async function getWeatherForMatch(dateString, hour) {
         return null;
     }
 }
+
+

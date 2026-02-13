@@ -1,4 +1,4 @@
-/* =====================================================
+﻿/* =====================================================
    PADELUMINATIS GALAXY BACKGROUND V6.0
    Dynamic star field with nebulae and shooting stars.
    ===================================================== */
@@ -109,5 +109,8 @@ export function initGalaxyBackground() {
     clearInterval(shootingStarInterval);
   };
 
-  console.log("🌌 Galaxy background initialized");
+  console.log("Galaxy background initialized");
 }
+
+
+

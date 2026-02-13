@@ -166,3 +166,14 @@
   font-size: 0.85rem;
   font-weight: 900;
 }
+
+/* Advanced polish */
+.event-card,
+.event-item {
+  padding: 16px;
+}
+.events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}

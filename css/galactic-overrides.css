@@ -1,0 +1,89 @@
+/* css/galactic-overrides.css */
+/* Extreme responsiveness and UI polish for Padeluminatis */
+
+:root {
+  --safe-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+/* Welcome Section Fixes */
+.welcome-section-v4 {
+  padding: clamp(1rem, 4vw, 1.5rem) !important;
+  margin-bottom: 1rem !important;
+  min-height: auto !important;
+}
+
+.username-v4 {
+  font-size: clamp(1.2rem, 5vw, 1.8rem) !important;
+  word-break: break-word;
+  max-width: 70%;
+}
+
+.rank-badge-simple {
+  flex-shrink: 0;
+}
+
+/* Stats Bar Polish */
+.stats-bar-v4 {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)) !important;
+  gap: 0.5rem !important;
+  padding: 0.75rem !important;
+}
+
+.m-stat-v4 {
+  min-width: 0 !important;
+}
+
+.v4-val {
+  font-size: 1rem !important;
+}
+
+.v4-lab {
+  font-size: 0.6rem !important;
+}
+
+/* AI Chat Layout Improvements */
+.ai-chat-panel {
+  z-index: 10000 !important;
+}
+
+.ai-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  max-height: 0;
+  overflow: hidden;
+  transition:
+    max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    margin 0.4s;
+  margin-top: 0;
+}
+
+.ai-quick-grid.open {
+  max-height: 200px;
+  margin-top: 12px;
+}
+
+.btn-command-toggle {
+  width: 100%;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.3s;
+}
+
+.btn-command-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+/* Mobile Bottom Navigation padding */
+.main-nav-v4 {
+  padding-bottom: var(--safe-bottom) !important;
+}

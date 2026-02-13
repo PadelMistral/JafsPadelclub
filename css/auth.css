@@ -4,16 +4,22 @@
    ===================================================== */
 
 /* ===== AUTH PAGE CONTAINER ===== */
+.body-auth {
+  overflow: hidden;
+  height: 100dvh;
+}
+
 .auth-screen {
+  width: 100%;
   min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px;
   position: relative;
   z-index: 10;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 /* ===== AUTH CARD & CONTAINER ===== */
@@ -21,6 +27,7 @@
 .auth-container {
   width: 100%;
   max-width: 420px;
+  margin: 0; /* Align with flex centering */
   background: rgba(15, 23, 42, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 32px;
@@ -32,12 +39,17 @@
     0 0 80px rgba(0, 212, 255, 0.15);
   backdrop-filter: blur(30px);
   -webkit-backdrop-filter: blur(30px);
-  animation: authCardEntry 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: authCardEntry 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
   display: flex;
   flex-direction: column;
+  opacity: 0; /* Start invisible */
 }
 
 @keyframes authCardEntry {
+  from {
+    transform: translateY(30px) scale(0.95);
+    opacity: 0;
+  }
   to {
     transform: translateY(0) scale(1);
     opacity: 1;
