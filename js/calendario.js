@@ -182,36 +182,63 @@ function renderSlot(date, hour) {
         const mTime = mDate.getTime();
         return mTime >= slotTime.getTime() && mTime < slotEnd.getTime();
     });
+    
     const isPast = slotEnd < new Date();
     let state = 'free';
     let label = 'Libre';
     let sub = '';
     let extraIcon = '';
+    let isLocked = false;
 
     if (match) {
-        const isMine = !!currentUser && match.jugadores?.includes(currentUser.uid);
-        const count = (match.jugadores || []).filter(id => id).length;
-        const isFull = count >= 4;
-        const isPlayed = match.estado === 'jugado';
-        
-        if (isPlayed) {
-            state = 'jugado';
-            label = 'JUGADO';
-            sub = match.resultado?.sets || 'VER RES';
-            if (isMine) {
-                const hasDiary = userData?.diario?.some(e => e.matchId === match.id);
-                if (!hasDiary) {
-                    label = 'DIARIO';
-                    extraIcon = '<i class="fas fa-exclamation-triangle pulse-warning absolute top-1 right-1 text-[10px] text-yellow-400"></i>';
+        // Private Match Check
+        if (match.visibility === 'private' && currentUser) {
+            const uid = currentUser.uid;
+             if (match.organizerId !== uid && match.creador !== uid && !(match.invitedUsers || []).includes(uid) && !(match.jugadores || []).includes(uid)) {
+                state = 'bloqueado';
+                label = 'PRIVADA';
+                sub = 'RESERVADO';
+                extraIcon = '<i class="fas fa-lock text-white/50 absolute top-2 right-2 text-xs"></i>';
+                isLocked = true;
+            }
+        }
+
+        if (!isLocked) {
+            const isMine = !!currentUser && match.jugadores?.includes(currentUser.uid);
+            const count = (match.jugadores || []).filter(id => id).length;
+            const isFull = count >= 4;
+            const isPlayed = match.estado === 'jugado';
+            
+            if (isPlayed) {
+                state = 'jugado';
+                label = 'JUGADO';
+                sub = match.resultado?.sets || 'VER RES';
+                if (isMine) {
+                    const hasDiary = userData?.diario?.some(e => e.matchId === match.id);
+                    if (!hasDiary) {
+                        label = 'DIARIO';
+                        extraIcon = '<i class="fas fa-exclamation-triangle pulse-warning absolute top-1 right-1 text-[10px] text-yellow-400"></i>';
+                    } else {
+                        label = 'FINALIZADO';
+                    }
+                }
+            } else {
+                if (isMine) {
+                    state = 'propia';
+                    label = 'TU PARTIDO';
+                    sub = 'VER DETALLES';
+                }
+                else if (isFull) {
+                    state = 'cerrada';
+                    label = 'COMPLETO';
+                    sub = 'SQUAD LLENO';
+                }
+                else {
+                    state = 'abierta';
+                    label = 'DISPONIBLE';
+                    sub = `${4 - count} PLAZAS`;
                 }
             }
-        } else {
-            if (isMine) state = 'propia';
-            else if (isFull) state = 'cerrada';
-            else state = 'abierta';
-
-            label = isMine ? 'MÍA' : (isFull ? 'LLENO' : 'UNIRSE');
-            sub = isFull ? 'PARTIDA CERRADA' : `${4 - count} HUECOS`;
         }
     }
 
@@ -306,31 +333,38 @@ window.openUserPicker = async (slotIndex) => {
     picker.classList.add('active');
     picker.dataset.slotIndex = slotIndex;
     
-    // Load users if empty
-    if (!list.innerHTML.trim()) {
-        list.innerHTML = '<div class="center py-10"><div class="spinner-galaxy"></div></div>';
-        try {
-            const snap = await window.getDocsSafe(query(collection(db, "usuarios"), limit(50)));
-            list.innerHTML = snap.docs.map(d => {
-                const u = d.data();
-                const photo = u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png';
-                // Remove redundant quote in onClick
-                return `
-                    <div class="u-item-list-v5" onclick="selectUserForSlot('${d.id}', '${u.nombreUsuario || u.nombre || 'Jugador'}', '${photo}')">
-                        <div class="u-item-left">
-                            <div class="u-avatar-v5"><img src="${photo}"></div>
-                            <div class="flex-col">
-                                <span class="u-name-v5">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
-                                <span class="u-lvl-v5">Nivel ${(u.nivel || 2.5).toFixed(2)}</span>
-                            </div>
-                        </div>
-                        <div class="u-add-btn"><i class="fas fa-plus"></i></div>
-                    </div>
-                `;
-            }).join('');
-        } catch(e) {
-            list.innerHTML = '<div class="center p-10">Error al cargar agentes.</div>';
+    // Reset and Always reload for fresh data
+    list.innerHTML = '<div class="center py-10"><div class="spinner-galaxy"></div></div>';
+    
+    try {
+        const getDocsFn = window.getDocsSafe || getDocs;
+        const snap = await getDocsFn(query(collection(db, "usuarios"), limit(50)));
+        
+        if (snap.empty) {
+            list.innerHTML = '<div class="center p-10 opacity-50">No hay otros agentes disponibles.</div>';
+            return;
         }
+
+        list.innerHTML = snap.docs.map(d => {
+            const u = d.data();
+            if (d.id === currentUser?.uid) return ''; // Skip self
+            const photo = u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png';
+            return `
+                <div class="u-item-list-v5 animate-fade-in" onclick="selectUserForSlot('${d.id}', '${(u.nombreUsuario || u.nombre || 'Jugador').toUpperCase()}', '${photo}')">
+                    <div class="u-item-left">
+                        <div class="u-avatar-v5"><img src="${photo}"></div>
+                        <div class="flex-col">
+                            <span class="u-name-v5">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
+                            <span class="u-lvl-v5">Nivel ${(u.nivel || 2.5).toFixed(2)}</span>
+                        </div>
+                    </div>
+                    <div class="u-add-btn"><i class="fas fa-plus"></i></div>
+                </div>
+            `;
+        }).join('');
+    } catch(e) {
+        console.error("User Picker Error:", e);
+        list.innerHTML = '<div class="center p-10 text-red-400">Error al sincronizar agentes.</div>';
     }
 };
 

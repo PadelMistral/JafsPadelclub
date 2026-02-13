@@ -1,289 +1,335 @@
 ﻿// ranking.js - Leaderboard & Points History V4.0
-import { db, auth, observerAuth, getDocument } from './firebase-service.js';
-import { collection, getDocs, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
-import { initAppUI, countUp, showToast } from './ui-core.js';
-import { injectHeader, injectNavbar, initBackground, setupModals } from './modules/ui-loader.js?v=6.5';
+import { db, auth, observerAuth, getDocument } from "./firebase-service.js";
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+  where,
+} from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
+import { initAppUI, countUp, showToast } from "./ui-core.js";
+import {
+  injectHeader,
+  injectNavbar,
+  initBackground,
+  setupModals,
+} from "./modules/ui-loader.js?v=6.5";
 
 let currentUser = null;
 let userData = null;
 window.podiumData = [];
 
-document.addEventListener('DOMContentLoaded', () => {
-    initAppUI('ranking');
-    initBackground();
-    setupModals();
-    
-    observerAuth(async (user) => {
-        if (!user) {
-            window.location.href = 'index.html';
-            return;
-        }
-        
-        currentUser = user;
-        userData = await getDocument('usuarios', user.uid);
-        
-        // Inject header with admin link if applicable
-        await injectHeader(userData);
-        injectNavbar('ranking');
-        
-        await loadRanking();
-        await loadPointsHistory();
-    });
+document.addEventListener("DOMContentLoaded", () => {
+  initAppUI("ranking");
+  initBackground();
+  setupModals();
+
+  observerAuth(async (user) => {
+    if (!user) {
+      window.location.href = "index.html";
+      return;
+    }
+
+    currentUser = user;
+    userData = await getDocument("usuarios", user.uid);
+
+    // Inject header with admin link if applicable
+    await injectHeader(userData);
+    injectNavbar("ranking");
+
+    await loadRanking();
+    await loadPointsHistory();
+  });
 });
 
 async function loadRanking() {
-    const snap = await window.getDocsSafe(query(collection(db, "usuarios"), orderBy("puntosRanking", "desc"), limit(50)));
-    const list = snap.docs.map((d, i) => ({ id: d.id, rank: i + 1, ...d.data() }));
-    
-    // My position
-    const myIdx = list.findIndex(u => u.id === currentUser.uid);
-    if (myIdx !== -1) {
-        const me = list[myIdx];
-        document.getElementById('my-rank').textContent = `#${me.rank}`;
-        countUp(document.getElementById('my-pts'), me.puntosRanking || 1000);
-        document.getElementById('my-level').textContent = (me.nivel || 2.5).toFixed(2);
-        
-        // Level progress (simplified: decimal part as percentage)
-        const lvl = me.nivel || 2.5;
-        const progress = (lvl % 1) * 100;
-        document.getElementById('level-fill').style.width = `${progress}%`;
-        document.getElementById('level-next').textContent = `→ ${Math.floor(lvl) + 1}.0`;
-        
-        // Trend
-        const trendEl = document.getElementById('rank-trend');
-        if (me.rachaActual > 0) {
-            trendEl.className = 'rank-trend up';
-            trendEl.innerHTML = `<i class="fas fa-arrow-up"></i> ${me.rachaActual}`;
-        } else if (me.rachaActual < 0) {
-            trendEl.className = 'rank-trend down';
-            trendEl.innerHTML = `<i class="fas fa-arrow-down"></i> ${Math.abs(me.rachaActual)}`;
-        } else {
-            trendEl.style.display = 'none';
-        }
+  const snap = await window.getDocsSafe(
+    query(
+      collection(db, "usuarios"),
+      orderBy("puntosRanking", "desc"),
+      limit(50),
+    ),
+  );
+  const list = snap.docs.map((d, i) => ({
+    id: d.id,
+    rank: i + 1,
+    ...d.data(),
+  }));
 
-        // Extra: Meta de posición respecto al resto de jugadores
-        const metaEl = document.getElementById('rank-meta-text');
-        if (metaEl) {
-            const totalPlayers = list.length || 1;
-            const percentile = Math.max(1, Math.min(100, Math.round((1 - ((me.rank - 1) / totalPlayers)) * 100)));
-            metaEl.textContent = `Estás en el TOP ${percentile}% de ${totalPlayers} jugadores activos`;
-        }
+  // My position
+  const myIdx = list.findIndex((u) => u.id === currentUser.uid);
+  if (myIdx !== -1) {
+    const me = list[myIdx];
+    document.getElementById("my-rank").textContent = `#${me.rank}`;
+    countUp(document.getElementById("my-pts"), me.puntosRanking || 1000);
+    document.getElementById("my-level").textContent = (me.nivel || 2.5).toFixed(
+      2,
+    );
+
+    // Level progress (simplified: decimal part as percentage)
+    const lvl = me.nivel || 2.5;
+    const progress = (lvl % 1) * 100;
+    const base = Math.floor(lvl);
+    document.getElementById("level-fill").style.width = `${progress}%`;
+    document.getElementById("level-prev").textContent = base.toFixed(1);
+    document.getElementById("level-next").textContent = (base + 1).toFixed(1);
+
+    // Trend
+    const trendEl = document.getElementById("rank-trend");
+    if (me.rachaActual > 0) {
+      trendEl.className = "rank-trend up";
+      trendEl.innerHTML = `<i class="fas fa-arrow-up"></i> ${me.rachaActual}`;
+    } else if (me.rachaActual < 0) {
+      trendEl.className = "rank-trend down";
+      trendEl.innerHTML = `<i class="fas fa-arrow-down"></i> ${Math.abs(me.rachaActual)}`;
+    } else {
+      trendEl.style.display = "none";
     }
-    
-    // Podium
-    window.podiumData = list.slice(0, 3);
-    for (let i = 0; i < 3; i++) {
-        if (list[i]) await renderPodiumSlot(i + 1, list[i]);
+
+    // Extra: Meta de posición respecto al resto de jugadores
+    const metaEl = document.getElementById("rank-meta-text");
+    if (metaEl) {
+      const totalPlayers = list.length || 1;
+      const percentile = Math.max(
+        1,
+        Math.min(100, Math.round((1 - (me.rank - 1) / totalPlayers) * 100)),
+      );
+      metaEl.textContent = `Estás en el TOP ${percentile}% de ${totalPlayers} jugadores activos`;
     }
-    
-    // Leaderboard (4th onwards)
-    renderLeaderboard(list.slice(3));
+  }
+
+  // Podium
+  window.podiumData = list.slice(0, 3);
+  for (let i = 0; i < 3; i++) {
+    if (list[i]) await renderPodiumSlot(i + 1, list[i]);
+  }
+
+  // Leaderboard (4th onwards)
+  renderLeaderboard(list.slice(3));
+
+  // Auto scroll to me after 1s
+  setTimeout(() => window.scrollToMe(), 1000);
 }
 
 async function renderPodiumSlot(pos, user) {
-    const av = document.getElementById(`p-av-${pos}`);
-    const name = document.getElementById(`p-name-${pos}`);
-    const pts = document.getElementById(`p-pts-${pos}`);
-    
-    const photo = user.fotoPerfil || user.fotoURL;
-    const userName = user.nombreUsuario || user.nombre || 'Jugador';
-    
-    if (av) {
-        if (photo) av.innerHTML = `<div class="avatar-premium"><img src="${photo}"></div>`;
-        else av.innerHTML = `<div class="avatar-premium initials">${userName.substring(0, 2).toUpperCase()}</div>`;
-        
-        // Dynamic medal color logic is handled by CSS classes in HTML
-    }
-    if (name) name.textContent = userName;
-    if (pts) countUp(pts, user.puntosRanking || 1000);
+  const av = document.getElementById(`p-av-${pos}`);
+  const name = document.getElementById(`p-name-${pos}`);
+  const pts = document.getElementById(`p-pts-${pos}`);
+
+  if (!user) return;
+
+  const photo = user.fotoPerfil || user.fotoURL;
+  const userName = (
+    user.nombreUsuario ||
+    user.nombre ||
+    "Jugador"
+  ).toUpperCase();
+
+  if (av) {
+    if (photo)
+      av.innerHTML = `<img src="${photo}" class="podium-img" style="width:100%; height:100%; object-fit:cover; border-radius:inherit">`;
+    else
+      av.innerHTML = `<div class="podium-initials" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); font-weight:900; color:white">${userName.substring(0, 2)}</div>`;
+  }
+  if (name) name.textContent = userName;
+  if (pts) countUp(pts, user.puntosRanking || 1000);
 }
 
 function renderLeaderboard(list) {
-    const container = document.getElementById('lb-list');
-    if (!container) return;
-    
-    container.innerHTML = list.map((u, i) => {
-        const isMe = u.id === currentUser.uid;
-        const name = u.nombreUsuario || u.nombre || 'Jugador';
-        const photo = u.fotoPerfil || u.fotoURL || './imagenes/default-avatar.png'; // Fallback
-        
-        // Comparison logic (me vs others)
-        let compHtml = '';
-        if (!isMe && userData) {
-            const diff = (u.puntosRanking || 1000) - (userData.puntosRanking || 1000);
-            const diffClass = diff >= 0 ? 'text-danger' : 'text-success';
-            const diffSign = diff >= 0 ? '+' : '';
-            if (diff !== 0) compHtml = `<span class="pts-diff ${diffClass}">${diffSign}${Math.round(diff)}</span>`;
-        } else if (isMe) {
-            compHtml = `<span class="pts-diff text-primary">TÚ</span>`;
-        }
+  const container = document.getElementById("lb-list");
+  if (!container) return;
 
-        // Stats Calculation
-        const ps = u.partidosJugados || 0;
-        const vs = u.victorias || 0;
-        const winrate = ps > 0 ? Math.round((vs / ps) * 100) : 0;
-        
-        // Gradient Logic: Galactic Shift
-        // Top ranks (handled by podium) start index at 0 (effectively 4th place in list logic usually, or list includes all?)
-        // If list includes podium, we should skip them or style them.
-        // Assuming list is FULL list.
-        
-        let bgStyle = '';
-        if (!isMe) {
-            // Shift from Blue (top) to Deep Purple (bottom)
-            const depth = Math.min(i / 20, 1); // 0 to 1 over 20 positions
-            const r = 15 + (10 * depth);
-            const g = 23 + (5 * depth);
-            const b = 42 + (20 * depth);
-            const a = 0.4 - (depth * 0.2); // Fade out slightly
-            bgStyle = `background: linear-gradient(90deg, rgba(${r},${g},${b},${a}) 0%, rgba(15, 23, 42, 0.1) 100%); border-left: 3px solid rgba(${0 + (100*depth)}, 212, 255, ${0.5 - (depth*0.3)})`;
-        }
+  container.innerHTML = list
+    .map((u, i) => {
+      const isMe = currentUser && u.id === currentUser.uid;
+      const name = u.nombreUsuario || u.nombre || "Jugador";
+      const photo = u.fotoPerfil || u.fotoURL || "./imagenes/Logojafs.png";
+      const ps = u.partidosJugados || 0;
+      const vs = u.victorias || 0;
+      const winrate = ps > 0 ? Math.round((vs / ps) * 100) : 0;
+      const streak = u.rachaActual || 0;
 
-        return `
-            <div class="lb-row ${isMe ? 'me' : ''} animate-up" 
-                 onclick="viewProfile('${u.id}')" 
-                 style="animation-delay: ${i * 0.03}s; ${!isMe ? bgStyle : ''}">
+      // Difference with previous player
+      let diffHtml = "";
+      const prevPlayer =
+        i > 0 ? list[i - 1] : window.podiumData && window.podiumData[2];
+      if (prevPlayer) {
+        const diff =
+          (prevPlayer.puntosRanking || 1000) - (u.puntosRanking || 1000);
+        if (diff > 0) {
+          diffHtml = `<span class="text-[9px] font-bold text-muted opacity-40">▲ ${Math.round(diff)}</span>`;
+        }
+      }
+
+      return `
+            <div class="ranking-card ${isMe ? "me" : ""} animate-up" 
+                 onclick="window.viewProfile('${u.id}')" 
+                 style="animation-delay: ${i * 0.05}s">
                 
-                <div class="lb-cell-rank">${u.rank}</div>
+                <div class="font-black text-sm w-8 text-center text-white/50">#${u.rank}</div>
                 
-                <div class="lb-cell-player">
-                    <img src="${photo}" class="lb-player-img" loading="lazy">
-                    <span class="lb-player-name">${name}</span>
-                </div>
-                
-                <div class="lb-cell-level">
-                    <span class="level-badge-mini">${(u.nivel || 2.5).toFixed(2)}</span>
-                </div>
-                
-                <div class="lb-cell-stats">
-                    <div class="winrate-bar-track">
-                        <div class="winrate-bar-fill" style="width: ${winrate}%"></div>
+                <div class="flex-row items-center gap-3 flex-1 overflow-hidden">
+                    <img src="${photo}" class="w-10 h-10 rounded-xl bg-black/50 object-cover border border-white/10" loading="lazy">
+                    <div class="flex-col truncate">
+                        <span class="text-xs font-bold text-white truncate uppercase tracking-tight">${name}</span>
+                        <div class="flex-row items-center gap-2">
+                             <div class="badge-premium-v7 sm ${streak > 2 ? "fire" : "neutral"} text-[8px] px-1 py-0">
+                                <i class="fas fa-fire"></i> ${streak}
+                             </div>
+                             <span class="text-[9px] text-muted font-bold">${winrate}% WR</span>
+                        </div>
                     </div>
-                    <span class="stats-text-mini">${winrate}% WR</span>
                 </div>
                 
-                <div class="lb-cell-pts">
-                    <span class="pts-val">${Math.round(u.puntosRanking || 1000)}</span>
-                    ${compHtml}
+                <div class="flex-col items-end gap-1">
+                    <span class="text-sm font-black text-white leading-none">${Math.round(u.puntosRanking || 1000)}</span>
+                    <div class="flex-row items-center gap-1">
+                        ${diffHtml}
+                        <span class="text-[8px] font-bold text-muted uppercase">ELO</span>
+                    </div>
                 </div>
             </div>
         `;
-    }).join('');
+    })
+    .join("");
 }
 
 async function loadPointsHistory() {
-    const container = document.getElementById('points-history');
-    if (!container) return;
-    
-    try {
-        const logs = await window.getDocsSafe(query(
-            collection(db, "rankingLogs"),
-            where("uid", "==", currentUser.uid),
-            orderBy("timestamp", "desc"),
-            limit(10)
-        ));
-        
-        if (logs.empty) {
-            container.innerHTML = '<div class="empty-state"><span class="empty-text">Sin historial</span></div>';
-            return;
+  const container = document.getElementById("points-history");
+  if (!container) return;
+
+  try {
+    const logs = await window.getDocsSafe(
+      query(
+        collection(db, "rankingLogs"),
+        where("uid", "==", currentUser.uid),
+        orderBy("timestamp", "desc"),
+        limit(10),
+      ),
+    );
+
+    if (logs.empty) {
+      container.innerHTML =
+        '<div class="empty-state"><span class="empty-text">Sin historial</span></div>';
+      return;
+    }
+
+    const entries = await Promise.all(
+      logs.docs.map(async (doc) => {
+        const log = doc.data();
+        const isWin = log.diff > 0;
+
+        // Try to get match details
+        let matchInfo = "";
+        let date = "";
+        if (log.matchId) {
+          const match =
+            (await getDocument("partidosReto", log.matchId)) ||
+            (await getDocument("partidosAmistosos", log.matchId));
+          if (match) {
+            matchInfo = match.resultado?.sets || "";
+            if (match.fecha) {
+              const d = match.fecha.toDate();
+              date = d.toLocaleDateString("es-ES", {
+                day: "numeric",
+                month: "short",
+              });
+            }
+          }
         }
-        
-        const entries = await Promise.all(logs.docs.map(async (doc) => {
-            const log = doc.data();
-            const isWin = log.diff > 0;
-            
-            // Try to get match details
-            let matchInfo = '';
-            let date = '';
-            if (log.matchId) {
-                const match = await getDocument('partidosReto', log.matchId) || await getDocument('partidosAmistosos', log.matchId);
-                if (match) {
-                    matchInfo = match.resultado?.sets || '';
-                    if (match.fecha) {
-                        const d = match.fecha.toDate();
-                        date = d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-                    }
-                }
-            }
-            if (!date && log.timestamp) {
-                const d = log.timestamp.toDate();
-                date = d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-            }
-            
-            return `
-                <div class="history-entry ${isWin ? 'win' : 'loss'}" onclick="showMatchBreakdown('${log.matchId}', ${log.diff}, ${log.newTotal})">
+        if (!date && log.timestamp) {
+          const d = log.timestamp.toDate();
+          date = d.toLocaleDateString("es-ES", {
+            day: "numeric",
+            month: "short",
+          });
+        }
+
+        return `
+                <div class="history-entry ${isWin ? "win" : "loss"}" onclick="showMatchBreakdown('${log.matchId}', ${log.diff}, ${log.newTotal})">
                     <div class="history-icon">
-                        <i class="fas ${isWin ? 'fa-arrow-up' : 'fa-arrow-down'}"></i>
+                        <i class="fas ${isWin ? "fa-arrow-up" : "fa-arrow-down"}"></i>
                     </div>
                     <div class="history-details">
-                        <span class="history-title">${isWin ? 'Victoria' : 'Derrota'} ${matchInfo ? `<span class="history-score">${matchInfo}</span>` : ''}</span>
-                        <span class="history-date">${date || 'N/A'}</span>
+                        <span class="history-title">${isWin ? "Victoria" : "Derrota"} ${matchInfo ? `<span class="history-score">${matchInfo}</span>` : ""}</span>
+                        <span class="history-date">${date || "N/A"}</span>
                     </div>
-                    <span class="history-value">${isWin ? '+' : ''}${log.diff}</span>
+                    <span class="history-value">${isWin ? "+" : ""}${log.diff}</span>
                 </div>
             `;
-        }));
-        
-        container.innerHTML = entries.join('');
-        
-    } catch (e) {
-        console.error('Error loading history:', e);
-        container.innerHTML = '<div class="error-state">Error cargando historial</div>';
-    }
+      }),
+    );
+
+    container.innerHTML = entries.join("");
+  } catch (e) {
+    console.error("Error loading history:", e);
+    container.innerHTML =
+      '<div class="error-state">Error cargando historial</div>';
+  }
 }
 
 window.showMatchBreakdown = async (matchId, diff, total) => {
-    const overlay = document.getElementById('modal-match-detail');
-    const area = document.getElementById('match-breakdown-area');
-    overlay.classList.add('active');
-    
-    if (!matchId) {
-        area.innerHTML = `
+  const overlay = document.getElementById("modal-match-detail");
+  const area = document.getElementById("match-breakdown-area");
+  overlay.classList.add("active");
+
+  if (!matchId) {
+    area.innerHTML = `
             <div class="modal-header-row mb-4">
                 <h3 class="modal-title">Desglose de Puntos</h3>
                 <button class="btn-icon-glass sm" onclick="document.getElementById('modal-match-detail').classList.remove('active')"><i class="fas fa-times"></i></button>
             </div>
             <div class="sport-card p-4 text-center">
-                <span class="font-display font-black text-3xl ${diff > 0 ? 'text-sport-green' : 'text-danger'}">${diff > 0 ? '+' : ''}${diff}</span>
+                <span class="font-display font-black text-3xl ${diff > 0 ? "text-sport-green" : "text-danger"}">${diff > 0 ? "+" : ""}${diff}</span>
                 <span class="block text-sm text-muted mt-2">Detalles no disponibles</span>
             </div>
         `;
-        return;
-    }
-    
-    area.innerHTML = '<div class="loading-state"><div class="spinner-neon"></div></div>';
-    
-    const match = await getDocument('partidosReto', matchId) || await getDocument('partidosAmistosos', matchId);
-    
-    if (!match) {
-        area.innerHTML = '<div class="empty-state text-danger">Partido no encontrado</div>';
-        return;
-    }
-    
-    const date = match.fecha?.toDate();
-    const players = match.jugadores || [];
-    const isComp = matchId.includes('reto') || match.tipo === 'reto';
-    
-    // Get player names
-    const playerNames = await Promise.all(players.map(async uid => {
-        if (!uid) return 'Libre';
-        if (uid.startsWith('GUEST_')) return uid.split('_')[1] + ' (Inv)';
-        const u = await getDocument('usuarios', uid);
-        return u?.nombreUsuario || u?.nombre || 'Jugador';
-    }));
-    
-    const team1 = playerNames.slice(0, 2).join(' & ');
-    const team2 = playerNames.slice(2, 4).map(n => n || 'Libre').join(' & ');
-    const myTeam = players.indexOf(currentUser.uid) < 2 ? 1 : 2;
-    const won = diff > 0;
-    
-    // Detailed Point Breakdown Logic
-    const basePoints = 25; // Standard base
-    const levelFactor = Math.round(diff * 0.4); // Points from level difference
-    const streakBonus = Math.round(diff * 0.1); // Streak bonus
-    const resultFactor = diff - levelFactor - streakBonus; // Remaining is result weight
+    return;
+  }
 
-    area.innerHTML = `
+  area.innerHTML =
+    '<div class="loading-state"><div class="spinner-neon"></div></div>';
+
+  const match =
+    (await getDocument("partidosReto", matchId)) ||
+    (await getDocument("partidosAmistosos", matchId));
+
+  if (!match) {
+    area.innerHTML =
+      '<div class="empty-state text-danger">Partido no encontrado</div>';
+    return;
+  }
+
+  const date = match.fecha?.toDate();
+  const players = match.jugadores || [];
+  const isComp = matchId.includes("reto") || match.tipo === "reto";
+
+  // Get player names
+  const playerNames = await Promise.all(
+    players.map(async (uid) => {
+      if (!uid) return "Libre";
+      if (uid.startsWith("GUEST_")) return uid.split("_")[1] + " (Inv)";
+      const u = await getDocument("usuarios", uid);
+      return u?.nombreUsuario || u?.nombre || "Jugador";
+    }),
+  );
+
+  const team1 = playerNames.slice(0, 2).join(" & ");
+  const team2 = playerNames
+    .slice(2, 4)
+    .map((n) => n || "Libre")
+    .join(" & ");
+  const myTeam = players.indexOf(currentUser.uid) < 2 ? 1 : 2;
+  const won = diff > 0;
+
+  // Detailed Point Breakdown Logic
+  const basePoints = 25; // Standard base
+  const levelFactor = Math.round(diff * 0.4); // Points from level difference
+  const streakBonus = Math.round(diff * 0.1); // Streak bonus
+  const resultFactor = diff - levelFactor - streakBonus; // Remaining is result weight
+
+  area.innerHTML = `
         <div class="modal-header-row mb-4">
             <h3 class="modal-title">Análisis de Puntuación</h3>
             <button class="btn-icon-glass sm" onclick="document.getElementById('modal-match-detail').classList.remove('active')">
@@ -291,21 +337,21 @@ window.showMatchBreakdown = async (matchId, diff, total) => {
             </button>
         </div>
         
-        <div class="sport-card p-4 mb-4 ${won ? 'glow-green' : 'glow-red'}">
+        <div class="sport-card p-4 mb-4 ${won ? "glow-green" : "glow-red"}">
             <div class="flex-row between mb-3">
-                <span class="status-badge ${won ? 'badge-green' : 'badge-orange'}">${won ? 'VICTORIA' : 'DERROTA'}</span>
-                <span class="text-xs text-muted">${date ? date.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }) : ''}</span>
+                <span class="status-badge ${won ? "badge-green" : "badge-orange"}">${won ? "VICTORIA" : "DERROTA"}</span>
+                <span class="text-xs text-muted">${date ? date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" }) : ""}</span>
             </div>
             
             <div class="text-center mb-4">
-                <span class="font-display font-black text-4xl text-white tracking-widest">${match.resultado?.sets || '-'}</span>
-                <span class="block text-xs text-muted mt-1 uppercase tracking-widest">${isComp ? 'Partido Oficial' : 'Amistoso'}</span>
+                <span class="font-display font-black text-4xl text-white tracking-widest">${match.resultado?.sets || "-"}</span>
+                <span class="block text-xs text-muted mt-1 uppercase tracking-widest">${isComp ? "Partido Oficial" : "Amistoso"}</span>
             </div>
             
             <div class="match-teams-display">
-                <span class="team-name ${myTeam === 1 ? 'chk' : ''}">${team1}</span>
+                <span class="team-name ${myTeam === 1 ? "chk" : ""}">${team1}</span>
                 <span class="vs-label">VS</span>
-                <span class="team-name ${myTeam === 2 ? 'chk' : ''}">${team2}</span>
+                <span class="team-name ${myTeam === 2 ? "chk" : ""}">${team2}</span>
             </div>
         </div>
         
@@ -316,9 +362,9 @@ window.showMatchBreakdown = async (matchId, diff, total) => {
                 <div class="factor-icon bg-blue-500/20 text-blue-400"><i class="fas fa-trophy"></i></div>
                 <div class="factor-info">
                     <span class="factor-name">Resultado Base</span>
-                    <span class="factor-desc">Puntos por ${won ? 'ganar' : 'perder'} el encuentro</span>
+                    <span class="factor-desc">Puntos por ${won ? "ganar" : "perder"} el encuentro</span>
                 </div>
-                <span class="factor-val text-white">${resultFactor > 0 ? '+' : ''}${resultFactor}</span>
+                <span class="factor-val text-white">${resultFactor > 0 ? "+" : ""}${resultFactor}</span>
             </div>
 
             <div class="point-factor-row">
@@ -327,7 +373,7 @@ window.showMatchBreakdown = async (matchId, diff, total) => {
                     <span class="factor-name">Diferencia Nivel</span>
                     <span class="factor-desc">Ajuste por nivel de rivales</span>
                 </div>
-                <span class="factor-val ${levelFactor >= 0 ? 'text-sport-green' : 'text-danger'}">${levelFactor > 0 ? '+' : ''}${levelFactor}</span>
+                <span class="factor-val ${levelFactor >= 0 ? "text-sport-green" : "text-danger"}">${levelFactor > 0 ? "+" : ""}${levelFactor}</span>
             </div>
 
             <div class="point-factor-row">
@@ -336,7 +382,7 @@ window.showMatchBreakdown = async (matchId, diff, total) => {
                     <span class="factor-name">Racha Actual</span>
                     <span class="factor-desc">Bonus por consistencia</span>
                 </div>
-                <span class="factor-val text-white">${streakBonus > 0 ? '+' : ''}${streakBonus}</span>
+                <span class="factor-val text-white">${streakBonus > 0 ? "+" : ""}${streakBonus}</span>
             </div>
         </div>
         
@@ -345,131 +391,399 @@ window.showMatchBreakdown = async (matchId, diff, total) => {
                 <span class="font-bold text-white text-sm uppercase opacity-90">Impacto Total</span>
                 <span class="text-xs text-white opacity-60">Nuevo ELO: ${total}</span>
             </div>
-            <span class="font-display font-black text-3xl text-white">${diff > 0 ? '+' : ''}${diff}</span>
+            <span class="font-display font-black text-3xl text-white">${diff > 0 ? "+" : ""}${diff}</span>
         </div>
     `;
 };
 
 window.viewProfile = async (uid) => {
-    if (!uid) return;
-    
-    const overlay = document.getElementById('modal-user');
-    const area = document.getElementById('user-detail-area');
-    
-    if(overlay) overlay.classList.add('active');
-    if(area) area.innerHTML = '<div class="loading-state"><div class="spinner-neon"></div></div>';
-    
-    const user = await getDocument('usuarios', uid);
-    if (!user) {
-        if(area) area.innerHTML = '<div class="empty-state text-danger">Usuario no encontrado</div>';
-        return;
-    }
-    
-    const name = user.nombreUsuario || user.nombre || 'Jugador';
-    const photo = user.fotoPerfil || user.fotoURL;
-    const winrate = user.partidosJugados > 0 ? Math.round((user.victorias / user.partidosJugados) * 100) : 0;
-    
-    // Fetch last 3 logs for this user
-    const userLogs = await window.getDocsSafe(query(
-        collection(db, "rankingLogs"),
-        where("uid", "==", uid),
-        orderBy("timestamp", "desc"),
-        limit(3)
-    ));
+  if (!uid) return;
 
-    let logsHtml = '<h4 class="section-subtitle mb-2">Últimos Resultados</h4>';
-    if (userLogs.empty) {
-        logsHtml += '<div class="empty-list-text">Sin partidos recientes</div>';
-    } else {
-        const logEntries = await Promise.all(userLogs.docs.map(async d => {
-            const log = d.data();
-            const date = log.timestamp?.toDate ? log.timestamp.toDate() : new Date();
-            return `
-                <div class="flex-row between p-2 bg-glass rounded-lg mb-2 items-center">
-                    <div class="flex-col gap-0">
-                        <span class="text-xs font-bold ${log.diff > 0 ? 'text-sport-green' : 'text-danger'}">${log.diff > 0 ? 'VICTORIA' : 'DERROTA'}</span>
-                        <span class="text-2xs text-muted">${date.toLocaleDateString('es-ES', {day:'numeric', month:'short'})}</span>
-                    </div>
-                    <span class="font-black text-sm text-white">${log.diff > 0 ? '+' : ''}${log.diff}</span>
-                </div>
-            `;
-        }));
-        logsHtml += logEntries.join('');
-    }
+  const overlay = document.getElementById("modal-user");
+  const area = document.getElementById("user-detail-area");
 
-    // Format vivienda display
-    const viv = user.vivienda || {};
-    const viviendaStr = viv.bloque ? `Blq ${viv.bloque} - ${viv.piso}º${viv.puerta}` : 'Sin vivienda';
-    
-    if(area) area.innerHTML = `
-        <div class="profile-modal-v5 animate-up">
-            <!-- Header with cover effect -->
-            <div class="profile-header-v5">
-                <div class="profile-cover"></div>
-                <div class="profile-main-info">
-                    <div class="profile-avatar-wrapper">
-                        ${photo ? `<img src="${photo}" class="profile-img-v5">` : `<div class="profile-initials-v5">${name.substring(0,2).toUpperCase()}</div>`}
-                        <div class="profile-level-tag">NV. ${(user.nivel || 2.5).toFixed(2)}</div>
-                    </div>
-                    <h2 class="profile-name-v5">${name}</h2>
-                    <div class="profile-badges-row">
-                        <span class="p-badge badge-housing"><i class="fas fa-house-user"></i> ${viviendaStr}</span>
-                    </div>
-                </div>
+  if (overlay) overlay.classList.add("active");
+  if (area)
+    area.innerHTML =
+      '<div class="loading-state"><div class="spinner-neon"></div></div>';
+
+  const user = await getDocument("usuarios", uid);
+  if (!user) {
+    if (area)
+      area.innerHTML =
+        '<div class="empty-state text-danger">Usuario no encontrado</div>';
+    return;
+  }
+
+  const name = user.nombreUsuario || user.nombre || "Jugador";
+  const photo = user.fotoPerfil || user.fotoURL;
+
+  const logsHtml = await renderUserDetailedHistory(uid);
+
+  area.innerHTML = `
+        <div class="modal-header-row mb-6">
+            <h3 class="modal-title">Expediente de Jugador</h3>
+            <button class="btn-icon-glass sm" onclick="document.getElementById('modal-user').classList.remove('active')"><i class="fas fa-times"></i></button>
+        </div>
+
+        <div class="flex-row items-center gap-4 mb-8">
+            <div class="profile-avatar-v7 ${user.rol === "Admin" ? "gold" : "cyan"}">
+                ${photo ? `<img src="${photo}">` : `<div class="initials">${name.charAt(0)}</div>`}
             </div>
-
-            <!-- Stats Grid Premium with Colors -->
-            <div class="profile-stats-grid-v5">
-                <div class="p-stat-card stat-blue">
-                    <i class="fas fa-ranking-star"></i>
-                    <div class="flex-col">
-                        <span class="p-val">${Math.round(user.puntosRanking || 1000)}</span>
-                        <span class="p-lbl">Puntos ELO</span>
-                    </div>
-                </div>
-                <div class="p-stat-card stat-green">
-                    <i class="fas fa-trophy"></i>
-                    <div class="flex-col">
-                        <span class="p-val">${user.victorias || 0}</span>
-                        <span class="p-lbl">Victorias</span>
-                    </div>
-                </div>
-                <div class="p-stat-card stat-orange">
-                    <i class="fas fa-fire"></i>
-                    <div class="flex-col">
-                        <span class="p-val">${user.rachaActual || 0}</span>
-                        <span class="p-lbl">Racha</span>
-                    </div>
-                </div>
-                <div class="p-stat-card stat-purple">
-                    <i class="fas fa-percentage"></i>
-                    <div class="flex-col">
-                        <span class="p-val">${winrate}%</span>
-                        <span class="p-lbl">Win Rate</span>
-                    </div>
-                </div>
+            <div class="flex-col">
+                <span class="text-xl font-black italic text-white leading-none">${name}</span>
+                <span class="text-[9px] font-bold text-muted uppercase tracking-[3px] mt-1">${user.rol || "Jugador"}</span>
             </div>
+        </div>
 
-            <!-- Results Section -->
-            <div class="profile-results-section">
+        <div class="grid grid-cols-3 gap-3 mb-8">
+            <div class="stat-card-v7 sm cyan">
+                <span class="text-[8px] font-black text-muted uppercase">Nivel</span>
+                <span class="text-sm font-black text-white italic">${(user.nivel || 2.5).toFixed(2)}</span>
+            </div>
+            <div class="stat-card-v7 sm gold">
+                <span class="text-[8px] font-black text-muted uppercase">Puntos</span>
+                <span class="text-sm font-black text-white italic">${user.puntosRanking || 1000}</span>
+            </div>
+            <div class="stat-card-v7 sm lime">
+                <span class="text-[8px] font-black text-muted uppercase">Racha</span>
+                <span class="text-sm font-black text-white italic">${user.rachaActual || 0}</span>
+            </div>
+        </div>
+
+        <div class="history-container-v7">
+            <h4 class="text-[10px] font-black text-muted uppercase tracking-widest mb-4">Últimos Partidos</h4>
+            <div class="flex-col gap-3">
                 ${logsHtml}
             </div>
+        </div>
 
-            <!-- Actions -->
-            <div class="profile-actions-v5">
-                <button class="btn-primary flex-1 py-3" onclick="showToast('Comparar', 'Comparativa de niveles: Tú vs ${name}', 'info')">
-                    <i class="fas fa-code-compare mr-2"></i> COMPARAR
-                </button>
-                <button class="btn-secondary flex-1 py-3" onclick="window.location.href='mailto:${user.email}'">
-                    <i class="fas fa-envelope mr-2"></i> CONTACTAR
-                </button>
-            </div>
-            
-            <button class="btn-ghost w-full py-3 mt-2 text-xs opacity-50" onclick="document.getElementById('modal-user').classList.remove('active')">
-                CERRAR FICHA
-            </button>
+        <div class="mt-8 pt-6 border-t border-white/5">
+            <button class="btn-premium-v7 w-full py-4 text-xs font-black uppercase tracking-widest" onclick="document.getElementById('modal-user').classList.remove('active')">Cerrar Expediente</button>
         </div>
     `;
 };
 
+/**
+ * Renders a detailed history card for the player expediente/profile
+ * @param {string} uid User ID
+ * @returns {Promise<string>} HTML string
+ */
+async function renderUserDetailedHistory(uid) {
+  try {
+    const snap = await window.getDocsSafe(
+      query(
+        collection(db, "rankingLogs"),
+        where("uid", "==", uid),
+        orderBy("timestamp", "desc"),
+        limit(10),
+      ),
+    );
 
+    if (snap.empty) {
+      return '<div class="text-xs text-muted py-4 text-center">Sin historial</div>';
+    }
+
+    const entries = await Promise.all(
+      snap.docs.map(async (doc) => {
+        const log = doc.data();
+        const isWin = log.diff > 0;
+        const timestamp = log.timestamp?.toDate
+          ? log.timestamp.toDate()
+          : new Date();
+        const dateStr = timestamp.toLocaleDateString("es-ES", {
+          day: "2-digit",
+          month: "short",
+        });
+
+        let rivalNames = "Desconocidos";
+        let result = "No reg.";
+        let pitch = "Normal";
+        let palaHtml = "";
+
+        if (log.matchId) {
+          const match =
+            (await getDocument("partidosReto", log.matchId)) ||
+            (await getDocument("partidosAmistosos", log.matchId));
+
+          if (match) {
+            result = match.resultado?.sets || match.resultado || result;
+            pitch = match.courtType || match.surface || pitch;
+
+            const players = match.jugadores || [];
+            const myIdx = players.indexOf(uid);
+            if (myIdx !== -1) {
+              const rivalsIdx = myIdx < 2 ? [2, 3] : [0, 1];
+              const rivals = await Promise.all(
+                rivalsIdx.map(async (ridx) => {
+                  const rUid = players[ridx];
+                  if (!rUid) return "Libre";
+                  if (rUid.startsWith("GUEST_")) return rUid.split("_")[1];
+                  const ru = await getDocument("usuarios", rUid);
+                  return ru?.nombreUsuario || ru?.nombre || "Jugador";
+                }),
+              );
+              rivalNames = rivals.join(" & ");
+            }
+
+            // Check for paddle in match or user profile
+            const user = await getDocument("usuarios", uid);
+            const pala = (match.palas && match.palas[uid]) || user?.pala;
+            if (pala) {
+              palaHtml = `<div class="flex-row items-center gap-1 opacity-50"><i class="fas fa-hammer text-[8px]"></i><span class="text-[8px] uppercase font-bold">${pala}</span></div>`;
+            }
+          }
+        }
+
+        return `
+                <div class="sport-card p-3 mb-2 flex-col gap-2 border-l-4 ${isWin ? "border-l-sport-green" : "border-l-sport-red"} bg-white/5" 
+                     onclick="window.showMatchBreakdown('${log.matchId}', ${log.diff}, ${log.newTotal})" 
+                     style="cursor:pointer">
+                    <div class="flex-row between items-start">
+                        <div class="flex-col overflow-hidden mr-2">
+                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">Contrincantes</span>
+                            <span class="text-[10px] font-bold text-white truncate w-full">${rivalNames}</span>
+                        </div>
+                        <div class="flex-col items-end shrink-0">
+                            <span class="text-[10px] font-black ${isWin ? "text-sport-green" : "text-sport-red"}">${isWin ? "+" : ""}${log.diff} PTS</span>
+                            <span class="text-[8px] text-muted font-bold">${dateStr}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-row between items-center pt-2 border-t border-white/5 gap-2">
+                        <div class="flex-row gap-3 overflow-hidden">
+                            <div class="flex-row items-center gap-1 shrink-0">
+                                <i class="fas fa-table-tennis text-[9px] text-primary"></i>
+                                <span class="text-[10px] font-black italic text-white">${result}</span>
+                            </div>
+                            <div class="flex-row items-center gap-1 truncate">
+                                <i class="fas fa-th text-[8px] text-muted"></i>
+                                <span class="text-[8px] text-muted uppercase font-bold truncate">${pitch}</span>
+                            </div>
+                        </div>
+                        ${palaHtml}
+                    </div>
+                </div>
+            `;
+      }),
+    );
+
+    return entries.join("");
+  } catch (error) {
+    console.error("Error en renderUserDetailedHistory:", error);
+    return '<div class="text-xs text-danger py-4 text-center">Error al cargar historial</div>';
+  }
+}
+
+// --- EXPEDIENTE JUGADOR (PHASE 2) ---
+window.viewProfile = (uid) => {
+  if (!uid) return;
+  window.openExpedient(uid);
+};
+
+window.openExpedient = async (uid) => {
+  // Create overlay if not exists
+  let overlay = document.getElementById("expedient-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "expedient-overlay";
+    overlay.className = "expedient-overlay";
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML =
+    '<div class="center py-20"><div class="spinner-galaxy"></div></div>';
+  overlay.classList.add("active");
+
+  try {
+    const u = await getDocument("usuarios", uid);
+    if (!u) throw new Error("Usuario no encontrado");
+
+    const ps = u.partidosJugados || 0;
+    const vs = u.victorias || 0;
+    const ds = u.derrotas || 0;
+    const winrate = ps > 0 ? Math.round((vs / ps) * 100) : 0;
+    const photo = u.fotoPerfil || u.fotoURL || "./imagenes/Logojafs.png";
+    const name = (u.nombreUsuario || u.nombre || "Jugador").toUpperCase();
+    const level = (u.nivel || 2.5).toFixed(2);
+    const pts = Math.round(u.puntosRanking || 1000);
+    const pala = u.pala || "No disponible";
+
+    overlay.innerHTML = `
+            <div class="expedient-card animate-up">
+                <div class="exp-header" style="background-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.9)), url('${photo}')">
+                    <div class="exp-close" onclick="document.getElementById('expedient-overlay').classList.remove('active')">
+                        <i class="fas fa-times"></i>
+                    </div>
+                    <div class="flex-row items-center w-full">
+                        <div class="exp-avatar-ring">
+                            <img src="${photo}">
+                        </div>
+                        <div class="exp-info">
+                            <h2>${name}</h2>
+                            <div class="exp-badge">NIVEL ${level}</div>
+                            <div class="exp-pala"><i class="fas fa-hammer"></i> ${pala}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="exp-stats-grid">
+                    <div class="exp-stat-item">
+                        <span class="exp-stat-val">${pts}</span>
+                        <span class="exp-stat-label">ELO</span>
+                    </div>
+                    <div class="exp-stat-item">
+                        <span class="exp-stat-val">${ps}</span>
+                        <span class="exp-stat-label">PJ</span>
+                    </div>
+                    <div class="exp-stat-item">
+                        <span class="exp-stat-val">${vs}</span>
+                        <span class="exp-stat-label">V</span>
+                    </div>
+                    <div class="exp-stat-item">
+                        <span class="exp-stat-val">${winrate}%</span>
+                        <span class="exp-stat-label">WR</span>
+                    </div>
+                </div>
+
+                <div class="px-4 pt-4 pb-2 border-b border-white/5">
+                    <span class="text-[9px] font-black text-primary uppercase tracking-[2px]">Historial de Operaciones</span>
+                </div>
+
+                <div class="exp-history-list custom-scroll" id="exp-history-list">
+                    <div class="center py-10 opacity-30"><i class="fas fa-circle-notch fa-spin"></i></div>
+                </div>
+            </div>
+        `;
+
+    // Load History
+    const historyContainer = document.getElementById("exp-history-list");
+    const historyHtml = await renderUserDetailedHistory(uid);
+    if (historyContainer) historyContainer.innerHTML = historyHtml;
+  } catch (e) {
+    console.error(e);
+    showToast("ERROR", "No se pudo cargar el expediente", "error");
+    overlay.classList.remove("active");
+  }
+};
+
+window.showMatchBreakdown = async (matchId, diff, total) => {
+  // Reusing existing logic but making it better for the phase 2 requirements
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay active";
+  overlay.style.zIndex = "11000";
+
+  // Using simple detail structure inside the new modal
+  overlay.innerHTML = `
+        <div class="modal-card glass-strong animate-up p-0 overflow-hidden" style="max-width:380px">
+            <div class="p-4 bg-white/5 flex-row between items-center border-b border-white/10">
+                <span class="text-[10px] font-black text-white uppercase tracking-widest">Detalle del Encuentro</span>
+                <button class="w-8 h-8 rounded-full bg-white/10 flex center text-white" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="breakdown-content" class="p-6">
+                <div class="center py-10"><i class="fas fa-circle-notch fa-spin text-primary"></i></div>
+            </div>
+        </div>
+    `;
+  document.body.appendChild(overlay);
+
+  try {
+    if (!matchId || matchId === "undefined") {
+      document.getElementById("breakdown-content").innerHTML = `
+                <div class="text-center py-6">
+                    <div class="text-3xl font-black mb-2 ${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${diff >= 0 ? "+" : ""}${diff}</div>
+                    <p class="text-[10px] text-muted uppercase tracking-widest">Impacto en ELO</p>
+                    <p class="text-[8px] text-muted mt-4">Detalles del partido no vinculados a este log.</p>
+                </div>
+            `;
+      return;
+    }
+
+    const m =
+      (await getDocument("partidosReto", matchId)) ||
+      (await getDocument("partidosAmistosos", matchId));
+    if (!m) throw new Error("Partido no encontrado");
+
+    const date = m.fecha?.toDate
+      ? m.fecha
+          .toDate()
+          .toLocaleDateString("es-ES", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })
+      : "Fecha no disponible";
+    const res = m.resultado?.sets || "Resultado no registrado";
+    const type = m.surface || (m.tipo === "reto" ? "PRO" : "AMISTOSO");
+
+    const players = await Promise.all(
+      (m.jugadores || []).map(async (id) => {
+        if (!id) return "Libre";
+        if (id.startsWith("GUEST_")) return id.split("_")[1] + " (Inv)";
+        const u = await getDocument("usuarios", id);
+        return u?.nombreUsuario || u?.nombre || "Jugador";
+      }),
+    );
+
+    document.getElementById("breakdown-content").innerHTML = `
+            <div class="flex-col gap-4">
+                <div class="text-center mb-2">
+                    <div class="text-4xl font-black ${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${diff >= 0 ? "+" : ""}${diff}</div>
+                    <span class="text-[9px] font-black text-muted uppercase tracking-[3px]">PUNTOS ELO</span>
+                </div>
+
+                <div class="bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <div class="flex-row between mb-2">
+                        <span class="text-[8px] font-black text-muted uppercase">Fecha</span>
+                        <span class="text-[9px] font-bold text-white capitalize">${date}</span>
+                    </div>
+                    <div class="flex-row between mb-2">
+                        <span class="text-[8px] font-black text-muted uppercase">Pista</span>
+                        <span class="text-[9px] font-bold text-white uppercase">${m.courtType || "Normal"} (${type})</span>
+                    </div>
+                    <div class="flex-row between">
+                        <span class="text-[8px] font-black text-muted uppercase">Resultado</span>
+                        <span class="text-[10px] font-black text-primary italic">${res}</span>
+                    </div>
+                </div>
+
+                <div class="flex-col gap-2">
+                    <span class="text-[8px] font-black text-muted uppercase tracking-widest px-1">Alineación Combatiente</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="bg-white/5 p-2 rounded-xl border border-white/5 text-center">
+                            <div class="text-[8px] text-muted mb-1 opacity-50 uppercase">Equipo A</div>
+                            <div class="text-[9px] font-bold text-white">${players[0]}</div>
+                            <div class="text-[9px] font-bold text-white">${players[1]}</div>
+                        </div>
+                        <div class="bg-white/5 p-2 rounded-xl border border-white/5 text-center">
+                            <div class="text-[8px] text-muted mb-1 opacity-50 uppercase">Equipo B</div>
+                            <div class="text-[9px] font-bold text-white">${players[2]}</div>
+                            <div class="text-[9px] font-bold text-white">${players[3]}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="w-full py-4 mt-2 rounded-2xl bg-white/10 text-white font-black text-[10px] tracking-[2px] hover:bg-white/20" onclick="this.closest('.modal-overlay').remove()">
+                    CERRAR REPORTE
+                </button>
+            </div>
+        `;
+  } catch (e) {
+    document.getElementById("breakdown-content").innerHTML = `
+            <div class="center py-10 flex-col gap-2">
+                <i class="fas fa-exclamation-triangle text-sport-red text-xl"></i>
+                <span class="text-xs text-muted">Error al vincular con base de datos</span>
+            </div>
+        `;
+  }
+};
+
+// Phase 3 — Auto Scroll to current user
+window.scrollToMe = () => {
+  const meRow = document.querySelector(".ranking-card.me");
+  if (meRow) {
+    meRow.scrollIntoView({ behavior: "smooth", block: "center" });
+    meRow.classList.add("glow-pulse");
+    setTimeout(() => meRow.classList.remove("glow-pulse"), 3000);
+  }
+};

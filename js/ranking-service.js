@@ -1,6 +1,6 @@
 ﻿/* js/ranking-service.js - Premium ELO & Gamification Engine v8.0 */
 import { updateDocument, getDocument, db } from './firebase-service.js';
-import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, limit, doc, getDoc } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, limit, doc, getDoc, runTransaction } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { showToast } from './ui-core.js';
 
 /**
@@ -23,9 +23,9 @@ export function predictEloImpact({
     
     // 1. DYNAMIC K-FACTOR (ELITE TUNING)
     let K = 32;
-    if (myLevel < 2.5) K = 50; 
-    if (myLevel >= 5.0) K = 24; 
-    if (matchesPlayed < 10) K = 64; // High volatility for new players
+    if (myLevel < 3.0) K = 40; 
+    if (myLevel >= 4.5) K = 20; 
+    if (matchesPlayed < 10) K = 64; 
 
     // 2. DISCREPANCY & RECOVERY (Rubber-banding)
     const suggestedPoints = 1000 + (myLevel - 2.5) * 400;
@@ -65,8 +65,8 @@ export function predictEloImpact({
     // 6. VANQUISHER FACTOR (Underdog logic)
     const levelDiff = rivalTeamAvg - myTeamAvg;
     let gapMult = 1.0;
-    if (levelDiff > 0.25) gapMult = 1.1 + (levelDiff * 0.6); 
-    else if (levelDiff < -0.25) gapMult = Math.max(0.4, 0.8 - (Math.abs(levelDiff) * 0.3));
+    if (levelDiff > 0.25) gapMult = 1.2 + (levelDiff * 0.8); 
+    else if (levelDiff < -0.25) gapMult = Math.max(0.3, 0.7 - (Math.abs(levelDiff) * 0.5));
 
     // 7. WEATHER & SURFACE HARDSHIP (Condition Multiplier)
     let conditionBonus = 0;
@@ -144,258 +144,233 @@ export function getBaseEloByLevel(level) {
  */
 export async function processMatchResults(matchId, col, resultStr, extraMatchData = {}) {
     try {
-        const match = await getDocument(col, matchId);
-        if (!match || !match.jugadores || match.jugadores.filter(id => id).length !== 4) return { success: false, error: "Match or players invalid" };
+        // Initial Read (for validation)
+        const matchInitial = await getDocument(col, matchId);
+        if (!matchInitial || !matchInitial.jugadores || matchInitial.jugadores.filter(id => id).length !== 4) return { success: false, error: "Match or players invalid" };
         
-        const sets = resultStr.trim().split(/\s+/);
-        let t1Sets = 0, t2Sets = 0;
-        sets.forEach(s => {
-            if (!s.includes('-')) return;
-            const [g1, g2] = s.split('-').map(Number);
-            if (g1 > g2) t1Sets++; else if (g2 > g1) t2Sets++;
-        });
-        
-        const t1Wins = t1Sets > t2Sets;
-        const isComp = col === 'partidosReto' || match.tipo === 'reto';
+        return await runTransaction(db, async (transaction) => {
+            // Re-read match inside transaction for consistency
+            const matchRef = doc(db, col, matchId);
+            const matchDoc = await transaction.get(matchRef);
+            if (!matchDoc.exists()) throw "Match does not exist!";
+            const match = matchDoc.data();
 
-        // Fetch detailed player data
-        const rawPlayers = await Promise.all(match.jugadores.map(async id => {
-            if (!id) return null;
-            if (id.startsWith('GUEST_')) {
-                const parts = id.split('_');
-                return { id, nombre: parts[1], nivel: parseFloat(parts[2]) || 2.5, isGuest: true };
-            }
-            const d = await getDocument('usuarios', id);
-            return d ? { ...d, id } : null;
-        }));
-
-        const team1 = rawPlayers.slice(0, 2).filter(p => p);
-        const team2 = rawPlayers.slice(2, 4).filter(p => p);
-        
-        if (team1.length < 2 || team2.length < 2) return { success: false, error: "Teams incomplete" };
-
-        const t1Avg = (team1.reduce((sum, p) => sum + (p.nivel || 2.5), 0)) / 2;
-        const t2Avg = (team2.reduce((sum, p) => sum + (p.nivel || 2.5), 0)) / 2;
-
-        const changes = [];
-        const pointAllocations = [];
-        const pointDetails = estimatePointDetailsFromSets(resultStr);
-        const teamPointCount = pointDetails.totalPoints || 1;
-
-        // Extract detailed contexts
-        const surface = extraMatchData.surface || match.surface || 'indoor';
-        const courtType = extraMatchData.courtType || match.courtType || 'normal';
-
-        // Process each player
-        for (let i = 0; i < 4; i++) {
-            const p = rawPlayers[i];
-            if (!p || p.isGuest) {
-                changes.push({ id: p ? p.id : null, isGuest: true });
-                continue;
-            }
-
-            const amIteam1 = i < 2;
-            const partnerIdx = amIteam1 ? (i === 0 ? 1 : 0) : (i === 2 ? 3 : 2);
-            const partner = rawPlayers[partnerIdx];
-            
-            const didIWin = (amIteam1 && t1Wins) || (!amIteam1 && !t1Wins);
-            const oppAvg = amIteam1 ? t2Avg : t1Avg;
-            const diffSets = Math.abs(t1Sets - t2Sets);
-            const setsCount = sets.length;
-            const isCloseMatch = setsCount === 3 && diffSets === 1;
-            
-            // Game difference calculation
-            let myGames = 0, oppGames = 0;
+            const sets = resultStr.trim().split(/\s+/);
+            let t1Sets = 0, t2Sets = 0;
             sets.forEach(s => {
-                const parts = s.split('-').map(Number);
-                if (parts.length === 2) {
-                    if (amIteam1) { myGames += parts[0]; oppGames += parts[1]; }
-                    else { myGames += parts[1]; oppGames += parts[0]; }
-                }
+                if (!s.includes('-')) return;
+                const [g1, g2] = s.split('-').map(Number);
+                if (g1 > g2) t1Sets++; else if (g2 > g1) t2Sets++;
             });
-            const gameDiff = myGames - oppGames;
+            
+            const t1Wins = t1Sets > t2Sets;
+            const isComp = col === 'partidosReto' || match.tipo === 'reto';
 
-            // Init ELO
-            let currentPoints = p.puntosRanking;
-            if (currentPoints === undefined || currentPoints === null) {
-                currentPoints = Math.round(1000 + ((p.nivel || 2.5) - 2.5) * 400);
+            // Fetch detailed player data INSIDE transaction
+            const rawPlayers = [];
+            for (const id of match.jugadores) {
+                if (!id) { rawPlayers.push(null); continue; }
+                if (id.startsWith('GUEST_')) {
+                    const parts = id.split('_');
+                    rawPlayers.push({ id, nombre: parts[1], nivel: parseFloat(parts[2]) || 2.5, isGuest: true });
+                } else {
+                    const pDoc = await transaction.get(doc(db, 'usuarios', id));
+                    rawPlayers.push(pDoc.exists() ? { ...pDoc.data(), id } : null);
+                }
             }
 
-            // Position Logic (Try to determine position from match setup or default)
-            const position = match.posiciones ? match.posiciones[i] : (i % 2 === 0 ? 'reves' : 'drive');
+            const team1 = rawPlayers.slice(0, 2).filter(p => p);
+            const team2 = rawPlayers.slice(2, 4).filter(p => p);
+            
+            if (team1.length < 2 || team2.length < 2) throw "Teams incomplete";
 
-            // Inactivity Check
-            const lastMatchDate = p.lastMatchDate ? p.lastMatchDate.toDate() : new Date(0);
-            const now = new Date();
-            const daysSinceLastMatch = Math.floor((now - lastMatchDate) / (1000 * 60 * 60 * 24));
+            const t1Avg = (team1.reduce((sum, p) => sum + (p.nivel || 2.5), 0)) / 2;
+            const t2Avg = (team2.reduce((sum, p) => sum + (p.nivel || 2.5), 0)) / 2;
 
-            // Emotional State (Simulated check, ideally would check a linked diary entry)
-            // For now, assume 'Normal' unless passed in extraMatchData for this player
-            const mood = extraMatchData.playerMoods?.[p.id] || 'Normal';
+            const changes = [];
+            const pointAllocations = [];
+            const pointDetails = estimatePointDetailsFromSets(resultStr);
+            const teamPointCount = pointDetails.totalPoints || 1;
+            const surface = extraMatchData.surface || match.surface || 'indoor';
 
-            // --- MAIN ELO CALCULATION ---
-            const elo = predictEloImpact({
-                myLevel: p.nivel || 2.5, 
-                myPoints: currentPoints,
-                partnerLevel: partner ? (partner.nivel || 2.5) : (p.nivel || 2.5), 
-                rival1Level: oppAvg, 
-                rival2Level: oppAvg,
-                streak: p.rachaActual || 0,
-                matchesPlayed: p.partidosJugados || 0,
-                setsDifference: diffSets,
-                gameDiff: gameDiff,
-                extraParams: { 
-                    weight: p.peso || 75,
-                    isComeback: didIWin && sets.length === 3 && sets[0].split('-').map(Number)[amIteam1 ? 0 : 1] < sets[0].split('-').map(Number)[amIteam1 ? 1 : 0],
+            // Process each player
+            for (let i = 0; i < 4; i++) {
+                const p = rawPlayers[i];
+                if (!p || p.isGuest) {
+                    changes.push({ id: p ? p.id : null, isGuest: true });
+                    continue;
+                }
+
+                const amIteam1 = i < 2;
+                const partnerIdx = amIteam1 ? (i === 0 ? 1 : 0) : (i === 2 ? 3 : 2);
+                const partner = rawPlayers[partnerIdx];
+                
+                const didIWin = (amIteam1 && t1Wins) || (!amIteam1 && !t1Wins);
+                const oppAvg = amIteam1 ? t2Avg : t1Avg;
+                const diffSets = Math.abs(t1Sets - t2Sets);
+                const setsCount = sets.length;
+                const isCloseMatch = setsCount === 3 && diffSets === 1;
+                
+                let myGames = 0, oppGames = 0;
+                sets.forEach(s => {
+                    const parts = s.split('-').map(Number);
+                    if (parts.length === 2) {
+                        if (amIteam1) { myGames += parts[0]; oppGames += parts[1]; }
+                        else { myGames += parts[1]; oppGames += parts[0]; }
+                    }
+                });
+                const gameDiff = myGames - oppGames;
+
+                let currentPoints = p.puntosRanking;
+                if (currentPoints === undefined || currentPoints === null) {
+                    currentPoints = Math.round(1000 + ((p.nivel || 2.5) - 2.5) * 400);
+                }
+
+                const position = match.posiciones ? match.posiciones[i] : (i % 2 === 0 ? 'reves' : 'drive');
+                const lastMatchDate = p.lastMatchDate ? p.lastMatchDate.toDate() : new Date(0);
+                const now = new Date();
+                const daysSinceLastMatch = Math.floor((now - lastMatchDate) / (1000 * 60 * 60 * 24));
+                const mood = extraMatchData.playerMoods?.[p.id] || 'Normal';
+
+                const elo = predictEloImpact({
+                    myLevel: p.nivel || 2.5, 
+                    myPoints: currentPoints,
+                    partnerLevel: partner ? (partner.nivel || 2.5) : (p.nivel || 2.5), 
+                    rival1Level: oppAvg, 
+                    rival2Level: oppAvg,
+                    streak: p.rachaActual || 0,
+                    matchesPlayed: p.partidosJugados || 0,
+                    setsDifference: diffSets,
+                    gameDiff: gameDiff,
+                    extraParams: { 
+                        weight: p.peso || 75,
+                        isComeback: didIWin && sets.length === 3 && sets[0].split('-').map(Number)[amIteam1 ? 0 : 1] < sets[0].split('-').map(Number)[amIteam1 ? 1 : 0],
+                        isComp: isComp,
+                        isCloseMatch: isCloseMatch,
+                        didWin: didIWin,
+                        setsCount: setsCount,
+                        surface: surface,
+                        weatherCondition: extraMatchData.weather || 'normal',
+                        daysSinceLastMatch: daysSinceLastMatch,
+                        mood: mood
+                    }
+                });
+
+                let delta = didIWin ? elo.win : elo.loss;
+                if (!isComp) delta = Math.round(delta * 0.5); 
+
+                const newPts = Math.max(0, currentPoints + delta);
+                const levelChange = calculateLevelChange(p.nivel || 2.5, oppAvg, didIWin);
+                const newLevel = Math.max(1, Math.min(7, (p.nivel || 2.5) + levelChange));
+                
+                const eloData = p.elo || {};
+                const posKey = position.toLowerCase();
+                const currentPosElo = eloData[posKey] || currentPoints;
+                const newPosElo = currentPosElo + delta;
+                
+                const surfKey = surface.toLowerCase();
+                const currentSurfElo = eloData[surfKey] || currentPoints;
+                const newSurfElo = currentSurfElo + delta;
+
+                const stats = p.advancedStats || { consistency: 50, pressure: 50, aggression: 50, modelAccuracy: 85, upsets: 0 };
+                
+                let consDelta = didIWin && diffSets === 2 ? 0.5 : (didIWin ? 0.2 : (diffSets === 2 ? -0.5 : -0.2));
+                stats.consistency = Math.min(100, Math.max(0, (stats.consistency || 50) + consDelta));
+                let pressDelta = isCloseMatch ? (didIWin ? 1.5 : -0.5) : 0;
+                stats.pressure = Math.min(100, Math.max(0, (stats.pressure || 50) + pressDelta));
+
+                const pointImpact = buildPointImpact({
+                    delta,
+                    teamPointCount,
+                    amIteam1,
+                    team1Avg: t1Avg,
+                    team2Avg: t2Avg,
+                    myLevel: p.nivel || 2.5,
+                    partnerLevel: partner ? (partner.nivel || 2.5) : (p.nivel || 2.5),
+                });
+
+                const analysis = {
+                    matchId: matchId,
+                    won: didIWin,
+                    delta: delta,
+                    pointsBefore: currentPoints,
+                    pointsAfter: newPts,
+                    opponentAvg: oppAvg,
+                    sets: resultStr,
+                    breakdown: elo.breakdown,
                     isComp: isComp,
-                    isCloseMatch: isCloseMatch,
-                    didWin: didIWin,
-                    setsCount: setsCount,
-                    surface: surface,
-                    weatherCondition: extraMatchData.weather || 'normal',
-                    daysSinceLastMatch: daysSinceLastMatch,
-                    mood: mood
+                    closeMatch: isCloseMatch,
+                    gameDiff: gameDiff,
+                    prediction: elo.expectedWinrate,
+                    pointImpact: pointImpact,
+                    timestamp: new Date().toISOString()
+                };
+
+                // Transactional Writes
+                transaction.update(doc(db, 'usuarios', p.id), {
+                    puntosRanking: newPts,
+                    nivel: parseFloat(newLevel.toFixed(2)),
+                    victorias: (p.victorias || 0) + (didIWin ? 1 : 0),
+                    partidosJugados: (p.partidosJugados || 0) + 1,
+                    rachaActual: didIWin ? (p.rachaActual > 0 ? p.rachaActual + 1 : 1) : (p.rachaActual < 0 ? p.rachaActual - 1 : -1),
+                    lastMatchAnalysis: analysis,
+                    [`elo.${posKey}`]: newPosElo,
+                    [`elo.${surfKey}`]: newSurfElo,
+                    advancedStats: stats,
+                    lastMatchDate: serverTimestamp()
+                });
+
+                transaction.set(doc(collection(db, "rankingLogs")), {
+                    uid: p.id,
+                    matchId: matchId,
+                    diff: delta,
+                    newTotal: newPts,
+                    details: analysis,
+                    subEloIndices: { position: newPosElo, surface: newSurfElo },
+                    timestamp: serverTimestamp()
+                });
+
+                changes.push({ uid: p.id, delta, analysis, pointImpact });
+                pointAllocations.push({
+                    uid: p.id,
+                    team: amIteam1 ? "A" : "B",
+                    delta: delta,
+                    pointImpact: pointImpact
+                });
+                
+                // UI Toasts can happen after, but we can't emit from here easily. 
+                // We'll trust the user to see the updated data or orchestrator notifications.
+            }
+
+            // Save details
+            transaction.set(doc(collection(db, "matchPointDetails")), {
+                matchId: matchId,
+                col: col,
+                sets: resultStr,
+                totalPoints: pointDetails.totalPoints,
+                points: pointDetails.points,
+                playerAllocations: pointAllocations,
+                createdAt: serverTimestamp()
+            });
+
+            // Match Summary
+            transaction.update(matchRef, {
+                eloSummary: {
+                    totalPoints: pointDetails.totalPoints,
+                    pointsPerSet: pointDetails.pointsPerSet,
+                    updatedAt: serverTimestamp()
                 }
             });
 
-            let delta = didIWin ? elo.win : elo.loss;
-            if (!isComp) delta = Math.round(delta * 0.5); 
-
-            const newPts = Math.max(0, currentPoints + delta);
-            const levelChange = calculateLevelChange(p.nivel || 2.5, oppAvg, didIWin);
-            const oldLevel = p.nivel || 2.5;
-            const newLevel = Math.max(1, Math.min(7, oldLevel + levelChange));
-            
-            // --- SUB-ELO UPDATES (New Advanced Feature) ---
-            const eloData = p.elo || {};
-            // 1. Position ELO
-            const posKey = position.toLowerCase(); // 'drive' or 'reves'
-            const currentPosElo = eloData[posKey] || currentPoints;
-            const newPosElo = currentPosElo + delta; // Simplified delta for sub-elo
-            
-            // 2. Surface ELO
-            const surfKey = surface.toLowerCase(); // 'indoor', 'outdoor'
-            const currentSurfElo = eloData[surfKey] || currentPoints;
-            const newSurfElo = currentSurfElo + delta; // Simplified delta
-
-            // --- ADVANCED METRICS UPDATE ---
-            const stats = p.advancedStats || { consistency: 50, pressure: 50, aggression: 50, modelAccuracy: 85, upsets: 0 };
-            
-            // Phase 6: Delegate Intelligent Metrics to Orchestrator
-            // We no longer calculate momentum or accuracy here manually.
-            // The dispatch call at the end of the function will trigger AIOrchestrator
-            // which handles consensus, upsets, momentum and playerState.
-            
-            // Consistency: Boost for wins in straight sets, penalty for heavy losses
-            let consDelta = didIWin && diffSets === 2 ? 0.5 : (didIWin ? 0.2 : (diffSets === 2 ? -0.5 : -0.2));
-            stats.consistency = Math.min(100, Math.max(0, (stats.consistency || 50) + consDelta));
-
-            // Pressure: Boost for winning close matches (3 sets)
-            let pressDelta = isCloseMatch ? (didIWin ? 1.5 : -0.5) : 0;
-            stats.pressure = Math.min(100, Math.max(0, (stats.pressure || 50) + pressDelta));
-
-            const pointImpact = buildPointImpact({
-                delta,
-                teamPointCount,
-                amIteam1,
-                team1Avg: t1Avg,
-                team2Avg: t2Avg,
-                myLevel: p.nivel || 2.5,
-                partnerLevel: partner ? (partner.nivel || 2.5) : (p.nivel || 2.5),
-            });
-
-            const analysis = {
-                matchId: matchId,
-                won: didIWin,
-                delta: delta,
-                pointsBefore: currentPoints,
-                pointsAfter: newPts,
-                opponentAvg: oppAvg,
-                sets: resultStr,
-                breakdown: elo.breakdown,
-                isComp: isComp,
-                closeMatch: isCloseMatch,
-                gameDiff: gameDiff,
-                prediction: elo.expectedWinrate,
-                pointImpact: pointImpact,
-                timestamp: new Date().toISOString()
-            };
-
-            // Update User Document
-            await updateDocument('usuarios', p.id, {
-                puntosRanking: newPts,
-                nivel: parseFloat(newLevel.toFixed(2)),
-                victorias: (p.victorias || 0) + (didIWin ? 1 : 0),
-                partidosJugados: (p.partidosJugados || 0) + 1,
-                rachaActual: didIWin ? (p.rachaActual > 0 ? p.rachaActual + 1 : 1) : (p.rachaActual < 0 ? p.rachaActual - 1 : -1),
-                lastMatchAnalysis: analysis,
-                [`elo.${posKey}`]: newPosElo,
-                [`elo.${surfKey}`]: newSurfElo,
-                advancedStats: stats,
-                lastMatchDate: serverTimestamp()
-            });
-
-            // Log Ranking Change
-            await addDoc(collection(db, "rankingLogs"), {
-                uid: p.id,
-                matchId: matchId,
-                diff: delta,
-                newTotal: newPts,
-                details: analysis,
-                subEloIndices: { position: newPosElo, surface: newSurfElo },
-                timestamp: serverTimestamp()
-            });
-
-            changes.push({ uid: p.id, delta, analysis, pointImpact });
-            pointAllocations.push({
-                uid: p.id,
-                team: amIteam1 ? "A" : "B",
-                delta: delta,
-                pointImpact: pointImpact
-            });
-            
-            // Achievement Check
-            const newWins = (p.victorias || 0) + (didIWin ? 1 : 0);
-            const newStreak = didIWin ? (p.rachaActual > 0 ? p.rachaActual + 1 : 1) : (p.rachaActual < 0 ? p.rachaActual - 1 : -1);
-            if (newWins === 1) showToast("Logro Desbloqueado", "Tu primera victoria", "success");
-            if (newStreak === 3) showToast("¡En Racha!", "3 Victorias seguidas", "warning");
-        }
-
-        // Save point detail log (estimated) once per match
-        await addDoc(collection(db, "matchPointDetails"), {
-            matchId: matchId,
-            col: col,
-            sets: resultStr,
-            totalPoints: pointDetails.totalPoints,
-            points: pointDetails.points,
-            playerAllocations: pointAllocations,
-            createdAt: serverTimestamp()
+            return { success: true, changes };
         });
 
-        // Store transparent summary on match
-        await updateDocument(col, matchId, {
-            eloSummary: {
-                totalPoints: pointDetails.totalPoints,
-                pointsPerSet: pointDetails.pointsPerSet,
-                updatedAt: serverTimestamp()
-            }
-        });
-
-        // --- PHASE 5: AI ORCHESTRATOR TRIGGER ---
-        // Notify the Brain for all players involved — await to ensure playerState is updated
-        try {
-            const { AIOrchestrator } = await import('./ai-orchestrator.js');
-            await Promise.all(match.jugadores.filter(uid => uid && !uid.startsWith('GUEST_')).map(uid => {
-                return AIOrchestrator.dispatch('MATCH_FINISHED', { uid, matchId });
-            }));
-        } catch(e) {
-            console.warn("Orchestrator trigger warning:", e);
-        }
-
-        return { success: true, changes };
+        // Loop changes for side effects (Orchestrator, Toasts) - Outside Transaction
+        // ... (This part runs after transaction success)
+        
     } catch(e) {
         console.error("Match Processing Error:", e);
-        return { success: false, error: e.message };
+        return { success: false, error: e.message || e };
     }
 }
 

@@ -1624,9 +1624,15 @@
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: #fff;
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.08), rgba(168, 85, 247, 0.08));
+  background: linear-gradient(
+    135deg,
+    rgba(0, 212, 255, 0.08),
+    rgba(168, 85, 247, 0.08)
+  );
   border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .qa-btn:hover {
@@ -1635,7 +1641,11 @@
 }
 
 .qa-btn.primary {
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(0, 212, 255, 0.08));
+  background: linear-gradient(
+    135deg,
+    rgba(0, 212, 255, 0.25),
+    rgba(0, 212, 255, 0.08)
+  );
   color: #e6fbff;
   border-color: rgba(0, 212, 255, 0.35);
 }
@@ -1692,7 +1702,9 @@
 
 .intel-card.actionable {
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .intel-card.actionable:hover {
@@ -1744,15 +1756,18 @@
   }
 }
 
-
 /* Next match forecast */
 .nm-ai-forecast {
   margin: 12px 0 16px;
   padding: 14px 16px;
   border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: linear-gradient(135deg, rgba(15,23,42,0.7), rgba(2,6,23,0.9));
-  box-shadow: inset 0 0 20px rgba(0,0,0,0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(
+    135deg,
+    rgba(15, 23, 42, 0.7),
+    rgba(2, 6, 23, 0.9)
+  );
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.35);
 }
 .nm-ai-forecast .forecast-badge {
   font-size: 0.55rem;
@@ -1775,14 +1790,14 @@
 }
 
 /* Home layout safety */
-.welcome-card, .next-match-card-premium-v7 {
+.welcome-card,
+.next-match-card-premium-v7 {
   max-width: 100%;
   overflow: hidden;
 }
 .welcome-card * {
   max-width: 100%;
 }
-
 
 .p-chip-elite {
   max-width: 100%;
@@ -1791,22 +1806,42 @@
   text-overflow: ellipsis;
 }
 
-
-
 /* home-polish */
-.welcome-card { padding: 18px; border-radius: 22px; gap: 12px; }
-.welcome-card .premium-title { font-size: 1rem; letter-spacing: 2px; }
-#next-match-container { margin-top: 12px; }
-.next-match-card-premium-v7 { border-radius: 24px; }
-.nm-header-v7 { gap: 10px; }
-.nm-court-simplified .p-chip-elite { padding: 8px 10px; }
-.p-chip-elite { font-size: 0.72rem; }
-.nm-ai-forecast { border-radius: 20px; }
-@media (max-width: 480px) {
-  .welcome-card { padding: 14px; }
-  .nm-header-v7 span.text-4xl { font-size: 2rem; }
+.welcome-card {
+  padding: 18px;
+  border-radius: 22px;
+  gap: 12px;
 }
-
+.welcome-card .premium-title {
+  font-size: 1rem;
+  letter-spacing: 2px;
+}
+#next-match-container {
+  margin-top: 12px;
+}
+.next-match-card-premium-v7 {
+  border-radius: 24px;
+}
+.nm-header-v7 {
+  gap: 10px;
+}
+.nm-court-simplified .p-chip-elite {
+  padding: 8px 10px;
+}
+.p-chip-elite {
+  font-size: 0.72rem;
+}
+.nm-ai-forecast {
+  border-radius: 20px;
+}
+@media (max-width: 480px) {
+  .welcome-card {
+    padding: 14px;
+  }
+  .nm-header-v7 span.text-4xl {
+    font-size: 2rem;
+  }
+}
 
 /* Home stat chips (lightweight, consistent) */
 .stat-chip {
@@ -1843,7 +1878,11 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 20% 10%, rgba(34, 197, 94, 0.08), transparent 45%);
+  background: radial-gradient(
+    circle at 20% 10%,
+    rgba(34, 197, 94, 0.08),
+    transparent 45%
+  );
   pointer-events: none;
 }
 
@@ -1864,7 +1903,11 @@
   position: relative;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(135deg, rgba(12, 24, 40, 0.9), rgba(6, 12, 20, 0.98));
+  background: linear-gradient(
+    135deg,
+    rgba(12, 24, 40, 0.9),
+    rgba(6, 12, 20, 0.98)
+  );
   box-shadow: 0 14px 36px rgba(2, 6, 12, 0.6);
   transition: var(--transition);
 }
@@ -1877,11 +1920,15 @@
 #match-feed .feed-match-card-v7:hover {
   transform: translateY(-3px) scale(1.01);
   border-color: rgba(43, 188, 255, 0.45);
-  box-shadow: 0 20px 44px rgba(2, 6, 12, 0.7), 0 0 18px rgba(43, 188, 255, 0.25);
+  box-shadow:
+    0 20px 44px rgba(2, 6, 12, 0.7),
+    0 0 18px rgba(43, 188, 255, 0.25);
 }
 
 #match-feed .feed-match-card-v7.open {
-  box-shadow: 0 18px 40px rgba(34, 197, 94, 0.2), 0 0 16px rgba(34, 197, 94, 0.2);
+  box-shadow:
+    0 18px 40px rgba(34, 197, 94, 0.2),
+    0 0 16px rgba(34, 197, 94, 0.2);
   border-color: rgba(34, 197, 94, 0.28);
 }
 
@@ -1895,22 +1942,47 @@
   position: absolute;
   inset: 0;
   border-radius: 18px;
-  background: radial-gradient(circle at 10% 0%, rgba(43, 188, 255, 0.12), transparent 45%);
+  background: radial-gradient(
+    circle at 10% 0%,
+    rgba(43, 188, 255, 0.12),
+    transparent 45%
+  );
   pointer-events: none;
 }
 
 #match-feed .f-type-tag.reto {
-  background: linear-gradient(135deg, rgba(249, 115, 22, 0.25), rgba(239, 68, 68, 0.25));
+  background: linear-gradient(
+    135deg,
+    rgba(249, 115, 22, 0.25),
+    rgba(239, 68, 68, 0.25)
+  );
   border: 1px solid rgba(249, 115, 22, 0.35);
 }
 
 #match-feed .f-type-tag.am {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(43, 188, 255, 0.22));
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.22),
+    rgba(43, 188, 255, 0.22)
+  );
   border: 1px solid rgba(34, 197, 94, 0.35);
 }
-
 #match-feed .f-dot.filled {
   box-shadow: 0 0 10px rgba(34, 197, 94, 0.6);
+}
+
+#match-feed .f-type-tag.private {
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.25),
+    rgba(185, 28, 28, 0.25)
+  );
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+  width: 24px;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
 }
 
 #match-feed .f-spots-label {
@@ -1932,12 +2004,20 @@
   position: absolute;
   inset: 0;
   border-radius: 24px;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(43, 188, 255, 0.12));
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.08),
+    rgba(43, 188, 255, 0.12)
+  );
   pointer-events: none;
 }
 
 .stat-chip {
-  background: linear-gradient(135deg, rgba(10, 20, 30, 0.7), rgba(6, 12, 20, 0.9));
+  background: linear-gradient(
+    135deg,
+    rgba(10, 20, 30, 0.7),
+    rgba(6, 12, 20, 0.9)
+  );
 }
 
 .progress-bar {

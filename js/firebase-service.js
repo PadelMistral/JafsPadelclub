@@ -170,7 +170,7 @@ export function getIncrement(val) { return increment(val); }
 
 // === STORAGE EXPORTS ===
 export async function uploadProfilePhoto(uid, file) {
-  const path = `profiles/${uid}/${Date.now()}.jpg`;
+  const path = `users/${uid}/profile.jpg`;
   const sRef = ref(storage, path);
   await uploadBytes(sRef, file);
   return getDownloadURL(sRef);

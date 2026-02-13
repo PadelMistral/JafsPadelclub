@@ -39,6 +39,31 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
             container.innerHTML = '<div class="center p-10 opacity-50">Partido no encontrado o cancelado.</div>'; 
             return; 
         }
+
+        // Privacy Check
+        if (m.visibility === 'private') {
+            const isInvited = (m.invitedUsers || []).includes(currentUser.uid);
+            const isOwner = m.organizerId === currentUser.uid || m.creador === currentUser.uid;
+            const isParticipant = (m.jugadores || []).includes(currentUser.uid);
+            
+            if (!isInvited && !isOwner && !isParticipant) {
+                container.innerHTML = `
+                    <div class="center py-20 flex-col items-center gap-4 animate-up">
+                        <div class="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex center mb-2">
+                            <i class="fas fa-lock text-2xl text-red-500"></i>
+                        </div>
+                        <h3 class="text-lg font-black text-white uppercase tracking-widest">Acceso Restringido</h3>
+                        <p class="text-xs text-center text-muted px-10 max-w-sm">
+                            Evento clasificado como PRIVADO. Solo personal autorizado o con invitación directa puede acceder a los datos tácticos.
+                        </p>
+                        <button class="btn-premium-v7 sm mt-6" onclick="document.getElementById('modal-match').classList.remove('active')">
+                            Cerrar Protocolo
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+        }
         
         const isParticipant = m.jugadores?.includes(currentUser.uid);
         const isCreator = m.creador === currentUser.uid || userData?.rol === 'Admin';
@@ -277,10 +302,12 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                     </div>
                     <div class="l-input-box flex-1">
                         <label>PISTA</label>
-                        <select id="inp-court" class="bg-transparent border-none text-white font-black text-xs text-center w-full outline-none">
-                            <option value="normal">ESTANDAR</option>
-                            <option value="panoramica">WPT PRO</option>
+                        <select id="sel-court" class="bg-transparent border-none text-white font-black text-xs text-center w-full outline-none" onchange="window.toggleCourtInput(this)">
+                            <option value="Mistral-Homes">MISTRAL-HOMES</option>
+                            <option value="custom">OTRA PISTA...</option>
                         </select>
+                        <input type="text" id="inp-court-custom" class="hidden mt-2 bg-white/5 border border-white/10 w-full text-[10px] p-2 rounded text-white font-bold uppercase" placeholder="NOMBRE PISTA" oninput="document.getElementById('inp-court').value = this.value">
+                        <input type="hidden" id="inp-court" value="Mistral-Homes">
                     </div>
                 </div>
                 
@@ -301,6 +328,25 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                         <i class="fas fa-coins text-sport-gold text-xl"></i>
                         <input type="number" id="inp-bet" value="50" placeholder="Apuesta">
                         <span class="suffix">FP POT</span>
+                    </div>
+                </div>
+
+                <!-- Visibilidad: Pública / Privada -->
+                <span class="cfg-label-v7">VISIBILIDAD</span>
+                <div class="mode-selector-v7 mb-6">
+                    <div id="opt-public" class="mode-card-v7 active" onclick="setMatchVisibility('public')">
+                        <div class="mode-icon"><i class="fas fa-globe"></i></div>
+                        <div>
+                            <span class="m-name">Pública</span>
+                            <span class="m-desc text-[9px] opacity-60">Visible para todos</span>
+                        </div>
+                    </div>
+                    <div id="opt-private" class="mode-card-v7" onclick="setMatchVisibility('private')">
+                        <div class="mode-icon"><i class="fas fa-lock"></i></div>
+                        <div>
+                            <span class="m-name">Privada</span>
+                            <span class="m-desc text-[9px] opacity-60">Solo invitados</span>
+                        </div>
                     </div>
                 </div>
 
@@ -332,6 +378,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
 
     // Temp state
     window._creationType = 'amistoso';
+    window._creationVisibility = 'public';
     window._initialJugadores = [currentUser.uid, null, null, null];
 
     window.setMatchType = (t) => {
@@ -339,6 +386,12 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
         document.getElementById('opt-am').classList.toggle('active', t === 'amistoso');
         document.getElementById('opt-re').classList.toggle('active', t === 'reto');
         document.getElementById('reto-options').classList.toggle('hidden-v5', t !== 'reto');
+    };
+
+    window.setMatchVisibility = (v) => {
+        window._creationVisibility = v;
+        document.getElementById('opt-public').classList.toggle('active', v === 'public');
+        document.getElementById('opt-private').classList.toggle('active', v === 'private');
     };
 }
 
@@ -350,7 +403,7 @@ async function getPlayerData(uid) {
     if (!uid) return null;
     if (uid.startsWith('GUEST_')) {
         const parts = uid.split('_');
-        return { name: parts[1], level: parseFloat(parts[2]), id: uid, isGuest: true };
+        return { name: parts[1], level: parseFloat(parts[2]), id: uid, isGuest: true, pala: parts[3] || 'Desconocida' };
     }
     const d = await getDocument('usuarios', uid);
     return d ? { name: d.nombreUsuario || d.nombre, photo: d.fotoPerfil || d.fotoURL, level: d.nivel || 2.5, id: uid } : null;
@@ -445,13 +498,19 @@ window.executeCreateMatch = async (dateStr, hour) => {
     const matchDate = new Date(`${dateStr}T${hour}`);
     
     try {
+        const visibility = window._creationVisibility || 'public';
+        const invitedUsers = jugs.filter(id => id && id !== auth.currentUser.uid && !id.startsWith('GUEST_'));
+
         const matchData = {
             creador: auth.currentUser.uid,
+            organizerId: auth.currentUser.uid,
             fecha: matchDate,
             jugadores: jugs,
             restriccionNivel: { min, max },
             familyPointsBet: bet,
             estado: 'abierto',
+            visibility: visibility,
+            invitedUsers: visibility === 'private' ? invitedUsers : [],
             timestamp: serverTimestamp(),
             equipoA: [jugs[0], jugs[1]],
             equipoB: [jugs[2], jugs[3]],
@@ -487,7 +546,11 @@ window.executeCreateMatch = async (dateStr, hour) => {
 
         const others = jugs.filter(id => id && id !== auth.currentUser.uid && !id.startsWith('GUEST_'));
         if (others.length > 0) {
-            await createNotification(others, "¡Padeluminatis!", `Te han convocado para el ${matchDate.toLocaleDateString()}`, 'match_join', 'calendario.html');
+            const notifType = visibility === 'private' ? 'private_invite' : 'match_join';
+            const notifMsg = visibility === 'private'
+                ? `Te han invitado a una partida privada el ${matchDate.toLocaleDateString()}`
+                : `Te han convocado para el ${matchDate.toLocaleDateString()}`;
+            await createNotification(others, "¡Padeluminatis!", notifMsg, notifType, 'calendario.html');
         }
 
         showToast("SISTEMA", "Despliegue confirmado en la Matrix", "success");
@@ -522,6 +585,15 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             
             if (m.restriccionNivel && (uLvl < m.restriccionNivel.min || uLvl > m.restriccionNivel.max)) {
                 return showToast("ACCESO DENEGADO", "Nivel incompatible con el protocolo", "warning");
+            }
+            
+            // Private Security Check
+            if (m.visibility === 'private') {
+                const isInvited = (m.invitedUsers || []).includes(user.uid);
+                const isOwner = m.organizerId === user.uid || m.creador === user.uid;
+                if (!isInvited && !isOwner) {
+                    return showToast("ACCESO DENEGADO", "Requiere invitación oficial", "error");
+                }
             }
             
             jugs[emptyIdx] = user.uid;
@@ -736,8 +808,166 @@ window.openResultForm = async (id, col) => {
                 try { window.location.href = `diario.html?matchId=${id}`; } catch (_) {}
             }, 1000);
         } catch (e) {
-            console.error(e);
             showToast("ERROR", "Fallo al guardar resultados", "error");
         }
     };
+};
+
+// --- DYNAMIC UI HELPERS ---
+window.toggleCourtInput = (sel) => {
+    const customInp = document.getElementById('inp-court-custom');
+    const finalInp = document.getElementById('inp-court');
+    if (sel.value === 'custom') {
+        customInp.classList.remove('hidden');
+        customInp.focus();
+        finalInp.value = customInp.value; 
+    } else {
+        customInp.classList.add('hidden');
+        finalInp.value = sel.value;
+    }
+};
+
+window.openPlayerSelector = async (matchId, col, extra) => {
+    const q = query(collection(db, 'usuarios'), orderBy('nombreUsuario'), limit(50));
+    const listSnap = await getDocs(q);
+    const users = listSnap.docs.map(d => ({id: d.id, ...d.data()}));
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '9999';
+    overlay.innerHTML = `
+        <div class="modal-card animate-up glass-strong" style="max-width:360px">
+            <div class="modal-header border-b border-white/10 p-4 flex-row between items-center">
+                <span class="text-xs font-black text-white uppercase tracking-widest">AÑADIR JUGADOR</span>
+                <button class="close-btn w-8 h-8 rounded-full bg-white/5 flex center" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times text-white"></i></button>
+            </div>
+            
+            <div class="p-4">
+                <div class="ps-tabs flex-row gap-2 mb-4">
+                    <div class="ps-tab active flex-1 p-2 text-center rounded-xl bg-primary text-black font-black text-xs cursor-pointer" onclick="window.switchPsTab(this, 'search')">EXISTENTE</div>
+                    <div class="ps-tab flex-1 p-2 text-center rounded-xl bg-white/5 text-white font-black text-xs cursor-pointer" onclick="window.switchPsTab(this, 'guest')">INVITADO</div>
+                </div>
+                
+                <div id="ps-panel-search">
+                    <input type="text" id="ps-search" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold mb-3 outline-none focus:border-primary/50" placeholder="Buscar jugador..." oninput="window.filterPsUsers(this.value)">
+                    <div id="ps-list" class="flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scroll">
+                        <!-- Users Rendered Here -->
+                    </div>
+                </div>
+                
+                <div id="ps-panel-guest" class="hidden flex-col gap-3">
+                    <input type="text" id="guest-name" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary/50" placeholder="Nombre Invitado">
+                    <div class="flex-row gap-2">
+                        <input type="number" id="guest-level" class="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary/50" placeholder="Nivel (2.5)" step="0.1">
+                        <input type="text" id="guest-pala" class="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary/50" placeholder="Pala (Opcional)">
+                    </div>
+                </div>
+
+                <button id="btn-add-guest" class="hidden w-full py-4 mt-4 bg-gradient-to-r from-primary to-lime-400 rounded-xl text-black font-black text-xs tracking-widest shadow-glow hover:scale-[1.02] transition-transform" onclick="window.addGuest('${matchId}', '${col}', ${JSON.stringify(extra).replace(/"/g, "'")})">
+                    CONFIRMAR INVITADO <i class="fas fa-check ml-2"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    window.psUsersCache = users;
+    window.psMatchContext = { matchId, col, extra };
+    window.filterPsUsers('');
+};
+
+window.switchPsTab = (tab, mode) => {
+    document.querySelectorAll('.ps-tab').forEach(t => {
+        t.classList.remove('bg-primary', 'text-black');
+        t.classList.add('bg-white/5', 'text-white');
+    });
+    tab.classList.remove('bg-white/5', 'text-white');
+    tab.classList.add('bg-primary', 'text-black');
+    
+    document.getElementById('ps-panel-search').classList.toggle('hidden', mode !== 'search');
+    document.getElementById('ps-panel-guest').classList.toggle('hidden', mode !== 'guest');
+    document.getElementById('btn-add-guest').classList.toggle('hidden', mode !== 'guest');
+};
+
+window.filterPsUsers = (q) => {
+    const term = q.toLowerCase();
+    const filtered = window.psUsersCache.filter(u => (u.nombreUsuario || u.nombre || '').toLowerCase().includes(term));
+    const mid = window.psMatchContext.matchId;
+    const col = window.psMatchContext.col;
+    const extra = window.psMatchContext.extra;
+    
+    document.getElementById('ps-list').innerHTML = filtered.map(u => {
+        const isNew = mid === 'NEW';
+        const action = isNew ? `window.selectUserForNew('${u.id}')` : `window.executeMatchAction('add', '${mid}', '${col}', {uid:'${u.id}', idx:${extra.idx}})`;
+        const finalAction = `${action}; document.querySelector('.modal-overlay.active').remove();`;
+        
+        return `
+        <div class="flex-row items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/50 cursor-pointer transition-all hover:bg-white/10" onclick="${finalAction}">
+            <img src="${u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png'}" class="w-8 h-8 rounded-full bg-black/50 object-cover border border-white/10">
+            <div class="flex-col flex-1">
+                <span class="text-xs font-bold text-white">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
+                <span class="text-[9px] text-muted">Nivel ${(u.nivel || 2.5).toFixed(2)}</span>
+            </div>
+            <i class="fas fa-plus text-primary text-xs"></i>
+        </div>
+        `;
+    }).join('');
+};
+
+window.addGuest = (mid, col, extra) => {
+    const name = document.getElementById('guest-name').value.trim();
+    const level = document.getElementById('guest-level').value || 2.5;
+    const pala = document.getElementById('guest-pala').value.trim() || 'Desconocida';
+    
+    if (!name) return showToast("ERROR", "Nombre requerido", "error");
+    
+    const guestId = `GUEST_${name}_${level}_${pala}`;
+    
+    if (mid === 'NEW') {
+        const u = { id: guestId, nombreUsuario: name + ' (Inv)', nivel: parseFloat(level), fotoPerfil: './imagenes/Logojafs.png', isGuest: true };
+        if (!window.psUsersCache) window.psUsersCache = [];
+        window.psUsersCache.push(u);
+        window.selectUserForNew(guestId);
+    } else {
+        window.executeMatchAction('add', mid, col, { uid: guestId, idx: extra.idx });
+    }
+    document.querySelector('.modal-overlay.active').remove();
+};
+
+window.selectUserForNew = (uid) => {
+    const extra = window.psMatchContext.extra; 
+    window._initialJugadores[extra.idx] = uid;
+    
+    let u = window.psUsersCache.find(x => x.id === uid);
+    if (!u && uid.startsWith('GUEST_')) {
+         const parts = uid.split('_');
+         u = { nombreUsuario: parts[1] + ' (Inv)', nivel: parseFloat(parts[2]), fotoPerfil: './imagenes/Logojafs.png' };
+    }
+    
+    const slot = document.getElementById(`slot-${extra.idx}-wrap`);
+    if(slot && u) {
+        const isTeamA = extra.idx < 2;
+        const color = isTeamA ? 'var(--primary)' : 'var(--secondary)';
+        
+        slot.className = "p-slot-v7 pointer";
+        slot.onclick = null; 
+        slot.innerHTML = `
+            <div class="p-img-box" style="border-color:${color}">
+                <img src="${u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png'}">
+            </div>
+            <span class="p-badge" style="color:${color}; border-color:currentColor">${(Number(u.nivel)||2.5).toFixed(1)}</span>
+            <span class="text-[8px] font-black uppercase text-white tracking-widest mt-1 truncate w-16 text-center">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
+            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px] shadow-lg z-10 hover:scale-110 transition-transform" onclick="event.stopPropagation(); window.removeUserFromNew(${extra.idx})"><i class="fas fa-times"></i></button>
+        `;
+    }
+};
+
+window.removeUserFromNew = (idx) => {
+    window._initialJugadores[idx] = null;
+    const slot = document.getElementById(`slot-${idx}-wrap`);
+    if(slot) {
+        slot.className = "p-slot-v7";
+        slot.innerHTML = `<div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>`;
+        slot.onclick = () => window.openPlayerSelector('NEW', window._creationType, {idx});
+    }
 };

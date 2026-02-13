@@ -223,22 +223,24 @@ function _detectIntent(query) {
     const q = query.toLowerCase();
     if (query.startsWith('CMD_')) return query; 
     
+    if (q.includes('hola') || q.includes('buenas') || q.includes('hi') || q.includes('que tal')) return 'CMD_GREETING';
+    if (q.includes('analiza a') || q.includes('análisis de') || q.includes('analiza mi')) return 'CMD_ANALYZE_RIVAL';
     if (q.includes('socio') || q.includes('compañero')) return 'CMD_PARTNER_SYNC';
     if (q.includes('chiste') || q.includes('risa')) return 'CMD_JOKE';
-    if (q.includes('diferencia con') || q.includes('comparar con')) return 'CMD_COMPARE_USER';
+    if (q.includes('diferencia con') || q.includes('comparar con') || q.includes('busca a')) return 'CMD_USER_SEARCH';
     if (q.includes('proximo partido') || q.includes('cuando juego')) return 'CMD_NEXT_MATCH';
     if (q.includes('llueve') || q.includes('lluvia')) return 'CMD_RAIN_TODAY';
-    if (q.includes('peor rival') || q.includes('cuesta ganar')) return 'CMD_NEMESIS';
+    if (q.includes('peor rival') || q.includes('cuesta ganar') || q.includes('nemesis')) return 'CMD_NEMESIS';
     if (q.includes('mejor partido')) return 'CMD_BEST_MATCH';
-    if (q.includes('peor partido')) return 'CMD_WORST_MATCH';
+    if (q.includes('ranking') || q.includes('mejor jugador') || q.includes('top')) return 'CMD_GLOBAL_RANKING';
     if (q.includes('abierto') || q.includes('hay partidas') || q.includes('huecos')) return 'CMD_OPEN_MATCHES';
     if (q.includes('ultimo') || q.includes('cuándo jugué')) return 'CMD_LAST_MATCH';
     if (q.includes('análisis') || q.includes('informe')) return 'CMD_REPORT';
-    if (q.includes('tutorial') || q.includes('ayuda')) return 'CMD_TUTORIAL';
+    if (q.includes('historial') || q.includes('mis partidos')) return 'CMD_STATS_READ';
+    if (q.includes('estadisticas globales') || q.includes('cuantos partidos')) return 'CMD_GLOBAL_STATS';
+    if (q.includes('tutorial') || q.includes('ayuda') || q.includes('como interactuo') || q.includes('instrucciones')) return 'CMD_TUTORIAL';
     if (q.includes('consejo') || q.includes('pro tip')) return 'CMD_PRO_TIPS';
     if (q.includes('prediccion') || q.includes('quien gana')) return 'CMD_PREDICT';
-    if (q.includes('entrenar') || q.includes('rutina')) return 'CMD_TRAINING_PLAN';
-    if (q.includes('clima') || q.includes('tiempo')) return 'CMD_WEATHER_TACTICS';
     return 'GENERAL';
 }
 
@@ -282,10 +284,10 @@ const chatHTML = `
                 <div id="ai-command-wrap" class="ai-command-container hidden">
                     <div class="ai-quick-grid">
                         <button class="ai-quick-btn" onclick="window.aiQuickCmd('CMD_REPORT','Informe')">Informe</button>
+                        <button class="ai-quick-btn" onclick="window.aiQuickCmd('CMD_GLOBAL_RANKING','Ranking')">Top 5</button>
+                        <button class="ai-quick-btn" onclick="window.aiQuickCmd('CMD_GLOBAL_STATS','Global')">App Stat</button>
                         <button class="ai-quick-btn" onclick="window.aiQuickCmd('CMD_LAST_MATCH','Último')">Último</button>
-                        <button class="ai-quick-btn" onclick="window.aiQuickCmd('CMD_MATCH_FORECAST','Pronóstico')">2v2</button>
-                        <button class="ai-quick-btn" onclick="window.aiQuickCmd('CMD_STREAK_ANALYSIS','Racha')">Racha</button>
-                        <button class="ai-quick-btn" onclick="window.aiQuickCmd('CMD_STATS_READ','Stats')">Stats</button>
+                        <button class="ai-quick-btn" onclick="window.aiQuickCmd('CMD_OPEN_MATCHES','Abiertos')">Pistas</button>
                         <button class="ai-quick-btn" onclick="window.aiQuickCmd('CMD_PREDICT','Predicción')">Evo</button>
                     </div>
                 </div>
@@ -368,6 +370,12 @@ const chatHTML = `
                 appearance: none; -webkit-appearance: none;
                 background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d4ff00' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
                 background-repeat: no-repeat; background-position: right 15px center; background-size: 12px;
+                animation: ai-pulse-border 2s infinite;
+            }
+            @keyframes ai-pulse-border {
+                0% { border-color: rgba(198,255,0,0.2); box-shadow: 0 0 0 rgba(198,255,0,0); }
+                50% { border-color: rgba(198,255,0,0.6); box-shadow: 0 0 15px rgba(198,255,0,0.2); }
+                100% { border-color: rgba(198,255,0,0.2); box-shadow: 0 0 0 rgba(198,255,0,0); }
             }
             
             .ai-result-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; padding: 20px; margin: 15px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
@@ -447,7 +455,7 @@ export async function toggleChat() {
         fab.classList.add('hidden');
         await _syncData();
         if (document.getElementById('ai-messages').children.length === 0) {
-            addMessage(`Hola ${DATA_CACHE.user?.nombreUsuario || 'cracks'}. Soy tu IA modular. Selecciona una función o escríbeme lo que necesites.`, 'bot');
+            addMessage(`Hola ${DATA_CACHE.user?.nombreUsuario || 'cracks'}. Soy la IA de Padeluminatis. Puedes interactuar conmigo así:<br><br>1️⃣ <b>Escríbeme:</b> "Busca a Juan", "Mi ranking", "Hay partidas?"<br>2️⃣ <b>Pulsa en el Dashboard:</b> Toca tu Némesis o Socio para que te dé un análisis táctico.<br>3️⃣ <b>Comandos Rápidos:</b> Usa el selector inferior para informes detallados.`, 'bot');
         }
     } else {
         panel.classList.remove('open');
@@ -455,12 +463,12 @@ export async function toggleChat() {
     }
 }
 
-export async function sendMessage() {
+export async function sendMessage(customText) {
     const input = document.getElementById('ai-input-field');
-    const text = input.value.trim();
+    const text = (typeof customText === 'string' ? customText : input.value).trim();
     if (!text) return;
     addMessage(text, 'user');
-    input.value = '';
+    if (!customText) input.value = '';
     const tid = addTyping();
     const response = await generateResponse(text);
     removeTyping(tid);
@@ -474,6 +482,13 @@ export async function generateResponse(query) {
     const respond = (c, v) => currentPersonality === 'coach' ? c : v;
 
     switch (intent) {
+        case 'CMD_GREETING':
+            const name = DATA_CACHE.user?.nombreUsuario?.split(' ')[0] || 'Agente';
+            return respond(
+                `¡Hola ${name}! Estoy lista para procesar tus datos. Prueba a escribirme "Mi ranking" o usa el menú táctico de abajo.`,
+                `¡Buenas, ${name}! ¿Vienes a cotillear el ranking o quieres que te lea la cartilla con tu winrate?`
+            );
+
         case 'CMD_REPORT':
             const trend = Analyzer.getEloTrend();
             const wr = _calcWinrate(uid);
@@ -723,7 +738,7 @@ export async function generateResponse(query) {
                 "Tú sal ahí y dalo todo. Si ves que no llegas, ¡hazle un globo al de la red!"
             );
 
-        case 'CMD_COMPARE_USER':
+        case 'CMD_COMPARE_USER': {
             let targetName = '';
             if (query.includes('|')) targetName = query.split('|').slice(1).join('|').trim();
             if (!targetName && query.toLowerCase().includes('con ')) targetName = query.split(/con /i).pop().trim();
@@ -749,6 +764,7 @@ export async function generateResponse(query) {
                 <div class="res-val">${target.nombreUsuario || target.nombre || 'Jugador'}</div>
                 <div class="res-sub">${diffLabel} • NV ${(target.nivel || 2.5).toFixed(2)}</div>
             </div>`;
+        }
 
         case 'CMD_COMPARE_ELITE':
             const sorted = [...DATA_CACHE.globalUsers].sort((a,b) => (b.puntosRanking || 0) - (a.puntosRanking || 0));
@@ -797,11 +813,47 @@ export async function generateResponse(query) {
             const diffLvl = aAvg - bAvg;
             const pA = Math.min(Math.max(50 + diffLvl * 18, 10), 90);
             const pB = 100 - pA;
+            return respond(
+                `<div class="ai-result-card">
+                    <span class="res-title">Predicción de Duelo</span>
+                    <div class="res-val">Equipo A ${Math.round(pA)}%  |  Equipo B ${Math.round(pB)}%</div>
+                    <div class="res-sub">Basado en niveles medios reales detectados en la Matrix.</div>
+                </div>`,
+                "Mis cálculos dicen que el Equipo A tiene ventaja, pero ya sabes lo que dicen... el pádel es un deporte de locos."
+            );
+
+        case 'CMD_GLOBAL_RANKING':
+            const top5 = [...DATA_CACHE.globalUsers]
+                .sort((a,b) => (b.puntosRanking || 0) - (a.puntosRanking || 0))
+                .slice(0, 5);
             return `<div class="ai-result-card">
-                <span class="res-title">pronóstico 2v2</span>
-                <div class="res-val">Equipo A ${Math.round(pA)}%  |  Equipo B ${Math.round(pB)}%</div>
-                <div class="res-sub">Basado en niveles medios. Si quieres un pronóstico fino, completa equipos y resultados.</div>
+                <span class="res-title">Olimpo Padeluminati</span>
+                ${top5.map((u, i) => `
+                    <div class="flex-row between py-1 border-b border-white/5">
+                        <span class="text-[10px] font-bold">#${i+1} ${u.nombreUsuario || u.nombre}</span>
+                        <span class="text-[10px] text-primary font-black">${Math.round(u.puntosRanking)} Pts</span>
+                    </div>
+                `).join('')}
             </div>`;
+
+        case 'CMD_USER_SEARCH': {
+            let targetName = '';
+            if (query.toLowerCase().includes('busca a ')) targetName = query.split(/busca a /i).pop().trim();
+            else if (query.toLowerCase().includes('diferencia con ')) targetName = query.split(/diferencia con /i).pop().trim();
+            
+            if (!targetName) return "Dime a quién busco (ej: 'busca a Juan').";
+            const target = _findUserByName(targetName);
+            if (!target) return noData(`No he encontrado a ningún '${targetName}' en el circuito.`);
+            
+            const myPts = DATA_CACHE.user?.puntosRanking || 1000;
+            const tPts = target.puntosRanking || 1000;
+            const diff = tPts - myPts;
+            return `<div class="ai-result-card">
+                <span class="res-title">Perfil de ${target.nombreUsuario || target.nombre}</span>
+                <div class="res-val">Nivel ${(target.nivel || 2.5).toFixed(2)}</div>
+                <div class="res-sub">Ranking: ${Math.round(tPts)} Pts. ${diff > 0 ? `Te lleva ${Math.round(diff)} puntos.` : `Le sacas ${Math.round(Math.abs(diff))} puntos.`}</div>
+            </div>`;
+        }
 
         case 'CMD_TACTIC_OVERVIEW':
             const journal = (DATA_CACHE.user?.diario || []).slice(-6);
@@ -871,10 +923,39 @@ export async function generateResponse(query) {
                 <div class="res-sub">Combina esto con tu diario para ajustar táctica y golpes débiles.</div>
             </div>`;
 
+        case 'CMD_ANALYZE_RIVAL':
+            let rName = query.split(/analiza (a |mi )/i).pop().trim();
+            const rUser = _findUserByName(rName);
+            if (!rUser) return noData(`No encuentro a ese jugador en la base de datos.`);
+            
+            const myLvl = DATA_CACHE.user?.nivel || 2.5;
+            const rLvl = rUser.nivel || 2.5;
+            const isHarder = rLvl > myLvl;
+            
+            return `<div class="ai-result-card">
+                <span class="res-title">Reporte de Inteligencia: ${rUser.nombreUsuario || rUser.nombre}</span>
+                <div class="res-val">Nivel ${rLvl.toFixed(2)} (${isHarder ? 'Supera' : 'Bajo'} tu nivel)</div>
+                <div class="res-sub">
+                    <b>Estrategia:</b> ${isHarder ? 'Juega a asegurar. No asumas riesgos innecesarios, busca su punto más débil.' : 'Domina el centro. Tienes ventaja técnica, úsala para desplazarle.'}<br><br>
+                    <b>Probabilidad:</b> ${Math.round(50 + (myLvl - rLvl)*15)}% de victoria base.
+                </div>
+            </div>`;
+
         default:
+            const helpCard = `
+                <div class="ai-result-card animate-up">
+                    <span class="res-title">Guía de Enlace</span>
+                    <div class="res-val">No he descifrado ese mensaje</div>
+                    <div class="res-sub">La Matrix aún está aprendiendo. Prueba estos patrones:<br><br>
+                        • 💬 "Busca a [Nombre]"<br>
+                        • 📈 "Mi ranking"<br>
+                        • 🏆 "Top 5"<br>
+                        • 🎾 "Hay partidas abiertas?"
+                    </div>
+                </div>`;
             if (humorEnabled) return humorNoData();
-            if (currentPersonality === 'vecina') return _getFunnyJoke();
-            return "Entendido. No tengo datos suficientes para responder. ¿Quieres darme más contexto?";
+            if (currentPersonality === 'vecina') return respond(helpCard, _getFunnyJoke());
+            return helpCard;
     }
 }
 

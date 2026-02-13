@@ -17,38 +17,57 @@
     <link rel="stylesheet" href="./css/components-premium.css">
     <link rel="stylesheet" href="./css/themes.css">
     <link rel="stylesheet" href="./css/ranking.css">
+    <link rel="stylesheet" href="./css/final-premium.css">
 </head>
 
 <body>
-    <!-- Galactic Background --> 
+    <!-- Galactic Background -->
     <div class="sport-bg"></div>
 
     <!-- Header & Nav injected by JS -->
 
-    <main class="page-content ranking-page">
+    <main class="page-content ranking-page" style="padding-top: 80px; padding-bottom: 100px;">
+        <!-- Top 3 Premium Section -->
+        <div class="ranking-header-v7 animate-fade-in text-center mb-10">
+            <h1 class="text-3xl font-black italic tracking-tighter text-white">PODIO <span
+                    class="text-primary">ESTELAR</span></h1>
+            <p class="text-[10px] font-bold text-muted uppercase tracking-[4px]">Los mejores del circuito</p>
+        </div>
 
-        <!-- Podium (First) -->
-        <div class="ranking-podium-container animate-fade-in">
-            <!-- Silver (Rank 2) -->
-            <div class="podium-card rank-2" onclick="viewProfile(window.podiumData[1]?.id)">
-                <div class="podium-pos">2</div>
-                <div class="podium-avatar" id="p-av-2"></div>
-                <span class="podium-name" id="p-name-2">...</span>
-                <span class="podium-pts" id="p-pts-2">0</span>
+        <div class="ranking-podium-v7 animate-fade-in mb-10">
+            <!-- Rank 2: SILVER (Cyan Semantic) -->
+            <div class="podium-item silver animate-up" onclick="viewProfile(window.podiumData[1]?.id)"
+                style="animation-delay: 0.1s;">
+                <div class="podium-badge"><i class="fas fa-medal"></i></div>
+                <div class="podium-avatar-wrapper" id="p-av-2"></div>
+                <div class="podium-info">
+                    <span class="p-name" id="p-name-2">...</span>
+                    <span class="p-pts" id="p-pts-2">0</span>
+                </div>
+                <div class="podium-base base-cyan"></div>
             </div>
-            <!-- Gold (Rank 1) -->
-            <div class="podium-card rank-1" onclick="viewProfile(window.podiumData[0]?.id)">
-                <div class="podium-pos">1</div>
-                <div class="podium-avatar" id="p-av-1"></div>
-                <span class="podium-name" id="p-name-1">...</span>
-                <span class="podium-pts" id="p-pts-1">0</span>
+
+            <!-- Rank 1: GOLD (Gold Semantic) -->
+            <div class="podium-item gold animate-up" onclick="viewProfile(window.podiumData[0]?.id)">
+                <div class="podium-badge gold"><i class="fas fa-crown"></i></div>
+                <div class="podium-avatar-wrapper lg" id="p-av-1"></div>
+                <div class="podium-info">
+                    <span class="p-name" id="p-name-1">...</span>
+                    <span class="p-pts" id="p-pts-1">0</span>
+                </div>
+                <div class="podium-base base-gold"></div>
             </div>
-            <!-- Bronze (Rank 3) -->
-            <div class="podium-card rank-3" onclick="viewProfile(window.podiumData[2]?.id)">
-                <div class="podium-pos">3</div>
-                <div class="podium-avatar" id="p-av-3"></div>
-                <span class="podium-name" id="p-name-3">...</span>
-                <span class="podium-pts" id="p-pts-3">0</span>
+
+            <!-- Rank 3: BRONZE (Magenta Semantic) -->
+            <div class="podium-item bronze animate-up" onclick="viewProfile(window.podiumData[2]?.id)"
+                style="animation-delay: 0.2s;">
+                <div class="podium-badge bronze"><i class="fas fa-award"></i></div>
+                <div class="podium-avatar-wrapper" id="p-av-3"></div>
+                <div class="podium-info">
+                    <span class="p-name" id="p-name-3">...</span>
+                    <span class="p-pts" id="p-pts-3">0</span>
+                </div>
+                <div class="podium-base base-magenta"></div>
             </div>
         </div>
 
@@ -100,9 +119,11 @@
                     <div class="level-bar">
                         <div class="level-fill" id="level-fill" style="width: 50%"></div>
                     </div>
-                    <div class="level-labels">
-                        <span class="level-current">Nivel <span id="my-level">2.5</span></span>
-                        <span class="level-next" id="level-next">→ 2.6</span>
+                    <div
+                        class="level-labels flex-row between w-full text-[10px] font-black uppercase text-muted tracking-widest mt-2 px-1">
+                        <span id="level-prev" class="opacity-50">2.0</span>
+                        <span class="text-primary">NIVEL <span id="my-level">2.5</span></span>
+                        <span id="level-next" class="opacity-50">3.0</span>
                     </div>
                 </div>
 
@@ -144,4 +165,3 @@
 </body>
 
 </html>
-

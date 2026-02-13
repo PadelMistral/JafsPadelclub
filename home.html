@@ -1,19 +1,24 @@
 ﻿<!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#020617">
     <title>Home | Padeluminatis Pro</title>
     <meta name="description" content="Panel principal de Padeluminatis">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="./css/core-bundle.css">
     <link rel="stylesheet" href="./css/themes.css">
     <link rel="stylesheet" href="./css/home.css">
     <link rel="stylesheet" href="./css/premium-v7.css">
+    <link rel="stylesheet" href="./css/final-premium.css">
 </head>
+
 <body>
     <div class="sport-bg"></div>
 
@@ -32,54 +37,95 @@
                         <div id="online-count-display" class="text-xs text-muted mt-1">0 ONLINE</div>
                         <span id="user-family-pts" class="text-[10px] text-muted uppercase tracking-widest"></span>
                     </div>
-                    <div class="avatar-xl" style="width:64px;height:64px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.1)">
-                        <img id="welcome-avatar" src="./imagenes/Logojafs.png" alt="Avatar" style="width:100%;height:100%;object-fit:cover;">
+                    <div class="avatar-xl"
+                        style="width:64px;height:64px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.1)">
+                        <img id="welcome-avatar" src="./imagenes/Logojafs.png" alt="Avatar"
+                            style="width:100%;height:100%;object-fit:cover;">
                     </div>
                 </div>
             </section>
 
             <section id="next-match-container" class="mt-3"></section>
 
-            <section class="card card-glass mt-3 animate-fade-in" style="animation-delay:0.05s;">
-                <div class="card-header">
-                    <div>
-                        <div class="card-subtitle">Resumen</div>
-                        <div class="card-title">Tus estadísticas</div>
-                    </div>
-                    <span id="online-count-next" class="text-xs text-muted"></span>
+            <!-- TOP STATS (PREMIUM V7) -->
+            <section class="mt-3 grid gap-3" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="stat-card-v7 cyan clickable" id="home-stat-level">
+                    <span class="text-[10px] font-black uppercase text-muted tracking-widest">Nivel</span>
+                    <span id="stat-level" class="text-xl font-black italic">2.5</span>
                 </div>
-                <div class="grid gap-3" style="grid-template-columns: repeat(2, minmax(0,1fr));">
-                    <div class="stat-chip">
-                        <span class="label">Puntos</span>
-                        <span id="stat-pts" class="value">0</span>
+                <div class="stat-card-v7 gold clickable" id="home-stat-points">
+                    <span class="text-[10px] font-black uppercase text-muted tracking-widest">Puntos</span>
+                    <span id="stat-pts" class="text-xl font-black italic">1000</span>
+                </div>
+                <div class="stat-card-v7 lime clickable" id="home-stat-streak">
+                    <span class="text-[10px] font-black uppercase text-muted tracking-widest">Racha</span>
+                    <span id="stat-streak" class="text-xl font-black italic">0</span>
+                </div>
+            </section>
+
+            <!-- ECOSYSTEM HEALTH & LEVEL BREAKDOWN -->
+            <section class="card card-premium-v7 mt-3 animate-fade-in shadow-cyan/10">
+                <div class="flex-row between items-center mb-4">
+                    <div class="flex-col">
+                        <span class="text-[10px] font-black text-muted uppercase tracking-widest">Salud del
+                            Ecosistema</span>
+                        <div class="flex-row items-center gap-2 mt-1">
+                            <div class="pulse-dot-green"></div>
+                            <span id="eco-health-index"
+                                class="text-xs font-black text-sport-green">Sincronizando...</span>
+                        </div>
                     </div>
-                    <div class="stat-chip">
-                        <span class="label">Victorias</span>
-                        <span id="stat-wins" class="value">0</span>
-                    </div>
-                    <div class="stat-chip">
-                        <span class="label">Partidos</span>
-                        <span id="stat-matches" class="value">0</span>
-                    </div>
-                    <div class="stat-chip">
-                        <span class="label">Winrate</span>
-                        <span id="stat-winrate" class="value">0%</span>
-                    </div>
-                    <div class="stat-chip" style="grid-column: span 2;">
-                        <span class="label">Nivel</span>
-                        <span id="stat-level" class="value">2.5</span>
+                    <div class="flex-col items-end">
+                        <span class="text-[10px] font-black text-muted uppercase tracking-widest">Nivel Actual</span>
+                        <span id="home-level-current" class="text-xs font-black text-white italic">NIVEL 2.50</span>
                     </div>
                 </div>
-                <div class="mt-3">
-                    <div class="flex-row between text-xs font-black mb-1">
-                        <span id="home-level-lower">2.5</span>
-                    <span id="home-level-current">Nivel 2.50</span>
-                        <span id="home-level-upper">3.0</span>
+
+                <!-- Detailed Progress Bar -->
+                <div class="progress-bar-v7 large mb-2">
+                    <div id="home-level-bar" class="fill-bar gradient-cyan" style="width: 50%;"></div>
+                </div>
+                <div class="flex-row between text-[9px] font-black text-muted uppercase">
+                    <span id="home-level-lower">2.5</span>
+                    <div id="home-level-points" class="flex-row gap-2"></div>
+                    <span id="home-level-upper">3.0</span>
+                </div>
+            </section>
+
+            <!-- ADN PLAYER STATE & RIVAL INTELLIGENCE -->
+            <section class="mt-3 grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));">
+                <div id="adn-panel" class="card-premium-v7 p-4 animate-up border-glow-cyan"
+                    style="animation-delay: 0.1s;">
+                    <div class="card-scanline"></div>
+                    <span class="text-[10px] font-black text-muted uppercase tracking-[3px] block mb-3">ADN /
+                        PlayerState</span>
+                    <div id="adn-content" class="flex-col gap-2">
+                        <div class="flex-row between text-xs"><span class="text-muted">Estilo:</span> <span
+                                id="dna-style" class="font-bold text-cyan">---</span></div>
+                        <div class="flex-row between text-xs"><span class="text-muted">Mood:</span> <span id="dna-mood"
+                                class="font-bold text-magenta">---</span></div>
                     </div>
-                    <div class="progress-bar" style="height:10px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,0.08)">
-                        <div id="home-level-bar" style="height:100%;width:0%;background:var(--gradient-neon)"></div>
+                </div>
+                <div id="rival-intel-panel"
+                    class="card-premium-v7 p-4 animate-up border-glow-magenta cursor-pointer hover:bg-magenta/10 transition-colors"
+                    style="animation-delay: 0.2s;" onclick="window.showRivalSelector()">
+                    <div class="card-grid-bg"></div>
+                    <span class="text-[10px] font-black text-muted uppercase tracking-[3px] block mb-3">Rival
+                        Intelligence</span>
+                    <div id="rival-intel-content" class="flex-row between gap-2">
+                        <div class="flex-col center flex-1 opacity-50" id="intel-nemesis">
+                            <i class="fas fa-skull text-magenta mb-1"></i>
+                            <span class="text-[8px] font-black uppercase">Némesis</span>
+                        </div>
+                        <div class="flex-col center flex-1 opacity-50" id="intel-victim">
+                            <i class="fas fa-crown text-gold mb-1"></i>
+                            <span class="text-[8px] font-black uppercase">Víctima</span>
+                        </div>
+                        <div class="flex-col center flex-1 opacity-50" id="intel-partner">
+                            <i class="fas fa-handshake text-cyan mb-1"></i>
+                            <span class="text-[8px] font-black uppercase">Socio</span>
+                        </div>
                     </div>
-                    <div id="home-level-points" class="text-xs text-muted mt-2"></div>
                 </div>
             </section>
 
@@ -88,28 +134,42 @@
                     <h2 class="text-sm font-black uppercase tracking-widest text-muted">Partidos abiertos</h2>
                     <span id="online-count-library" class="text-xs text-muted"></span>
                 </div>
-                <div id="match-feed" class="flex-col gap-3"></div>
+                <div id="match-feed" class="flex-col gap-4"></div>
             </section>
 
-            <section class="mt-3 grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-                <div id="last-match-box" class="card card-glass"></div>
-                <div id="tip-box" class="card card-glass"></div>
-            </section>
-
-            <section id="ai-welcome-msg" class="card card-glass mt-3">
-                <div class="card-header">
-                    <div>
-                        <div class="card-subtitle">Coach</div>
-                        <div class="card-title">IA Padeluminatis</div>
+            <!-- AI INSIGHTS & QUICK ACTIONS (PREMIUM V7) -->
+            <section class="mt-3">
+                <div id="ai-welcome-box" class="card-premium-v7 ai-welcome-card clickable animate-fade-in">
+                    <div class="flex-row items-center gap-4">
+                        <div class="ai-avatar-glow">
+                            <i class="fas fa-robot text-primary"></i>
+                        </div>
+                        <div class="flex-col">
+                            <span class="text-[9px] font-black text-primary uppercase tracking-[3px]">Vecina AP
+                                Insight</span>
+                            <p class="ai-quote text-[11px] font-bold text-white leading-tight mt-1">Conectando con la
+                                Matrix de Padel...</p>
+                        </div>
                     </div>
                 </div>
-                <div class="ai-quote text-sm text-muted">Listo para analizar tus datos cuando quieras.</div>
             </section>
 
-            <div id="weather-forecast-card" class="hidden"></div>
-            <div id="matrix-feed-container" class="hidden"></div>
-            <div id="home-achievements" class="hidden"></div>
-            <div id="quick-weather" class="hidden"></div>
+            <section class="mt-3 grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));">
+                <div id="last-match-box" class="card-premium-v7 p-4 animate-up" style="animation-delay: 0.3s;">
+                    <span class="text-[10px] font-black text-muted uppercase tracking-[3px] block mb-3">Último
+                        Combate</span>
+                    <div id="last-match-content" class="flex-col gap-2 opacity-50">
+                        <span class="text-[10px]">Sincronizando...</span>
+                    </div>
+                </div>
+                <div id="tip-box" class="card-premium-v7 p-4 animate-up flex-col center"
+                    style="animation-delay: 0.4s; min-height: 100px;">
+                    <i class="fas fa-brain text-xl text-primary mb-2"></i>
+                    <span class="text-[9px] font-black text-muted uppercase">Análisis Estratégico</span>
+                </div>
+            </section>
+
+
         </div>
     </main>
 
@@ -120,7 +180,8 @@
                     <h3 class="modal-title text-accent" id="modal-titulo">PARTIDO</h3>
                     <span class="text-xs text-muted">Detalles del encuentro</span>
                 </div>
-                <button class="close-btn" onclick="document.getElementById('modal-match').classList.remove('active')">&times;</button>
+                <button class="close-btn"
+                    onclick="document.getElementById('modal-match').classList.remove('active')">&times;</button>
             </div>
             <div class="modal-body scroll-y" id="match-detail-area" style="max-height: 80vh;"></div>
         </div>
@@ -133,6 +194,201 @@
         initThemeSystem();
         initGalaxyBackground();
     </script>
-</body>
-</html>
+    <div id="modal-ai-hub" class="modal-overlay">
+        <div class="modal-card glass-strong slide-up">
+            <div class="modal-header">
+                <div class="flex-col">
+                    <h3 class="modal-title font-black text-cyan tracking-widest italic">NEXO INTELIGENTE</h3>
+                    <span class="text-[10px] text-muted font-bold uppercase tracking-[4px]">Análisis en tiempo
+                        real</span>
+                </div>
+                <button class="close-btn"
+                    onclick="document.getElementById('modal-ai-hub').classList.remove('active')">&times;</button>
+            </div>
 
+            <div class="modal-body custom-scroll p-4 flex-col gap-6">
+
+                <!-- Ecosystem Health Index -->
+                <div class="ai-section animate-up">
+                    <div class="flex-row between items-center mb-2">
+                        <span class="text-[10px] font-black text-muted uppercase tracking-widest">Salud del
+                            Ecosistema</span>
+                        <div class="flex-row items-center gap-2" id="eco-health-badge">
+                            <span class="w-1.5 h-1.5 rounded-full bg-sport-green animate-pulse"></span>
+                            <span class="text-[10px] font-bold text-sport-green"
+                                id="eco-health-val">Calculando...</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar-v7">
+                        <div id="eco-health-bar" class="fill-bar" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- Live Level Progress -->
+                <div class="ai-section animate-up" style="animation-delay: 0.1s;">
+                    <div class="flex-row between items-end mb-2">
+                        <span class="text-[10px] font-black text-muted uppercase tracking-widest">Nivel de
+                            Combate</span>
+                        <span id="ai-level-decimal"
+                            class="text-2xl font-black text-white italic tracking-tighter">--.--</span>
+                    </div>
+                    <div class="progress-bar-v7 large">
+                        <div id="ai-level-bar" class="fill-bar gradient-cyan" style="width: 0%;"></div>
+                    </div>
+                    <div class="flex-row between mt-1">
+                        <span class="text-[9px] text-muted font-bold" id="ai-level-min">--</span>
+                        <span class="text-[9px] text-muted font-bold" id="ai-level-max">--</span>
+                    </div>
+                    <div class="mt-2 p-2 rounded-xl bg-white/5 border border-white/5 text-[10px] text-muted italic"
+                        id="ai-level-insight">
+                        <i class="fas fa-circle-notch fa-spin mr-1 text-cyan"></i> Sincronizando datos...
+                    </div>
+                </div>
+
+                <!-- Quick Actions Grid -->
+                <div class="grid grid-cols-2 gap-3 animate-up" style="animation-delay: 0.2s;">
+                    <div class="ai-action-card cyan" onclick="window.aiAction('profile')">
+                        <i class="fas fa-user-astronaut"></i>
+                        <span>Perfil</span>
+                    </div>
+                    <div class="ai-action-card magenta" onclick="window.aiAction('matches')">
+                        <i class="fas fa-trophy"></i>
+                        <span>Partidos</span>
+                    </div>
+                    <div class="ai-action-card lime" onclick="window.aiAction('ranking')">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Rankings</span>
+                    </div>
+                    <div class="ai-action-card gold" onclick="window.aiAction('rivals')">
+                        <i class="fas fa-crosshairs"></i>
+                        <span>Rivales</span>
+                    </div>
+                    <div class="ai-action-card purple" onclick="window.aiAction('diary')">
+                        <i class="fas fa-book-journal-whills"></i>
+                        <span>Diario</span>
+                    </div>
+                    <div class="ai-action-card orange" onclick="window.aiAction('admin')">
+                        <i class="fas fa-shield-halved"></i>
+                        <span>Admin</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .ai-section {
+            margin-bottom: 0px;
+        }
+
+        .ai-action-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .ai-action-card:active {
+            transform: scale(0.95);
+        }
+
+        .ai-action-card i {
+            font-size: 24px;
+            opacity: 0.8;
+        }
+
+        .ai-action-card span {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.6;
+        }
+
+        .ai-action-card.cyan:hover {
+            background: rgba(0, 212, 255, 0.1);
+            border-color: rgba(0, 212, 255, 0.3);
+        }
+
+        .ai-action-card.cyan i {
+            color: var(--primary);
+        }
+
+        .ai-action-card.magenta:hover {
+            background: rgba(255, 0, 85, 0.1);
+            border-color: rgba(255, 0, 85, 0.3);
+        }
+
+        .ai-action-card.magenta i {
+            color: var(--secondary);
+        }
+
+        .ai-action-card.lime:hover {
+            background: rgba(198, 255, 0, 0.1);
+            border-color: rgba(198, 255, 0, 0.3);
+        }
+
+        .ai-action-card.lime i {
+            color: var(--sport-green);
+        }
+
+        .ai-action-card.gold:hover {
+            background: rgba(255, 215, 0, 0.1);
+            border-color: rgba(255, 215, 0, 0.3);
+        }
+
+        .ai-action-card.gold i {
+            color: var(--sport-gold);
+        }
+
+        .ai-action-card.purple:hover {
+            background: rgba(168, 85, 247, 0.1);
+            border-color: rgba(168, 85, 247, 0.3);
+        }
+
+        .ai-action-card.purple i {
+            color: #a855f7;
+        }
+
+        .ai-action-card.orange:hover {
+            background: rgba(249, 115, 22, 0.1);
+            border-color: rgba(249, 115, 22, 0.3);
+        }
+
+        .ai-action-card.orange i {
+            color: #f97316;
+        }
+
+        .progress-bar-v7 {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 99px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar-v7.large {
+            height: 12px;
+        }
+
+        .fill-bar {
+            height: 100%;
+            border-radius: 99px;
+            background: var(--sport-green);
+            transition: width 1s ease-out;
+        }
+
+        .fill-bar.gradient-cyan {
+            background: var(--gradient-neon);
+        }
+    </style>
+</body>
+
+</html>

@@ -139,17 +139,15 @@ function getFriendlyErrorMessage(code) {
     switch (code) {
         case 'auth/user-not-found': 
         case 'auth/invalid-email':
-            return 'El correo o usuario no existe.';
         case 'auth/wrong-password': 
-            return 'La contraseña no es correcta.';
         case 'auth/invalid-credential': 
-            return 'Credenciales incorrectas. Revisa tus datos.';
+            return 'Usuario o contraseña incorrectos.';
         case 'auth/too-many-requests': 
             return 'Cuenta temporalmente bloqueada. Prueba en unos minutos.';
         case 'auth/network-request-failed':
             return 'Sin conexión. Revisa tu internet.';
         default: 
-            return 'Error de acceso: No se pudo conectar con el Circuito.';
+            return 'Error de acceso: Revisa tus credenciales.';
     }
 }
 

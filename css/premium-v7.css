@@ -2908,9 +2908,149 @@ input:checked + .t-slider:before {
     background: linear-gradient(90deg, transparent, #64b5f6, transparent); 
 }
 
-@keyframes pulse {
-    0% { transform: scale(0.95); opacity: 0.7; }
-    50% { transform: scale(1.1); opacity: 1; }
-    100% { transform: scale(0.95); opacity: 0.7; }
+/* ===== 14. NEXT MATCH PREMIUM V7 ===== */
+.next-match-card-premium-v7 {
+    background: linear-gradient(145deg, rgba(20,20,40,0.9), rgba(10,10,25,0.95)) !important;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 32px;
+    padding: 30px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 30px 60px -15px rgba(0,0,0,0.8), 0 0 20px rgba(0,212,255,0.1) !important;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: pointer;
+}
+.next-match-card-premium-v7:hover {
+    transform: translateY(-8px) scale(1.01);
+    border-color: var(--primary);
+    box-shadow: 0 40px 80px -20px rgba(0,0,0,0.9), 0 0 40px rgba(0,212,255,0.2) !important;
+}
+.nm-glass-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(circle at top right, rgba(0,212,255,0.1), transparent 70%);
+    pointer-events: none;
+}
+.nm-badge-pro-v7 {
+    padding: 8px 16px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.65rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.nm-badge-pro-v7.reto {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(198,255,0,0.1);
+}
+.nm-divider-v7 {
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 900;
+    color: var(--primary);
+    opacity: 0.5;
+    background: rgba(0,0,0,0.5);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--primary);
+}
+.nm-court-simplified {
+    background: linear-gradient(180deg, rgba(198,255,0,0.02) 0%, rgba(0,0,0,0.2) 100%);
+    border-radius: 20px;
+    padding: 20px;
+    border: 1px solid rgba(255,255,255,0.05);
+    position: relative;
+}
+.p-chip-elite {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-muted);
+    font-size: 0.6rem;
+    font-weight: 900;
+    padding: 8px 14px;
+    border-radius: 12px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.p-chip-elite.filled {
+    border-color: var(--primary);
+    color: #fff;
+    background: rgba(198,255,0,0.05);
+}
+
+/* ===== 15. MATCH FEED COURT SCHEMA ===== */
+.f-court-visual {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    min-width: 60px;
+}
+.f-court-schema {
+    width: 50px;
+    height: 70px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+}
+.f-court-net {
+    position: absolute;
+    top: 50%; left: 0; right: 0;
+    height: 1px;
+    background: rgba(255,255,255,0.3);
+}
+.f-p-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    height: 100%;
+    padding: 4px;
+    gap: 15px 4px; /* Space for net */
+}
+.f-p-slot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    justify-self: center;
+    align-self: center;
+}
+.f-p-slot.occupied {
+    background: var(--primary);
+    box-shadow: 0 0 5px var(--primary-glow);
+}
+
+/* Global Glow Borders */
+.border-glow-cyan { border-color: rgba(0,212,255,0.4) !important; box-shadow: 0 0 20px rgba(0,212,255,0.1) !important; }
+.border-glow-magenta { border-color: rgba(255,0,255,0.4) !important; box-shadow: 0 0 20px rgba(255,0,255,0.1) !important; }
+
+.card-scanline {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(to bottom, transparent 50%, rgba(255,255,255,0.03) 50.5%);
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 1;
+}
+.card-grid-bg {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: 
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 20px 20px;
+    pointer-events: none;
 }
 

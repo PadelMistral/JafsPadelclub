@@ -1,74 +1,48 @@
-/**
- * RIVAL-INTELLIGENCE.js - Phase 3: Competitive Analysis
- * @version 1.0 (Deepmind Core)
- * 
- * Module for parsing Head-to-Head data and generating unique insights.
- */
-
 export const RivalIntelligence = {
 
     /**
-     * Parses historical matchups between current user and opponent.
-     * @param {string} userId - Current user ID
-     * @param {string} rivalId - Opponent ID
-     * @param {Array} history - Array of match objects (documents)
+     * Enhanced parsing of matchups
      */
-    analyzeHeadToHead: (userId, rivalId, history) => {
+    parseMatches: (userId, rivalId, history) => {
         const matches = history.filter(m => {
-            if (!m.jugadores || m.jugadores.filter(id => id).length !== 4) return false;
-            // Check if user and rival were opponents
-            const userIdx = m.jugadores.indexOf(userId);
-            const rivalIdx = m.jugadores.indexOf(rivalId);
-            if (userIdx === -1 || rivalIdx === -1) return false;
-            
-            // They are opponents if (0,1 vs 2,3) -> one is <2, other >=2
-            const userTeam = userIdx < 2 ? 1 : 2;
-            const rivalTeam = rivalIdx < 2 ? 1 : 2;
-            return userTeam !== rivalTeam;
+            if (!m.participantes || m.participantes.length < 4) return false;
+            const uIdx = m.participantes.indexOf(userId);
+            const rIdx = m.participantes.indexOf(rivalId);
+            if (uIdx === -1 || rIdx === -1) return false;
+
+            const uTeam = uIdx < 2 ? 1 : 2;
+            const rTeam = rIdx < 2 ? 1 : 2;
+            return uTeam !== rTeam;
         });
 
         const total = matches.length;
-        if (total === 0) return { status: "No Data", wins: 0, losses: 0 };
+        if (total === 0) return { wins: 0, losses: 0, winRate: 0, confidence: 10, tacticalBrief: "No hay historial previo entre ambos jugadores." };
 
         let wins = 0;
         let losses = 0;
-        let setsWon = 0;
-        let setsLost = 0;
 
         matches.forEach(m => {
-            const userIdx = m.jugadores.indexOf(userId);
-            const userTeam = userIdx < 2 ? 1 : 2;
-            
-            // Safe Result Parsing "6-4 6-4"
-            if (m.resultado && m.resultado.sets) { // Assuming structured Result
-                 // Or parse string Result if needed (depends on V9 structure)
-                 // This assumes 'ganador' field exists from V9
-                 if (m.resultado.ganador === userTeam) wins++; else losses++;
-            } else if (typeof m.resultado === 'string') {
-                 // Fallback parsing (simplified)
-                 // If string exists, check score logic
-            }
+            const uIdx = m.participantes.indexOf(userId);
+            const uTeam = uIdx < 2 ? 1 : 2;
+            if (m.resultado?.ganador === uTeam) wins++;
+            else if (m.resultado?.ganador) losses++;
         });
 
-        // Calculate Trend (Last 3)
-        const recent = matches.slice(0, 3);
-        const recentWins = recent.reduce((sum, m) => {
-            const userIdx = m.jugadores.indexOf(userId);
-            const userTeam = userIdx < 2 ? 1 : 2;
-            return sum + (m.resultado?.ganador === userTeam ? 1 : 0);
-        }, 0);
+        const winRate = Math.round((wins / total) * 100);
+        const confidence = Math.min(100, total * 15 + 10);
 
-        let trend = "Neutral";
-        if (recentWins === 3) trend = "Dominante";
-        if (recentWins === 0) trend = "Sometido (Kryptonita)";
+        let brief = "";
+        if (winRate >= 70) brief = "Dominas claramente el cara a cara. Juega con calma; el rival suele frustrarse ante tu consistencia.";
+        else if (winRate <= 30) brief = "Este rival es tu némesis. Suelen ganarte por volumen de juego. Prueba a cambiar el ritmo o jugar globos más profundos.";
+        else brief = "Enfrentamiento muy equilibrado. Se decidirá por los detalles y quién cometa menos errores no forzados en el tercer set.";
 
         return {
             total,
             wins,
             losses,
-            winRate: Math.round((wins / total) * 100),
-            trend,
-            recentForm: `${recentWins}-${recent.length - recentWins}` 
+            winRate,
+            confidence,
+            tacticalBrief: brief
         };
     },
 
@@ -90,18 +64,10 @@ export const RivalIntelligence = {
     /**
      * Classifies the Rival based on difficulty.
      */
-    classifyRival: (h2h, matchProb) => {
-        if (h2h.status === "No Data") return { class: "Incógnita", color: "gray" };
-        
-        // Kryptonite: Low winrate (<30%) AND High volume (>3 matches)
-        if (h2h.winRate < 30 && h2h.total > 3) return { class: "KERYPTONITA", color: "red", icon: "fa-skull" };
-
-        // Easy: High winrate (>70%)
-        if (h2h.winRate > 70) return { class: "EASY PEASY", color: "green", icon: "fa-laugh-beam" };
-
-        // Rival: Close match (40-60%)
-        if (h2h.winRate >= 40 && h2h.winRate <= 60) return { class: "RIVAL DIRECTO", color: "orange", icon: "fa-handshake" };
-
-        return { class: "NEUTRAL", color: "blue", icon: "fa-user" };
+    classifyRival: (h2h) => {
+        if (!h2h || h2h.total === 0) return { class: "Incógnita", color: "gray" };
+        if (h2h.winRate < 30 && h2h.total >= 2) return { class: "KERYPTONITA", color: "red", icon: "fa-skull" };
+        if (h2h.winRate > 70 && h2h.total >= 2) return { class: "VÍCTIMA", color: "green", icon: "fa-laugh-beam" };
+        return { class: "RIVAL DIRECTO", color: "orange", icon: "fa-handshake" };
     }
 };

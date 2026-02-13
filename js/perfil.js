@@ -90,14 +90,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const name = data.nombreUsuario || data.nombre || "JUGADOR";
     const phone = data.telefono || "";
 
-    // Stats
-    const vivInfo = data.vivienda || data.direccion || {};
-    const viviendaStr = vivInfo.bloque
-      ? `Blq ${vivInfo.bloque} - ${vivInfo.piso}º${vivInfo.puerta}`
-      : "Sin vivienda";
-
     if (nameEl) nameEl.textContent = name.toUpperCase();
-    if (roleEl) roleEl.textContent = viviendaStr.toUpperCase();
+    if (roleEl) roleEl.textContent = (data.rol || 'Atleta Pro').toUpperCase();
     if (avatarEl && photo) avatarEl.src = photo;
     if (userInp) userInp.value = name;
     
@@ -105,35 +99,38 @@ document.addEventListener("DOMContentLoaded", () => {
     const setVal = (id, v) => { const el = document.getElementById(id); if(el) el.value = v; };
     setVal("p-phone-inp", phone);
     setVal("p-weight-inp", data.peso || "");
+    const vivInfo = data.vivienda || data.direccion || {};
     if(vivInfo.bloque) {
         setVal("addr-bloque", vivInfo.bloque);
         setVal("addr-piso", vivInfo.piso);
         setVal("addr-puerta", vivInfo.puerta);
     }
 
-    // Big Stats - Quick View
-    countUp(document.getElementById("p-nivel"), (data.nivel || 2.5).toFixed(2));
-    countUp(document.getElementById("p-puntos"), Math.round(data.puntosRanking || 1000));
+    // V7 Stats Cards
+    const levelVal = (data.nivel || 2.5).toFixed(2);
+    const ptsVal = Math.round(data.puntosRanking || 1000);
+    const streakVal = data.rachaActual || 0;
     
+    const lvlEl = document.getElementById("p-nivel");
+    const ptsEl = document.getElementById("p-puntos");
+    const stkEl = document.getElementById("p-streak");
+    
+    if(lvlEl) countUp(lvlEl, levelVal);
+    if(ptsEl) countUp(ptsEl, ptsVal);
+    if(stkEl) {
+        stkEl.textContent = Math.abs(streakVal);
+        stkEl.style.color = streakVal >= 0 ? "var(--sport-green)" : "var(--sport-red)";
+    }
+
+    // Grid Metrics (Detailed)
     const winrate = data.partidosJugados > 0
         ? Math.round((data.victorias / data.partidosJugados) * 100)
         : 0;
-    const winrateEl = document.getElementById("p-winrate");
-    if (winrateEl) winrateEl.textContent = winrate + "%";
-
-    // Grid Metrics
     const setText = (id, txt) => { const el = document.getElementById(id); if(el) el.textContent = txt; };
     setText("stat-total-matches", data.partidosJugados || 0);
     setText("stat-total-wins", data.victorias || 0);
-    setText("stat-streak", Math.abs(data.rachaActual || 0));
+    setText("stat-streak", Math.abs(streakVal));
     setText("stat-winrate", winrate + "%");
-
-    // Streak styling
-    const rachaEl = document.getElementById("stat-streak");
-    if (rachaEl) {
-      rachaEl.style.color = (data.rachaActual || 0) >= 0 ? "var(--sport-green)" : "var(--sport-red)";
-      rachaEl.parentElement.classList.toggle('fire-effect', (data.rachaActual || 0) >= 3);
-    }
 
     // Level Progress
     updateLevelProgress(data.nivel || 2.5, data.puntosRanking || 1000);
@@ -146,44 +143,27 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateLevelProgress(nivel, puntos) {
-    const currentLevel = Math.floor(nivel * 2) / 2;
-    const nextLevel = currentLevel + 0.5;
-    const prevLevel = currentLevel - 0.5;
-
-    // Progress: Each 0.5 level bracket is 200 points approx, but we use strict ELO mapping
-    // ELO 1000 = 2.5. ELO 1200 = 3.0. ELO 1400 = 3.5. ELO 1600 = 4.0.
-    // So 1 level = 400 points. 0.5 level = 200 points.
-    // Points for current base level: (currentLevel - 2.5) * 400 + 1000
-    // But easier: derive progress from fractional level
+    const currentBracket = Math.floor(nivel * 2) / 2;
+    const nextBracket = currentBracket + 0.5;
     
-    const fraction = nivel - currentLevel; // 0.00 to 0.49
+    const fraction = nivel - currentBracket;
     const progress = (fraction / 0.5) * 100;
 
     const bar = document.getElementById("level-bar");
-    const progressText = document.getElementById("level-progress-text");
+    const currentLabel = document.getElementById("p-level-current");
+    const detailEl = document.getElementById("level-progress-detail");
     const lowerLabel = document.getElementById("level-lower");
-    const currentLabel = document.getElementById("level-current");
     const upperLabel = document.getElementById("level-upper");
 
     if (bar) bar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
 
-    if (progressText) {
-      const nextStepPts = ((nextLevel - 2.5) * 400) + 1000;
-      const pointsNeeded = Math.max(0, Math.round(nextStepPts - puntos));
-      
-      if (progress >= 90) {
-        progressText.textContent = "¡Casi subes de categoría!";
-        progressText.classList.add("text-sport-green");
-        progressText.classList.add("pulse-fast");
-      } else {
-        progressText.textContent = `${pointsNeeded} pts para Nivel ${nextLevel}`;
-        progressText.classList.remove("text-sport-green", "pulse-fast");
-      }
-    }
-
-    if (lowerLabel) lowerLabel.textContent = currentLevel.toFixed(1);
-    if (currentLabel) currentLabel.textContent = `NIVEL ${nivel.toFixed(2)}`;
-    if (upperLabel) upperLabel.textContent = nextLevel.toFixed(1);
+    const pointsToLevel = Math.round((nextBracket - nivel) * 400);
+    
+    if (currentLabel) currentLabel.textContent = `NIVEL ACTUAL: ${nivel.toFixed(2)}`;
+    if (detailEl) detailEl.innerHTML = `<span class="text-primary">+${pointsToLevel} PTS PARA NV ${nextBracket.toFixed(1)}</span>`;
+    
+    if (lowerLabel) lowerLabel.textContent = currentBracket.toFixed(1);
+    if (upperLabel) upperLabel.textContent = nextBracket.toFixed(1);
   }
 
   async function loadEloHistory(uid) {
@@ -539,26 +519,44 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function setupStatInteractions() {
-      // Explanation Modals logic could go here, for now using simple alerts or custom toasts as user requested visual feedback
-      // Implementing quick tooltip-like toasts
-      const bind = (id, title, msg) => {
-          const el = document.getElementById(id);
-          if(!el) return;
-          el.style.cursor = 'help';
-          el.onclick = () => showToast(title, msg, 'info');
-      };
+    const bind = (id, title, msg) => {
+        const el = document.getElementById(id);
+        if(!el) return;
+        el.style.cursor = 'pointer';
+        el.onclick = () => showVisualBreakdown(title, msg);
+    };
 
-      bind('p-nivel', 'Sistema de Nivel', 'Tu nivel (1.0-7.0) se basa en tus puntos ELO. Gana partidos oficiales para subir.');
-      bind('p-puntos', 'Ranking ELO', 'Puntos ganados vs rivales. Victorias contra rivales fuertes dan más puntos.');
-      bind('stat-streak', 'Sistema de Racha', 'Victorias consecutivas activan multiplicadores de ELO (x1.1, x1.2...).');
-      bind('val-consistency', 'Consistencia', 'Calculado basándose en tu ratio Winners/Errores reportado en el Diario.');
+    bind('profile-stat-level', 'Fórmula de Nivel', 'Calculado basándose en ELO: (ELO-1000)/400 + 2.5. Se pondera por dificultad del rival.');
+    bind('profile-stat-points', 'Puntos Ranking', 'Puntos ELO acumulados. Suman por victorias, restan por derrotas considerando el ELO esperado.');
+    bind('profile-stat-streak', 'Efecto Racha', 'Ratio de victorias recientes. Activa multiplicadores x1.25 (3), x1.6 (6), x2.5 (10).');
+  }
+
+  function showVisualBreakdown(title, content) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '9999';
+    overlay.innerHTML = `
+        <div class="modal-card animate-up glass-strong" style="max-width:320px; border: 1px solid rgba(255,255,255,0.1)">
+            <div class="modal-header border-b border-white/10 p-4">
+                <span class="text-xs font-black text-primary uppercase">${title}</span>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+            </div>
+            <div class="p-5">
+                <p class="text-sm text-white/80 leading-relaxed">${content}</p>
+                <div class="mt-4 p-3 bg-white/5 rounded-xl border border-white/5 text-[10px] text-muted italic">
+                    <i class="fas fa-info-circle mr-1"></i> Estos valores se actualizan en tiempo real tras cada partido.
+                </div>
+            </div>
+        </div>
+    `;
+    overlay.onclick = (e) => { if(e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
   }
 
   // Window Exports for HTML interactions
   window.openGearModal = () => document.getElementById("modal-gear")?.classList.add("active");
   
   window.savePala = async () => {
-    // ... (Existing save logic) ...
     const marca = document.getElementById("gear-marca").value;
     const modelo = document.getElementById("gear-modelo").value;
     if(!marca || !modelo) return showToast("Error", "Datos incompletos", "error");
@@ -582,52 +580,52 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.loadRivalAnalysis = async (rivalId) => {
-      const dashboard = document.getElementById('rival-intel-dashboard');
-      if(!dashboard) return;
-      dashboard.innerHTML = `<div class="text-center py-4"><div class="spinner-neon"></div><span class="text-xs blink">Descifrando Rival...</span></div>`;
-      
-      try {
-          const rivalDoc = await getDocument('usuarios', rivalId);
-          if(!rivalDoc) throw new Error("Rival no encontrado");
-          
-          // Use RivalIntelligence module
-          // Mocking history for now as fetching all matches is expensive, in prod use cached interactions
-          const h2h = { wins: 0, losses: 0, winRate: 50, status: 'Neutral' }; // Placeholder
-          const classification = RivalIntelligence.classifyRival(h2h);
-          
-          let html = `
-             <div class="flex items-center justify-between mb-4 px-2 animate-fade-in">
-                <div class="flex items-center gap-3">
-                    <img src="${rivalDoc.fotoPerfil || rivalDoc.fotoURL || './imagenes/default-avatar.png'}" class="w-10 h-10 rounded-xl border border-white/20 object-cover">
-                    <div class="flex flex-col">
-                        <span class="text-[12px] font-black text-white uppercase">${rivalDoc.nombreUsuario || 'Rival'}</span>
-                        <div class="flex items-center gap-1">
-                            <span class="text-[9px] font-bold text-white/50">NIVEL ${rivalDoc.nivel || 2.5}</span>
-                            <span class="text-[9px] font-bold text-${classification.color}-500">• ${classification.class}</span>
-                        </div>
-                    </div>
+    const dashboard = document.getElementById('rival-intel-dashboard');
+    if(!dashboard) return;
+    
+    dashboard.innerHTML = '<div class="py-10 center"><div class="spinner-neon"></div></div>';
+    
+    try {
+        const rival = await getDocument('usuarios', rivalId);
+        const { RivalIntelligence } = await import('./rival-intelligence.js');
+        const amSnap = await window.getDocsSafe(query(collection(db, "partidosAmistosos"), where("participantes", "array-contains", currentUser.uid)));
+        const reSnap = await window.getDocsSafe(query(collection(db, "partidosReto"), where("participantes", "array-contains", currentUser.uid)));
+        const matches = [...amSnap.docs, ...reSnap.docs].filter(m => m.data().participantes.includes(rivalId)).map(d => d.data());
+        
+        const intel = RivalIntelligence.parseMatches(currentUser.uid, rivalId, matches);
+        
+        dashboard.innerHTML = `
+            <div class="flex-row items-center gap-4 mb-4">
+                <img src="${rival.fotoURL || rival.fotoPerfil || './imagenes/default-avatar.png'}" class="w-10 h-10 rounded-full border border-primary/30">
+                <div class="flex-col">
+                    <span class="text-xs font-black text-white italic uppercase">${rival.nombreUsuario || rival.nombre}</span>
+                    <span class="text-[8px] font-bold text-muted uppercase">Nivel ${rival.nivel || '---'}</span>
                 </div>
-             </div>
-             <div class="mb-2 px-2">
-                 <div class="bg-black/40 rounded-lg p-3 border border-white/5">
-                    <span class="text-[10px] text-muted block mb-1">PROBABILIDAD DE VICTORIA</span>
-                    <div class="w-full bg-white/10 h-2 rounded-full overflow-hidden">
-                        <div class="h-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500" style="width: 50%"></div>
-                    </div>
-                    <span class="text-xs font-black text-center block mt-1">50%</span>
-                 </div>
-             </div>
-          `;
-          dashboard.innerHTML = html;
-      } catch(e) {
-          dashboard.innerHTML = `<div class="text-center text-red-500 text-xs py-4">${e.message}</div>`;
-      }
+            </div>
+            <div class="grid grid-cols-2 gap-2 mb-4">
+                <div class="p-3 bg-white/5 rounded-xl border border-white/5">
+                    <span class="text-[8px] font-black text-muted uppercase block">Balance H2H</span>
+                    <span class="text-xs font-black text-white">${intel.wins}W - ${intel.losses}L</span>
+                </div>
+                <div class="p-3 bg-white/5 rounded-xl border border-white/5">
+                    <span class="text-[8px] font-black text-muted uppercase block">Confianza</span>
+                    <span class="text-xs font-black text-sport-green">${intel.confidence}%</span>
+                </div>
+            </div>
+            <div class="p-3 bg-primary/10 rounded-xl border border-primary/20">
+                <span class="text-[8px] font-black text-primary uppercase block mb-1">Análisis Táctico</span>
+                <p class="text-[10px] text-white/80 leading-tight">${intel.tacticalBrief || 'No hay suficientes datos para un perfil táctico completo.'}</p>
+            </div>
+        `;
+    } catch(e) {
+        dashboard.innerHTML = '<div class="text-[10px] text-danger">Error al cargar inteligencia.</div>';
+    }
   };
   
   // Theme Manager Init
   import("./modules/theme-manager.js?v=6.5").then(m => m.renderThemeSelector("theme-selector-container")).catch(console.error);
   
-  // Save profile handlers (Name, Phone, etc)
+  // Save profile handlers
   document.getElementById("save-address")?.addEventListener("click", async () => {
     const b = document.getElementById("addr-bloque").value;
     const pi = document.getElementById("addr-piso").value;
@@ -639,14 +637,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnLogout = document.getElementById("btn-logout");
   if (btnLogout) btnLogout.onclick = () => { if(confirm("¿Salir?")) auth.signOut(); };
 
-  // Photo Upload
+  // Photo Upload (Enhanced Path)
   document.getElementById("upload-photo")?.addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (file) {
         try {
-            showToast("Subiendo...", "Procesando imagen", "info");
+            showToast("Subiendo...", "Procesando imagen con el satélite", "info");
             const url = await uploadProfilePhoto(currentUser.uid, file);
-            await updateDocument("usuarios", currentUser.uid, { fotoPerfil: url });
+            await updateDocument("usuarios", currentUser.uid, { fotoPerfil: url, fotoURL: url });
             showToast("Éxito", "Imagen actualizada", "success");
         } catch(e) { showToast("Error", "Fallo al subir", "error"); }
     }

@@ -196,7 +196,7 @@ document.addEventListener("DOMContentLoaded", () => {
       await import("./modules/ui-loader.js?v=6.5");
 
     // Only show loader if initial_load_done is not set to 'true'
-    const isFirstLoad = !sessionStorage.getItem("initial_load_done");
+    let isFirstLoad = !sessionStorage.getItem("initial_load_done");
     if (isFirstLoad) showLoading("Sincronizando con la Galaxia...");
 
     currentUser = user;
@@ -209,60 +209,46 @@ document.addEventListener("DOMContentLoaded", () => {
     // Init Auto Notifications System (V7.0) - Unified Service
     initAutoNotifications(user.uid);
 
-    // Listen to user data changes
+    // Listen to user data changes - Optimization: only update UI, don't re-init components
+    let lastDataString = "";
     subscribeDoc("usuarios", user.uid, async (data) => {
       if (data) {
-        currentUser = user;
+        const dataStr = JSON.stringify({ n: data.nivel, p: data.puntosRanking, r: data.rachaActual });
+        if (dataStr === lastDataString) return; // Prevent unnecessary re-renders
+        lastDataString = dataStr;
+
         userData = data;
         updateDashboard(data);
-        initMatrixFeed();
-        renderHallOfFame(data);
-
-        // Personalized welcome toast after spectacular loader
-        const welcomeName = localStorage.getItem("first_login_welcome");
-        if (welcomeName) {
-          setTimeout(() => {
-            showToast(
-              `¡BIENVENIDO, ${welcomeName.toUpperCase()}!`,
-              "Tu panel de control está listo. ¡A dominar la pista!",
-              "success",
-            );
-            localStorage.removeItem("first_login_welcome");
-          }, 1000);
+        
+        // One-time Initializations
+        if (isFirstLoad) {
+            initMatrixFeed();
+            renderHallOfFame(data);
+            injectHeader(data);
+            injectNavbar("home");
+            updateEcosystemHealth();
+            requestNotificationPermission();
+            setupStatInteractions();
+            
+            // Personalized welcome toast
+            const welcomeName = localStorage.getItem("first_login_welcome");
+            if (welcomeName) {
+                showToast(`¡BIENVENIDO, ${welcomeName.toUpperCase()}!`, "Tu panel de control está listo.", "success");
+                localStorage.removeItem("first_login_welcome");
+            }
+            
+            // Initial Orchestrator Sync
+            import('./ai-orchestrator.js').then(m => m.AIOrchestrator.init(user.uid));
+            
+            setTimeout(hideLoading, 1200);
+            isFirstLoad = false;
+        } else {
+            updateHeader(data); // Lightweight update
         }
-
-        // Ensure header is updated with role/info
-        injectHeader(data);
-        injectNavbar("home");
       }
     });
 
     await loadMatches();
-    // Reduced home payload: move weather/insights to AI chat
-    requestNotificationPermission();
-
-    // Dynamic Welcome Toast
-    setTimeout(() => {
-      const hour = new Date().getHours();
-      let greet = "¡Buenos días!";
-      if (hour >= 14 && hour < 21) greet = "¡Buenas tardes!";
-      else if (hour >= 21 || hour < 5) greet = "¡Buenas noches!";
-
-      const name = (
-        userData?.nombreUsuario ||
-        user.displayName ||
-        "Jugador"
-      ).split(" ")[0];
-      const phrase =
-        userData?.aiProfile?.funPhrase ||
-        "¡A dominar la pista!";
-      showToast(greet, `${name}, ${phrase}`, "success");
-    }, 1000);
-
-    // Initial Orchestrator Sync (Phase 5)
-    import('./ai-orchestrator.js').then(m => m.AIOrchestrator.init(user.uid));
-
-    if (isFirstLoad) setTimeout(hideLoading, 1500);
   });
 
   // Filter tabs logic...
@@ -341,8 +327,10 @@ async function updateDashboard(data) {
   const homeUpper = document.getElementById("home-level-upper");
 
   if (homeBar) homeBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
-  if (homePts)
-    homePts.innerHTML = `<span class="text-primary font-black">+${pointsToNext} PTS</span> <span class="opacity-30">|</span> <span class="text-orange-400 font-black">-${pointsToPrev} PTS</span>`;
+  if (homePts) {
+    const pointsToLevel = Math.round((nextBracket - lvlNum) * 400);
+    homePts.innerHTML = `<span class="text-primary font-black">+${pointsToLevel} PTS PARA NV ${nextBracket.toFixed(1)}</span>`;
+  }
   if (homeLower) homeLower.textContent = currentBracket.toFixed(1);
   if (homeCurrent) homeCurrent.textContent = `NIVEL ${lvlNum.toFixed(2)}`;
   if (homeUpper) homeUpper.textContent = nextBracket.toFixed(1);
@@ -373,7 +361,23 @@ async function updateDashboard(data) {
   const famPtsEl = document.getElementById("user-family-pts");
   if (famPtsEl) countUp(famPtsEl, data.familyPoints || 0);
 
-  const aiBox = document.getElementById("ai-welcome-msg");
+  // Stats Horizontal Horizontal (Top)
+  const streakNum = data.rachaActual || 0;
+  const streakEl = document.getElementById("stat-streak");
+  if (streakEl) {
+    streakEl.textContent = Math.abs(streakNum);
+    streakEl.style.color = streakNum >= 0 ? "var(--sport-green)" : "var(--sport-red)";
+  }
+
+  // ADN / PlayerState
+  const state = data.playerState || {};
+  const dnaStyle = document.getElementById("dna-style");
+  const dnaMood = document.getElementById("dna-mood");
+  if (dnaStyle) dnaStyle.textContent = (state.qualitative?.style || "ANALIZANDO...").toUpperCase();
+  if (dnaMood) dnaMood.textContent = (state.qualitative?.emotionalTrend || "ESTABLE").toUpperCase();
+
+  // AI Welcome Box (ReferenceError Fixed)
+  const aiBox = document.getElementById("ai-welcome-box");
   if (aiBox) {
     const quoteEl = aiBox.querySelector(".ai-quote");
     const nameBrief = (data.nombreUsuario || "Jugador").split(" ")[0];
@@ -383,17 +387,28 @@ async function updateDashboard(data) {
     if (hour >= 14 && hour < 21) intro = "Buenas tardes";
     else if (hour >= 21 || hour < 5) intro = "Buenas noches";
 
-    const tip = "Soy Vecina AP. Analizando tu potencial galáctico...";
+    const tips = [
+      `¿Sabías que el Rival Intel analiza tu Némesis y Socio ideal?`,
+      `El AI Brain (La Vecina) predice resultados según el clima y niveles.`,
+      `Registra tus partidos en el Diario para que mi cerebro IA aprenda de ti.`,
+      `Tu Rival Intel te dirá a quién evitar y con quién formar equipo.`,
+      `Soy tu analista táctica: uso la Matrix para que ganes más puntos.`
+    ];
+    const tip = data.aiProfile?.dailyTip || tips[Math.floor(Math.random() * tips.length)];
     if (quoteEl) quoteEl.textContent = `¡${intro} ${nameBrief}! ${tip}`;
 
     aiBox.onclick = async () => {
-      const { initVecinaChat, toggleChat } =
-        await import("./modules/ui-loader.js?v=6.5");
-      // Vecina Chat is actually initialized in ui-loader
-      const fab = document.querySelector(".ai-fab");
+      const fab = document.getElementById("vecina-chat-fab");
       if (fab) fab.click();
+      else {
+          const { toggleChat } = await import("./modules/vecina-chat.js?v=6.5");
+          toggleChat();
+      }
     };
   }
+
+  // Rival Intelligence Sync
+  syncRivalIntelligence(data.uid);
 
   // Analysis section updates - Tip Box / Events Box
   const tipBox = document.getElementById("tip-box");
@@ -663,6 +678,15 @@ async function renderMatchFeed(param) {
     list = allMatches.filter((m) => (m.jugadores || []).filter(id => id).length >= 4);
   }
 
+  // Private match filtering: hide private matches from non-organizer/non-invited users
+  const uid = currentUser?.uid;
+  list = list.filter(m => {
+    if (m.visibility === 'private') {
+      return m.organizerId === uid || m.creador === uid || (m.invitedUsers || []).includes(uid) || (m.jugadores || []).includes(uid);
+    }
+    return true;
+  });
+
   list = list.slice(0, 12);
 
   if (!list || list.length === 0) {
@@ -682,6 +706,7 @@ async function renderMatchFeed(param) {
       const creatorName = await getPlayerName(m.creador);
       const isFull = playersCount >= 4;
       const isMine = m.jugadores?.includes(currentUser.uid);
+      const p = m.jugadores || [];
 
       return `
             <div class="feed-match-card-v7 animate-up ${isFull ? "closed" : "open"} ${isMine ? "me" : ""}" 
@@ -698,17 +723,24 @@ async function renderMatchFeed(param) {
                         <span class="f-creator">${creatorName.toUpperCase()}</span>
                         ${isMine ? '<span class="f-badge-me">T</span>' : ""}
                     </div>
-                    <div class="f-info-row flex-row items-center gap-3">
+                    <div class="f-info-row flex-row items-center gap-2">
                          <span class="f-type-tag ${m.isComp ? "reto" : "am"}">
                             <i class="fas ${m.isComp ? "fa-bolt" : "fa-handshake"}"></i> ${m.isComp ? "RETO" : "AM"}
                          </span>
+                         ${m.visibility === 'private' ? '<span class="f-type-tag private"><i class="fas fa-lock"></i></span>' : ''}
                          <span class="f-lvl-tag">NV ${(m.nivelMin || 2.0).toFixed(1)}-${(m.nivelMax || 5.0).toFixed(1)}</span>
                     </div>
                 </div>
                 
-                <div class="f-spots-col">
-                    <div class="f-spots-visual">
-                         ${[0, 1, 2, 3].map((idx) => `<div class="f-dot ${idx < playersCount ? "filled" : ""}"></div>`).join("")}
+                <div class="f-court-visual">
+                    <div class="f-court-schema">
+                        <div class="f-court-net"></div>
+                        <div class="f-p-grid">
+                            <div class="f-p-slot ${p[0] ? 'occupied' : ''}"></div>
+                            <div class="f-p-slot ${p[1] ? 'occupied' : ''}"></div>
+                            <div class="f-p-slot ${p[2] ? 'occupied' : ''}"></div>
+                            <div class="f-p-slot ${p[3] ? 'occupied' : ''}"></div>
+                        </div>
                     </div>
                     <span class="f-spots-label ${isFull ? "full" : ""}">
                         ${isFull ? "LLENO" : `${playersCount}/4`}
@@ -812,19 +844,14 @@ window.openMatch = async (matchId, col) => {
         container.innerHTML = '<div class="center py-20"><div class="spinner-galaxy"></div></div>'; // Quick clear
         
         try {
-            // Ensure we have user data before rendering
-            if (!currentUser || !userData) {
-                 // Retry once after 500ms if data not ready (edge case on fresh load)
-                 await new Promise(r => setTimeout(r, 500));
-            }
+            const { renderMatchDetail } = await import("./match-service.js");
             await renderMatchDetail(container, matchId, col, currentUser, userData);
         } catch (e) {
             console.error("Error opening match:", e);
             container.innerHTML = '<div class="center p-10 opacity-50 text-xs">Error al cargar datos del nodo.</div>';
         }
     }
-};  } catch (e) {}
-}
+};
 
 function getIconFromCode(code) {
   if (code <= 3) return "fa-sun";
@@ -842,30 +869,6 @@ async function getPlayerName(uid) {
   const d = await getDocument("usuarios", uid);
   return d?.nombreUsuario || d?.nombre || "Jugador";
 }
-
-
-const WELCOME_PHRASES = [
-  "¿Listo para dominar la pista, Padeluminati?",
-  "La victoria se entrena en la oscuridad... ¡Brilla en la pista!",
-  "Hoy es un gran día para escalar el Olimpo Padeluminati.",
-  "El circuito tiembla ante tu bandeja... ¡Demuéstralo!",
-  "Padeluminatis Pro: donde los mejores se hacen leyendas.",
-  "La constancia es el secreto de los elegidos.",
-];
-
-window.openMatch = async (id, col) => {
-  const overlay = document.getElementById("modal-match");
-  const area = document.getElementById("match-detail-area");
-  overlay.classList.add("active");
-  area.innerHTML =
-    '<div class="loading-state"><div class="spinner-neon"></div></div>';
-
-  // Dynamically load match service only when needed
-  const { renderMatchDetail } = await import("./match-service.js");
-  renderMatchDetail(area, id, col, currentUser, userData);
-};
-
-// V9 Padeluminatis Evolution
 async function initMatrixFeed() {
   const container = document.getElementById("matrix-feed-container");
   if (!container) return;
@@ -1023,3 +1026,291 @@ function renderActiveMode(user) {
 
 
 
+// Health logic
+async function updateEcosystemHealth() {
+    try {
+        const usersSnap = await window.getDocsSafe(collection(db, "usuarios"));
+        const matchesSnap = await window.getDocsSafe(collection(db, "partidosReto"), limit(50));
+        
+        const totalUsers = usersSnap.size || 1;
+        const totalMatches = matchesSnap.size || 0;
+        
+        // activity: users active in last 24h
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        let activeUsers = 0;
+        usersSnap.forEach(u => {
+            const acc = u.data().ultimoAcceso?.toDate();
+            if (acc && acc > yesterday) activeUsers++;
+        });
+
+        // score calculation
+        const activityScore = Math.min(40, (activeUsers / totalUsers) * 100 * 0.4);
+        const matchScore = Math.min(30, totalMatches * 0.5);
+        const achievementBonus = 20; // assumed high for vibe
+        
+        const finalScore = Math.round(activityScore + matchScore + achievementBonus + 10); // +10 base
+        const score = Math.min(100, finalScore);
+
+        // Update UI
+        const valEl = document.getElementById('eco-health-index');
+        const aiValEl = document.getElementById('eco-health-val');
+        const aiBarEl = document.getElementById('eco-health-bar');
+
+        if (valEl) valEl.textContent = `ESTADO: ${score}%`;
+        if (aiValEl) aiValEl.textContent = `${score}/100`;
+        if (aiBarEl) aiBarEl.style.width = `${score}%`;
+
+    } catch(e) { console.error("Health calculation error:", e); }
+}
+
+async function syncRivalIntelligence(uid) {
+    try {
+        const { RivalIntelligence } = await import('./rival-intelligence.js');
+        const reSnap = await window.getDocsSafe(query(collection(db, "partidosReto"), where("participantes", "array-contains", uid), limit(30)));
+        const amSnap = await window.getDocsSafe(query(collection(db, "partidosAmistosos"), where("participantes", "array-contains", uid), limit(30)));
+        const matches = [...reSnap.docs, ...amSnap.docs].map(d => d.data());
+        
+        const partners = {};
+        const rivals = { won: {}, lost: {} };
+
+        matches.forEach(m => {
+            if (m.estado !== 'jugado' || !m.resultado) return;
+            const isT1 = m.equipo1?.includes(uid);
+            const userTeam = isT1 ? m.equipo1 : m.equipo2;
+            const rivalTeam = isT1 ? m.equipo2 : m.equipo1;
+            const userWon = m.resultado.ganador === (isT1 ? 1 : 2);
+
+            userTeam?.forEach(p => { if (p && p !== uid) partners[p] = (partners[p] || 0) + 1; });
+            rivalTeam?.forEach(r => {
+                if(r) {
+                    if (userWon) rivals.won[r] = (rivals.won[r] || 0) + 1;
+                    else rivals.lost[r] = (rivals.lost[r] || 0) + 1;
+                }
+            });
+        });
+
+        const getTop = (obj) => {
+            const keys = Object.keys(obj);
+            return keys.length > 0 ? keys.reduce((a, b) => obj[a] > obj[b] ? a : b) : null;
+        };
+
+        const topNem = getTop(rivals.lost);
+        const topVic = getTop(rivals.won);
+        const topPar = getTop(partners);
+
+        const renderIntel = async (id, elId, label, icon) => {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            if (id) {
+                const u = await getDocument('usuarios', id);
+                const name = (u?.nombreUsuario || u?.nombre || 'Jugador').split(' ')[0];
+                el.innerHTML = `
+                    <i class="fas ${icon} mb-1"></i>
+                    <span class="text-[8px] font-black uppercase text-white">${label}</span>
+                    <span class="text-[9px] font-bold text-primary mt-1">${name}</span>
+                `;
+                el.classList.remove('opacity-50');
+                el.classList.add('clickable');
+                el.onclick = async () => {
+                    const { toggleChat, sendMessage } = await import("./modules/vecina-chat.js?v=6.5");
+                    toggleChat(true); // Ensure open
+                    sendMessage(`Analiza a mi ${label.toLowerCase()} ${name}`);
+                };
+            }
+        };
+
+        await renderIntel(topNem, 'intel-nemesis', 'NÉMESIS', 'fa-skull text-magenta');
+        await renderIntel(topVic, 'intel-victim', 'VÍCTIMA', 'fa-crown text-sport-green');
+        await renderIntel(topPar, 'intel-partner', 'SOCIO', 'fa-user-group text-cyan');
+
+    } catch(e) { console.warn("Rival Intel sync error:", e); }
+}
+
+function setupStatInteractions() {
+    const bind = (id, title, msg) => {
+        const el = document.getElementById(id);
+        if(!el) return;
+        el.onclick = () => showVisualBreakdown(title, msg);
+    };
+
+    bind('home-stat-level', 'Fórmula de Nivel', 'Calculado basándose en ELO: (ELO-1000)/400 + 2.5. Se pondera por dificultad del rival.');
+    bind('home-stat-points', 'Puntos Ranking', 'Puntos ELO acumulados. Suman por victorias, restan por derrotas considerando el ELO esperado.');
+    bind('home-stat-streak', 'Efecto Racha', 'Ratio de victorias recientes. Activa multiplicadores x1.25 (3), x1.6 (6), x2.5 (10).');
+    
+    // Help for Rival Intel
+    const rivalPanel = document.getElementById('rival-intel-panel');
+    if(rivalPanel) {
+        const header = rivalPanel.querySelector('span'); // First span is the header
+        if(header) {
+            header.innerHTML += ' <i class="fas fa-question-circle text-[8px] opacity-30 cursor-help" onclick="event.stopPropagation(); window.showVisualBreakdown(\'Rival Intelligence\', \'Este panel identifica a tus contactos clave basándose en tu historial de partidos. Pulsa en Némesis para ver cómo derrotarle, o en Socio para ver vuestra compatibilidad.\')"></i>';
+        }
+    }
+}
+
+function showVisualBreakdown(title, content) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '9999';
+    overlay.innerHTML = `
+        <div class="modal-card animate-up glass-strong" style="max-width:320px">
+            <div class="modal-header border-b border-white/10 p-4">
+                <span class="text-xs font-black text-primary uppercase">${title}</span>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+            </div>
+            <div class="p-5">
+                <p class="text-sm text-white/80 leading-relaxed">${content}</p>
+                <div class="mt-4 p-3 bg-white/5 rounded-xl border border-white/5 text-[10px] text-muted italic">
+                    <i class="fas fa-info-circle mr-1"></i> Estos valores se actualizan en tiempo real tras cada partido.
+                </div>
+            </div>
+        </div>
+    `;
+    overlay.onclick = (e) => { if(e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+}
+
+window.openAIHub = async () => {
+    const modal = document.getElementById('modal-ai-hub');
+    if (!modal) return;
+    modal.classList.add('active');
+    updateEcosystemHealth();
+};
+
+window.aiAction = (action) => {
+    document.getElementById('modal-ai-hub').classList.remove('active');
+    switch(action) {
+        case 'profile': window.location.href = 'perfil.html'; break;
+        case 'matches': window.location.href = 'historial.html'; break; 
+        case 'ranking': window.location.href = 'ranking.html'; break;
+        case 'rivals': window.location.href = 'perfil.html'; break; 
+        case 'diary': window.location.href = 'diario.html'; break;
+        case 'admin': window.location.href = 'admin.html'; break;
+    }
+};
+
+window.showRivalSelector = async () => {
+    // Collect opponents from history
+    const opponents = new Map();
+    const uid = currentUser?.uid;
+    if (!uid) return;
+
+    allMatches.forEach(m => {
+        if (!m.jugadores || !m.resultado) return;
+        m.jugadores.forEach(pid => {
+            if (pid && pid !== uid && !pid.startsWith('GUEST_')) {
+               opponents.set(pid, (opponents.get(pid) || 0) + 1);
+            }
+        });
+    });
+
+    const sorted = [...opponents.entries()].sort((a, b) => b[1] - a[1]); // Most frequent first
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '10000';
+    overlay.innerHTML = `
+        <div class="modal-card animate-up glass-strong" style="max-width:360px">
+            <div class="modal-header border-b border-white/10 p-4 flex-row between items-center">
+                <span class="text-xs font-black text-white uppercase tracking-widest">SELECCIONAR RIVAL</span>
+                <button class="close-btn w-8 h-8 rounded-full bg-white/5 flex center" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times text-white"></i></button>
+            </div>
+            <div class="p-4 flex-col gap-2 max-h-[60vh] overflow-y-auto custom-scroll">
+                ${sorted.length === 0 ? '<div class="text-center text-xs text-muted py-4 opacity-50 font-bold uppercase tracking-widest">Sin historial suficiente.</div>' : ''}
+                <div id="rival-list-container">Loading...</div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // Async load names to avoid blocking UI
+    const container = overlay.querySelector('#rival-list-container');
+    const htmlPromises = sorted.map(async ([pid, count]) => {
+        const name = await getPlayerName(pid);
+        return `
+        <div class="flex-row items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-magenta/50 cursor-pointer transition-all hover:bg-white/10" 
+                onclick="window.analyzeRival('${pid}')">
+            <div class="w-8 h-8 rounded-full bg-black/50 border border-white/10 flex center text-[10px] font-bold text-white shrink-0">
+                ${name.substring(0,2).toUpperCase()}
+            </div>
+            <div class="flex-col flex-1">
+                <span class="text-xs font-bold text-white uppercase tracking-tight">${name}</span>
+                <span class="text-[9px] text-muted font-bold">${count} PARTIDOS</span>
+            </div>
+            <i class="fas fa-chevron-right text-[10px] text-magenta opacity-50"></i>
+        </div>`;
+    });
+    
+    const items = await Promise.all(htmlPromises);
+    container.innerHTML = items.join('');
+};
+
+window.analyzeRival = async (rivalId) => {
+    document.querySelector('.modal-overlay.active')?.remove();
+    
+    // Dynamic Import Rival Intelligence
+    const { RivalIntelligence } = await import('./rival-intelligence.js');
+    const { getPlayerName } = await import('./firebase-service.js'); // Ensure import
+
+    // Calculate Stats
+    // Assuming allMatches is global in home-logic.js
+    const h2h = RivalIntelligence.parseMatches(currentUser.uid, rivalId, allMatches);
+    const classification = RivalIntelligence.classifyRival(h2h);
+    const rivalName = await getPlayerName(rivalId);
+
+    // Show Report Modal
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '10001';
+    overlay.style.backdropFilter = 'blur(10px) saturate(180%)';
+    
+    const colorMap = { 'red': 'magenta', 'green': 'sport-green', 'orange': 'gold', 'gray': 'white' };
+    const themeColor = colorMap[classification.color] || 'gold';
+
+    overlay.innerHTML = `
+        <div class="modal-card animate-up glass-strong" style="max-width:340px; border: 1px solid var(--${themeColor}); box-shadow: 0 0 30px var(--${themeColor}-glow)">
+            <div class="modal-header p-6 relative overflow-hidden h-40 flex-col justify-end">
+                <div class="absolute inset-0 bg-gradient-to-b from-transparent to-black/80 z-10"></div>
+                <!-- Abstract BG -->
+                <div class="absolute inset-0 opacity-20" style="background: radial-gradient(circle at top right, var(--${themeColor}), transparent 70%);"></div>
+                
+                <div class="relative z-20">
+                    <span class="text-[9px] font-black uppercase text-white/60 tracking-[3px]">EXPEDIENTE TÁCTICO</span>
+                    <h2 class="text-2xl font-black italic text-white leading-none mt-1 tracking-tighter">${rivalName.toUpperCase()}</h2>
+                    <div class="flex-row items-center gap-2 mt-3">
+                         <div class="badge-premium sm" style="background: var(--${themeColor}); color: black; border:none">
+                            <i class="fas ${classification.icon}"></i> <span class="font-black tracking-widest">${classification.class}</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 border border-white/10 flex center text-white z-30 hover:bg-white/20 transition-colors" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div class="p-6 bg-[#0a0a0f]">
+                <div class="flex-row between items-center mb-6 px-4">
+                    <div class="flex-col center flex-1">
+                        <span class="text-3xl font-black text-sport-green">${h2h.wins}</span>
+                        <span class="text-[9px] font-bold text-muted uppercase tracking-widest mt-1">VICTORIAS</span>
+                    </div>
+                    <div class="text-xl font-black text-white/10">VS</div>
+                    <div class="flex-col center flex-1">
+                        <span class="text-3xl font-black text-sport-red">${h2h.losses}</span>
+                        <span class="text-[9px] font-bold text-muted uppercase tracking-widest mt-1">DERROTAS</span>
+                    </div>
+                </div>
+
+                <div class="p-5 bg-white/5 rounded-2xl border border-white/5 mb-6 relative overflow-hidden group">
+                    <i class="fas fa-quote-left absolute top-3 left-3 text-white/5 text-xl"></i>
+                    <p class="text-xs text-white/90 font-medium leading-relaxed italic relative z-10 text-center px-2">"${h2h.tacticalBrief}"</p>
+                    <div class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-50"></div>
+                </div>
+
+                <div class="flex-row center">
+                    <div class="px-4 py-1 rounded-full border border-white/10 bg-white/5">
+                        <span class="text-[9px] font-black text-muted uppercase tracking-widest">WINRATE HISTÓRICO: <span class="text-white">${h2h.winRate}%</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+};

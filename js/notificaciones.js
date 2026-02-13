@@ -111,6 +111,11 @@ function getIconInfo(type) {
         case 'match_result': return { icon: 'fa-trophy' };
         case 'reto': return { icon: 'fa-bolt' };
         case 'info': return { icon: 'fa-circle-info' };
+        case 'private_invite': return { icon: 'fa-lock' };
+        case 'warning': return { icon: 'fa-triangle-exclamation' };
+        case 'ranking_change': return { icon: 'fa-chart-line' };
+        case 'match_reminder': return { icon: 'fa-clock' };
+        case 'system': return { icon: 'fa-gear' };
         default: return { icon: 'fa-bell' };
     }
 }
