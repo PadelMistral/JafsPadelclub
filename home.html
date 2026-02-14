@@ -51,6 +51,38 @@
 
             <section id="next-match-container" class="mt-3"></section>
 
+            <!-- OPEN MATCHES SCANNER (MOVED HIGHER) -->
+            <section class="mt-3 card-premium-v7 p-4 animate-up border-glow-cyan" style="animation-delay: 0.1s;">
+                <div class="flex-row between items-center mb-4">
+                    <div class="flex-col">
+                        <span class="text-[10px] font-black text-primary uppercase tracking-[3px]">Retos Abiertos</span>
+                        <span class="text-[8px] text-muted uppercase font-bold">Pistas buscando guerreros</span>
+                    </div>
+                    <i class="fas fa-satellite-dish text-primary text-xs animate-pulse"></i>
+                </div>
+                <div id="open-matches-panel" class="flex-row gap-3 overflow-x-auto pb-2 custom-scroll no-scrollbar">
+                    <div class="flex-row center py-4 opacity-40 w-full">
+                        <i class="fas fa-satellite-dish mb-2 mr-2"></i>
+                        <span class="text-[9px] font-black uppercase tracking-widest">Escaneando Pistas...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- UPCOMING MATCHES (NEW SECTION) -->
+            <section class="mt-3 card-premium-v7 p-4 animate-up" style="animation-delay: 0.2s;">
+                <div class="flex-row between items-center mb-4">
+                    <div class="flex-col">
+                        <span class="text-[10px] font-black text-muted uppercase tracking-[3px]">Próximos
+                            Despliegues</span>
+                        <span class="text-[8px] text-muted uppercase font-bold">Agenda de la Matrix</span>
+                    </div>
+                    <i class="fas fa-calendar-alt text-muted text-xs"></i>
+                </div>
+                <div id="upcoming-matches-panel" class="flex-col gap-2">
+                    <!-- Dynamic content -->
+                </div>
+            </section>
+
             <!-- TOP STATS (PREMIUM V7) -->
             <section class="mt-3 grid gap-3" style="grid-template-columns: repeat(3, 1fr);">
                 <div class="stat-card-v7 cyan clickable" id="home-stat-level">
@@ -64,6 +96,17 @@
                 <div class="stat-card-v7 lime clickable" id="home-stat-streak">
                     <span class="text-[10px] font-black uppercase text-muted tracking-widest">Racha</span>
                     <span id="stat-streak" class="text-xl font-black italic">0</span>
+                </div>
+            </section>
+
+            <!-- TOP 3 PODIUM (NEW VERTICAL) -->
+            <section class="mt-4 mb-4">
+                <div class="flex-row between items-center mb-3">
+                    <span class="text-[10px] font-black text-muted uppercase tracking-[3px]">Elite Matrix Top 3</span>
+                    <i class="fas fa-medal text-gold animate-bounce"></i>
+                </div>
+                <div id="vertical-podium" class="podium-vertical-v7 animate-fade-in">
+                    <!-- Dynamic Content -->
                 </div>
             </section>
 
@@ -133,22 +176,6 @@
                 </div>
             </section>
 
-            <!-- OPEN MATCHES SCANNER (NEW) -->
-            <section class="mt-3 card-premium-v7 p-4 animate-up" style="animation-delay: 0.3s;">
-                <div class="flex-row between items-center mb-4">
-                    <span class="text-[10px] font-black text-muted uppercase tracking-[3px]">Retos Abiertos</span>
-                    <i class="fas fa-satellite-dish text-primary text-xs animate-pulse"></i>
-                </div>
-                <div id="open-matches-panel" class="flex-col gap-2">
-                    <div class="flex-col center py-4 opacity-40">
-                        <i class="fas fa-satellite-dish mb-2"></i>
-                        <span class="text-[9px] font-black uppercase tracking-widest">Escaneando Pistas...</span>
-                    </div>
-                </div>
-            </section>
-            <div id="match-feed" class="flex-col gap-4"></div>
-            </section>
-
             <!-- AI INSIGHTS & QUICK ACTIONS (PREMIUM V7) -->
             <section class="mt-3">
                 <div id="ai-welcome-box" class="card-premium-v7 ai-welcome-card clickable animate-fade-in">
@@ -201,10 +228,10 @@
         </div>
     </div>
 
-    <script type="module" src="./js/home-logic.js?v=6.5"></script>
+    <script type="module" src="./js/home-logic.js"></script>
     <script type="module">
-        import { initGalaxyBackground } from './js/modules/galaxy-bg.js?v=6.5';
-        import { initThemeSystem } from './js/modules/theme-manager.js?v=6.5';
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem } from './js/modules/theme-manager.js';
         initThemeSystem();
         initGalaxyBackground();
     </script>

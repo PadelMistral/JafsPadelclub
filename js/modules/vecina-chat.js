@@ -37,6 +37,7 @@ function humorNoData() {
     "No tengo info suficiente, pero prometo volver más fuerte que un globo en verano.",
     "No me llega el dato, hoy estoy en modo ahorro de energía.",
     "Sin datos por ahora. Mientras tanto, entreno mis predicciones en silencio.",
+    "El partido aún no se ha jugado. No puedo analizarlo todavía.", // Added
   ];
   return lines[Math.floor(Math.random() * lines.length)];
 }
@@ -311,6 +312,8 @@ function _detectIntent(query) {
     q.includes("que tal")
   )
     return "CMD_GREETING";
+  if (q.includes("analiza mi partido") || q.includes("análisis del partido") || q.includes("qué tal jugamos"))
+    return "CMD_ANALYZE_MATCH";
   if (
     q.includes("analiza a") ||
     q.includes("análisis de") ||
@@ -359,25 +362,40 @@ function _detectIntent(query) {
     q.includes("guia")
   )
     return "CMD_TUTORIAL";
-  if (q.includes("consejo") || q.includes("pro tip")) return "CMD_PRO_TIPS";
+  if (q.includes("consejo") || q.includes("pro tip") || q.includes("qué hago") || q.includes("ayúdame")) return "CMD_PRO_TIPS";
   if (
     q.includes("pala") ||
     q.includes("raqueta") ||
-    q.includes("mejor material")
+    q.includes("mejor material") ||
+    q.includes("equipo")
   )
     return "CMD_GEAR_ADVICE";
   if (
     q.includes("formula") ||
     q.includes("como se calcula") ||
-    q.includes("puntos elo")
+    q.includes("puntos elo") ||
+    q.includes("puntuación")
   )
     return "CMD_ELO_FORMULA";
   if (
     q.includes("censo") ||
     q.includes("cuanta gente") ||
-    q.includes("niveles de la app")
+    q.includes("niveles de la app") ||
+    q.includes("comunidad")
   )
     return "CMD_CLUB_CENSUS";
+  if (q.includes("ganar hoy") || q.includes("quién gana") || q.includes("apuesta") || q.includes("probabilidad"))
+    return "CMD_PREDICT";
+  if (q.includes("clima") || q.includes("tiempo") || q.includes("lloverá") || q.includes("temperatura"))
+    return "CMD_RAIN_TODAY";
+  if (q.includes("estadísticas") || q.includes("mis datos") || q.includes("mi rendimiento") || q.includes("mis números"))
+    return "CMD_STATS_READ";
+  if (q.includes("qué pala") || q.includes("recomienda pala") || q.includes("mi pala") || q.includes("material"))
+    return "CMD_GEAR_ADVICE";
+  
+  if (q.includes("vecina") || q.includes("maruja") || q.includes("qué dices"))
+    return "CMD_PERSONALITY_CHAT";
+
   return "GENERAL";
 }
 
@@ -1382,16 +1400,31 @@ export async function generateResponse(query) {
                 </div>
             </div>`;
 
+    case "CMD_ANALYZE_MATCH":
+      const myMatches = DATA_CACHE.matches || [];
+      const lastM = myMatches
+        .filter(m => m.jugadores?.includes(uid))
+        .sort((a,b) => (b.fecha?.toMillis?.() || 0) - (a.fecha?.toMillis?.() || 0))[0];
+      
+      if (!lastM) return noData("No hay registros de combates en tu base de datos.");
+      if (!lastM.resultado) return noData("El partido aún no se ha jugado. No puedo analizarlo todavía.");
+
+      return `<div class="ai-result-card">
+                <span class="res-title">Análisis de Combate</span>
+                <div class="res-val">Resultado: ${lastM.resultado.sets}</div>
+                <div class="res-sub">La Matrix detecta una ejecución táctica de nivel ${ (DATA_CACHE.user?.nivel || 2.5).toFixed(2) }. Revisa tu diario para optimizar errores.</div>
+            </div>`;
+
     default:
       const helpCard = `
                 <div class="ai-result-card animate-up">
-                    <span class="res-title">Guía de Enlace</span>
-                    <div class="res-val">No he descifrado ese mensaje</div>
+                    <span class="res-title">Vecina Maruja: Módulo IA</span>
+                    <div class="res-val">No te entiendo ni con un traductor galáctico... ¡céntrate un poco!</div>
                     <div class="res-sub">La Matrix aún está aprendiendo. Prueba estos patrones:<br><br>
-                        • 💬 "Busca a [Nombre]"<br>
                         • 📈 "Mi ranking"<br>
                         • 🏆 "Top 5"<br>
-                        • 🎾 "Hay partidas abiertas?"
+                        • 🎾 "Hay partidas abiertas?"<br>
+                        • 💬 "Analiza a [Nombre]"
                     </div>
                 </div>`;
       if (currentPersonality === "vecina") {

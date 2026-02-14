@@ -49,26 +49,37 @@ export async function createNotification(
     const promises = targets.map(async (uid) => {
       if (!uid) return;
 
-      // Anti-duplicate check: don't send same message to same user if unread
+      // Robust Anti-duplicate check (Persistent registry)
+      const dedupId =
+        extraData?.dedupId ||
+        `${uid}_${type}_${title}_${message}`.replace(/\s/g, "_");
+      const registryKey = `sent_notif_${dedupId}`;
+      if (localStorage.getItem(registryKey)) return;
+
+      // Database check as secondary safety
       const q = query(
         collection(db, "notificaciones"),
         where("destinatario", "==", uid),
+        where("titulo", "==", title),
         where("mensaje", "==", message),
-        where("leido", "==", false),
         limit(1),
       );
       const existing = await window.getDocsSafe(q);
-      if (!existing.empty) return;
+      if (!existing.empty) {
+        localStorage.setItem(registryKey, "true");
+        return;
+      }
 
-      return addDoc(collection(db, "notificaciones"), {
+      const docRef = await addDoc(collection(db, "notificaciones"), {
         destinatario: uid,
         remitente: auth.currentUser?.uid || "system",
         tipo: type,
         titulo: title,
         mensaje: message,
         enlace: link || null,
-        data: extraData || null,
+        data: { ...extraData, dedupId },
         leido: false,
+        seen: false, // New flag for visibility tracking
         timestamp: serverTimestamp(),
         // compatibility fields (legacy)
         uid: uid,
@@ -77,6 +88,9 @@ export async function createNotification(
         read: false,
         createdAt: serverTimestamp(),
       });
+
+      if (docRef.id) localStorage.setItem(registryKey, "true");
+      return docRef;
     });
     await Promise.all(promises);
     return true;
@@ -95,10 +109,25 @@ export async function markAsRead(notifId) {
     await updateDoc(ref, {
       leido: true,
       read: true, // compatibility
+      seen: true, // Read implies seen
     });
     return true;
   } catch (e) {
     console.error(e);
+    return false;
+  }
+}
+
+/**
+ * Mark notification as seen (viewed in Home)
+ */
+export async function markAsSeen(notifId) {
+  try {
+    const ref = doc(db, "notificaciones", notifId);
+    await updateDoc(ref, { seen: true });
+    return true;
+  } catch (e) {
+    console.error("Error marking as seen:", e);
     return false;
   }
 }
@@ -110,6 +139,7 @@ export function listenToNotifications(callback) {
   if (!auth.currentUser) return null;
   return subscribeCol("notificaciones", callback, [
     ["destinatario", "==", auth.currentUser.uid],
+    ["seen", "==", false], // NEW: only return unseen
   ]);
 }
 
@@ -130,20 +160,27 @@ export async function initAutoNotifications(uid) {
   watchMatchesFilling(uid);
   scheduleMatchReminders(uid);
   watchNewChallenges(uid);
-  
+
   // 3. Native Background Pulse
   // Listen for new unread notifications and trigger local push
   let initialLoad = true;
   listenToNotifications((list) => {
     if (initialLoad) {
       initialLoad = false;
-      return; 
+      return;
     }
-    
-    // Find the latest unread and notify
-    const newest = list.filter(n => !n.leido).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0))[0];
+
+    // Find the latest unread AND unseen and notify
+    const newest = list
+      .filter((n) => !n.seen)
+      .sort(
+        (a, b) =>
+          (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0),
+      )[0];
     if (newest) {
       sendPushNotification(newest.titulo || "Padeluminatis", newest.mensaje);
+      // Mark as seen immediately so it doesn't repeat
+      markAsSeen(newest.id);
     }
   });
 

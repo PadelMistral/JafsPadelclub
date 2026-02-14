@@ -162,10 +162,10 @@ window.showOnlineUsers = async () => {
 
 document.addEventListener("DOMContentLoaded", () => {
   // AUTO-CLEAN CACHE ON HARD RELOAD OR VERSION MISMATCH
-  if (localStorage.getItem('app_version') !== '6.5.4') {
+  if (localStorage.getItem('app_version') !== '6.6') {
       console.log("Actualizando versión... Limpiando caché.");
       sessionStorage.clear();
-      localStorage.setItem('app_version', '6.5.4');
+      localStorage.setItem('app_version', '6.6');
   }
 
   initAppUI("home");
@@ -177,6 +177,36 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    let ud = null;
+    try {
+        ud = await getDocument('usuarios', user.uid);
+    } catch (e) {
+        console.error("Auth Observer Error:", e);
+    }
+
+    if (!ud) {
+        console.warn("Perfil no encontrado o error de red. Manteniendo sesión...");
+        showToast("Sincronizando...", "Verificando credenciales en la Matrix", "info");
+        // Do NOT redirect here to avoid ghost redirects on network glitches
+        // Just let it try again or fail gracefully on UI
+        // But we need 'userData' for the app.
+        // We can retry or just return.
+        return; 
+    }
+
+    const isApproved = ud.status === 'approved' || ud.rol === 'Admin';
+    if (!isApproved) {
+       console.warn("Usuario no aprobado. Acceso denegado.");
+       showToast("ACCESO DENEGADO", "Tu cuenta está pendiente de aprobación.", "warning");
+       setTimeout(async () => {
+           await auth.signOut();
+           window.location.href = 'index.html?msg=pending';
+       }, 2000); // Give time to read toast
+	   return;
+    }
+
+    currentUser = user;
+    userData = ud;
     // Register SW when document is stable
     // Robust Service Worker Registration for VS Code Preview & Production
     if ("serviceWorker" in navigator) {
@@ -187,7 +217,18 @@ document.addEventListener("DOMContentLoaded", () => {
       ) {
         console.log("Skipping SW registration in preview environment.");
       } else {
-        navigator.serviceWorker.register("./sw.js").catch((err) => {
+        navigator.serviceWorker.register("./sw.js", { updateViaCache: 'none' }).then(reg => {
+            // Check for updates
+            reg.onupdatefound = () => {
+                const installingWorker = reg.installing;
+                installingWorker.onstatechange = () => {
+                    if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        console.log('New content available; reloading...');
+                        window.location.reload();
+                    }
+                };
+            };
+        }).catch((err) => {
           if (err.name === "AbortError" || err.message.includes("shutdown")) {
             console.warn(
               "SW registration aborted (likely due to environment shutdown)",
@@ -195,6 +236,12 @@ document.addEventListener("DOMContentLoaded", () => {
           } else if (err.name !== "InvalidStateError") {
             console.error("SW Error:", err);
           }
+        });
+
+        // Controller Change Handler
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+           console.log("Controller changed, reloading page...");
+           window.location.reload();
         });
       }
     }
@@ -259,6 +306,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     await loadMatches();
+    renderVerticalPodium();
   });
 
   // Filter tabs logic...
@@ -546,9 +594,11 @@ async function loadMatches() {
   );
 
   allMatches = list;
-  const myNext = list.find((m) => m.jugadores?.includes(currentUser.uid));
+  const myMatches = list.filter((m) => m.jugadores?.includes(currentUser.uid));
+  const myNext = myMatches[0];
 
   renderNextMatch(myNext);
+  renderUpcomingMatches(myMatches.slice(1, 4));
   renderMatchFeed("all");
 }
 
@@ -904,20 +954,90 @@ async function initMatrixFeed() {
   const container = document.getElementById("matrix-feed-container");
   if (!container) return;
 
-  const feeds = [
-    { icon: 'fa-user-plus', text: 'NUEVO ASPIRANTE UNIDO AL CIRCUITO', color: 'primary' },
-    { icon: 'fa-trophy', text: 'TORNEO DE PRIMAVERA: INSCRIPCIONES ABIERTAS', color: 'sport-gold' },
-    { icon: 'fa-bolt', text: 'NIVELES ACTUALIZADOS TRAS EL LTIMO PARTIDO', color: 'secondary' },
-    { icon: 'fa-fire', text: 'RACHA COLECTIVA EN AUMENTO (74% WINS)', color: 'sport-green' }
-  ];
+  const { listenToNotifications, markAsSeen } = await import("./services/notification-service.js");
 
-  container.innerHTML = feeds.map(f => `
-    <div class="feed-node animate-fade-in">
-        <div class="node-pulse" style="background: var(--${f.color || 'primary'}); box-shadow: 0 0 10px var(--${f.color || 'primary'})"></div>
-        <i class="fas ${f.icon} opacity-40 ml-1"></i>
-        <span class="font-black opacity-80">${f.text}</span>
-    </div>
-  `).join('');
+  listenToNotifications(async (list) => {
+    if (!list || list.length === 0) {
+      container.innerHTML = `
+        <div class="feed-node opacity-40">
+            <div class="node-pulse bg-white/20"></div>
+            <i class="fas fa-satellite opacity-40 ml-1"></i>
+            <span class="font-black opacity-60 uppercase text-[9px]">Sincronización estable: Sin anomalías</span>
+        </div>
+      `;
+      return;
+    }
+
+    const html = list.slice(0, 4).map(n => {
+      let icon = 'fa-bolt';
+      let color = 'primary';
+      if (n.tipo === 'success' || n.tipo === 'match_full') { icon = 'fa-trophy'; color = 'sport-green'; }
+      if (n.tipo === 'warning') { icon = 'fa-triangle-exclamation'; color = 'sport-red'; }
+      
+      return `
+        <div class="feed-node animate-fade-in">
+            <div class="node-pulse" style="background: var(--${color}); box-shadow: 0 0 10px var(--${color}-glow)"></div>
+            <i class="fas ${icon} opacity-40 ml-1"></i>
+            <span class="font-black opacity-80 uppercase text-[9px]">${n.titulo}: ${n.mensaje}</span>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = html;
+
+    // Mark as seen after a short delay to allow visual reading
+    setTimeout(() => {
+        list.forEach(n => markAsSeen(n.id));
+    }, 8000);
+  });
+}
+ 
+async function renderVerticalPodium() {
+    const container = document.getElementById('vertical-podium');
+    if (!container) return;
+    
+    try {
+        const q = query(collection(db, 'usuarios'), orderBy('puntosRanking', 'desc'), limit(3));
+        const snap = await window.getDocsSafe(q);
+        
+        if (snap.empty) return;
+        
+        const medals = ['gold', 'silver', 'bronze'];
+        const colors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+        
+        container.innerHTML = snap.docs.map((d, i) => {
+            const u = d.data();
+            const photo = u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png';
+            const isMe = currentUser && d.id === currentUser.uid;
+            
+            return `
+            <div class="podium-row-v7 ${medals[i]} ${isMe ? 'podium-me' : ''} animate-up shadow-glow-${medals[i]}" style="animation-delay: ${i * 0.1}s; padding: 15px; margin-bottom: 12px; border-radius: 20px;">
+                <div class="pr-rank" style="font-size: 1.2rem; min-width: 30px;">#${i + 1}</div>
+                <div class="pr-avatar" style="border-width: 3px; width: 60px; height: 60px; border-color: ${colors[i]}; box-shadow: 0 0 15px ${colors[i]}44">
+                    <img src="${photo}" style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
+                <div class="pr-info flex-1 ml-4">
+                    <div class="flex-row items-center gap-2">
+                        <span class="pr-name font-black tracking-tighter" style="font-size: 1rem;">${(u.nombreUsuario || u.nombre || 'Jugador').toUpperCase()}</span>
+                        ${isMe ? '<span class="badge-premium-v7 sm cyan" style="font-size: 7px;">TÚ</span>' : ''}
+                    </div>
+                    <div class="flex-row items-center gap-3 mt-1">
+                        <span class="pr-pts font-black text-white/90" style="font-size: 0.8rem;">${Math.round(u.puntosRanking || 1000)} <small class="text-[7px] text-muted tracking-widest">PTS</small></span>
+                        <span class="text-[9px] font-bold text-primary italic">Lvl ${(u.nivel || 2.5).toFixed(2)}</span>
+                    </div>
+                </div>
+                <div class="pr-medal"><i class="fas fa-medal text-xl" style="color: ${colors[i]}; filter: drop-shadow(0 0 5px ${colors[i]})"></i></div>
+            </div>`;
+        }).join('');
+
+        // Auto-scroll to me if present
+        if (currentUser && snap.docs.some(d => d.id === currentUser.uid)) {
+            setTimeout(() => {
+               const me = container.querySelector('.podium-me');
+               if(me) me.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 500);
+        }
+    } catch(e) { console.error("Error rendering podium:", e); }
 }
 
 function renderHallOfFame(user) {
@@ -1345,48 +1465,113 @@ window.analyzeRival = async (rivalId) => {
     `;
     document.body.appendChild(overlay);
 };
+async function renderUpcomingMatches(matches) {
+    const container = document.getElementById('upcoming-matches-panel');
+    if (!container) return;
+
+    if (!matches || matches.length === 0) {
+        container.innerHTML = `
+            <div class="flex-col center py-6 opacity-30">
+                <span class="text-[9px] font-black uppercase tracking-widest">Sin más despliegues programados</span>
+            </div>
+        `;
+        return;
+    }
+
+    const htmlPromises = matches.map(async (m) => {
+        const date = m.fecha.toDate ? m.fecha.toDate() : new Date(m.fecha);
+        const isComp = m.col === 'partidosReto';
+        return `
+            <div class="upcoming-item-v7 flex-row between items-center p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 clickable transition-all" onclick="openMatch('${m.id}', '${m.col}')">
+                <div class="flex-row items-center gap-3">
+                    <div class="flex-col center bg-black/40 w-10 h-10 rounded-xl border border-white/5">
+                        <span class="text-xs font-black text-white">${date.getDate()}</span>
+                        <span class="text-[8px] text-muted uppercase font-bold">${date.toLocaleDateString('es-ES', {month:'short'})}</span>
+                    </div>
+                    <div class="flex-col">
+                        <span class="text-xs font-black text-white italic uppercase">${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')} HRS</span>
+                        <span class="text-[9px] text-muted font-bold">${isComp ? 'RETO ELO' : 'AMISTOSO'}</span>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-[10px] text-muted"></i>
+            </div>
+        `;
+    });
+
+    const items = await Promise.all(htmlPromises);
+    container.innerHTML = items.join('');
+}
+
 async function renderOpenMatches() {
     const container = document.getElementById('open-matches-panel');
     if (!container) return;
 
     try {
-        const q = query(
-            collection(db, "partidosReto"),
-            where("estado", "==", "abierto"),
-            limit(5)
-        );
-        const snap = await window.getDocsSafe(q);
+        // Fetch open matches from both collections
+        const [am, re] = await Promise.all([
+            window.getDocsSafe(query(collection(db, "partidosAmistosos"), where("estado", "==", "abierto"), limit(10))),
+            window.getDocsSafe(query(collection(db, "partidosReto"), where("estado", "==", "abierto"), limit(10)))
+        ]);
+
+        let list = [];
+        am.forEach(d => list.push({ id: d.id, col: 'partidosAmistosos', ...d.data() }));
+        re.forEach(d => list.push({ id: d.id, col: 'partidosReto', ...d.data() }));
+
+        // Filter and sort
+        const now = new Date();
+        list = list.filter(m => {
+            const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
+            const slots = (m.jugadores || []).filter(id => id).length;
+            return slots < 4 && date > new Date(now - 3600000); // Only matches not full and not older than 1h
+        });
+
+        list.sort((a,b) => (a.fecha?.toDate() || 0) - (b.fecha?.toDate() || 0));
         
-        if (snap.empty) {
+        if (list.length === 0) {
             container.innerHTML = `
-                <div class="flex-col center py-4 opacity-40">
-                    <i class="fas fa-ghost mb-2"></i>
-                    <span class="text-[9px] font-black uppercase tracking-widest">No hay retos abiertos</span>
+                <div class="flex-col center py-8 opacity-40 w-full">
+                    <i class="fas fa-satellite-dish mb-2 text-primary opacity-20"></i>
+                    <span class="text-[9px] font-black uppercase tracking-widest text-muted">Escaneo completado: 0 Retos</span>
                 </div>
             `;
             return;
         }
 
-        container.innerHTML = snap.docs.map(doc => {
-            const m = doc.data();
+        const html = await Promise.all(list.map(async m => {
             const date = m.fecha?.toDate() || new Date();
-            const slots = 4 - (m.jugadores || []).filter(id => id).length;
+            const filled = (m.jugadores || []).filter(id => id).length;
+            const slots = 4 - filled;
+            const creator = await getPlayerName(m.creador);
+            const isComp = m.col === 'partidosReto';
             
             return `
-                <div class="open-match-card-v7 animate-up" onclick="openMatch('${doc.id}', 'partidosReto')">
-                    <div class="flex-row between items-center">
+                <div class="open-match-card-v7 animate-up min-w-[200px]" onclick="openMatch('${m.id}', '${m.col}')">
+                    <div class="om-tag ${isComp ? 'reto' : 'am'}">${isComp ? 'RETO' : 'AMISTOSO'}</div>
+                    <div class="flex-row between items-start mb-3">
                         <div class="flex-col">
-                            <span class="text-[10px] font-black text-white italic">${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}</span>
-                            <span class="text-[8px] text-muted font-bold">${date.toLocaleDateString('es-ES', {day:'numeric', month:'short'})}</span>
+                            <span class="text-xl font-black text-white italic tracking-tighter">${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}</span>
+                            <span class="text-[9px] text-muted font-black uppercase">${date.toLocaleDateString('es-ES', {weekday:'short', day:'numeric'})}</span>
                         </div>
                         <div class="slots-pill ${slots === 1 ? 'critical' : ''}">
-                            <i class="fas fa-users-rays mr-1"></i> ${slots} HUECO${slots > 1 ? 'S' : ''}
+                            <span class="text-[9px] font-black">${slots} ${slots === 1 ? 'HUECO' : 'HUECOS'}</span>
                         </div>
-                        <i class="fas fa-chevron-right text-[10px] text-primary"></i>
+                    </div>
+                    
+                    <div class="flex-col gap-2 mt-auto">
+                        <div class="flex-row items-center gap-2">
+                             <div class="w-5 h-5 rounded-full bg-primary/20 flex center"><i class="fas fa-crown text-[8px] text-primary"></i></div>
+                             <span class="text-[10px] font-bold text-white/60 truncate">${creator.toUpperCase()}</span>
+                        </div>
+                        <div class="flex-row -space-x-1.5 mt-1">
+                            ${(m.jugadores || []).filter(id => id).map(id => `<div class="w-6 h-6 rounded-full border border-[#0a0a0f] bg-white/10 overflow-hidden"><img src="./imagenes/Logojafs.png" class="w-full h-full object-cover"></div>`).join('')}
+                            ${Array(slots).fill(0).map(() => `<div class="w-6 h-6 rounded-full border border-dashed border-white/10 bg-white/5 flex center"><i class="fas fa-plus text-[8px] text-white/20"></i></div>`).join('')}
+                        </div>
                     </div>
                 </div>
             `;
-        }).join('');
+        }));
+
+        container.innerHTML = html.join('');
 
     } catch(e) { console.error("Error loading open matches:", e); }
 }

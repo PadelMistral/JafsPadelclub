@@ -57,6 +57,7 @@ export async function injectHeader(userData = null) {
                     <i class="fas fa-shield-halved"></i>
                 </div>
             ` : ''}
+
             <div class="header-notif" onclick="window.location.href='notificaciones.html'" title="Notificaciones">
                 <i class="fas fa-bell"></i>
                 <span class="notification-badge" id="notif-badge" style="display:none">0</span>
@@ -245,3 +246,19 @@ export function hideLoading() {
     }
 }
 
+
+window.clearGlobalNotifications = async () => {
+    if (!auth.currentUser) return;
+    if (!confirm('¿Vaciar toda la bandeja de entrada?')) return;
+    
+    const { writeBatch, collection, query, where, getDocs, doc } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
+    const q = query(collection(db, 'notificaciones'), where('destinatario', '==', auth.currentUser.uid));
+    const snap = await getDocs(q);
+    
+    if (snap.empty) return showToast('Info', 'Ya está todo limpio', 'info');
+    
+    const batch = writeBatch(db);
+    snap.docs.forEach(d => batch.delete(doc(db, 'notificaciones', d.id)));
+    await batch.commit();
+    showToast('Limpieza Completa', 'Se han borrado todas las notificaciones.', 'success');
+};

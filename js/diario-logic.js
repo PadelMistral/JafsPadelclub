@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modal.classList.add('active');
         currentStep = 1;
         updateWizardUI();
+        loadAvailableMatches(); // Always try to load played matches
         if (matchId) loadLinkedMatch(matchId);
     };
 
@@ -116,6 +117,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     window.wizardNext = async () => {
+        // Validation for step 1
+        if (currentStep === 1) {
+            const mId = document.getElementById('inp-match-id').value || document.getElementById('inp-match-selector').value;
+            if (!mId) {
+                showToast('ACCIÓN REQUERIDA', 'Debes seleccionar un partido completado para crear un reporte.', 'warning');
+                return;
+            }
+
+            // Verify match is played
+            try {
+                const match = await getDocument('partidosReto', mId) || await getDocument('partidosAmistosos', mId);
+                if (!match || !match.resultado) {
+                     showToast('PARTIDO PENDIENTE', 'El partido seleccionado aún no tiene resultado registrado. Juega primero, analiza después.', 'warning');
+                     return;
+                }
+            } catch(e) {
+                 showToast('ERROR', 'No se pudo verificar el estado del partido.', 'error');
+                 return;
+            }
+        }
+
         if (currentStep < totalSteps) {
             currentStep++;
             updateWizardUI();
@@ -223,6 +245,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadLinkedMatch(mId);
     }
 
+    async function loadAvailableMatches() {
+        if (!currentUser) return;
+        const selector = document.getElementById('inp-match-selector');
+        if (!selector) return;
+
+        try {
+            const { query, collection, where, getDocs, orderBy } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
+            
+            // Fetch from both collections
+            const qA = query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", currentUser.uid), where("estado", "==", "jugado"), orderBy("fecha", "desc"));
+            const qR = query(collection(db, "partidosReto"), where("jugadores", "array-contains", currentUser.uid), where("estado", "==", "jugado"), orderBy("fecha", "desc"));
+            
+            const [snapA, snapR] = await Promise.all([getDocs(qA), getDocs(qR)]);
+            
+            let all = [
+                ...snapA.docs.map(d => ({ id: d.id, ...d.data(), type: 'Amistoso' })),
+                ...snapR.docs.map(d => ({ id: d.id, ...d.data(), type: 'Reto' }))
+            ].sort((a,b) => (b.fecha?.toMillis?.() || 0) - (a.fecha?.toMillis?.() || 0));
+
+            selector.innerHTML = '<option value="">-- Selecciona un partido --</option>';
+            all.forEach(m => {
+                const date = m.fecha?.toDate ? m.fecha.toDate().toLocaleDateString() : '---';
+                const res = m.resultado?.sets || 'Sin resultado';
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = `${date} - ${m.type} [${res}]`;
+                selector.appendChild(opt);
+            });
+        } catch (e) {
+            console.error("Error loading matches for diary:", e);
+        }
+    }
+
+    window.onMatchSelectChange = (id) => {
+        if (id) loadLinkedMatch(id);
+    };
+
     async function loadLinkedMatch(id) {
         const match = await getDocument('partidosReto', id) || await getDocument('partidosAmistosos', id);
         if (match) {
@@ -238,6 +297,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                     document.querySelectorAll('#surface-selector button').forEach(b => {
                         if(b.dataset.val === match.surface) b.click();
                     });
+                }
+                
+                // Pre-fill players
+                if (match.jugadores) {
+                    const myIdx = match.jugadores.indexOf(currentUser.uid);
+                    if (myIdx !== -1) {
+                         const partnerIdx = myIdx < 2 ? (myIdx === 0 ? 1 : 0) : (myIdx === 2 ? 3 : 2);
+                         const partId = match.jugadores[partnerIdx];
+                         if (partId) {
+                             getDocument('usuarios', partId).then(u => {
+                                 if (u) document.getElementById('inp-partner').value = u.nombreUsuario || u.nombre;
+                             });
+                         }
+                    }
                 }
             }
         }

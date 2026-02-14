@@ -66,7 +66,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         }
         
         const isParticipant = m.jugadores?.includes(currentUser.uid);
-        const isCreator = m.creador === currentUser.uid || userData?.rol === 'Admin';
+        const isOrganizer = m.organizerId === currentUser.uid || m.creador === currentUser.uid || userData?.rol === 'Admin';
         const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
         const players = await Promise.all([0, 1, 2, 3].map(i => getPlayerData(m.jugadores?.[i])));
 
@@ -170,8 +170,8 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         <div class="court-net"></div>
                         
                         <div class="players-row-v7 top mb-8">
-                            ${renderPlayerSlot(players[0], 0, isCreator, matchId, col)}
-                            ${renderPlayerSlot(players[1], 1, isCreator, matchId, col)}
+                            ${renderPlayerSlot(players[0], 0, isOrganizer, matchId, col)}
+                            ${renderPlayerSlot(players[1], 1, isOrganizer, matchId, col)}
                         </div>
                         
                         <div class="vs-divider-v7">
@@ -181,8 +181,8 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         </div>
                         
                         <div class="players-row-v7 bottom mt-8">
-                            ${renderPlayerSlot(players[2], 2, isCreator, matchId, col)}
-                            ${renderPlayerSlot(players[3], 3, isCreator, matchId, col)}
+                            ${renderPlayerSlot(players[2], 2, isOrganizer, matchId, col)}
+                            ${renderPlayerSlot(players[3], 3, isOrganizer, matchId, col)}
                         </div>
                     </div>
                 </div>
@@ -212,7 +212,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                 </div>
 
                 <div class="actions-grid-v7 flex-col gap-3">
-                    ${renderMatchActions(m, isParticipant, isCreator, currentUser.uid, matchId, col)}
+                    ${renderMatchActions(m, isParticipant, isOrganizer, currentUser.uid, matchId, col)}
                 </div>
             </div>
         `;
@@ -464,7 +464,7 @@ function renderPlayerSlot(p, idx, canEdit, mid, col) {
 /**
  * Determines available actions for a match.
  */
-function renderMatchActions(m, isParticipant, isCreator, uid, id, col) {
+function renderMatchActions(m, isParticipant, isOrganizer, uid, id, col) {
     const isPlayed = m.estado === 'jugado';
     if (isPlayed) return `<button class="btn-confirm-v7" onclick="window.location.href='diario.html?matchId=${id}'"><span class="t-main">VER ANALITICAS</span><i class="fas fa-chart-pie"></i></button>`;
 
@@ -483,12 +483,16 @@ function renderMatchActions(m, isParticipant, isCreator, uid, id, col) {
             <button class="flex-1 py-4 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black text-white hover:bg-white/10" onclick="executeMatchAction('leave', '${id}', '${col}')">
                 ABANDONAR
             </button>
-            ${isCreator ? `<button class="flex-1 py-4 rounded-xl bg-red-500/10 border border-red-500/30 text-[10px] font-black text-red-500 hover:bg-red-500/20" onclick="executeMatchAction('delete', '${id}', '${col}')">CANCELAR</button>` : ''}
+            ${isOrganizer ? 
+                `<button class="flex-1 py-4 rounded-xl bg-red-500/10 border border-red-500/30 text-[10px] font-black text-red-500 hover:bg-red-500/20" onclick="executeMatchAction('delete', '${id}', '${col}')">CANCELAR</button>` : 
+                `<button class="flex-1 py-4 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black text-muted opacity-40 cursor-not-allowed" disabled title="Solo el organizador puede cancelar">CANCELAR</button>`
+            }
         </div>
         ${realPlayerCount === 4 ? `
-            <button class="btn-confirm-v7 mt-2" onclick="openResultForm('${id}', '${col}')">
-                <span class="t-main">FINALIZAR & REPORTAR</span>
-                <i class="fas fa-flag-checkered"></i>
+            <button class="btn-confirm-v7 mt-2 ${!isOrganizer ? 'opacity-40 cursor-not-allowed' : ''}" 
+                    ${!isOrganizer ? 'disabled title="Solo el organizador puede reportar resultado"' : `onclick="openResultForm('${id}', '${col}')"`}>
+                <span class="t-main">${!isOrganizer ? 'ESPERANDO RESULTADO' : 'FINALIZAR & REPORTAR'}</span>
+                <i class="fas ${!isOrganizer ? 'fa-hourglass-half' : 'fa-flag-checkered'}"></i>
             </button>
         ` : ''}
     `;
@@ -498,6 +502,7 @@ function renderMatchActions(m, isParticipant, isCreator, uid, id, col) {
  * Creates match in Firestore.
  */
 window.executeCreateMatch = async (dateStr, hour) => {
+    if (!auth.currentUser) return showToast("ERROR", "Debes iniciar sesión", "error");
     const minInput = document.getElementById('inp-min-lvl');
     const maxInput = document.getElementById('inp-max-lvl');
     const min = minInput ? parseFloat(minInput.value) : 2.0;
@@ -575,8 +580,12 @@ window.executeCreateMatch = async (dateStr, hour) => {
         if (window.closeMatchModal) window.closeMatchModal();
         else document.getElementById('modal-match')?.classList.remove('active');
     } catch(e) {
-        console.error("Error creating match:", e);
-        showToast("ERROR", "Fallo en la creación del nodo", "error");
+        console.error("Error creating match detailed:", e);
+        if (e.code === 'permission-denied') {
+             showToast("ACCESO DENEGADO", "Reglas de seguridad impiden la reserva.", "error");
+        } else {
+             showToast("ERROR CRÍTICO", e.message || "Fallo en la creación del nodo", "error");
+        }
     }
 };
 
@@ -594,6 +603,8 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
     const matchDate = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
 
     try {
+        const isOrganizer = m.organizerId === user.uid || m.creador === user.uid || (await getDocument('usuarios', user.uid))?.rol === 'Admin';
+        
         if (action === 'join') {
             const emptyIdx = jugs.findIndex(id => !id);
             if (emptyIdx === -1) return showToast("COMPLETO", "Sin huecos en este nodo", "warning");
@@ -621,7 +632,6 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 equipoB: [jugs[2], jugs[3]]
             });
             
-            // Orchestrator Broadcast
             if (jugs.filter(id => id).length === 4) {
                 try {
                     const { AIOrchestrator } = await import('./ai-orchestrator.js');
@@ -629,9 +639,14 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                         if (uid && !uid.startsWith('GUEST_')) AIOrchestrator.dispatch('MATCH_READY', { uid, matchId: id });
                     });
                 } catch(err) {}
+                
+                // Match Filled Notification
+                const others = jugs.filter(uid => uid !== user.uid && !uid.startsWith('GUEST_'));
+                await createNotification(others, "🏆 Squad Completo", `¡El partido del ${matchDate.toLocaleDateString()} está listo! Somos 4 guerreros.`, 'success', 'home.html');
             }
             
-            await createNotification(m.creador, "Refuerzos", `${d.data()?.nombreUsuario} se ha unido al squad`, 'match_join', 'calendario.html');
+            const myName = d.data()?.nombreUsuario || 'Un jugador';
+            await createNotification(m.creador, "Nuevos Datos", `${myName} se ha unido al squad del ${matchDate.toLocaleDateString()}`, 'match_join', 'calendario.html');
             showToast("CONECTADO", "Sincronización completa", "success");
         } 
         else if (action === 'leave') {
@@ -665,6 +680,8 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             }
         }
         else if (action === 'delete') {
+            if (!isOrganizer) return showToast("ACCESO DENEGADO", "Solo el organizador puede cancelar", "error");
+            
             if (confirm("¿Abortar misión?")) {
                 const others = jugs.filter(uid => uid !== user.uid && !uid.startsWith('GUEST_'));
                 await createNotification(others, "Misión Abortada", `El partido ha sido cancelado por el líder`, 'warning', 'calendario.html');
@@ -673,6 +690,8 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             }
         }
         else if (action === 'remove') {
+            if (!isOrganizer) return showToast("ACCESO DENEGADO", "Solo el organizador puede expulsar", "error");
+            
             const removedUid = jugs[extra.idx];
             jugs[extra.idx] = null;
             await updateDoc(ref, { 
@@ -681,11 +700,14 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 equipoB: [jugs[2], jugs[3]]
             });
             if (removedUid && !removedUid.startsWith('GUEST_')) {
-                await createNotification(removedUid, "Expulsado", `Has sido retirado del squad`, 'warning');
+                const adminName = auth.currentUser?.displayName || 'El organizador';
+                await createNotification(removedUid, "Baja del Squad", `${adminName} te ha retirado del partido del ${matchDate.toLocaleDateString()}`, 'warning');
             }
             showToast("ELIMINADO", "Jugador expulsado", "info");
         }
         else if (action === 'add') {
+             if (!isOrganizer) return showToast("ACCESO DENEGADO", "Solo el organizador puede añadir jugadores", "error");
+
              if (extra.idx !== undefined) jugs[extra.idx] = extra.uid;
              else {
                  const nextHueco = jugs.findIndex(id => !id);
@@ -700,7 +722,9 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
              });
              
              if (!extra.uid.startsWith('GUEST_')) {
-                await createNotification(extra.uid, "Reclutado", `Te han añadido a un partido`, 'match_join', 'calendario.html');
+                const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+                const currentPlayers = jugs.filter(id => id).length;
+                await createNotification(extra.uid, "¡Convocado!", `Te han unido a una partida para el ${day}. Ya sois ${currentPlayers}/4 jugadores.`, 'match_join', 'calendario.html');
              }
              showToast("AÑADIDO", "Agente reclutado", "success");
         }
@@ -884,6 +908,10 @@ window.openPlayerSelector = async (matchId, col, extra) => {
                 <button id="btn-add-guest" class="hidden w-full py-4 mt-4 bg-gradient-to-r from-primary to-lime-400 rounded-xl text-black font-black text-xs tracking-widest shadow-glow hover:scale-[1.02] transition-transform" onclick="window.addGuest('${matchId}', '${col}', ${JSON.stringify(extra).replace(/"/g, "'")})">
                     CONFIRMAR INVITADO <i class="fas fa-check ml-2"></i>
                 </button>
+
+                <button class="w-full py-4 mt-6 bg-white/10 rounded-xl text-white font-black text-xs tracking-widest border border-white/10 hover:bg-white/20" onclick="this.closest('.modal-overlay').remove()">
+                    FINALIZAR SELECCIÓN
+                </button>
             </div>
         </div>
     `;
@@ -917,7 +945,7 @@ window.filterPsUsers = (q) => {
     document.getElementById('ps-list').innerHTML = filtered.map(u => {
         const isNew = mid === 'NEW';
         const action = isNew ? `window.selectUserForNew('${u.id}')` : `window.executeMatchAction('add', '${mid}', '${col}', {uid:'${u.id}', idx:${extra.idx}})`;
-        const finalAction = `${action}; document.querySelector('.modal-overlay.active').remove();`;
+        const finalAction = `${action}; showToast('Añadido', 'Jugador seleccionado');`;
         
         return `
         <div class="flex-row items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/50 cursor-pointer transition-all hover:bg-white/10" onclick="${finalAction}">
@@ -949,8 +977,10 @@ window.addGuest = (mid, col, extra) => {
     } else {
         window.executeMatchAction('add', mid, col, { uid: guestId, idx: extra.idx });
     }
-    document.querySelector('.modal-overlay.active').remove();
+    showToast('Invitado', 'Se ha añadido al squad');
 };
+ 
+// CSS injection removed. Styles moved to css/premium-v7.css
 
 window.selectUserForNew = (uid) => {
     const extra = window.psMatchContext.extra; 

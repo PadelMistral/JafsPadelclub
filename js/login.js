@@ -2,10 +2,27 @@
 import { showToast } from './ui-core.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Check if redirecting due to pending status
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('msg') === 'pending') {
+        showToast('ACCESO RESTRINGIDO', 'Tu cuenta está pendiente de aprobación por el administrador.', 'warning');
+    }
+
     // Check if already logged in
     observerAuth((user) => {
         if (user) {
-            window.location.href = 'home.html';
+            // But verify approval if already logged in
+            getDocument('usuarios', user.uid).then(ud => {
+                const isApproved = ud?.status === 'approved' || ud?.aprobado === true || ud?.rol === 'Admin';
+                if (isApproved) {
+                    window.location.href = 'home.html';
+                } else {
+                    // Force sign out if pending
+                    auth.signOut().then(() => {
+                        showToast('ACCESO DENEGADO', 'Tu cuenta está pendiente de aprobación.', 'warning');
+                    });
+                }
+            });
         }
     });
 
@@ -43,10 +60,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const userDoc = await getDocument('usuarios', userCred.user.uid);
                 
                 // AUDIT: Check Approval Status
-                const isApproved = userDoc?.status === 'approved' || userDoc?.aprobado === true; 
-                if (!isApproved && userDoc?.rol !== 'Admin') {
+                const isApproved = userDoc?.status === 'approved' || userDoc?.rol === 'Admin'; 
+                if (!isApproved) {
                     await auth.signOut();
-                    showToast('ACCESO RESTRINGIDO', 'Todavía no estás aprobado por la administración.', 'warning');
+                    showToast('ACCESO RESTRINGIDO', 'Tu cuenta está pendiente de aprobación por el administrador.', 'warning');
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = originalBtnContent;
                     return;
@@ -80,10 +97,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const userDoc = await getDocument('usuarios', user.uid);
                     
                     // AUDIT: Check Approval Status
-                    const isApproved = userDoc?.status === 'approved' || userDoc?.aprobado === true;
-                    if (!isApproved && userDoc?.rol !== 'Admin') {
+                    const isApproved = userDoc?.status === 'approved' || userDoc?.rol === 'Admin';
+                    if (!isApproved) {
                         await auth.signOut();
-                        showToast('Acceso Restringido', 'Tu cuenta está pendiente de aprobación.', 'warning');
+                        showToast('ACCESO RESTRINGIDO', 'Tu cuenta está pendiente de aprobación por el administrador.', 'warning');
                         return;
                     }
 

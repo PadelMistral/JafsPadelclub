@@ -234,8 +234,30 @@ async function showMatchDetail(m) {
         return { name: d?.nombreUsuario || d?.nombre || 'Jugador', photo: d?.fotoPerfil || d?.fotoURL, id: uid };
     }));
 
+    // AI Analysis Validation
+    if (!m.resultado || !m.resultado.sets) {
+        content.innerHTML = `
+            <div class="center py-20 flex-col items-center gap-4 animate-fade-in">
+                <div class="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex center mb-2 opacity-50">
+                    <i class="fas fa-brain-circuit text-2xl text-primary"></i>
+                </div>
+                <h3 class="text-xs font-black text-white uppercase tracking-[4px]">Análisis Bloqueado</h3>
+                <p class="text-[11px] text-center text-muted px-10 italic">
+                    "El partido aún no se ha jugado. No puedo analizarlo todavía."
+                </p>
+                <div class="mt-8 flex-col items-center border-t border-white/5 pt-6 w-full">
+                     <span class="text-[9px] font-black text-white/20 uppercase tracking-[2px] mb-4">Jugadores Convocados</span>
+                     <div class="flex-row gap-4">
+                        ${players.map(p => `<div class="w-8 h-8 rounded-full border border-white/10 overflow-hidden opacity-40"><img src="${p.photo || './imagenes/default-avatar.png'}" class="w-full h-full object-cover"></div>`).join('')}
+                     </div>
+                </div>
+                <button class="btn-premium-v7 sm mt-8" onclick="document.getElementById('modal-match-detail').classList.remove('active')">ENTENDIDO</button>
+            </div>
+        `;
+        return;
+    }
+
     // Fetch Diary Entries (Simple check for current user or generic query)
-    // For now, let's look at the current user's diary in their profile to see if they logged this match
     let diaryContext = null;
     if (currentUser) {
         const userDoc = await getDocument('usuarios', currentUser.uid);

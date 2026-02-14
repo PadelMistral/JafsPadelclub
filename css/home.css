@@ -2023,3 +2023,76 @@
 .progress-bar {
   background: rgba(255, 255, 255, 0.06);
 }
+
+/* ===== V7 OPEN & UPCOMING MATCHES ===== */
+.open-match-card-v7 {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.open-match-card-v7:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--primary);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 10px 30px -10px rgba(198, 255, 0, 0.3);
+}
+
+.om-tag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 4px 10px;
+  font-size: 7px;
+  font-weight: 900;
+  border-bottom-left-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.om-tag.reto {
+  background: var(--neon-cyan);
+  color: #000;
+}
+
+.om-tag.am {
+  background: var(--sport-green);
+  color: #000;
+}
+
+.slots-pill {
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 100px;
+  color: var(--primary);
+}
+
+.slots-pill.critical {
+  background: rgba(255, 0, 85, 0.2);
+  color: #ff0055;
+  animation: pulse 1.5s infinite;
+}
+
+.upcoming-item-v7:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateX(5px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

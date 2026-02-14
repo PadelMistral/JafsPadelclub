@@ -3711,3 +3711,124 @@ input:checked + .t-slider:before {
   box-shadow: 0 8px 25px var(--primary-glow);
   filter: brightness(1.1);
 }
+
+/* ===== PODIUM VERTICAL V7 (HOME) ===== */
+.podium-vertical-v7 {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.podium-row-v7 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-light);
+  padding: var(--space-lg);
+  border-radius: var(--radius-xl);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+}
+
+.podium-row-v7:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(5px) scale(1.02);
+  box-shadow: var(--shadow-md);
+}
+
+/* Medal Variations */
+.podium-row-v7.gold {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 215, 0, 0.15) 0%,
+    rgba(255, 215, 0, 0.02) 100%
+  );
+  border-left: 4px solid var(--sport-gold);
+  border-color: rgba(255, 215, 0, 0.3);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.1);
+}
+
+.podium-row-v7.silver {
+  background: linear-gradient(
+    90deg,
+    rgba(192, 192, 192, 0.15) 0%,
+    rgba(192, 192, 192, 0.02) 100%
+  );
+  border-left: 4px solid #c0c0c0;
+  border-color: rgba(192, 192, 192, 0.3);
+}
+
+.podium-row-v7.bronze {
+  background: linear-gradient(
+    90deg,
+    rgba(205, 127, 50, 0.15) 0%,
+    rgba(205, 127, 50, 0.02) 100%
+  );
+  border-left: 4px solid #cd7f32;
+  border-color: rgba(205, 127, 50, 0.3);
+}
+
+.podium-row-v7.podium-me {
+  border: 2px solid var(--neon-cyan);
+  box-shadow: 0 0 30px rgba(0, 212, 255, 0.2);
+}
+
+.pr-rank {
+  font-family: var(--font-display);
+  font-weight: 900;
+  color: var(--text-muted);
+  width: 30px;
+  text-align: center;
+  font-style: italic;
+  font-size: 1.2rem;
+}
+
+.pr-avatar {
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid transparent; /* Overridden by inline style */
+}
+
+.pr-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 2px;
+}
+
+.pr-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+.pr-pts {
+  color: #fff;
+}
+
+.pr-medal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.badge-premium-v7.sm {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.badge-premium-v7.cyan {
+  background: rgba(0, 212, 255, 0.2);
+  color: var(--neon-cyan);
+  border: 1px solid rgba(0, 212, 255, 0.4);
+}

@@ -84,7 +84,8 @@ export async function loginWithGoogle() {
             victorias: 0,
             partidosJugados: 0,
             rachaActual: 0,
-            rol: 'Usuario',
+            rol: 'Jugador',
+            status: 'pending',
             fechaRegistro: serverTimestamp()
         });
     }
@@ -99,7 +100,16 @@ export function logout() {
 export async function getDocument(col, id) {
   try {
     const snap = await getDoc(doc(db, col, id));
-    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    if (!snap.exists()) return null;
+    const d = snap.data();
+    
+    // Legacy user fallback
+    if (col === 'usuarios') {
+        if (!d.rol) d.rol = 'Jugador';
+        if (!d.status && d.rol !== 'Admin') d.status = 'pending';
+    }
+    
+    return { id: snap.id, ...d };
   } catch (err) {
     console.error("Firestore getDocument error:", err);
     return null;

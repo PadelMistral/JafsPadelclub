@@ -239,6 +239,14 @@
 
                 <!-- STEP 1: CONTEXTO -->
                 <div id="step-1" class="wizard-step active">
+                    <div class="cfg-group-v9 mb-6">
+                        <label class="cfg-label-v7">PARTIDO VINCULADO (REQUERIDO)</label>
+                        <select id="inp-match-selector" class="select-v9"
+                            onchange="window.onMatchSelectChange(this.value)">
+                            <option value="">-- Selecciona un partido --</option>
+                        </select>
+                    </div>
+
                     <div class="cfg-grid-v9 mb-6">
                         <div class="cfg-group-v9">
                             <label class="cfg-label-v7">TIPO DE SESIÓN</label>
@@ -260,22 +268,14 @@
                         </div>
                     </div>
 
-                    <div class="cfg-grid-v9 mb-6">
-                        <div class="cfg-group-v9">
-                            <label class="cfg-label-v7">SUPERFICIE</label>
-                            <div class="segmented-v9" id="surface-selector">
-                                <button class="seg-node-v9 active" data-val="indoor">INDOOR</button>
-                                <button class="seg-node-v9" data-val="outdoor">OUTDOOR</button>
-                            </div>
-                        </div>
-                        <div class="cfg-group-v9">
-                            <label class="cfg-label-v7">TIPO DE PISTA</label>
-                            <select id="inp-court-type" class="select-v9">
-                                <option value="cristal">Cristal Estándar</option>
-                                <option value="panoramica">Panorámica WPT</option>
-                                <option value="muro">Muro (Old School)</option>
-                            </select>
-                        </div>
+                    <div class="cfg-group-v9 mb-6">
+                        <label class="cfg-label-v7">VINCULAR PARTIDO OFICIAL</label>
+                        <select id="inp-match-selector" class="select-v9"
+                            onchange="window.onMatchSelectChange(this.value)">
+                            <option value="">-- SELECCIONAR PARTIDO --</option>
+                        </select>
+                        <p class="text-[9px] text-muted italic mt-2">Solo aparecen tus partidos completados en la
+                            Matrix.</p>
                     </div>
 
                     <div id="linked-match-info" class="link-hook-v9 hidden mb-6">
@@ -284,11 +284,15 @@
                             <div class="flex-row items-center gap-3">
                                 <div class="hook-icon"><i class="fas fa-link"></i></div>
                                 <div class="flex-col">
-                                    <span class="text-[9px] font-black opacity-50">VÍNCULO DETECTADO</span>
+                                    <span
+                                        class="text-[9px] font-black opacity-50 uppercase tracking-widest">Sincronización
+                                        de Nodo</span>
                                     <span id="txt-match-date" class="text-xs font-bold">--/--/--</span>
                                     <span id="txt-result" class="text-[10px] text-sport-gold font-mono"></span>
                                 </div>
                             </div>
+                            <button class="text-[10px] font-black text-red-400 uppercase"
+                                onclick="window.unlinkMatch()">DESVINCULAR</button>
                         </div>
                         <input type="hidden" id="inp-match-id">
                     </div>

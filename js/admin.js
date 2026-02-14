@@ -560,6 +560,7 @@ window.editMatch = async (id, col) => {
     
     const date = match.fecha?.toDate();
     const players = await Promise.all((match.jugadores || []).map(async uid => {
+        if (!uid) return { name: null, id: null, isGuest: false };
         if (uid.startsWith('GUEST_')) return { name: uid.split('_')[1] + ' (Inv)', id: uid, isGuest: true };
         const u = await getDocument('usuarios', uid);
         return { name: u?.nombreUsuario || u?.nombre || 'Desconocido', id: uid, isGuest: false };
