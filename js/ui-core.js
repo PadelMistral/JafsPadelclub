@@ -15,6 +15,26 @@ if (typeof window !== 'undefined' && !window.viewProfile) {
  * Shared UI Initialization
  */
 export function initAppUI(activePageName) {
+    // Register Service Worker for PWA & Background Notifications
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => {
+                    console.log('🚀 Service Worker Register: Active', reg.scope);
+                    // Check for updates
+                    reg.onupdatefound = () => {
+                        const installingWorker = reg.installing;
+                        installingWorker.onstatechange = () => {
+                            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                console.log('Matrix Update Available. Please refresh.');
+                            }
+                        };
+                    };
+                })
+                .catch(err => console.error('SW Register Error:', err));
+        });
+    }
+
     const path = window.location.pathname.toLowerCase();
     const isPublic = PUBLIC_PAGES.some(p => path.includes(p)) || path.endsWith('/') || path === '';
 

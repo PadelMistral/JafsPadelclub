@@ -269,24 +269,42 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                     </div>
                 </div>
 
-                <!-- Alineación -->
+                <!-- Alineación Táctica (Disposición de Pista) -->
                 <span class="cfg-label-v7">ALINEACIÓN TÁCTICA</span>
-                <div class="alignment-preview-v7 mb-6">
-                    <div class="p-slot-v7 active" id="slot-0-wrap">
-                        <div class="p-img-box">
-                            <img src="${userData.fotoPerfil || userData.fotoURL || './imagenes/Logojafs.png'}">
+                <div class="court-container-v7 mb-6">
+                    <div class="court-schema-v7" style="padding: 20px 10px;">
+                        <div class="court-net"></div>
+                        
+                        <div class="players-row-v7 top mb-6">
+                            <div class="p-slot-v7 active" id="slot-0-wrap">
+                                <div class="p-img-box" style="border-color:var(--primary)">
+                                    <img src="${userData.fotoPerfil || userData.fotoURL || './imagenes/Logojafs.png'}">
+                                </div>
+                                <span class="p-badge" style="color:var(--primary); border-color:currentColor">${(userData.nivel || 2.5).toFixed(1)}</span>
+                                <span class="text-[8px] font-black uppercase text-white tracking-widest mt-1 truncate w-16 text-center">${userData.nombreUsuario || 'TÚ'}</span>
+                            </div>
+                            <div class="p-slot-v7" id="slot-1-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:1})">
+                                <div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>
+                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2">VACÍO</span>
+                            </div>
                         </div>
-                        <span class="p-badge text-[8px]">${(userData.nivel || 2.5).toFixed(1)}</span>
-                    </div>
-                    <div class="p-slot-v7" id="slot-1-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:1})">
-                        <div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>
-                    </div>
-                    <div class="align-vs">VS</div>
-                    <div class="p-slot-v7" id="slot-2-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:2})">
-                        <div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>
-                    </div>
-                    <div class="p-slot-v7" id="slot-3-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:3})">
-                        <div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>
+                        
+                        <div class="vs-divider-v7">
+                           <div class="vs-line"></div>
+                           <div class="vs-circle">VS</div>
+                           <div class="vs-line"></div>
+                        </div>
+                        
+                        <div class="players-row-v7 bottom mt-6">
+                            <div class="p-slot-v7" id="slot-2-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:2})">
+                                <div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>
+                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2">VACÍO</span>
+                            </div>
+                            <div class="p-slot-v7" id="slot-3-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:3})">
+                                <div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>
+                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2">VACÍO</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

@@ -79,3 +79,62 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(fetch(event.request));
 });
+
+// --- PUSH NOTIFICATIONS HANDLING ---
+self.addEventListener("push", (event) => {
+  let data = {
+    title: "Padeluminatis Pro",
+    body: "Nueva actualización en la Matrix.",
+    icon: "./imagenes/Logojafs.png",
+  };
+
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: data.icon || "./imagenes/Logojafs.png",
+    badge: "./imagenes/Logojafs.png",
+    vibrate: [200, 100, 200],
+    data: {
+      url: data.url || "./home.html",
+    },
+    actions: [
+      { action: "open", title: "Ver ahora" },
+      { action: "close", title: "Cerrar" },
+    ],
+  };
+
+  event.waitUntil(self.registration.showNotification(data.title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  if (event.action === "close") return;
+
+  const urlToOpen = event.notification.data.url || "./home.html";
+
+  event.waitUntil(
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((windowClients) => {
+        // Look for an existing app window and focus it
+        for (let i = 0; i < windowClients.length; i++) {
+          const client = windowClients[i];
+          if (client.url === urlToOpen && "focus" in client) {
+            return client.focus();
+          }
+        }
+        // If no window found, open a new one
+        if (clients.openWindow) {
+          return clients.openWindow(urlToOpen);
+        }
+      }),
+  );
+});

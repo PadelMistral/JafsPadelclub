@@ -161,6 +161,13 @@ window.showOnlineUsers = async () => {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+  // AUTO-CLEAN CACHE ON HARD RELOAD OR VERSION MISMATCH
+  if (localStorage.getItem('app_version') !== '6.5.4') {
+      console.log("Actualizando versión... Limpiando caché.");
+      sessionStorage.clear();
+      localStorage.setItem('app_version', '6.5.4');
+  }
+
   initAppUI("home");
   injectOnlineCount();
 
@@ -229,6 +236,8 @@ document.addEventListener("DOMContentLoaded", () => {
             updateEcosystemHealth();
             requestNotificationPermission();
             setupStatInteractions();
+            syncRivalIntelligence(user.uid);
+            renderOpenMatches(); // New function
             
             // Personalized welcome toast
             const welcomeName = localStorage.getItem("first_login_welcome");
@@ -241,6 +250,7 @@ document.addEventListener("DOMContentLoaded", () => {
             import('./ai-orchestrator.js').then(m => m.AIOrchestrator.init(user.uid));
             
             setTimeout(hideLoading, 1200);
+            sessionStorage.setItem("initial_load_done", "true");
             isFirstLoad = false;
         } else {
             updateHeader(data); // Lightweight update
@@ -582,6 +592,7 @@ async function renderNextMatch(match) {
   container.innerHTML = `
         <div class="next-match-card-premium-v7 animate-up" onclick="openMatch('${match.id}', '${match.col}')">
             <div class="nm-glass-overlay"></div>
+            <div class="nm-glow-v7"></div>
             
             <div class="nm-header-v7 flex-row between items-center mb-6">
                 <div class="flex-col">
@@ -589,71 +600,91 @@ async function renderNextMatch(match) {
                          <span class="text-4xl font-black text-white italic tracking-tighter">${date.getHours()}:${date.getMinutes().toString().padStart(2, "0")}</span>
                          <span class="text-[12px] font-black text-primary uppercase tracking-[2px]">HRS</span>
                     </div>
-                    <span class="text-[11px] font-black text-white/50 uppercase tracking-[4px] mt-1">${date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric" })}</span>
+                    <span class="text-[11px] font-black text-white/40 uppercase tracking-[4px] mt-1">
+                        <i class="far fa-calendar-alt mr-1"></i> ${date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+                    </span>
                 </div>
                 
                 <div class="nm-badge-pro-v7 ${match.isComp ? "reto" : "amistoso"}">
+                    <div class="badge-scanline"></div>
                     <i class="fas ${match.isComp ? "fa-bolt" : "fa-handshake"}"></i>
                     <span>${match.isComp ? "RETO ELO" : "AMISTOSO"}</span>
                 </div>
             </div>
 
-            <div class="nm-court-simplified mb-6">
-                <div class="flex-row between items-center relative gap-4">
-                    <div class="team-side flex-1 flex-col gap-2">
-                        <div class="p-chip-elite ${match.jugadores[0] ? "filled" : "empty"}">${players[0].toUpperCase()}</div>
-                        <div class="p-chip-elite ${match.jugadores[1] ? "filled" : "empty"}">${players[1].toUpperCase()}</div>
+            <div class="nm-court-premium mb-6">
+                <div class="flex-row between items-center relative gap-6">
+                    <div class="team-side-v7 flex-1 flex-col gap-3">
+                        <div class="player-slot-v7 ${match.jugadores[0] ? "filled" : "empty"}">
+                            <i class="fas fa-user-astronaut mr-2 opacity-40"></i>
+                            <span class="truncate">${players[0].toUpperCase()}</span>
+                        </div>
+                        <div class="player-slot-v7 ${match.jugadores[1] ? "filled" : "empty"}">
+                            <i class="fas fa-user-astronaut mr-2 opacity-40"></i>
+                            <span class="truncate">${players[1].toUpperCase()}</span>
+                        </div>
                     </div>
                     
-                    <div class="vs-divider-mini">VS</div>
+                    <div class="vs-container-v7">
+                        <div class="vs-line"></div>
+                        <div class="vs-circle">VS</div>
+                        <div class="vs-line"></div>
+                    </div>
                     
-                    <div class="team-side flex-1 flex-col gap-2">
-                        <div class="p-chip-elite ${match.jugadores[2] ? "filled" : "empty"}">${players[2].toUpperCase()}</div>
-                        <div class="p-chip-elite ${match.jugadores[3] ? "filled" : "empty"}">${players[3].toUpperCase()}</div>
+                    <div class="team-side-v7 flex-1 flex-col gap-3">
+                        <div class="player-slot-v7 ${match.jugadores[2] ? "filled" : "empty"}">
+                            <i class="fas fa-user-astronaut mr-2 opacity-40"></i>
+                            <span class="truncate">${players[2].toUpperCase()}</span>
+                        </div>
+                        <div class="player-slot-v7 ${match.jugadores[3] ? "filled" : "empty"}">
+                            <i class="fas fa-user-astronaut mr-2 opacity-40"></i>
+                            <span class="truncate">${players[3].toUpperCase()}</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- PREDICTION COMPONENT (PHASE 3.5) -->
             ${match.preMatchPrediction ? `
-            <div class="mb-4 animate-fade-in">
-                <div class="flex-row items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm">
-                    <div class="flex-row items-center gap-3">
-                        <div class="w-10 h-10 rounded-full flex flex-row items-center justify-center border-2 border-primary relative" style="overflow:hidden">
-                            <i class="fas fa-brain text-purple-400 absolute text-[8px] opacity-50 top-1"></i>
-                            <span class="text-[10px] font-black text-white relative z-10">${match.preMatchPrediction.winProbability}%</span>
-                            <div class="absolute inset-0 bg-primary opacity-20" style="height:${match.preMatchPrediction.winProbability}%"></div>
+            <div class="mb-5 animate-fade-in">
+                <div class="prediction-card-v7">
+                    <div class="flex-row items-center gap-4">
+                        <div class="prediction-gauge-v7">
+                            <svg viewBox="0 0 36 36" class="circular-chart primary">
+                                <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <path class="circle" stroke-dasharray="${match.preMatchPrediction.winProbability}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            </svg>
+                            <span class="gauge-val">${match.preMatchPrediction.winProbability}%</span>
                         </div>
                         <div class="flex-col">
-                            <span class="text-[9px] font-bold text-muted uppercase tracking-widest">IA PREDICCIÓN</span>
-                            <span class="text-[10px] font-black uppercase tracking-wider ${match.preMatchPrediction.winProbability > 50 ? 'text-sport-green' : 'text-red-400'}">
-                                ${match.preMatchPrediction.winProbability > 50 ? 'VICTORIA PROBABLE' : 'PARTIDO DIFÍCIL'}
+                            <span class="text-[9px] font-black text-white/40 uppercase tracking-[3px]">Análisis Predictivo IA</span>
+                            <span class="text-[12px] font-black uppercase tracking-wider ${match.preMatchPrediction.winProbability > 50 ? 'text-sport-green' : 'text-red-400'}">
+                                ${match.preMatchPrediction.winProbability > 50 ? 'VICTORIA PROBABLE' : 'DESAFÍO CRÍTICO'}
                             </span>
                         </div>
+                        ${match.tags?.includes('high_volatility') ? `
+                            <div class="volatility-badge-v7 ml-auto">
+                                <i class="fas fa-triangle-exclamation mr-1"></i> VOLÁTIL
+                            </div>
+                        ` : ''}
                     </div>
-                     ${match.tags?.includes('high_volatility') ? `
-                        <div class="flex-row items-center gap-1 px-2 py-1 rounded bg-red-500/20 border border-red-500/30">
-                            <i class="fas fa-exclamation-triangle text-red-400 text-[10px]"></i>
-                            <span class="text-[8px] font-black text-red-400 uppercase tracking-widest">VOLATIL</span>
-                        </div>
-                    ` : ''}
                 </div>
             </div>
             ` : ''}
 
-             <div class="flex-row between items-center">
+             <div class="flex-row between items-center pt-2 border-t border-white-05">
                 <div class="flex-row items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-white/5 flex-center border border-white/10">
-                         <i class="fas fa-crown text-yellow-500 text-sm"></i>
+                    <div class="creator-avatar-v7">
+                         <i class="fas fa-crown text-yellow-500"></i>
                     </div>
                     <div class="flex-col">
-                        <span class="text-[9px] font-black text-muted uppercase tracking-[2px]">Organizador</span>
-                        <span class="text-xs font-black text-white uppercase italic">${creator}</span>
+                        <span class="text-[9px] font-black text-white/30 uppercase tracking-[2px]">Organizador</span>
+                        <span class="text-[11px] font-black text-white uppercase italic">${creator}</span>
                     </div>
                 </div>
 
-                <div class="btn-view-details-v7">
-                    DETALLES <i class="fas fa-arrow-right-long ml-2"></i>
+                <div class="btn-primary-v7 sm">
+                    DESPLEGAR DATOS <i class="fas fa-chevron-right ml-2 text-[8px]"></i>
                 </div>
              </div>
         </div>
@@ -1313,4 +1344,56 @@ window.analyzeRival = async (rivalId) => {
         </div>
     `;
     document.body.appendChild(overlay);
+};
+async function renderOpenMatches() {
+    const container = document.getElementById('open-matches-panel');
+    if (!container) return;
+
+    try {
+        const q = query(
+            collection(db, "partidosReto"),
+            where("estado", "==", "abierto"),
+            limit(5)
+        );
+        const snap = await window.getDocsSafe(q);
+        
+        if (snap.empty) {
+            container.innerHTML = `
+                <div class="flex-col center py-4 opacity-40">
+                    <i class="fas fa-ghost mb-2"></i>
+                    <span class="text-[9px] font-black uppercase tracking-widest">No hay retos abiertos</span>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = snap.docs.map(doc => {
+            const m = doc.data();
+            const date = m.fecha?.toDate() || new Date();
+            const slots = 4 - (m.jugadores || []).filter(id => id).length;
+            
+            return `
+                <div class="open-match-card-v7 animate-up" onclick="openMatch('${doc.id}', 'partidosReto')">
+                    <div class="flex-row between items-center">
+                        <div class="flex-col">
+                            <span class="text-[10px] font-black text-white italic">${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}</span>
+                            <span class="text-[8px] text-muted font-bold">${date.toLocaleDateString('es-ES', {day:'numeric', month:'short'})}</span>
+                        </div>
+                        <div class="slots-pill ${slots === 1 ? 'critical' : ''}">
+                            <i class="fas fa-users-rays mr-1"></i> ${slots} HUECO${slots > 1 ? 'S' : ''}
+                        </div>
+                        <i class="fas fa-chevron-right text-[10px] text-primary"></i>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch(e) { console.error("Error loading open matches:", e); }
+}
+
+// Global cache cleaner helper
+window.clearAppCache = () => {
+    sessionStorage.clear();
+    localStorage.removeItem('app_version');
+    window.location.reload();
 };

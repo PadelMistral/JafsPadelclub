@@ -148,7 +148,7 @@
 }
 
 .exp-history-list {
-  padding: 10px;
+  padding: 20px;
   overflow-y: auto;
   flex: 1;
 }
@@ -188,71 +188,7 @@
 }
 
 /* === RANKING PREMIUM (PHASE 3) === */
-.podium-container {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 10px;
-  margin-bottom: 30px;
-  padding-top: 20px;
-}
-.podium-slot {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  position: relative;
-}
-.podium-slot.first {
-  order: 2;
-  transform: scale(1.1);
-  z-index: 10;
-}
-.podium-slot.second {
-  order: 1;
-}
-.podium-slot.third {
-  order: 3;
-}
-
-.podium-avatar {
-  width: 60px;
-  height: 60px;
-  border-radius: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-  margin-bottom: -15px;
-  position: relative;
-  z-index: 5;
-  background: #000;
-}
-.podium-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.podium-base {
-  width: 80px;
-  border-radius: 12px 12px 0 0;
-  padding-top: 20px;
-  padding-bottom: 10px;
-  text-align: center;
-  color: #000;
-  font-weight: 900;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
-
-.podium-slot.first .podium-base {
-  height: 120px;
-  background: linear-gradient(180deg, var(--neon-gold) 0%, #b45309 100%);
-}
-.podium-slot.second .podium-base {
-  height: 90px;
-  background: linear-gradient(180deg, var(--neon-silver) 0%, #475569 100%);
-}
-.podium-slot.third .podium-base {
-  height: 75px;
-  background: linear-gradient(180deg, #d97706 0%, #78350f 100%);
-}
+/* Obsolete podium styles removed in favor of ranking.css V7 */
 
 .ranking-card {
   display: flex;
@@ -323,4 +259,99 @@
 .court-custom-wrap.active {
   display: block;
   animation: fadeIn 0.3s;
+}
+
+/* Centrado Universal de Spinners */
+.spinner,
+.spinner-neon,
+.spinner-galaxy {
+  display: block !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.flex-center,
+.center {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* AI Chat Decorator - Premium V7 */
+#ai-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px !important;
+}
+
+.chat-row {
+  display: flex;
+  width: 100%;
+  margin-bottom: 4px;
+  align-items: flex-end;
+}
+
+.chat-row.user {
+  justify-content: flex-end;
+}
+
+.chat-row.bot {
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.chat-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+.chat-avatar.bot {
+  background: var(--primary);
+  color: #000;
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.ai-msg {
+  max-width: 85% !important;
+  padding: 12px 16px !important;
+  border-radius: 20px !important;
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  position: relative;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.ai-msg.user {
+  background: linear-gradient(135deg, var(--primary), #a3e635) !important;
+  color: #000 !important;
+  font-weight: 700 !important;
+  border-bottom-right-radius: 4px !important;
+}
+
+.ai-msg.bot {
+  background: rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff !important;
+  border-bottom-left-radius: 4px !important;
+}
+
+.ai-msg p {
+  margin: 0;
+}
+
+.ai-result-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  margin: 5px 0;
 }

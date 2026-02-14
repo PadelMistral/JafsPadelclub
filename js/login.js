@@ -46,19 +46,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isApproved = userDoc?.status === 'approved' || userDoc?.aprobado === true; 
                 if (!isApproved && userDoc?.rol !== 'Admin') {
                     await auth.signOut();
-                    showToast('Acceso Restringido', 'Tu cuenta está pendiente de aprobación.', 'warning');
+                    showToast('ACCESO RESTRINGIDO', 'Todavía no estás aprobado por la administración.', 'warning');
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = originalBtnContent;
                     return;
                 }
 
-                const userName = userDoc?.nombreUsuario || userDoc?.nombre || 'LEYENDA';
-                startSpectacularLoading(userName);
+                const userName = userDoc?.nombreUsuario || userDoc?.nombre || 'JUGADOR';
+                showToast('ÉXITO', `Bienvenido de nuevo, ${userName.toUpperCase()}`, 'success');
+                
+                setTimeout(() => {
+                    startSpectacularLoading(userName);
+                }, 800);
+
             } catch (err) {
                 console.error("Login fail:", err);
-                let msg = getFriendlyErrorMessage(err.code);
+                let { title, msg } = getFriendlyErrorMessage(err.code);
                 
-                showToast('Acceso Denegado', msg, 'error');
+                showToast(title, msg, 'error');
                 
                 // Restore button
                 submitBtn.disabled = false;
@@ -138,16 +143,19 @@ function getFriendlyErrorMessage(code) {
     console.log("Firebase Error Code:", code);
     switch (code) {
         case 'auth/user-not-found': 
-        case 'auth/invalid-email':
+            return { title: 'USUARIO INEXISTENTE', msg: 'Ese usuario no existe en la base de datos.' };
         case 'auth/wrong-password': 
+            return { title: 'CONTRASEÑA ERRÓNEA', msg: 'La contraseña introducida es incorrecta.' };
+        case 'auth/invalid-email':
+            return { title: 'FORMATO INVÁLIDO', msg: 'El formato del email no es correcto.' };
         case 'auth/invalid-credential': 
-            return 'Usuario o contraseña incorrectos.';
+            return { title: 'ERROR DE ACCESO', msg: 'Credenciales inválidas o expiradas.' };
         case 'auth/too-many-requests': 
-            return 'Cuenta temporalmente bloqueada. Prueba en unos minutos.';
+            return { title: 'BLOQUEO TEMPORAL', msg: 'Demasiados intentos. Prueba en unos minutos.' };
         case 'auth/network-request-failed':
-            return 'Sin conexión. Revisa tu internet.';
+            return { title: 'FALLO DE RED', msg: 'Sin conexión. Revisa tu internet.' };
         default: 
-            return 'Error de acceso: Revisa tus credenciales.';
+            return { title: 'ERROR DESCONOCIDO', msg: 'No se pudo iniciar sesión. Revisa los datos.' };
     }
 }
 

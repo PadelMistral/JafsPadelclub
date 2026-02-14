@@ -49,17 +49,21 @@ async function markAllAsRead() {
 }
 
 async function clearAllNotifications() {
-    if (!confirm('¿Estás seguro de que quieres borrar todas las notificaciones?')) return;
+    if (allNotifs.length === 0) return;
+    if (!confirm('¿Estás seguro de que quieres vaciar toda tu bandeja de entrada? Esta acción es irreversible.')) return;
+    
     const batch = writeBatch(db);
     allNotifs.forEach(n => {
         const ref = doc(db, 'notificaciones', n.id);
         batch.delete(ref);
     });
+    
     try {
         await batch.commit();
-        showToast('Historial Limpio', 'Se han borrado todas las notificaciones', 'info');
+        showToast('Matrix Limpia', 'Se han eliminado todas las trazas de comunicación.', 'info');
     } catch (e) {
-        console.error(e);
+        console.error("Error clearing notifications:", e);
+        showToast('Error', 'No se pudieron borrar todas las notificaciones.', 'error');
     }
 }
 
@@ -69,10 +73,10 @@ function renderList() {
 
     if (allNotifs.length === 0) {
         container.innerHTML = `
-            <div class="empty-state-v5">
-                <i class="fas fa-bell-slash"></i>
-                <p class="font-bold text-white">Bandeja Vacía</p>
-                <p class="text-xs">No tienes notificaciones nuevas por ahora.</p>
+            <div class="empty-state-v5 py-20 opacity-30">
+                <i class="fas fa-bell-slash text-4xl mb-4"></i>
+                <p class="font-black uppercase tracking-widest text-xs">Bandeja de Entrada Vacía</p>
+                <p class="text-[10px] font-bold mt-1">Sincronización completa. Sin alertas pendientes.</p>
             </div>
         `;
         return;
@@ -83,22 +87,30 @@ function renderList() {
         const iconInfo = getIconInfo(n.tipo);
         const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
         const dateStr = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).toUpperCase();
+        const isUnread = !n.leido;
 
         return `
-            <div class="notif-item-v5 ${n.leido ? '' : 'unread'}" onclick="handleNotifClick('${n.id}', '${n.enlace || ''}')">
-                <div class="ni-icon-v5 ${n.tipo || 'system'}">
+            <div class="notif-item-v7 ${isUnread ? 'unread' : ''} animate-up" onclick="handleNotifClick('${n.id}', '${n.enlace || ''}')">
+                <div class="notif-icon-v7 ${iconInfo.variant}">
                     <i class="fas ${iconInfo.icon}"></i>
                 </div>
-                <div class="ni-content-v5">
-                    <div class="ni-top-v5">
-                        <span class="ni-title-v5">${n.titulo || 'Notificación'}</span>
-                        <span class="ni-time-v5">${timeStr} · ${dateStr}</span>
+                
+                <div class="notif-body">
+                    <div class="notif-title-row">
+                        <span class="notif-title">${n.titulo || 'Notificación'}</span>
+                        <span class="notif-time">${timeStr} · ${dateStr}</span>
                     </div>
-                    <p class="ni-msg-v5">${n.mensaje || ''}</p>
+                    <p class="notif-msg">${n.mensaje || ''}</p>
+                    
+                    <div class="notif-actions-row">
+                        ${isUnread ? `<button class="notif-btn-s primary" onclick="event.stopPropagation(); handleNotifClick('${n.id}')">LEER</button>` : ''}
+                        <button class="notif-btn-s outline" onclick="event.stopPropagation(); deleteNotification('${n.id}')">
+                            <i class="fas fa-trash-can"></i>
+                        </button>
+                    </div>
                 </div>
-                <div class="ni-actions-v5" onclick="event.stopPropagation(); deleteNotification('${n.id}')">
-                    <i class="fas fa-trash-can opacity-20 hover:opacity-100 hover:text-red-500 transition-all"></i>
-                </div>
+                
+                ${isUnread ? '<div class="unread-dot"></div>' : ''}
             </div>
         `;
     }).join('');
@@ -106,17 +118,22 @@ function renderList() {
 
 function getIconInfo(type) {
     switch (type) {
-        case 'match_invite': return { icon: 'fa-envelope-open-text' };
-        case 'match_join': return { icon: 'fa-user-plus' };
-        case 'match_result': return { icon: 'fa-trophy' };
-        case 'reto': return { icon: 'fa-bolt' };
-        case 'info': return { icon: 'fa-circle-info' };
-        case 'private_invite': return { icon: 'fa-lock' };
-        case 'warning': return { icon: 'fa-triangle-exclamation' };
-        case 'ranking_change': return { icon: 'fa-chart-line' };
-        case 'match_reminder': return { icon: 'fa-clock' };
-        case 'system': return { icon: 'fa-gear' };
-        default: return { icon: 'fa-bell' };
+        case 'match_invite':
+        case 'private_invite': 
+            return { icon: 'fa-envelope-open-text', variant: 'type-match' };
+        case 'match_join': 
+            return { icon: 'fa-user-plus', variant: 'type-match' };
+        case 'match_result':
+        case 'ranking_change': 
+            return { icon: 'fa-trophy', variant: 'type-challenge' };
+        case 'reto': 
+            return { icon: 'fa-bolt-lightning', variant: 'type-challenge' };
+        case 'match_reminder': 
+            return { icon: 'fa-clock-rotate-left', variant: 'type-system' };
+        case 'warning': 
+            return { icon: 'fa-triangle-exclamation', variant: 'type-system' };
+        default: 
+            return { icon: 'fa-ghost', variant: 'type-system' };
     }
 }
 

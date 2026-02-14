@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#020617">
     <title>Acceso | Padeluminatis Pro</title>
     <meta name="description" content="Accede al circuito Padeluminatis">
@@ -21,12 +22,20 @@
     <div class="sport-bg"></div>
 
     <div id="master-loader" class="master-loader" style="display:none;">
+        <div class="loader-cosmic-bg"></div>
         <div class="loader-box">
-            <img src="./imagenes/Logojafs.png" class="loader-logo" alt="Padeluminatis">
-            <div class="loader-bar">
-                <div id="progress-fill" class="loader-bar-fill"></div>
+            <div class="loader-visual">
+                <div class="loader-ring"></div>
+                <div class="loader-ring inner"></div>
+                <img src="./imagenes/Logojafs.png" class="loader-logo" alt="Padeluminatis">
             </div>
-            <div id="loader-status" class="loader-status">Sincronizando acceso...</div>
+            <div class="loader-text-group">
+                <div id="loader-status" class="loader-status">Iniciando Sincronización</div>
+                <div class="loader-bar-container">
+                    <div id="progress-fill" class="loader-bar-fill"></div>
+                </div>
+                <div class="loader-percentage">SECURE CONNECTION</div>
+            </div>
         </div>
     </div>
 
@@ -82,54 +91,144 @@
         .master-loader {
             position: fixed;
             inset: 0;
-            z-index: 9999;
-            background: rgba(2, 6, 23, 0.96);
+            z-index: 10000;
+            background: #02040a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .loader-cosmic-bg {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(198, 255, 0, 0.05) 0%, transparent 70%);
+            animation: pulseBg 4s infinite alternate;
+        }
+
+        @keyframes pulseBg {
+            from {
+                opacity: 0.3;
+                transform: scale(1);
+            }
+
+            to {
+                opacity: 0.7;
+                transform: scale(1.2);
+            }
+        }
+
+        .loader-box {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+            z-index: 10;
+        }
+
+        .loader-visual {
+            position: relative;
+            width: 120px;
+            height: 120px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        .loader-box {
-            width: min(320px, 80vw);
-            background: rgba(15, 23, 42, 0.55);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 24px;
-            padding: 28px;
-            text-align: center;
-            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
-        }
-
         .loader-logo {
-            width: 72px;
-            height: 72px;
+            width: 70px;
+            height: 70px;
             object-fit: contain;
-            margin-bottom: 16px;
-            filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.5));
+            filter: drop-shadow(0 0 20px rgba(198, 255, 0, 0.4));
+            z-index: 5;
+            animation: logoPulse 2s infinite ease-in-out;
+            margin-bottom: 0 !important;
         }
 
-        .loader-bar {
+        @keyframes logoPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                filter: drop-shadow(0 0 20px rgba(198, 255, 0, 0.4));
+            }
+
+            50% {
+                transform: scale(1.05);
+                filter: drop-shadow(0 0 35px rgba(198, 255, 0, 0.7));
+            }
+        }
+
+        .loader-ring {
+            position: absolute;
+            inset: 0;
+            border: 2px solid rgba(198, 255, 0, 0.1);
+            border-top: 2px solid #c6ff00;
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+        }
+
+        .loader-ring.inner {
+            inset: 15px;
+            border: 1px solid rgba(0, 212, 255, 0.1);
+            border-bottom: 1px solid #00d4ff;
+            animation: spinReverse 2.5s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes spinReverse {
+            to {
+                transform: rotate(-360deg);
+            }
+        }
+
+        .loader-text-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            width: 280px;
+        }
+
+        .loader-status {
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-family: 'Rajdhani';
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        .loader-bar-container {
             width: 100%;
-            height: 8px;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.1);
+            height: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
             overflow: hidden;
-            margin: 10px 0 12px;
+            border: 1px solid rgba(255, 255, 255, 0.02);
         }
 
         .loader-bar-fill {
             width: 0%;
             height: 100%;
-            background: linear-gradient(90deg, #00d4ff, #22d3ee);
-            border-radius: 999px;
-            transition: width 0.2s ease;
+            background: linear-gradient(90deg, #c6ff00, #00d4ff);
+            box-shadow: 0 0 15px rgba(198, 255, 0, 0.5);
+            transition: width 0.3s ease;
         }
 
-        .loader-status {
-            font-size: 0.7rem;
-            color: #cbd5f5;
-            letter-spacing: 2px;
+        .loader-percentage {
+            font-size: 0.6rem;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.3);
+            letter-spacing: 4px;
             text-transform: uppercase;
-            font-weight: 700;
         }
 
         .toggle-pass {
@@ -190,9 +289,3 @@
 </body>
 
 </html>
-
-
-
-
-
-

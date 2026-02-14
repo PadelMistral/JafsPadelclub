@@ -13,14 +13,106 @@ document.addEventListener('DOMContentLoaded', async () => {
     let wizardData = {};
 
     // --- WIZARD LOGIC ---
-    window.openWizard = () => {
-        document.getElementById('modal-entry').classList.add('active');
+    window.openWizard = (matchId = null) => {
+        const modal = document.getElementById('modal-entry');
+        modal.classList.add('active');
         currentStep = 1;
         updateWizardUI();
+        if (matchId) loadLinkedMatch(matchId);
     };
 
     window.closeWizard = () => {
         document.getElementById('modal-entry').classList.remove('active');
+    };
+
+    // --- DETAILS MODAL ---
+    window.showEntryDetails = (entryId) => {
+        const entry = userData.diario.find(e => e.id === entryId);
+        if (!entry) return;
+
+        const date = new Date(entry.fecha);
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay active';
+        overlay.style.zIndex = '11000';
+        
+        overlay.innerHTML = `
+            <div class="modal-card glass-strong animate-up p-0 overflow-hidden" style="max-width:420px; border-radius: 30px !important;">
+                <div class="modal-header relative overflow-hidden p-6">
+                    <div class="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-50"></div>
+                    <div class="relative z-10 flex-col">
+                        <span class="text-[9px] font-black text-primary tracking-[4px] uppercase mb-1">Análisis Táctico</span>
+                        <h2 class="text-2xl font-black italic text-white leading-none">${date.toLocaleDateString('es-ES', {day:'numeric', month:'long'}).toUpperCase()}</h2>
+                        <span class="text-[10px] font-bold text-muted mt-2 uppercase">${entry.tipo} | ${entry.posicion.toUpperCase()} | ${entry.hora.toUpperCase()}</span>
+                    </div>
+                    <button class="close-btn absolute top-6 right-6" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
+                </div>
+                
+                <div class="modal-body custom-scroll p-6">
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="p-4 bg-white/5 rounded-2xl border border-white/5 flex-col center">
+                            <span class="text-xs font-black text-sport-green">${entry.stats?.winners || 0}</span>
+                            <span class="text-[8px] font-bold text-muted uppercase tracking-widest mt-1">WINNERS</span>
+                        </div>
+                        <div class="p-4 bg-white/5 rounded-2xl border border-white/5 flex-col center">
+                            <span class="text-xs font-black text-sport-red">${entry.stats?.ue || 0}</span>
+                            <span class="text-[8px] font-bold text-muted uppercase tracking-widest mt-1">ERRORES</span>
+                        </div>
+                    </div>
+
+                    <!-- Tactical Insights -->
+                    <div class="flex-col gap-4 mb-6">
+                        <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
+                            <h4 class="text-[9px] font-black text-primary uppercase tracking-widest mb-2">Clave del Partido</h4>
+                            <p class="text-xs text-white/80 italic">"${entry.tactica?.clave || 'No registrada'}"</p>
+                        </div>
+                        <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
+                            <h4 class="text-[9px] font-black text-sport-red uppercase tracking-widest mb-2">Daño Recibido</h4>
+                            <p class="text-xs text-white/80">${entry.tactica?.dañoRecibido || 'N/A'}</p>
+                        </div>
+                        <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
+                            <h4 class="text-[9px] font-black text-sport-green uppercase tracking-widest mb-2">Daño Infligido</h4>
+                            <p class="text-xs text-white/80">${entry.tactica?.dañoInfligido || 'N/A'}</p>
+                        </div>
+                    </div>
+
+                    <!-- Mood & Biometrics -->
+                    <div class="p-5 bg-gradient-to-br from-primary/5 to-transparent rounded-3xl border border-primary/10">
+                        <div class="flex-row between items-center mb-4">
+                            <span class="text-[9px] font-black text-white/40 uppercase tracking-widest">Estado Biométrico</span>
+                            <span class="badge-premium-v7 sm neutral" style="font-size: 8px;">${entry.biometria?.mood?.toUpperCase()}</span>
+                        </div>
+                        <div class="flex-row gap-3">
+                             <div class="flex-1 flex-col center p-2 bg-black/20 rounded-xl">
+                                <span class="text-sm font-black text-white">${entry.biometria?.fisico}/10</span>
+                                <span class="text-[7px] text-muted font-bold uppercase mt-1">Físico</span>
+                             </div>
+                             <div class="flex-1 flex-col center p-2 bg-black/20 rounded-xl">
+                                <span class="text-sm font-black text-white">${entry.biometria?.mental}/10</span>
+                                <span class="text-[7px] text-muted font-bold uppercase mt-1">Mental</span>
+                             </div>
+                             <div class="flex-1 flex-col center p-2 bg-black/20 rounded-xl">
+                                <span class="text-sm font-black text-white">${entry.biometria?.confianza}/10</span>
+                                <span class="text-[7px] text-muted font-bold uppercase mt-1">Confianza</span>
+                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    ${entry.tactica?.notas ? `
+                        <div class="mt-6 p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                            <h4 class="text-[9px] font-black text-white/30 uppercase tracking-widest mb-2">Observaciones Libres</h4>
+                            <p class="text-xs text-white/70 leading-relaxed">${entry.tactica.notas}</p>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <div class="p-6 bg-black/20 border-t border-white/5 flex-row center">
+                    <button class="btn btn-primary btn-sm w-full" onclick="this.closest('.modal-overlay').remove()">CERRAR ANÁLISIS</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
     };
 
     window.wizardNext = async () => {
@@ -308,7 +400,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         list.innerHTML = [...entries].reverse().map(e => {
             const date = new Date(e.fecha);
-            const isWin = e.biometria?.mood === 'Fluido' || e.biometria?.mood === 'Motivado'; // Simple proxy
             const moodColor = {
                 'Frustrado': 'text-red-400',
                 'Cansado': 'text-orange-400',
@@ -318,11 +409,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             }[e.biometria?.mood || 'Normal'];
 
             return `
-                <div class="journal-card-v10 animate-fade-in mb-4">
+                <div class="journal-card-v10 animate-fade-in mb-4 cursor-pointer hover:bg-white/5 transition-all" 
+                     onclick="window.showEntryDetails('${e.id}')">
                     <div class="card-header-v10 flex-row between items-center mb-3">
                         <div class="flex-col">
                             <span class="text-[9px] font-black uppercase tracking-widest text-primary">${e.tipo || 'SESIÓN'}</span>
-                            <span class="text-xs font-black text-white">${date.toLocaleDateString('es-ES', {weekday:'short', day:'numeric', month:'short'})}</span>
+                            <span class="text-xs font-black text-white">${date.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
                         </div>
                         <div class="mood-badge ${moodColor} border border-white/10 px-3 py-1 rounded-full bg-black/40">
                             <span class="text-[10px] font-black uppercase">${e.biometria?.mood || 'N/A'}</span>
@@ -330,16 +422,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
 
                     ${e.aiSummary ? `
-                        <div class="ai-insight-box mb-4">
-                            <i class="fas fa-brain text-purple-400 text-xs mr-2"></i>
+                        <div class="ai-insight-box mb-4 p-3 bg-white/5 rounded-xl border border-white/5">
+                            <i class="fas fa-brain text-purple-400 text-[10px] mr-2"></i>
                             <span class="text-[10px] italic text-gray-300">"${e.aiSummary}"</span>
                         </div>
                     ` : ''}
 
                     <div class="stat-mini-grid">
-                        <div class="sm-item"><span>WINNERS</span><b>${e.stats?.winners || 0}</b></div>
-                        <div class="sm-item"><span>ERRORES</span><b>${e.stats?.ue || 0}</b></div>
-                        <div class="sm-item"><span>POSICIÓN</span><b>${(e.posicion || '-').toUpperCase()}</b></div>
+                        <div class="sm-item flex-col">
+                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">Winners</span>
+                            <b class="text-sport-green text-sm">${e.stats?.winners || 0}</b>
+                        </div>
+                        <div class="sm-item flex-col">
+                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">Errores</span>
+                            <b class="text-sport-red text-sm">${e.stats?.ue || 0}</b>
+                        </div>
+                        <div class="sm-item flex-col">
+                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">Posición</span>
+                            <b class="text-white text-sm">${(e.posicion || '-').toUpperCase()}</b>
+                        </div>
                     </div>
                 </div>
             `;

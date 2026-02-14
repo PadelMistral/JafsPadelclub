@@ -30,9 +30,9 @@ export async function requestNotificationPermission() {
 }
 
 /**
- * Sends a local push notification (renamed to sendPushNotification for clarity)
+ * Sends a local push notification using Service Worker if available
  */
-export function sendPushNotification(title, body, icon = './imagenes/Logojafs.png') {
+export async function sendPushNotification(title, body, icon = './imagenes/Logojafs.png') {
     if (notifPermission !== 'granted') return;
     
     const options = {
@@ -42,12 +42,25 @@ export function sendPushNotification(title, body, icon = './imagenes/Logojafs.pn
         vibrate: [200, 100, 200],
         tag: 'padeluminatis',
         renotify: true,
-        data: { url: window.location.href }
+        data: { url: window.location.origin + '/home.html' }
     };
     
+    // Try via Service Worker (Better for background/mobile)
+    if ('serviceWorker' in navigator) {
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            if (registration) {
+                await registration.showNotification(title, options);
+                return;
+            }
+        } catch (swErr) {
+            console.warn('SW notification fallback to window:', swErr);
+        }
+    }
+    
+    // Fallback to Window Notification API
     try {
         const notification = new Notification(title, options);
-        
         notification.onclick = () => {
             window.focus();
             notification.close();
@@ -107,24 +120,33 @@ export function notifyMatchJoin(userName, matchDate) {
  * Daily reminder check
  */
 export async function checkDailyReminders(userId, matches) {
-    const today = new Date();
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const morningCheckKey = `morning_notif_${userId}_${todayStr}`;
     
     // Check for matches today
     const todayMatches = matches.filter(m => {
-        const mDate = m.fecha?.toDate();
-        return mDate && mDate.toDateString() === today.toDateString();
+        const mDate = m.fecha?.toDate ? m.fecha.toDate() : (m.fecha instanceof Date ? m.fecha : new Date(m.fecha));
+        return mDate && mDate.toDateString() === now.toDateString();
     });
     
-    if (todayMatches.length > 0) {
+    // Morning Notification (from 7:30 AM)
+    const isAfterMorningTime = now.getHours() > 7 || (now.getHours() === 7 && now.getMinutes() >= 30);
+    const alreadySentToday = localStorage.getItem(morningCheckKey) === 'true';
+
+    if (todayMatches.length > 0 && isAfterMorningTime && !alreadySentToday) {
         sendPushNotification(
-            'Tienes partido hoy',
-            `${todayMatches.length} partido(s) programado(s) para hoy.`
+            '¡Hoy juegas!',
+            `Tienes ${todayMatches.length} partido(s) programado(s) para hoy. ¡A por todas!`
         );
-        
-        // Schedule individual reminders
+        localStorage.setItem(morningCheckKey, 'true');
+    }
+
+    if (todayMatches.length > 0) {
+        // Schedule individual reminders (30 min before)
         todayMatches.forEach(m => {
-            if (m.fecha?.toDate) scheduleMatchReminder(m.fecha.toDate(), m.type);
+            const mDate = m.fecha?.toDate ? m.fecha.toDate() : (m.fecha instanceof Date ? m.fecha : new Date(m.fecha));
+            if (mDate) scheduleMatchReminder(mDate, m.type);
         });
     }
 }
-

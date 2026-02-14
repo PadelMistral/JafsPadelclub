@@ -7204,9 +7204,6 @@ h3 {
   flex-direction: row;
 }
 
-
-
-
 /* === POLISH OVERRIDES V1 === */
 .page-content {
   display: flex;
@@ -7219,10 +7216,13 @@ h3 {
 .page-content .container > * + * {
   margin-top: 16px;
 }
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
-img, video {
+img,
+video {
   max-width: 100%;
   height: auto;
   display: block;
@@ -7307,10 +7307,10 @@ body {
 
 /* === ADVANCED POLISH V2 === */
 .app-header {
-  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 .bottom-nav {
-  box-shadow: 0 -6px 20px rgba(0,0,0,0.25);
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.25);
 }
 .section-header,
 .section-header-row {
@@ -7342,7 +7342,7 @@ body {
 .stat-card-v9,
 .leaderboard-card-v9,
 .status-card-v9 {
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .input,
 .input-glass,
@@ -7360,8 +7360,8 @@ body {
 }
 .modal-card,
 .modal-sheet {
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
 }
 .modal-header {
   padding: 18px 20px;
@@ -7371,4 +7371,20 @@ body {
 }
 .modal-footer {
   padding: 16px 20px 20px;
+}
+
+/* Centrado Universal de Spinners */
+.spinner,
+.spinner-neon,
+.spinner-galaxy {
+  display: block !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.center,
+.flex-center {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }

@@ -115,6 +115,8 @@ export function listenToNotifications(callback) {
 
 // ─── AUTOMATION LOGIC ───
 
+import { sendPushNotification } from "../modules/push-notifications.js";
+
 /**
  * Initialize auto notifications for a user
  * @param {string} uid - User ID
@@ -128,7 +130,25 @@ export async function initAutoNotifications(uid) {
   watchMatchesFilling(uid);
   scheduleMatchReminders(uid);
   watchNewChallenges(uid);
-  checkDailySummary(uid);
+  
+  // 3. Native Background Pulse
+  // Listen for new unread notifications and trigger local push
+  let initialLoad = true;
+  listenToNotifications((list) => {
+    if (initialLoad) {
+      initialLoad = false;
+      return; 
+    }
+    
+    // Find the latest unread and notify
+    const newest = list.filter(n => !n.leido).sort((a,b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0))[0];
+    if (newest) {
+      sendPushNotification(newest.titulo || "Padeluminatis", newest.mensaje);
+    }
+  });
+
+  // 4. Daily Morning Pulse (7:30 AM)
+  checkMorningMatchSummary(uid);
 
   // 2. New Elite Watchers
   watchRankingChanges(uid);
@@ -348,6 +368,62 @@ function watchNewChallenges(uid) {
       }
     });
   });
+}
+
+/**
+ * Check and send daily match summary (Today you play!)
+ */
+async function checkMorningMatchSummary(uid) {
+  const now = new Date();
+  const hour = now.getHours();
+  const min = now.getMinutes();
+
+  // Condition: After 7:30 AM
+  const isAfter730 = hour > 7 || (hour === 7 && min >= 30);
+  if (!isAfter730) return;
+
+  const todayStr = now.toISOString().split("T")[0];
+  const lastKey = `morning_match_notif_${uid}_${todayStr}`;
+  if (localStorage.getItem(lastKey)) return;
+
+  try {
+    const collections = ["partidosReto", "partidosAmistosos"];
+    let matchesToday = 0;
+
+    for (const col of collections) {
+      const q = query(
+        collection(db, col),
+        where("jugadores", "array-contains", uid),
+        where("estado", "==", "abierto"),
+      );
+      const snap = await window.getDocsSafe(q);
+      snap.forEach((d) => {
+        const m = d.data();
+        const mDate = m.fecha?.toDate?.() || new Date(m.fecha);
+        if (mDate.toDateString() === now.toDateString()) {
+          matchesToday++;
+        }
+      });
+    }
+
+    if (matchesToday > 0) {
+      const { getDocument } = await import("../firebase-service.js");
+      const user = await getDocument("usuarios", uid);
+      const name = user?.nombreUsuario?.split(" ")[0] || "Campeón";
+
+      await createNotification(
+        uid,
+        `☀️ ¡Hoy juegas, ${name}!`,
+        `Tienes ${matchesToday} partido(s) programado(s) para hoy en la Matrix. ¡A por todas!`,
+        "info",
+        null,
+        { type: "morning_matches" },
+      );
+      localStorage.setItem(lastKey, "true");
+    }
+  } catch (e) {
+    console.error("Error checkMorningMatchSummary:", e);
+  }
 }
 
 /**

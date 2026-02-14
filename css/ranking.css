@@ -72,6 +72,7 @@
   text-transform: uppercase;
   letter-spacing: 2px;
   margin-bottom: var(--space-xs);
+  opacity: 0.6;
 }
 
 .rank-position-row {
@@ -185,144 +186,218 @@
   letter-spacing: 1px;
 }
 
-/* ===== PODIUM ===== */
-.ranking-podium-container {
+/* ===== PODIUM V7 (PARALLEL) ===== */
+.ranking-podium-v7 {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: var(--space-md);
-  padding: var(--space-xl) var(--space-md);
-  margin-bottom: var(--space-2xl);
+  gap: 12px;
+  padding: 20px 10px;
+  margin-top: 20px;
 }
 
-.podium-card {
+.podium-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
-  cursor: pointer;
-  transition: var(--transition);
+  max-width: 100px;
 }
 
-.podium-card:hover {
-  transform: translateY(-8px);
+.podium-avatar-wrapper {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  margin-bottom: 35px; /* space for the base */
+  z-index: 2;
 }
 
-.podium-pos {
+.podium-avatar-wrapper.lg {
+  width: 80px;
+  height: 80px;
+  transform: translateY(-15px);
+}
+
+.podium-badge {
   position: absolute;
-  top: -12px;
-  width: 28px;
-  height: 28px;
-  background: #000;
-  border: 2px solid;
+  top: -10px;
+  right: -5px;
+  width: 24px;
+  height: 24px;
+  background: #111;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 900;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   z-index: 10;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.podium-avatar {
-  border-radius: 50%;
-  background-size: cover;
-  background-position: center;
-  background-color: var(--bg-glass);
-  border: 3px solid;
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
-  margin-bottom: var(--space-sm);
+.podium-badge.gold {
+  border-color: var(--sport-gold);
+  color: var(--sport-gold);
+  box-shadow: 0 0 10px var(--sport-gold-glow);
 }
-
-.podium-name {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-secondary);
+.podium-info {
+  position: absolute;
+  bottom: -15px;
+  width: 100%;
   text-align: center;
-  max-width: 80px;
+  z-index: 5;
+}
+
+.p-name {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 900;
+  color: #fff;
+  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 4px;
+}
+
+.p-pts {
+  font-size: 0.8rem;
+  font-weight: 900;
+  color: var(--primary);
+  font-family: "Rajdhani";
+}
+
+.podium-base {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px 8px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: none;
+  z-index: 1;
+}
+
+.podium-base.base-gold {
+  height: 60px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 215, 0, 0.05) 0%,
+    transparent 100%
+  );
+  border-color: rgba(255, 215, 0, 0.2);
+}
+.podium-base.base-cyan {
+  height: 45px;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 212, 255, 0.05) 0%,
+    transparent 100%
+  );
+  border-color: rgba(0, 212, 255, 0.2);
+}
+.podium-base.base-magenta {
+  height: 35px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 0, 255, 0.05) 0%,
+    transparent 100%
+  );
+  border-color: rgba(255, 0, 255, 0.2);
+}
+
+/* Rank Numbers & Colors */
+.rank-number-v7 {
+  width: 32px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 950;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.rank-number-v7.glow {
+  color: #fff;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.ranking-card.rank-gold {
+  border-left: 3px solid var(--sport-gold);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 215, 0, 0.1) 0%,
+    transparent 100%
+  );
+}
+.ranking-card.rank-gold .rank-number-v7 {
+  color: var(--sport-gold);
+}
+
+.ranking-card.rank-silver {
+  border-left: 3px solid var(--sport-silver);
+  background: linear-gradient(
+    90deg,
+    rgba(192, 192, 192, 0.1) 0%,
+    transparent 100%
+  );
+}
+.ranking-card.rank-silver .rank-number-v7 {
+  color: var(--sport-silver);
+}
+
+.ranking-card.rank-bronze {
+  border-left: 3px solid var(--sport-bronze);
+  background: linear-gradient(
+    90deg,
+    rgba(205, 127, 50, 0.1) 0%,
+    transparent 100%
+  );
+}
+.ranking-card.rank-bronze .rank-number-v7 {
+  color: var(--sport-bronze);
+}
+
+.ranking-card.rank-elite {
+  border-left: 3px solid var(--primary);
+  background: linear-gradient(
+    90deg,
+    rgba(0, 212, 255, 0.05) 0%,
+    transparent 100%
+  );
+}
+.ranking-card.rank-elite .rank-number-v7 {
+  color: var(--primary);
+}
+
+.ranking-card.me {
+  background: rgba(168, 85, 247, 0.15) !important;
+  border: 1px solid var(--accent) !important;
+  transform: scale(1.02);
+  z-index: 10;
+}
+
+/* Smaller Podium */
+.podium-card.rank-1 .podium-avatar {
+  width: 80px;
+  height: 80px;
+}
+.podium-card.rank-2 .podium-avatar,
+.podium-card.rank-3 .podium-avatar {
+  width: 60px;
+  height: 60px;
+}
+
+.podium-name {
+  font-size: 0.7rem;
+  max-width: 70px;
 }
 
 .podium-pts {
-  font-family: var(--font-display);
-  font-size: 1rem;
-  font-weight: 900;
-  color: var(--text-primary);
-}
-
-/* Rank 1 - Gold */
-.podium-card.rank-1 {
-  order: 2;
-  margin-bottom: var(--space-xl);
-}
-
-.podium-card.rank-1 .podium-avatar {
-  width: 90px;
-  height: 90px;
-  border-color: var(--sport-gold);
-  box-shadow:
-    0 0 40px var(--sport-gold-glow),
-    0 20px 50px rgba(0, 0, 0, 0.6);
-}
-
-.podium-card.rank-1 .podium-pos {
-  background: var(--sport-gold);
-  border-color: var(--sport-gold);
-  color: #000;
-  width: 32px;
-  height: 32px;
   font-size: 0.9rem;
 }
 
-.podium-card.rank-1 .podium-name {
-  color: var(--sport-gold);
-  font-size: 0.85rem;
-}
-
-.podium-card.rank-1 .podium-pts {
-  font-size: 1.2rem;
-  color: var(--sport-gold);
-}
-
-/* Rank 2 - Silver */
-.podium-card.rank-2 {
-  order: 1;
-}
-
-.podium-card.rank-2 .podium-avatar {
-  width: 70px;
-  height: 70px;
-  border-color: var(--sport-silver);
-}
-
-.podium-card.rank-2 .podium-pos {
-  background: var(--sport-silver);
-  border-color: var(--sport-silver);
-  color: #000;
-}
-
-/* Rank 3 - Bronze */
-.podium-card.rank-3 {
-  order: 3;
-}
-
-.podium-card.rank-3 .podium-avatar {
-  width: 70px;
-  height: 70px;
-  border-color: var(--sport-bronze);
-}
-
-.podium-card.rank-3 .podium-pos {
-  background: var(--sport-bronze);
-  border-color: var(--sport-bronze);
-  color: #000;
-}
-
-/* ===== HISTORY SECTION ===== */
+/* History Section */
 .history-section {
   margin-bottom: var(--space-2xl);
 }
@@ -407,47 +482,44 @@
   margin-bottom: var(--space-2xl);
 }
 
-.leaderboard-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.lb-entry {
+/* Leaderboard Entry Decoration */
+.ranking-card {
   display: grid;
-  grid-template-columns: 32px 42px 1fr auto;
-  gap: var(--space-sm);
+  grid-template-columns: 35px 32px 1fr auto;
   align-items: center;
-  padding: var(--space-md);
-  background: var(--bg-glass);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
   cursor: pointer;
-  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
 }
 
-@media (min-width: 480px) {
-  .lb-entry {
-    grid-template-columns: 40px 42px 1fr auto;
-    gap: var(--space-md);
-    padding: var(--space-lg);
-  }
+.ranking-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateX(5px);
 }
 
-.lb-entry:hover {
-  background: var(--bg-elevated);
-  border-color: var(--primary);
-  box-shadow: 0 0 15px rgba(0, 212, 255, 0.15);
-  transform: scale(1.02);
+.ranking-card .lb-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.lb-entry.me {
+.ranking-card.me {
   background: linear-gradient(
     90deg,
-    rgba(168, 85, 247, 0.2) 0%,
-    transparent 100%
+    rgba(168, 85, 247, 0.1) 0%,
+    rgba(0, 212, 255, 0.05) 100%
   );
-  border-color: var(--accent);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.1);
 }
 
 .lb-rank {

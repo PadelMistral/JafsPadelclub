@@ -223,3 +223,24 @@
   transform: translateY(-2px);
   border-color: rgba(43, 188, 255, 0.35);
 }
+
+/* UNREAD DOT INDICATOR */
+.unread-dot {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 8px;
+  height: 8px;
+  background: var(--primary);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.notif-item-v7.unread .notif-title {
+  color: var(--primary);
+}
+
+/* GHOST ICON DEFAULT */
+.notif-icon-v7.type-system i {
+  opacity: 0.8;
+}
