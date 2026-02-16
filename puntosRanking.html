@@ -75,6 +75,7 @@
         <section class="leaderboard-section animate-fade-in" style="animation-delay: 0.1s;">
             <div class="section-header">
                 <h2 class="section-title">Clasificación General</h2>
+                <span id="lb-total-info" class="lb-total-info">Sincronizando...</span>
             </div>
 
             <!-- Table Headers -->
@@ -82,8 +83,8 @@
                 <span class="lb-h-rank">#</span>
                 <span class="lb-h-player">JUGADOR</span>
                 <span class="lb-h-level">NIVEL</span>
-                <span class="lb-h-stats">STATS</span>
-                <span class="lb-h-pts">ELO</span>
+                <span class="lb-h-stats">PARTIDOS</span>
+                <span class="lb-h-pts">ELO/MOV</span>
             </div>
 
             <div id="lb-list" class="leaderboard-list">
@@ -127,6 +128,17 @@
                     </div>
                 </div>
 
+                <div class="rank-extra-grid">
+                    <div class="rank-extra-card">
+                        <span class="rank-extra-label">Partidos</span>
+                        <span id="my-played" class="rank-extra-val">0</span>
+                    </div>
+                    <div class="rank-extra-card">
+                        <span class="rank-extra-label">Nivel</span>
+                        <span id="my-level-card" class="rank-extra-val">2.50</span>
+                    </div>
+                </div>
+
                 <p class="rank-meta-text" id="rank-meta-text"></p>
             </div>
         </section>
@@ -153,7 +165,6 @@
         <div class="modal-sheet" id="match-breakdown-area"></div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module" src="./js/ranking.js?v=6.5"></script>
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js?v=6.5';

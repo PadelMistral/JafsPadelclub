@@ -13,6 +13,47 @@ let userData = null;
 let currentWeekOffset = 0;
 let allMatches = [];
 let weeklyWeather = null;
+const calendarUserNameCache = new Map();
+let slotInteractionBusy = false;
+let calendarMatchUnsubs = [];
+let calendarBootUid = null;
+
+function withTimeout(promise, ms = 12000) {
+    let timeoutId = null;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('slot-render-timeout')), ms);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+        if (timeoutId) clearTimeout(timeoutId);
+    });
+}
+
+async function hydrateCreatorNames() {
+    const ids = [
+        ...new Set(
+            allMatches
+                .map((m) => m?.organizerId || m?.creador)
+                .filter(Boolean)
+        ),
+    ];
+
+    const missing = ids.filter((id) => !calendarUserNameCache.has(id));
+    await Promise.all(
+        missing.map(async (uid) => {
+            const u = await getDocument("usuarios", uid);
+            const name = u?.nombreUsuario || u?.nombre || "Jugador";
+            calendarUserNameCache.set(uid, name);
+        })
+    );
+
+    allMatches = allMatches.map((m) => {
+        const ownerId = m?.organizerId || m?.creador;
+        return {
+            ...m,
+            creatorName: ownerId ? calendarUserNameCache.get(ownerId) || "Jugador" : "Jugador",
+        };
+    });
+}
 
 async function fetchWeeklyWeather() {
     try {
@@ -40,9 +81,16 @@ document.addEventListener('DOMContentLoaded', () => {
     observerAuth(async (user) => {
         try {
             if (!user) {
+                calendarMatchUnsubs.forEach((unsub) => {
+                    try { if (typeof unsub === 'function') unsub(); } catch (_) {}
+                });
+                calendarMatchUnsubs = [];
+                calendarBootUid = null;
                 window.location.href = 'index.html';
                 return;
             }
+            if (calendarBootUid === user.uid) return;
+            calendarBootUid = user.uid;
             currentUser = user;
             
             // Initial data load
@@ -50,8 +98,15 @@ document.addEventListener('DOMContentLoaded', () => {
             userData = uData || {};
             
             // Sync matches from both collections
-            subscribeCol("partidosAmistosos", () => syncMatches());
-            subscribeCol("partidosReto", () => syncMatches());
+            calendarMatchUnsubs.forEach((unsub) => {
+                try { if (typeof unsub === 'function') unsub(); } catch (_) {}
+            });
+            calendarMatchUnsubs = [];
+
+            const unsubA = await subscribeCol("partidosAmistosos", () => syncMatches());
+            const unsubR = await subscribeCol("partidosReto", () => syncMatches());
+            if (typeof unsubA === 'function') calendarMatchUnsubs.push(unsubA);
+            if (typeof unsubR === 'function') calendarMatchUnsubs.push(unsubR);
             
             syncMatches(); // Initial trigger
         } catch (e) {
@@ -93,7 +148,8 @@ async function syncMatches() {
         allMatches = [];
         snapA.forEach(d => allMatches.push({ id: d.id, col: 'partidosAmistosos', ...d.data() }));
         snapR.forEach(d => allMatches.push({ id: d.id, col: 'partidosReto', isComp: true, ...d.data() }));
-        
+
+        await hydrateCreatorNames();
         await fetchWeeklyWeather();
         renderGrid();
     } catch (e) {
@@ -187,6 +243,7 @@ function renderSlot(date, hour) {
     let state = 'free';
     let label = 'Libre';
     let sub = '';
+    let ownerSub = '';
     let extraIcon = '';
     let isLocked = false;
 
@@ -227,17 +284,24 @@ function renderSlot(date, hour) {
                     state = 'propia';
                     label = 'TU PARTIDO';
                     sub = 'VER DETALLES';
+                    ownerSub = `Reserva: ${shortName(match.creatorName || "Tú")}`;
                 }
                 else if (isFull) {
                     state = 'cerrada';
                     label = 'COMPLETO';
                     sub = 'SQUAD LLENO';
+                    ownerSub = `Reserva: ${shortName(match.creatorName)}`;
                 }
                 else {
                     state = 'abierta';
                     label = 'DISPONIBLE';
                     sub = `${4 - count} PLAZAS`;
+                    ownerSub = `Reserva: ${shortName(match.creatorName)}`;
                 }
+            }
+
+            if (!ownerSub && match.creatorName) {
+                ownerSub = `Reserva: ${shortName(match.creatorName)}`;
             }
         }
     }
@@ -262,8 +326,14 @@ function renderSlot(date, hour) {
             ${weatherHtml}
             <span class="slot-chip-v5">${label}</span>
             <span class="slot-info-v5">${sub}</span>
+            ${ownerSub ? `<span class="slot-owner-v5">${ownerSub}</span>` : ''}
         </div>
     `;
+}
+
+function shortName(name) {
+    if (!name) return "Jugador";
+    return name.split(" ").slice(0, 2).join(" ");
 }
 
 function getWeatherStateFromCode(code) {
@@ -288,11 +358,17 @@ function getIconFromCode(code) {
 
 // Global Handlers
 window.handleSlot = async (date, hour, id, col) => {
+    if (slotInteractionBusy) return;
+    slotInteractionBusy = true;
+
     const modal = document.getElementById('modal-match');
     const area = document.getElementById('match-detail-area');
     const title = document.getElementById('modal-titulo');
     
-    if(!modal || !area) return;
+    if(!modal || !area) {
+        slotInteractionBusy = false;
+        return;
+    }
 
     modal.classList.add('active');
     area.innerHTML = '<div class="center py-20"><div class="spinner-galaxy"></div></div>';
@@ -300,13 +376,16 @@ window.handleSlot = async (date, hour, id, col) => {
 
     try {
         if (id) {
-            await renderMatchDetail(area, id, col, currentUser, userData);
+            await withTimeout(renderMatchDetail(area, id, col, currentUser, userData));
         } else {
-            await renderCreationForm(area, date, hour, currentUser, userData);
+            await withTimeout(renderCreationForm(area, date, hour, currentUser, userData));
         }
     } catch(e) {
         console.error("Render error:", e);
         area.innerHTML = '<div class="center p-10 opacity-50">Error de carga</div>';
+        showToast('ERROR DE CARGA', 'No se pudo abrir la franja seleccionada. Inténtalo de nuevo.', 'error');
+    } finally {
+        slotInteractionBusy = false;
     }
 };
 

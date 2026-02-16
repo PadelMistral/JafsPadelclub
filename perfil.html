@@ -208,6 +208,10 @@
             <div class="radar-card-v9">
                 <canvas id="tactical-radar-chart"></canvas>
             </div>
+            <!-- Attribute Progress Bars (RPG Style) -->
+            <div id="attribute-list" class="mt-4 px-2">
+                <!-- Injected via JS -->
+            </div>
         </section>
 
         <!-- Predictive Intelligence & Profile (NEW) -->
@@ -277,61 +281,65 @@
         <!-- Settings Section -->
         <section class="profile-section animate-fade-in" style="animation-delay: 0.25s;">
             <div class="section-header">
-                <h2 class="section-title">Configuración</h2>
+                <h2 class="section-title"><i class="fas fa-cog text-white/30 mr-2"></i>Configuración</h2>
             </div>
             <div class="settings-card">
+                <!-- Alias -->
                 <div class="setting-item">
                     <div class="setting-left">
-                        <i class="fas fa-user"></i>
-                        <span>Alias</span>
+                        <i class="fas fa-id-badge"></i>
+                        <span>Alias de Combate</span>
                     </div>
                     <div class="setting-right">
-                        <input type="text" id="p-username-inp" class="setting-input" placeholder="Tu nombre...">
+                        <input type="text" id="p-username-inp" class="setting-input" placeholder="Tu alias...">
                         <button class="setting-save-btn" id="p-save-name">
                             <i class="fas fa-check"></i>
                         </button>
                     </div>
-                    <!-- Weight Input -->
-                    <div class="setting-item">
-                        <div class="setting-left">
-                            <i class="fas fa-weight"></i>
-                            <span>Peso (Kg)</span>
-                        </div>
-                        <div class="setting-right">
-                            <input type="number" id="p-weight-inp" class="setting-input" placeholder="00"
-                                style="width: 80px;">
-                            <button class="setting-save-btn success" id="p-save-weight">
-                                <i class="fas fa-check"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <div class="setting-left">
-                            <i class="fas fa-phone"></i>
-                            <span>Teléfono</span>
-                        </div>
-                        <div class="setting-right">
-                            <input type="tel" id="p-phone-inp" class="setting-input" placeholder="600 000 000">
-                            <button class="setting-save-btn success" id="p-save-phone">
-                                <i class="fas fa-check"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <a href="diario.html" class="setting-item link">
-                        <div class="setting-left">
-                            <i class="fas fa-book-medical"></i>
-                            <span>Diario Táctico</span>
-                        </div>
-                        <i class="fas fa-chevron-right setting-arrow"></i>
-                    </a>
-                    <a href="historial.html" class="setting-item link">
-                        <div class="setting-left">
-                            <i class="fas fa-history"></i>
-                            <span>Historial Partidos</span>
-                        </div>
-                        <i class="fas fa-chevron-right setting-arrow"></i>
-                    </a>
                 </div>
+                <!-- Phone -->
+                <div class="setting-item">
+                    <div class="setting-left">
+                        <i class="fas fa-mobile-screen"></i>
+                        <span>Teléfono</span>
+                    </div>
+                    <div class="setting-right">
+                        <input type="tel" id="p-phone-inp" class="setting-input" placeholder="600 000 000">
+                        <button class="setting-save-btn success" id="p-save-phone">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- Change Password -->
+                <div class="setting-item flex-col" style="align-items:stretch;">
+                    <div class="flex-row items-center gap-3 mb-3">
+                        <i class="fas fa-lock text-muted"></i>
+                        <span class="text-xs font-bold text-white">Cambiar Contraseña</span>
+                    </div>
+                    <input type="password" id="p-new-password" class="setting-input mb-2 w-full"
+                        placeholder="Nueva contraseña (mín. 6 caracteres)">
+                    <input type="password" id="p-confirm-password" class="setting-input mb-3 w-full"
+                        placeholder="Confirmar nueva contraseña">
+                    <button class="btn btn-sm btn-secondary w-full" id="btn-change-password">
+                        <i class="fas fa-shield-halved mr-1"></i> Actualizar Contraseña
+                    </button>
+                </div>
+                <!-- Links -->
+                <a href="diario.html" class="setting-item link">
+                    <div class="setting-left">
+                        <i class="fas fa-book-medical"></i>
+                        <span>Diario Táctico</span>
+                    </div>
+                    <i class="fas fa-chevron-right setting-arrow"></i>
+                </a>
+                <a href="historial.html" class="setting-item link">
+                    <div class="setting-left">
+                        <i class="fas fa-history"></i>
+                        <span>Historial Partidos</span>
+                    </div>
+                    <i class="fas fa-chevron-right setting-arrow"></i>
+                </a>
+            </div>
         </section>
 
         <!-- Address Section -->

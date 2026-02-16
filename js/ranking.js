@@ -48,7 +48,6 @@ async function loadRanking() {
     query(
       collection(db, "usuarios"),
       orderBy("puntosRanking", "desc"),
-      limit(50),
     ),
   );
   const list = snap.docs.map((d, i) => ({
@@ -59,13 +58,24 @@ async function loadRanking() {
 
   // My position
   const myIdx = list.findIndex((u) => u.id === currentUser.uid);
+  const totalPlayers = list.length || 1;
+  const totalInfoEl = document.getElementById("lb-total-info");
+  if (totalInfoEl) totalInfoEl.textContent = `${totalPlayers} jugadores clasificados`;
+
   if (myIdx !== -1) {
     const me = list[myIdx];
+    const myPts = Number(me.puntosRanking || 1000);
+    const played = Number(me.partidosJugados || 0);
+
     document.getElementById("my-rank").textContent = `#${me.rank}`;
-    countUp(document.getElementById("my-pts"), me.puntosRanking || 1000);
+    countUp(document.getElementById("my-pts"), myPts);
     document.getElementById("my-level").textContent = (me.nivel || 2.5).toFixed(
       2,
     );
+    const playedEl = document.getElementById("my-played");
+    const levelCardEl = document.getElementById("my-level-card");
+    if (playedEl) playedEl.textContent = `${played}`;
+    if (levelCardEl) levelCardEl.textContent = (me.nivel || 2.5).toFixed(2);
 
     // Level progress (simplified: decimal part as percentage)
     const lvl = me.nivel || 2.5;
@@ -77,25 +87,20 @@ async function loadRanking() {
 
     // Trend
     const trendEl = document.getElementById("rank-trend");
-    if (me.rachaActual > 0) {
-      trendEl.className = "rank-trend up";
-      trendEl.innerHTML = `<i class="fas fa-arrow-up"></i> ${me.rachaActual}`;
-    } else if (me.rachaActual < 0) {
-      trendEl.className = "rank-trend down";
-      trendEl.innerHTML = `<i class="fas fa-arrow-down"></i> ${Math.abs(me.rachaActual)}`;
-    } else {
-      trendEl.style.display = "none";
+    if (trendEl) {
+      trendEl.style.display = "inline-flex";
+      trendEl.className = "rank-trend";
+      trendEl.innerHTML = `<i class="fas fa-minus"></i> 0`;
     }
 
     // Extra: Meta de posición respecto al resto de jugadores
     const metaEl = document.getElementById("rank-meta-text");
     if (metaEl) {
-      const totalPlayers = list.length || 1;
       const percentile = Math.max(
         1,
         Math.min(100, Math.round((1 - (me.rank - 1) / totalPlayers) * 100)),
       );
-      metaEl.textContent = `Estás en el TOP ${percentile}% de ${totalPlayers} jugadores activos`;
+      metaEl.textContent = `Estás en el TOP ${percentile}% (${me.rank}/${totalPlayers}) del circuito activo`;
     }
   }
 
@@ -105,11 +110,71 @@ async function loadRanking() {
     if (list[i]) await renderPodiumSlot(i + 1, list[i]);
   }
 
+  const movementMap = await getRecentRankMovements(list);
+  const myMove = Number(movementMap.get(currentUser.uid) || 0);
+  const trendEl = document.getElementById("rank-trend");
+  if (trendEl) {
+    if (myMove > 0) {
+      trendEl.className = "rank-trend up";
+      trendEl.innerHTML = `<i class="fas fa-arrow-up"></i> +${myMove}`;
+    } else if (myMove < 0) {
+      trendEl.className = "rank-trend down";
+      trendEl.innerHTML = `<i class="fas fa-arrow-down"></i> ${Math.abs(myMove)}`;
+    } else {
+      trendEl.className = "rank-trend";
+      trendEl.innerHTML = `<i class="fas fa-minus"></i> 0`;
+    }
+  }
+
   // Leaderboard (4th onwards)
-  renderLeaderboard(list.slice(3));
+  renderLeaderboard(list.slice(3), totalPlayers, movementMap);
 
   // Auto scroll to me after 1s
   setTimeout(() => window.scrollToMe(), 1000);
+}
+
+async function getRecentRankMovements(users) {
+  const movementMap = new Map();
+  users.forEach((u) => movementMap.set(u.id, 0));
+  if (!users.length) return movementMap;
+
+  try {
+    const logsSnap = await window.getDocsSafe(
+      query(
+        collection(db, "rankingLogs"),
+        orderBy("timestamp", "desc"),
+        limit(Math.max(120, users.length * 6)),
+      ),
+    );
+    if (!logsSnap || logsSnap._errorCode) return movementMap;
+
+    const latestLogByUid = new Map();
+    logsSnap.docs.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (data?.uid && !latestLogByUid.has(data.uid)) latestLogByUid.set(data.uid, data);
+    });
+
+    users.forEach((u) => {
+      const log = latestLogByUid.get(u.id);
+      if (!log || typeof log.diff !== "number") return;
+
+      const previousPoints = Number(u.puntosRanking || 1000) - Number(log.diff || 0);
+      let previousRank = 1;
+
+      users.forEach((other) => {
+        if (other.id === u.id) return;
+        const otherPoints = Number(other.puntosRanking || 1000);
+        if (otherPoints > previousPoints) previousRank += 1;
+      });
+
+      // positive => climbed positions, negative => dropped
+      movementMap.set(u.id, previousRank - Number(u.rank || 0));
+    });
+  } catch (e) {
+    console.warn("Could not compute rank movement map:", e);
+  }
+
+  return movementMap;
 }
 
 async function renderPodiumSlot(pos, user) {
@@ -136,7 +201,11 @@ async function renderPodiumSlot(pos, user) {
   if (pts) countUp(pts, user.puntosRanking || 1000);
 }
 
-function renderLeaderboard(list) {
+function renderLeaderboard(
+  list,
+  totalPlayers = list.length,
+  movementMap = new Map(),
+) {
   const container = document.getElementById("lb-list");
   if (!container) return;
 
@@ -146,9 +215,9 @@ function renderLeaderboard(list) {
       const name = u.nombreUsuario || u.nombre || "Jugador";
       const photo = u.fotoPerfil || u.fotoURL || "./imagenes/Logojafs.png";
       const ps = u.partidosJugados || 0;
-      const vs = u.victorias || 0;
-      const winrate = ps > 0 ? Math.round((vs / ps) * 100) : 0;
-      const streak = u.rachaActual || 0;
+      const level = Number(u.nivel || 2.5).toFixed(2);
+      const points = Math.round(u.puntosRanking || 1000);
+      const movement = Number(movementMap.get(u.id) || 0);
 
       // Dynamic rank class for colors
       let rankClass = "rank-entry";
@@ -157,22 +226,27 @@ function renderLeaderboard(list) {
       else if (u.rank === 3) rankClass = "rank-bronze";
       else if (u.rank <= 10) rankClass = "rank-elite";
 
-      // Difference with previous player
-      let diffHtml = "";
-      const prevPlayer =
-        i > 0 ? list[i - 1] : window.podiumData && window.podiumData[2];
-      if (prevPlayer) {
-        const diff =
-          (prevPlayer.puntosRanking || 1000) - (u.puntosRanking || 1000);
-        if (diff > 0) {
-          diffHtml = `<span class="text-[9px] font-bold text-muted opacity-40">▲ ${Math.round(diff)}</span>`;
-        }
-      }
+      const depth = totalPlayers > 1 ? (u.rank - 1) / (totalPlayers - 1) : 0;
+      const hue = Math.max(6, Math.round(130 - depth * 124)); // Verde -> rojo
+      const sat = Math.max(62, Math.round(84 - depth * 16));
+      const light = Math.max(41, Math.round(56 - depth * 13));
+      const tintOpacity = Math.max(0.08, 0.24 - depth * 0.14);
+      const rowStyle = `animation-delay:${i * 0.05}s; --rank-accent:hsl(${hue} ${sat}% ${light}%); --rank-tint:hsla(${hue} ${sat}% ${light}% / ${tintOpacity});`;
+      const movementClass =
+        movement > 0 ? "up" : movement < 0 ? "down" : "neutral";
+      const movementIcon =
+        movement > 0
+          ? "fa-arrow-up"
+          : movement < 0
+            ? "fa-arrow-down"
+            : "fa-minus";
+      const movementText =
+        movement > 0 ? `+${movement}` : movement < 0 ? `${Math.abs(movement)}` : "=";
 
       return `
             <div class="ranking-card ${isMe ? "me" : ""} ${rankClass} animate-up" 
                  onclick="window.viewProfile('${u.id}')" 
-                 style="animation-delay: ${i * 0.05}s">
+                 style="${rowStyle}">
                 
                 <div class="lb-rank">#${u.rank}</div>
                 
@@ -182,17 +256,15 @@ function renderLeaderboard(list) {
 
                 <div class="lb-info truncate">
                     <span class="lb-name">${name.toUpperCase()}</span>
-                    <div class="flex-row items-center gap-2">
-                         <div class="badge-premium-v7 sm ${streak > 2 ? "fire" : "neutral"}">
-                            <i class="fas ${streak > 0 ? 'fa-fire' : 'fa-minus'} text-[8px]"></i> ${streak}
-                         </div>
-                         <span class="text-[9px] text-muted font-black">${winrate}% WR</span>
+                    <div class="lb-meta-row">
+                        <span class="lb-meta-chip">${ps} PARTIDOS</span>
+                        <span class="lb-meta-chip">NIVEL ${level}</span>
                     </div>
                 </div>
                 
                 <div class="flex-col items-end">
-                    <span class="lb-pts">${Math.round(u.puntosRanking || 1000)}</span>
-                    ${diffHtml ? diffHtml : '<span class="text-[8px] text-muted font-bold tracking-widest">ELO</span>'}
+                    <span class="lb-pts">${points}</span>
+                    <span class="lb-rank-move ${movementClass}"><i class="fas ${movementIcon}"></i>${movementText}</span>
                 </div>
             </div>
         `;
@@ -613,6 +685,12 @@ window.openExpedient = async (uid) => {
     const level = (u.nivel || 2.5).toFixed(2);
     const pts = Math.round(u.puntosRanking || 1000);
     const pala = u.pala || "No disponible";
+    
+    // Address
+    const viv = u.vivienda || {};
+    const addressStr = (viv.bloque || viv.piso || viv.puerta) 
+      ? `Blq ${viv.bloque || '-'}, Piso ${viv.piso || '-'}, Pta ${viv.puerta || '-'}` 
+      : null;
 
     overlay.innerHTML = `
             <div class="expedient-card animate-up">
@@ -628,6 +706,7 @@ window.openExpedient = async (uid) => {
                             <h2>${name}</h2>
                             <div class="exp-badge">NIVEL ${level}</div>
                             <div class="exp-pala"><i class="fas fa-hammer"></i> ${pala}</div>
+                            ${addressStr ? `<div class="exp-pala" style="margin-top:4px;"><i class="fas fa-map-pin"></i> ${addressStr}</div>` : ''}
                         </div>
                     </div>
                 </div>
@@ -650,6 +729,8 @@ window.openExpedient = async (uid) => {
                         <span class="exp-stat-label">WR</span>
                     </div>
                 </div>
+
+                ${u.telefono ? `<div class="px-4 pt-3 flex-row items-center gap-2"><i class="fas fa-phone text-[10px] text-muted"></i><span class="text-[10px] text-white/50 font-bold">${u.telefono}</span></div>` : ''}
 
                 <div class="px-4 pt-4 pb-2 border-b border-white/5">
                     <span class="text-[9px] font-black text-primary uppercase tracking-[2px]">Historial de Operaciones</span>
@@ -711,10 +792,20 @@ window.showMatchBreakdown = async (matchId, diff, total) => {
     const res = m.resultado?.sets || "0-0";
     const won = diff > 0;
     
-    // Fake Breakdown calculation for visual impact (matches real logic usually)
-    const factorBase = won ? 20 : -15;
-    const factorLevel = Math.round(diff - factorBase);
-    const factorStreak = Math.abs(diff) > 30 ? (won ? 5 : -5) : 0;
+    // --- REAL BREAKDOWN from matchPointDetails ---
+    let detailData = null;
+    try {
+      const detailSnap = await getDocs(query(collection(db, "matchPointDetails"), where("matchId", "==", matchId), limit(1)));
+      if (!detailSnap.empty) detailData = detailSnap.docs[0].data();
+    } catch(e) {}
+    
+    // Calculate real factors from detail or estimate
+    const factorBase = detailData?.basePoints || (won ? 20 : -15);
+    const factorLevel = detailData?.levelAdjust || Math.round(diff * 0.35);
+    const factorStreak = detailData?.streakBonus || (Math.abs(diff) > 30 ? (won ? 5 : -5) : 0);
+    const factorKFactor = detailData?.kFactor || 25;
+    const factorCleanSheet = detailData?.cleanSheetBonus || 0;
+    const factorVanquisher = detailData?.vanquisherBonus || 0;
     const netPoints = diff;
 
     document.getElementById("breakdown-content").innerHTML = `
@@ -768,6 +859,44 @@ window.showMatchBreakdown = async (matchId, diff, total) => {
                     </div>
                 </div>
 
+                <!-- Additional Factors -->
+                ${factorCleanSheet !== 0 ? `
+                    <div class="flex-row between items-center p-3 bg-white/5 rounded-2xl border border-white/5">
+                        <div class="flex-row items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-500/20 flex center text-cyan-400"><i class="fas fa-broom text-xs"></i></div>
+                            <div class="flex-col">
+                                <span class="text-[10px] font-bold text-white uppercase">Clean Sheet</span>
+                                <span class="text-[8px] text-muted font-bold">Sin juegos perdidos</span>
+                            </div>
+                        </div>
+                        <span class="font-black text-sport-green">+${factorCleanSheet}</span>
+                    </div>
+                ` : ''}
+                ${factorVanquisher !== 0 ? `
+                    <div class="flex-row between items-center p-3 bg-white/5 rounded-2xl border border-white/5">
+                        <div class="flex-row items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-yellow-500/20 flex center text-yellow-400"><i class="fas fa-dragon text-xs"></i></div>
+                            <div class="flex-col">
+                                <span class="text-[10px] font-bold text-white uppercase">Matagigantes</span>
+                                <span class="text-[8px] text-muted font-bold">Victoria contra superior</span>
+                            </div>
+                        </div>
+                        <span class="font-black text-sport-green">+${factorVanquisher}</span>
+                    </div>
+                ` : ''}
+                
+                <!-- K-Factor Info -->
+                <div class="flex-row between items-center p-3 bg-white/3 rounded-2xl border border-white/5 opacity-60">
+                    <div class="flex-row items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-white/5 flex center text-white/40"><i class="fas fa-sliders text-xs"></i></div>
+                        <div class="flex-col">
+                            <span class="text-[10px] font-bold text-white/60 uppercase">K-Factor</span>
+                            <span class="text-[8px] text-muted font-bold">Sensibilidad ELO V2</span>
+                        </div>
+                    </div>
+                    <span class="font-black text-white/40">${factorKFactor}</span>
+                </div>
+
                 <!-- Total Impact -->
                 <div class="mt-2 p-5 bg-primary/10 rounded-3xl border border-primary/20 flex-row between items-center">
                     <div class="flex-col">
@@ -802,3 +931,66 @@ window.scrollToMe = () => {
     setTimeout(() => meRow.classList.remove("glow-pulse"), 3000);
   }
 };
+
+// --- ELO EXPLAINER CHART ---
+function renderEloExplainerChart() {
+  const canvas = document.getElementById('elo-explainer-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  
+  const ctx = canvas.getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ['1000', '1200', '1400', '1600', '1800', '2000', '2200', '2400'],
+      datasets: [{
+        label: 'Nivel',
+        data: [2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0],
+        borderColor: '#c6ff00',
+        backgroundColor: 'rgba(198,255,0,0.08)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 5,
+        pointBackgroundColor: '#c6ff00',
+        pointBorderColor: '#000',
+        pointBorderWidth: 2,
+        borderWidth: 3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(0,0,0,0.9)',
+          titleColor: '#c6ff00',
+          bodyColor: '#fff',
+          borderColor: 'rgba(198,255,0,0.3)',
+          borderWidth: 1,
+          callbacks: {
+            title: (items) => `ELO: ${items[0].label}`,
+            label: (item) => `Nivel: ${item.raw}`,
+            afterLabel: (item) => {
+              const kFactors = ['K=40 (Rookie)', 'K=40', 'K=25', 'K=25', 'K=25', 'K=15 (Pro)', 'K=15', 'K=15'];
+              return kFactors[item.dataIndex] || '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'PUNTOS ELO', color: 'rgba(255,255,255,0.3)', font: { size: 9, weight: 900 } },
+          ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 9, weight: 700 } },
+          grid: { color: 'rgba(255,255,255,0.03)' }
+        },
+        y: {
+          title: { display: true, text: 'NIVEL', color: 'rgba(255,255,255,0.3)', font: { size: 9, weight: 900 } },
+          ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 9, weight: 700 }, stepSize: 0.5 },
+          grid: { color: 'rgba(255,255,255,0.03)' },
+          min: 2,
+          max: 6.5
+        }
+      }
+    }
+  });
+}

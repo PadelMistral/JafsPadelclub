@@ -5,9 +5,10 @@ export const RivalIntelligence = {
      */
     parseMatches: (userId, rivalId, history) => {
         const matches = history.filter(m => {
-            if (!m.participantes || m.participantes.length < 4) return false;
-            const uIdx = m.participantes.indexOf(userId);
-            const rIdx = m.participantes.indexOf(rivalId);
+            const players = m.jugadores || m.participantes;
+            if (!players || players.length < 4) return false;
+            const uIdx = players.indexOf(userId);
+            const rIdx = players.indexOf(rivalId);
             if (uIdx === -1 || rIdx === -1) return false;
 
             const uTeam = uIdx < 2 ? 1 : 2;
@@ -21,11 +22,27 @@ export const RivalIntelligence = {
         let wins = 0;
         let losses = 0;
 
+        const resolveWinner = (m) => {
+            if (m.resultado?.ganador) return m.resultado.ganador;
+            const sets = String(m.resultado?.sets || '').trim().split(/\s+/).filter(Boolean);
+            let t1 = 0, t2 = 0;
+            sets.forEach(s => {
+                const [a, b] = s.split('-').map(Number);
+                if (!Number.isFinite(a) || !Number.isFinite(b)) return;
+                if (a > b) t1++;
+                else if (b > a) t2++;
+            });
+            if (t1 === t2) return null;
+            return t1 > t2 ? 1 : 2;
+        };
+
         matches.forEach(m => {
-            const uIdx = m.participantes.indexOf(userId);
+            const players = m.jugadores || m.participantes || [];
+            const uIdx = players.indexOf(userId);
             const uTeam = uIdx < 2 ? 1 : 2;
-            if (m.resultado?.ganador === uTeam) wins++;
-            else if (m.resultado?.ganador) losses++;
+            const winner = resolveWinner(m);
+            if (winner === uTeam) wins++;
+            else if (winner) losses++;
         });
 
         const winRate = Math.round((wins / total) * 100);

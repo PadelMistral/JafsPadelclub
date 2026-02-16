@@ -531,6 +531,42 @@
   }
 }
 
+@media (max-width: 768px) {
+  .body-auth {
+    overflow-y: auto;
+    min-height: 100dvh;
+    height: auto;
+  }
+
+  .auth-screen {
+    justify-content: flex-start !important;
+    overflow-y: auto;
+    padding-top: max(20px, env(safe-area-inset-top, 0px));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-height: 760px) {
+  .body-auth {
+    overflow-y: auto;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .auth-screen {
+    justify-content: flex-start !important;
+    overflow-y: auto;
+    padding-top: max(14px, env(safe-area-inset-top, 0px));
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .auth-card,
+  .auth-container {
+    margin-top: 8px;
+    margin-bottom: 8px;
+  }
+}
+
 /* ===== SPECTACULAR LOADER ===== */
 .spectacular-loader {
   position: fixed;

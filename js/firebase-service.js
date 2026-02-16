@@ -193,6 +193,7 @@ export async function updatePresence(uid) {
   const userRef = doc(db, "usuarios", uid);
   return updateDoc(userRef, {
     ultimoAcceso: serverTimestamp()
-  }).catch(() => {}); // Fail silently
+  }).catch((err) => {
+    console.warn("Presence update failed:", err?.code || err?.message || err);
+  });
 }
-

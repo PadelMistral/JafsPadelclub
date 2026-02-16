@@ -11,7 +11,8 @@ import {
     doc, getDoc, getDocs, collection, deleteDoc, onSnapshot, 
     query, orderBy, where, limit, addDoc, updateDoc, serverTimestamp 
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
-import { showToast } from './ui-core.js';
+import { triggerFeedback, handleOperationError, FEEDBACK } from './modules/feedback-system.js';
+import { showToast } from './ui-core.js'; // Keep for legacy/direct use if needed
 import { processMatchResults } from './ranking-service.js';
 import { createNotification } from './services/notification-service.js';
 
@@ -22,6 +23,110 @@ async function safeOnSnapshot(q, onNext) {
     }
     return onSnapshot(q, onNext, () => {});
 }
+
+/**
+ * Creates match in Firestore.
+ */
+window.executeCreateMatch = async (dateStr, hour) => {
+    if (!auth.currentUser) return triggerFeedback({ title: "ERROR", msg: "Debes iniciar sesión", type: "error" });
+    const minInput = document.getElementById('inp-min-lvl');
+    const maxInput = document.getElementById('inp-max-lvl');
+    const min = minInput ? parseFloat(minInput.value) : 2.0;
+    const max = maxInput ? parseFloat(maxInput.value) : 6.0;
+    
+    const type = window._creationType || 'amistoso';
+    const betInput = document.getElementById('inp-bet');
+    const bet = (type === 'reto' && betInput) ? parseInt(betInput.value || 0) : 0;
+    const col = type === 'reto' ? 'partidosReto' : 'partidosAmistosos';
+    
+    // Ensure we have exactly 4 slots
+    const jugs = window._initialJugadores || [auth.currentUser.uid, null, null, null];
+    while (jugs.length < 4) jugs.push(null);
+    if(jugs.length > 4) jugs.length = 4;
+    
+    const matchDate = new Date(`${dateStr}T${hour}`);
+    
+    try {
+        const { showLoading, hideLoading } = await import('./modules/ui-loader.js?v=6.5');
+        showLoading("Creando partido en la Matrix...");
+
+        const creatorDoc = await getDocument('usuarios', auth.currentUser.uid);
+        const creatorName = creatorDoc?.nombreUsuario || creatorDoc?.nombre || 'Un jugador';
+        const visibility = window._creationVisibility || 'public';
+        const invitedUsers = jugs.filter(id => id && id !== auth.currentUser.uid && !id.startsWith('GUEST_'));
+
+        const matchData = {
+            creador: auth.currentUser.uid,
+            organizerId: auth.currentUser.uid,
+            fecha: matchDate,
+            jugadores: jugs,
+            restriccionNivel: { min, max },
+            familyPointsBet: bet,
+            estado: 'abierto',
+            visibility: visibility,
+            invitedUsers: visibility === 'private' ? invitedUsers : [],
+            timestamp: serverTimestamp(),
+            equipoA: [jugs[0], jugs[1]],
+            equipoB: [jugs[2], jugs[3]],
+            surface: document.getElementById('inp-surface')?.value || 'indoor',
+            courtType: document.getElementById('inp-court')?.value || 'normal'
+        };
+
+        // Pre-Match Prediction (if filled)
+        const validPlayers = jugs.filter(id => id);
+        if (validPlayers.length === 4) {
+            try {
+                const profiles = await Promise.all(jugs.map(async uid => {
+                    if (uid.startsWith('GUEST_')) {
+                        const parts = uid.split('_');
+                        return { id: uid, puntosRanking: 1000, nivel: parseFloat(parts[2]) || 2.5 }; 
+                    }
+                    const d = await getDoc(doc(db, 'usuarios', uid));
+                    return d.exists() ? d.data() : { puntosRanking: 1000, nivel: 2.5 };
+                }));
+
+                const { PredictiveEngine } = await import('./predictive-engine.js');
+                const prediction = PredictiveEngine.calculateMatchProbability(
+                    profiles[0], profiles[1], profiles[2], profiles[3], 
+                    { surface: matchData.surface }
+                );
+                
+                matchData.preMatchPrediction = prediction;
+                if (prediction.volatility.includes('Alta')) matchData.tags = ['high_volatility'];
+            } catch (err) { }
+        }
+
+        const matchRef = await addDoc(collection(db, col), matchData);
+        const createdMatchId = matchRef.id;
+
+        const others = jugs.filter(id => id && id !== auth.currentUser.uid && !id.startsWith('GUEST_'));
+        if (others.length > 0) {
+            const notifType = visibility === 'private' ? 'private_invite' : 'match_opened';
+            const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+            const time = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            const notifMsg = visibility === 'private'
+                ? `${creatorName} te invitó a una partida privada el ${day} a las ${time}.`
+                : `${creatorName} creó una partida para el ${day} a las ${time}.`;
+            await createNotification(
+                others,
+                "¡Padeluminatis!",
+                notifMsg,
+                notifType,
+                'calendario.html',
+                { type: notifType, matchId: createdMatchId, matchCollection: col, dedupId: `${notifType}_${createdMatchId}` }
+            );
+        }
+
+        hideLoading();
+        triggerFeedback(FEEDBACK.MATCH.CREATED);
+        if (window.closeMatchModal) window.closeMatchModal();
+        else document.getElementById('modal-match')?.classList.remove('active');
+    } catch(e) {
+        const { hideLoading } = await import('./modules/ui-loader.js?v=6.5');
+        hideLoading();
+        handleOperationError(e);
+    }
+};
 
 /**
  * Renders the detailed view of a match in a modal or container.
@@ -498,96 +603,7 @@ function renderMatchActions(m, isParticipant, isOrganizer, uid, id, col) {
     `;
 }
 
-/**
- * Creates match in Firestore.
- */
-window.executeCreateMatch = async (dateStr, hour) => {
-    if (!auth.currentUser) return showToast("ERROR", "Debes iniciar sesión", "error");
-    const minInput = document.getElementById('inp-min-lvl');
-    const maxInput = document.getElementById('inp-max-lvl');
-    const min = minInput ? parseFloat(minInput.value) : 2.0;
-    const max = maxInput ? parseFloat(maxInput.value) : 6.0;
-    
-    const type = window._creationType || 'amistoso';
-    const betInput = document.getElementById('inp-bet');
-    const bet = (type === 'reto' && betInput) ? parseInt(betInput.value || 0) : 0;
-    const col = type === 'reto' ? 'partidosReto' : 'partidosAmistosos';
-    
-    // Ensure we have exactly 4 slots
-    const jugs = window._initialJugadores || [auth.currentUser.uid, null, null, null];
-    while (jugs.length < 4) jugs.push(null);
-    if(jugs.length > 4) jugs.length = 4;
-    
-    const matchDate = new Date(`${dateStr}T${hour}`);
-    
-    try {
-        const visibility = window._creationVisibility || 'public';
-        const invitedUsers = jugs.filter(id => id && id !== auth.currentUser.uid && !id.startsWith('GUEST_'));
 
-        const matchData = {
-            creador: auth.currentUser.uid,
-            organizerId: auth.currentUser.uid,
-            fecha: matchDate,
-            jugadores: jugs,
-            restriccionNivel: { min, max },
-            familyPointsBet: bet,
-            estado: 'abierto',
-            visibility: visibility,
-            invitedUsers: visibility === 'private' ? invitedUsers : [],
-            timestamp: serverTimestamp(),
-            equipoA: [jugs[0], jugs[1]],
-            equipoB: [jugs[2], jugs[3]],
-            surface: document.getElementById('inp-surface')?.value || 'indoor',
-            courtType: document.getElementById('inp-court')?.value || 'normal'
-        };
-
-        // Pre-Match Prediction (if filled)
-        const validPlayers = jugs.filter(id => id);
-        if (validPlayers.length === 4) {
-            try {
-                const profiles = await Promise.all(jugs.map(async uid => {
-                    if (uid.startsWith('GUEST_')) {
-                        const parts = uid.split('_');
-                        return { id: uid, puntosRanking: 1000, nivel: parseFloat(parts[2]) || 2.5 }; 
-                    }
-                    const d = await getDoc(doc(db, 'usuarios', uid));
-                    return d.exists() ? d.data() : { puntosRanking: 1000, nivel: 2.5 };
-                }));
-
-                const { PredictiveEngine } = await import('./predictive-engine.js');
-                const prediction = PredictiveEngine.calculateMatchProbability(
-                    profiles[0], profiles[1], profiles[2], profiles[3], 
-                    { surface: matchData.surface }
-                );
-                
-                matchData.preMatchPrediction = prediction;
-                if (prediction.volatility.includes('Alta')) matchData.tags = ['high_volatility'];
-            } catch (err) { }
-        }
-
-        await addDoc(collection(db, col), matchData);
-
-        const others = jugs.filter(id => id && id !== auth.currentUser.uid && !id.startsWith('GUEST_'));
-        if (others.length > 0) {
-            const notifType = visibility === 'private' ? 'private_invite' : 'match_join';
-            const notifMsg = visibility === 'private'
-                ? `Te han invitado a una partida privada el ${matchDate.toLocaleDateString()}`
-                : `Te han convocado para el ${matchDate.toLocaleDateString()}`;
-            await createNotification(others, "¡Padeluminatis!", notifMsg, notifType, 'calendario.html');
-        }
-
-        showToast("SISTEMA", "Despliegue confirmado en la Matrix", "success");
-        if (window.closeMatchModal) window.closeMatchModal();
-        else document.getElementById('modal-match')?.classList.remove('active');
-    } catch(e) {
-        console.error("Error creating match detailed:", e);
-        if (e.code === 'permission-denied') {
-             showToast("ACCESO DENEGADO", "Reglas de seguridad impiden la reserva.", "error");
-        } else {
-             showToast("ERROR CRÍTICO", e.message || "Fallo en la creación del nodo", "error");
-        }
-    }
-};
 
 /**
  * Universal action handler.
@@ -603,16 +619,21 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
     const matchDate = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
 
     try {
+        const { showLoading, hideLoading } = await import('./modules/ui-loader.js?v=6.5');
+        const labels = { 'join': 'Uniéndose...', 'leave': 'Abandonando...', 'delete': 'Cancelando...', 'remove': 'Procesando...', 'add': 'Añadiendo...' };
+        showLoading(labels[action] || "Sincronizando...", true);
+
         const isOrganizer = m.organizerId === user.uid || m.creador === user.uid || (await getDocument('usuarios', user.uid))?.rol === 'Admin';
         
         if (action === 'join') {
             const emptyIdx = jugs.findIndex(id => !id);
-            if (emptyIdx === -1) return showToast("COMPLETO", "Sin huecos en este nodo", "warning");
+            if (emptyIdx === -1) { hideLoading(); return showToast("COMPLETO", "Sin huecos en este nodo", "warning"); }
             
             const d = await getDoc(doc(db, "usuarios", user.uid));
             const uLvl = d.data()?.nivel || 2.5;
             
             if (m.restriccionNivel && (uLvl < m.restriccionNivel.min || uLvl > m.restriccionNivel.max)) {
+                hideLoading();
                 return showToast("ACCESO DENEGADO", "Nivel incompatible con el protocolo", "warning");
             }
             
@@ -621,6 +642,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 const isInvited = (m.invitedUsers || []).includes(user.uid);
                 const isOwner = m.organizerId === user.uid || m.creador === user.uid;
                 if (!isInvited && !isOwner) {
+                    hideLoading();
                     return showToast("ACCESO DENEGADO", "Requiere invitación oficial", "error");
                 }
             }
@@ -635,19 +657,37 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             if (jugs.filter(id => id).length === 4) {
                 try {
                     const { AIOrchestrator } = await import('./ai-orchestrator.js');
-                    jugs.forEach(uid => {
-                        if (uid && !uid.startsWith('GUEST_')) AIOrchestrator.dispatch('MATCH_READY', { uid, matchId: id });
-                    });
+                    AIOrchestrator.dispatch('MATCH_READY', { uid: user.uid, matchId: id });
                 } catch(err) {}
                 
                 // Match Filled Notification
                 const others = jugs.filter(uid => uid !== user.uid && !uid.startsWith('GUEST_'));
-                await createNotification(others, "🏆 Squad Completo", `¡El partido del ${matchDate.toLocaleDateString()} está listo! Somos 4 guerreros.`, 'success', 'home.html');
+                const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+                const time = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                await createNotification(
+                    others,
+                    "Partido completo",
+                    `La partida del ${day} a las ${time} está cerrada: ya sois 4 jugadores.`,
+                    'match_full',
+                    'home.html',
+                    { type: 'match_full', matchId: id, dedupId: `match_full_${id}` }
+                );
             }
             
             const myName = d.data()?.nombreUsuario || 'Un jugador';
-            await createNotification(m.creador, "Nuevos Datos", `${myName} se ha unido al squad del ${matchDate.toLocaleDateString()}`, 'match_join', 'calendario.html');
-            showToast("CONECTADO", "Sincronización completa", "success");
+            const joinDay = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+            await createNotification(
+                m.creador,
+                "Nuevos Datos",
+                `${myName} se ha unido a tu partida del ${joinDay}.`,
+                'match_join',
+                'calendario.html',
+                { type: 'match_join', matchId: id, matchCollection: col, dedupId: `match_join_${id}_${user.uid}` }
+            );
+            
+            hideLoading();
+            triggerFeedback(FEEDBACK.MATCH.JOINED);
+            if(window.closeMatchModal) window.closeMatchModal();
         } 
         else if (action === 'leave') {
             const wasFull = jugs.filter(id => id).length === 4;
@@ -658,7 +698,8 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 
                 if (activeJugs.length === 0 && jugs.filter(id => id).length === 0) {
                     await deleteDoc(ref);
-                    showToast("NODO COLAPSADO", "Partido eliminado por vacío", "info");
+                    hideLoading();
+                    triggerFeedback({title: "NODO COLAPSADO", msg: "Partido eliminado por vacío", type: "info"});
                 } else {
                     await updateDoc(ref, { 
                         jugadores: jugs,
@@ -670,49 +711,83 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                     if (wasFull) {
                         try {
                             const { AIOrchestrator } = await import('./ai-orchestrator.js');
-                            jugs.forEach(uid => {
-                                if (uid && !uid.startsWith('GUEST_')) AIOrchestrator.dispatch('MATCH_UNREADY', { uid, matchId: id });
-                            });
+                            AIOrchestrator.dispatch('MATCH_UNREADY', { uid: user.uid, matchId: id });
                         } catch(err) {}
                     }
-                    showToast("DESCONECTADO", "Has abandonado la sesión", "info");
+                    const meDoc = await getDocument('usuarios', user.uid);
+                    const leaveName = meDoc?.nombreUsuario || meDoc?.nombre || 'Un jugador';
+                    const stillInMatch = jugs.filter(id => id && id !== user.uid && !id.startsWith('GUEST_'));
+                    if (stillInMatch.length > 0) {
+                        const leaveDay = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+                        await createNotification(
+                            stillInMatch,
+                            "Jugador fuera de la partida",
+                            `${leaveName} ha abandonado la partida del ${leaveDay}.`,
+                            'warning',
+                            'calendario.html',
+                            { matchId: id, type: 'match_leave' }
+                        );
+                    }
+                    hideLoading();
+                    triggerFeedback(FEEDBACK.MATCH.LEFT);
+                    if(window.closeMatchModal) window.closeMatchModal();
                 }
-            }
+            } else { hideLoading(); }
         }
         else if (action === 'delete') {
-            if (!isOrganizer) return showToast("ACCESO DENEGADO", "Solo el organizador puede cancelar", "error");
+            if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
             
             if (confirm("¿Abortar misión?")) {
                 const others = jugs.filter(uid => uid !== user.uid && !uid.startsWith('GUEST_'));
-                await createNotification(others, "Misión Abortada", `El partido ha sido cancelado por el líder`, 'warning', 'calendario.html');
+                const adminDoc = await getDocument('usuarios', user.uid);
+                const adminName = adminDoc?.nombreUsuario || adminDoc?.nombre || 'El organizador';
+                const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+                await createNotification(
+                    others,
+                    "Partido cancelado",
+                    `La partida de ${adminName} del ${day} fue cancelada.`,
+                    'match_cancelled',
+                    'calendario.html',
+                    { type: 'match_cancelled', matchId: id, dedupId: `match_cancelled_${id}` }
+                );
                 await deleteDoc(ref); 
-                showToast("ABORTADO", "Protocolo cancelado", "warning"); 
-            }
+                hideLoading();
+                triggerFeedback(FEEDBACK.MATCH.CANCELLED); 
+            } else { hideLoading(); }
         }
         else if (action === 'remove') {
-            if (!isOrganizer) return showToast("ACCESO DENEGADO", "Solo el organizador puede expulsar", "error");
+            if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
             
             const removedUid = jugs[extra.idx];
+            if (removedUid && !removedUid.startsWith('GUEST_')) {
+                const adminName = auth.currentUser?.displayName || 'El organizador';
+                const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+                await createNotification(
+                    removedUid,
+                    "Baja del Squad",
+                    `${adminName} te ha retirado de la partida del ${day}.`,
+                    'warning',
+                    'calendario.html',
+                    { type: 'match_removed', matchId: id, matchCollection: col, dedupId: `match_removed_${id}_${removedUid}` }
+                );
+            }
             jugs[extra.idx] = null;
             await updateDoc(ref, { 
                 jugadores: jugs,
                 equipoA: [jugs[0], jugs[1]],
                 equipoB: [jugs[2], jugs[3]]
             });
-            if (removedUid && !removedUid.startsWith('GUEST_')) {
-                const adminName = auth.currentUser?.displayName || 'El organizador';
-                await createNotification(removedUid, "Baja del Squad", `${adminName} te ha retirado del partido del ${matchDate.toLocaleDateString()}`, 'warning');
-            }
-            showToast("ELIMINADO", "Jugador expulsado", "info");
+            hideLoading();
+            triggerFeedback({title: "ELIMINADO", msg: "Jugador expulsado", type: "info"});
         }
         else if (action === 'add') {
-             if (!isOrganizer) return showToast("ACCESO DENEGADO", "Solo el organizador puede añadir jugadores", "error");
+             if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
 
              if (extra.idx !== undefined) jugs[extra.idx] = extra.uid;
              else {
                  const nextHueco = jugs.findIndex(id => !id);
                  if (nextHueco !== -1) jugs[nextHueco] = extra.uid;
-                 else return showToast("ERROR", "Squad completo", "warning");
+                 else { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.FULL); }
              }
              
              await updateDoc(ref, { 
@@ -724,13 +799,22 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
              if (!extra.uid.startsWith('GUEST_')) {
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
                 const currentPlayers = jugs.filter(id => id).length;
-                await createNotification(extra.uid, "¡Convocado!", `Te han unido a una partida para el ${day}. Ya sois ${currentPlayers}/4 jugadores.`, 'match_join', 'calendario.html');
+                await createNotification(
+                    extra.uid,
+                    "¡Convocado!",
+                    `Te han unido a una partida para el ${day}. Ya sois ${currentPlayers}/4 jugadores.`,
+                    'match_join',
+                    'calendario.html',
+                    { type: 'match_join', matchId: id, matchCollection: col, dedupId: `match_add_${id}_${extra.uid}` }
+                );
              }
-             showToast("AÑADIDO", "Agente reclutado", "success");
+             hideLoading();
+             triggerFeedback({title: "AÑADIDO", msg: "Agente reclutado", type: "success"});
         }
     } catch(e) { 
-        console.error(e);
-        showToast("ERROR", "Fallo en la operación", "error"); 
+        const { hideLoading } = await import('./modules/ui-loader.js?v=6.5');
+        hideLoading();
+        handleOperationError(e); 
     }
 };
 
@@ -765,9 +849,82 @@ window.sendMatchChat = async (id, col) => {
     const inp = document.getElementById('match-chat-in');
     const text = inp.value.trim();
     if (!text || !auth.currentUser) return;
-    await addDoc(collection(db, col, id, 'chat'), { uid: auth.currentUser.uid, text, timestamp: serverTimestamp() });
+    if (text.length > 500) {
+        return showToast("MENSAJE LARGO", "Máximo 500 caracteres por mensaje.", "warning");
+    }
+    const msgRef = await addDoc(collection(db, col, id, 'chat'), {
+        uid: auth.currentUser.uid,
+        authorId: auth.currentUser.uid,
+        text,
+        timestamp: serverTimestamp()
+    });
     inp.value = '';
+
+    try {
+        const targets = await resolveMentionTargets(id, col, text, auth.currentUser.uid);
+        if (targets.length > 0) {
+            const me = await getDocument('usuarios', auth.currentUser.uid);
+            const senderName = me?.nombreUsuario || me?.nombre || 'Un jugador';
+            await createNotification(
+                targets,
+                "Te han mencionado en el chat",
+                `${senderName} te ha mencionado en el chat del partido.`,
+                "chat_mention",
+                "calendario.html",
+                { matchId: id, type: "chat_mention", dedupId: `chat_mention_${msgRef.id}` }
+            );
+        }
+    } catch (e) {
+        console.warn("Mention notification skipped:", e);
+    }
 };
+
+function normalizeMentionToken(v) {
+    return String(v || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9._-]/g, '');
+}
+
+function extractMentionTokens(text) {
+    const tokens = [];
+    const regex = /@([a-zA-Z0-9._-]{2,40})/g;
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+        const token = normalizeMentionToken(m[1]);
+        if (token) tokens.push(token);
+    }
+    return Array.from(new Set(tokens));
+}
+
+async function resolveMentionTargets(matchId, col, text, senderUid) {
+    const mentions = extractMentionTokens(text);
+    if (mentions.length === 0) return [];
+
+    const mSnap = await getDoc(doc(db, col, matchId));
+    if (!mSnap.exists()) return [];
+    const players = (mSnap.data()?.jugadores || [])
+        .filter(uid => uid && !uid.startsWith('GUEST_') && uid !== senderUid);
+    if (players.length === 0) return [];
+
+    const profiles = await Promise.all(players.map(async uid => {
+        const p = await getDocument('usuarios', uid);
+        return {
+            uid,
+            userToken: normalizeMentionToken(p?.nombreUsuario || ''),
+            nameToken: normalizeMentionToken(p?.nombre || '')
+        };
+    }));
+
+    return profiles
+        .filter(p =>
+            mentions.includes(p.userToken) ||
+            mentions.includes(p.nameToken) ||
+            mentions.some(t => p.userToken.startsWith(t) || p.nameToken.startsWith(t))
+        )
+        .map(p => p.uid);
+}
 
 async function getPlayerName(uid) {
     if (!uid) return 'Anónimo';
@@ -829,6 +986,8 @@ window.openResultForm = async (id, col) => {
     };
 
     document.getElementById('btn-save-res').onclick = async () => {
+        const saveBtn = document.getElementById('btn-save-res');
+        const prevBtnHtml = saveBtn?.innerHTML || '';
         const res = [];
         for(let i=1; i<=3; i++){
             const i1 = document.getElementById(`s${i}-1`);
@@ -841,16 +1000,33 @@ window.openResultForm = async (id, col) => {
         if (res.length < 2) return showToast("INCOMPLETO", "Se requieren al menos 2 sets", "warning");
 
         try {
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = `<span class="t-main">GUARDANDO...</span><i class="fas fa-spinner fa-spin"></i>`;
+            }
+            showToast("Guardando...", "Registrando resultado oficial del partido.", "info");
             const resultStr = res.join(' ');
             await updateDoc(doc(db, col, id), { resultado: { sets: resultStr }, estado: 'jugado' });
-            await processMatchResults(id, col, resultStr);
-            showToast("DATOS GUARDADOS", "Ranking actualizado", "success");
+            const rankingSync = await processMatchResults(id, col, resultStr);
+            if (!rankingSync?.success) {
+                throw new Error(rankingSync?.error || 'ranking-sync-failed');
+            }
+            showToast(
+                "DATOS GUARDADOS",
+                rankingSync?.skipped ? "Resultado guardado (ranking ya procesado)." : "Ranking actualizado",
+                "success"
+            );
             window.closeMatchModal();
             setTimeout(() => {
                 try { window.location.href = `diario.html?matchId=${id}`; } catch (_) {}
             }, 1000);
         } catch (e) {
-            showToast("ERROR", "Fallo al guardar resultados", "error");
+            showToast("ERROR", `Fallo al guardar resultados (${e?.message || 'sync'})`, "error");
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = prevBtnHtml;
+            }
         }
     };
 };

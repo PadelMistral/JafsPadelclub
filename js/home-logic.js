@@ -26,12 +26,27 @@ import {
   showLoading,
   hideLoading,
 } from "./modules/ui-loader.js?v=6.5";
-import { createNotification, initAutoNotifications } from "./services/notification-service.js";
+import { initAutoNotifications } from "./services/notification-service.js";
 import { requestNotificationPermission } from "./modules/push-notifications.js";
 
 let currentUser = null;
 let userData = null;
 let allMatches = [];
+let weatherForecast = null;
+let openMatchesCache = [];
+let homePresenceInterval = null;
+let homeRefreshInterval = null;
+let homeUserDocUnsub = null;
+let homeBootUid = null;
+const userProfileCache = new Map();
+const shownNotifToastIds = new Set();
+let notifToastBaselineReady = false;
+
+function safeAuthRedirect(url) {
+  if (window.__appRedirectLock) return;
+  window.__appRedirectLock = true;
+  window.location.replace(url);
+}
 
 /* DUPLICATE WELCOME_PHRASES DISABLED (cleaned) */
 
@@ -42,130 +57,274 @@ function calculateBasePoints(level) {
   return pts;
 }
 
-// Real Online Count Logic - Only counts users active in the last 15 minutes
+function toDateSafe(value) {
+  if (!value) return new Date();
+  if (typeof value.toDate === "function") return value.toDate();
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
+function formatHour(date) {
+  return `${date.getHours()}:${date.getMinutes().toString().padStart(2, "0")}`;
+}
+
+function shortPlayerName(name) {
+  if (!name) return "JUGADOR";
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((t) => t.toUpperCase())
+    .join(" ");
+}
+
+function buildTeamLabel(team) {
+  const filled = team.filter((p) => !p.isEmpty);
+  if (!filled.length) return "PLAZAS LIBRES";
+  return filled.map((p) => shortPlayerName(p.name)).join(" + ");
+}
+
+function buildCompactRoster(players) {
+  return players
+    .map((p) => {
+      const cls = [
+        "match-roster-chip-v12",
+        p.isEmpty ? "empty" : "",
+        p.isMe ? "me" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const text = p.isEmpty
+        ? "Libre"
+        : `${shortPlayerName(p.name)}${p.isGuest ? " · INV" : ` · ${Number(p.level || 2.5).toFixed(2)}`}`;
+      return `<span class="${cls}">${text}</span>`;
+    })
+    .join("");
+}
+
+function getWeatherAnimClass(code) {
+  if (code <= 3) return "weather-anim-sun";
+  if (code <= 48) return "weather-anim-cloud";
+  if (code <= 82) return "weather-anim-rain";
+  return "weather-anim-storm";
+}
+
+function buildWeatherPill(date, compact = false) {
+  if (!weatherForecast?.hourly) return "";
+  const hourIdx = weatherForecast.hourly.time.findIndex((t) => {
+    const tDate = new Date(t);
+    return tDate.getDate() === date.getDate() && tDate.getHours() === date.getHours();
+  });
+  if (hourIdx === -1) return "";
+
+  const temp = Math.round(weatherForecast.hourly.temperature_2m[hourIdx]);
+  const code = weatherForecast.hourly.weather_code[hourIdx];
+  const icon = getIconFromCode(code);
+  const animClass = getWeatherAnimClass(code);
+  const compactClass = compact ? "compact" : "";
+  return `<span class="match-weather-pill ${animClass} ${compactClass}"><i class="fas ${icon} match-weather-icon"></i><span>${temp}°</span></span>`;
+}
+
+async function getCachedUserProfile(uid) {
+  if (!uid || uid.startsWith("GUEST_")) return null;
+  if (userProfileCache.has(uid)) return userProfileCache.get(uid);
+
+  const raw = await getDocument("usuarios", uid);
+  const profile = {
+    id: uid,
+    name: raw?.nombreUsuario || raw?.nombre || "Jugador",
+    level: Number(raw?.nivel || 2.5),
+    photo: raw?.fotoPerfil || raw?.fotoURL || "./imagenes/Logojafs.png",
+    role: raw?.rol || "Jugador",
+    points: Math.round(Number(raw?.puntosRanking || 1000)),
+  };
+  userProfileCache.set(uid, profile);
+  return profile;
+}
+
+async function getDetailedMatchSlots(match) {
+  const slots = [...(match?.jugadores || [])];
+  while (slots.length < 4) slots.push(null);
+  const normalized = slots.slice(0, 4);
+
+  return Promise.all(
+    normalized.map(async (uid) => {
+      if (!uid) {
+        return {
+          id: null,
+          name: "Libre",
+          level: null,
+          photo: "./imagenes/Logojafs.png",
+          isEmpty: true,
+          isGuest: false,
+          isMe: false,
+        };
+      }
+
+      if (uid.startsWith("GUEST_")) {
+        return {
+          id: uid,
+          name: uid.split("_")[1] || "Invitado",
+          level: null,
+          photo: "./imagenes/Logojafs.png",
+          isEmpty: false,
+          isGuest: true,
+          isMe: false,
+        };
+      }
+
+      const profile = await getCachedUserProfile(uid);
+      return {
+        ...profile,
+        isEmpty: false,
+        isGuest: false,
+        isMe: uid === currentUser?.uid,
+      };
+    }),
+  );
+}
+
+// Real Online Count Logic - Only counts users active in the last 5 minutes (Real-time)
 async function injectOnlineCount() {
   try {
-    const threshold = new Date(Date.now() - 15 * 60 * 1000);
+    const threshold = new Date(Date.now() - 5 * 60 * 1000);
     const q = query(
       collection(db, "usuarios"),
       where("ultimoAcceso", ">", threshold),
       limit(100),
     );
     const snap = await window.getDocsSafe(q);
-    const onlineCount = snap.size || 1;
+    const onlineCount = snap.docs.length;
 
     const el = document.getElementById("online-count-display");
     const elLibrary = document.getElementById("online-count-library");
     if (el) {
-      el.innerHTML = `${onlineCount} JUGADORES ONLINE`;
+      el.innerHTML = `
+        <div class="flex-row items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-sm">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span class="text-[9px] font-black text-emerald-400 uppercase tracking-widest whitespace-nowrap">
+            ${onlineCount} JUGADORES ACTIVOS
+          </span>
+        </div>
+      `;
       el.style.cursor = "pointer";
       el.onclick = () => window.showOnlineUsers();
     }
     if (elLibrary) {
       elLibrary.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-sport-green animate-pulse"></span> ${onlineCount} ONLINE`;
     }
-    const elNext = document.getElementById("online-count-next");
-    if (elNext) {
-      elNext.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-sport-green animate-pulse"></span> <span class="val">${onlineCount} ONLINE</span>`;
-      elNext.classList.remove("hidden");
-    }
   } catch (e) {
     console.error("Error detecting online players:", e);
   }
 }
 
-// Show Online Users Modal (Elite Rebirth v7.0)
+// Show Online Users Modal (Elite Rebirth v8.0)
 window.showOnlineUsers = async () => {
-  const threshold = new Date(Date.now() - 15 * 60 * 1000);
-  const q = query(
-    collection(db, "usuarios"),
-    where("ultimoAcceso", ">", threshold),
-    limit(50),
-  );
-  const snap = await window.getDocsSafe(q);
+    const updateModalList = async () => {
+        const threshold = new Date(Date.now() - 5 * 60 * 1000);
+        const q = query(
+            collection(db, "usuarios"),
+            where("ultimoAcceso", ">", threshold),
+            limit(50),
+        );
+        const snap = await window.getDocsSafe(q);
 
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay active";
-  overlay.style.backdropFilter = "blur(12px) saturate(180%)";
-  overlay.innerHTML = `
-        <div class="modal-card animate-up" style="background: rgba(10, 10, 15, 0.85); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 0 50px rgba(0,0,0,0.8);">
-            <!-- Glass Header -->
+        const listContainer = document.getElementById('online-users-list');
+        const countTxt = document.getElementById('online-users-count');
+        if (!listContainer) return;
+
+        countTxt.innerText = `${snap.docs.length} GUERREROS INTERACTUANDO`;
+        listContainer.innerHTML = snap.docs.map((d) => {
+            const u = d.data();
+            const photo = u.fotoPerfil || u.fotoURL || "./imagenes/Logojafs.png";
+            const isMe = d.id === currentUser?.uid;
+            const lvl = Number(u.nivel || 2.5).toFixed(1);
+            const isGold = (u.puntosRanking || 1000) > 1800;
+
+            return `
+                <div class="flex-row items-center gap-3 p-2 rounded-xl bg-white/5 border border-white/5 hover:border-primary/40 transition-all cursor-pointer group ${isMe ? "bg-primary/5 border-primary/20" : ""}" 
+                     onclick="window.viewProfile('${d.id}')">
+                    <div class="relative flex-shrink-0">
+                        <div class="w-7 h-7 rounded-full p-0.5 ${isGold ? 'gradient-gold' : 'bg-white/10'}">
+                            <img src="${photo}" class="w-full h-full rounded-full object-cover">
+                        </div>
+                        <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-sport-green rounded-full border-2 border-[#0a0a0f] shadow-glow flex center">
+                            <i class="fas fa-bolt text-[5px] text-black"></i>
+                        </div>
+                    </div>
+                    <div class="flex-col flex-1 truncate">
+                        <span class="text-[12px] font-black text-white italic uppercase tracking-tighter truncate ${isMe ? "text-primary" : ""}">
+                            ${u.nombreUsuario || u.nombre || "Jugador"}
+                        </span>
+                        <div class="flex-row items-center gap-2">
+                            <span class="text-[7px] text-muted font-black uppercase tracking-widest opacity-60">${u.rol || "Atleta"}</span>
+                            <span class="text-[9px] text-primary font-black">NV ${lvl}</span>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-[7px] text-white/10 group-hover:text-primary transition-all"></i>
+                </div>
+            `;
+        }).join("");
+        if (snap.docs.length === 0) listContainer.innerHTML = '<div class="text-center text-xs text-muted py-14 opacity-20 uppercase tracking-[4px]">Silencio...</div>';
+    };
+
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay active";
+    overlay.style.backdropFilter = "blur(15px) saturate(180%)";
+    overlay.innerHTML = `
+        <div class="modal-card animate-up glass-strong" style="max-width: 360px; border: 1px solid rgba(255,255,255,0.1);">
             <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding: 20px;">
                 <div class="flex-col">
-                    <div class="flex-row items-center gap-2 mb-1">
-                        <div class="pulse-dot-green"></div>
-                        <h3 class="modal-title font-black italic text-white tracking-widest">SALA DE JUGADORES</h3>
+                    <div class="flex-row items-center gap-3 mb-1">
+                        <div class="w-2.5 h-2.5 bg-sport-green rounded-full animate-pulse shadow-glow"></div>
+                        <h3 class="text-lg font-black italic text-white tracking-[1px] m-0 uppercase">Nexus Online</h3>
                     </div>
-                    <span class="text-[10px] text-muted font-bold tracking-[0.2em] uppercase">${snap.size} OPERATIVOS EN LÍNEA</span>
+                    <span id="online-users-count" class="text-[9px] text-muted font-black uppercase opacity-60">Sincronizando...</span>
                 </div>
                 <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
 
-            <div class="modal-body custom-scroll" style="padding: 15px; max-height: 70vh;">
-                <div class="flex-col gap-3">
-                    ${snap.docs
-                      .map((d) => {
-                        const u = d.data();
-                        const photo =
-                          u.fotoPerfil ||
-                          u.fotoURL ||
-                          "./imagenes/default-avatar.png";
-                        const isMe =
-                          u.uid === currentUser?.uid ||
-                          d.id === currentUser?.uid;
-                        const lvl = Number(u.nivel || 2.5).toFixed(1);
-
-                        return `
-                            <div class="flex-row items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-primary/30 transition-all cursor-pointer group ${isMe ? "bg-primary/10 border-primary/20" : ""}" 
-                                 onclick="window.viewProfile('${u.uid || d.id}')">
-                                
-                                <div class="relative flex-shrink-0">
-                                    <img src="${photo}" class="w-12 h-12 rounded-full object-cover border-2 ${isMe ? "border-primary shadow-glow-sm" : "border-white/10"}">
-                                    <div class="absolute bottom-0 right-0 w-3 h-3 bg-sport-green rounded-full border-2 border-[#0a0a0f] shadow-glow"></div>
-                                </div>
-
-                                <div class="flex-col flex-1">
-                                    <span class="text-[14px] font-black text-white italic uppercase tracking-tighter ${isMe ? "text-primary" : ""}">
-                                        ${u.nombreUsuario || u.nombre || "Jugador"} ${isMe ? '<span class="text-[10px] opacity-70 ml-1">(T)</span>' : ""}
-                                    </span>
-                                    <div class="flex-row items-center gap-2">
-                                        <div class="flex-row items-center gap-1 bg-black/40 px-2 py-0.5 rounded-md border border-white/5">
-                                            <span class="text-[8px] text-muted font-black">NV</span>
-                                            <span class="text-[10px] text-primary font-black">${lvl}</span>
-                                        </div>
-                                        <span class="text-[9px] text-muted font-black uppercase tracking-widest opacity-60">${u.rol || "Jugador"}</span>
-                                    </div>
-                                </div>
-
-                                <i class="fas fa-chevron-right text-[10px] text-muted group-hover:text-primary transition-transform group-hover:translate-x-1"></i>
-                            </div>
-                        `;
-                      })
-                      .join("")}
-                    ${snap.empty ? '<div class="text-center text-xs text-muted py-10 font-bold uppercase tracking-widest opacity-30">Silencio absoluto en la Matrix...</div>' : ""}
-                </div>
+            <div id="online-users-list" class="modal-body custom-scroll p-3 flex-col gap-2" style="max-height: 60vh;">
+                <!-- Content injected via updateModalList -->
             </div>
 
-            <div class="modal-footer" style="padding: 15px; border-top: 1px solid rgba(255,255,255,0.05); text-align: center;">
-                <span class="text-[9px] text-muted font-bold italic opacity-60 uppercase tracking-widest">Toca un jugador para ver su perfil estelar</span>
+            <div class="modal-footer p-3 text-center border-t border-white/5">
+                <p class="text-[9px] text-muted font-black uppercase tracking-widest m-0 opacity-40">DetecciÃ³n de presencia activa</p>
             </div>
         </div>
     `;
 
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.remove();
-  });
-  document.body.appendChild(overlay);
+    document.body.appendChild(overlay);
+    updateModalList();
+    const refreshInterval = setInterval(updateModalList, 15000);
+
+    overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) {
+            clearInterval(refreshInterval);
+            overlay.remove();
+        }
+    });
+
+    const closeBtn = overlay.querySelector('.close-btn');
+    if (closeBtn) {
+        closeBtn.onclick = () => {
+            clearInterval(refreshInterval);
+            overlay.remove();
+        };
+    }
 };
 
 document.addEventListener("DOMContentLoaded", () => {
   // AUTO-CLEAN CACHE ON HARD RELOAD OR VERSION MISMATCH
-  if (localStorage.getItem('app_version') !== '6.6') {
-      console.log("Actualizando versión... Limpiando caché.");
+  if (localStorage.getItem('app_version') !== '6.8') {
+      console.log("Actualizando versiÃ³n... Limpiando cachÃ©.");
       sessionStorage.clear();
-      localStorage.setItem('app_version', '6.6');
+      localStorage.setItem('app_version', '6.8');
   }
 
   initAppUI("home");
@@ -173,7 +332,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   observerAuth(async (user) => {
     if (!user) {
-      window.location.href = "index.html";
+      if (homeUserDocUnsub) {
+        try { homeUserDocUnsub(); } catch (_) {}
+        homeUserDocUnsub = null;
+      }
+      homeBootUid = null;
+      safeAuthRedirect("index.html");
       return;
     }
 
@@ -185,7 +349,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (!ud) {
-        console.warn("Perfil no encontrado o error de red. Manteniendo sesión...");
+        console.warn("Perfil no encontrado o error de red. Manteniendo sesiÃ³n...");
         showToast("Sincronizando...", "Verificando credenciales en la Matrix", "info");
         // Do NOT redirect here to avoid ghost redirects on network glitches
         // Just let it try again or fail gracefully on UI
@@ -197,54 +361,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const isApproved = ud.status === 'approved' || ud.rol === 'Admin';
     if (!isApproved) {
        console.warn("Usuario no aprobado. Acceso denegado.");
-       showToast("ACCESO DENEGADO", "Tu cuenta está pendiente de aprobación.", "warning");
+       showToast("ACCESO DENEGADO", "Tu cuenta estÃ¡ pendiente de aprobaciÃ³n.", "warning");
        setTimeout(async () => {
            await auth.signOut();
-           window.location.href = 'index.html?msg=pending';
+           safeAuthRedirect('index.html?msg=pending');
        }, 2000); // Give time to read toast
-	   return;
-    }
+		   return;
+	    }
 
-    currentUser = user;
-    userData = ud;
-    // Register SW when document is stable
-    // Robust Service Worker Registration for VS Code Preview & Production
-    if ("serviceWorker" in navigator) {
-      // Skip if inside restricted environment
-      if (
-        window.location.protocol === "vscode-webview:" ||
-        window.location.href.includes("vscode-")
-      ) {
-        console.log("Skipping SW registration in preview environment.");
-      } else {
-        navigator.serviceWorker.register("./sw.js", { updateViaCache: 'none' }).then(reg => {
-            // Check for updates
-            reg.onupdatefound = () => {
-                const installingWorker = reg.installing;
-                installingWorker.onstatechange = () => {
-                    if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        console.log('New content available; reloading...');
-                        window.location.reload();
-                    }
-                };
-            };
-        }).catch((err) => {
-          if (err.name === "AbortError" || err.message.includes("shutdown")) {
-            console.warn(
-              "SW registration aborted (likely due to environment shutdown)",
-            );
-          } else if (err.name !== "InvalidStateError") {
-            console.error("SW Error:", err);
-          }
-        });
+	    if (homeBootUid === user.uid) return;
+	    homeBootUid = user.uid;
 
-        // Controller Change Handler
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-           console.log("Controller changed, reloading page...");
-           window.location.reload();
-        });
-      }
-    }
+	    currentUser = user;
+	    userData = ud;
 
     const { showLoading, hideLoading, injectHeader, injectNavbar } =
       await import("./modules/ui-loader.js?v=6.5");
@@ -258,14 +387,19 @@ document.addEventListener("DOMContentLoaded", () => {
     // Update presence on every load
     const { updatePresence } = await import("./firebase-service.js");
     updatePresence(user.uid);
-    setInterval(() => updatePresence(user.uid), 60000); 
+    if (homePresenceInterval) clearInterval(homePresenceInterval);
+    homePresenceInterval = setInterval(() => updatePresence(user.uid), 60000);
 
     // Init Auto Notifications System (V7.0) - Unified Service
     initAutoNotifications(user.uid);
 
     // Listen to user data changes - Optimization: only update UI, don't re-init components
     let lastDataString = "";
-    subscribeDoc("usuarios", user.uid, async (data) => {
+    if (homeUserDocUnsub) {
+      try { homeUserDocUnsub(); } catch (_) {}
+      homeUserDocUnsub = null;
+    }
+    homeUserDocUnsub = subscribeDoc("usuarios", user.uid, async (data) => {
       if (data) {
         const dataStr = JSON.stringify({ n: data.nivel, p: data.puntosRanking, r: data.rachaActual });
         if (dataStr === lastDataString) return; // Prevent unnecessary re-renders
@@ -289,7 +423,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Personalized welcome toast
             const welcomeName = localStorage.getItem("first_login_welcome");
             if (welcomeName) {
-                showToast(`¡BIENVENIDO, ${welcomeName.toUpperCase()}!`, "Tu panel de control está listo.", "success");
+                showToast(`Â¡BIENVENIDO, ${welcomeName.toUpperCase()}!`, "Tu panel de control estÃ¡ listo.", "success");
                 localStorage.removeItem("first_login_welcome");
             }
             
@@ -306,7 +440,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     await loadMatches();
-    renderVerticalPodium();
+    const podiumRefresh = await renderVerticalPodium();
+    
+    // Auto-refresh dynamic data every 30 seconds
+    if (homeRefreshInterval) clearInterval(homeRefreshInterval);
+    homeRefreshInterval = setInterval(() => {
+        injectOnlineCount();
+        renderOpenMatches();
+    }, 30000);
   });
 
   // Filter tabs logic...
@@ -326,26 +467,57 @@ async function updateDashboard(data) {
 
   // Greeting based on time
   const hour = new Date().getHours();
-  let greet = "¡BUENOS DÍAS!";
-  if (hour >= 14 && hour < 21) greet = "¡BUENAS TARDES!";
-  else if (hour >= 21 || hour < 5) greet = "¡BUENAS NOCHES!";
+  let greet = "BUENOS DIAS";
+  if (hour >= 14 && hour < 21) greet = "BUENAS TARDES";
+  else if (hour >= 21 || hour < 5) greet = "BUENAS NOCHES";
 
   const userNameEl = document.getElementById("user-name");
+  const userHandleEl = document.getElementById("user-handle");
+  const userRoleEl = document.getElementById("user-role");
   const greetingEl = document.getElementById("greeting-text");
+  const welcomeAvatarEl = document.getElementById("welcome-avatar");
+  const syncTimeEl = document.getElementById("welcome-sync-time");
+  const statusPillEl = document.getElementById("welcome-status-pill");
 
-  if (userNameEl)
-    userNameEl.textContent = (
-      data.nombreUsuario ||
-      data.nombre ||
-      "JUGADOR"
-    ).toUpperCase();
+  const displayName =
+    data.nombreUsuario || data.nombre || currentUser?.displayName || "Jugador";
+  if (userNameEl) userNameEl.textContent = displayName.toUpperCase();
+  if (userHandleEl) {
+    const handle = displayName
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .replace(/\s+/g, "")
+      .replace(/[^a-zA-Z0-9_]/g, "")
+      .toLowerCase();
+    userHandleEl.textContent = `@${handle || "padelero"}`;
+  }
   if (greetingEl) greetingEl.textContent = greet;
+  if (syncTimeEl) {
+    syncTimeEl.textContent = new Date().toLocaleTimeString("es-ES", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  if (statusPillEl) {
+    statusPillEl.textContent = (data.status === "approved" || data.rol === "Admin")
+      ? "CUENTA VERIFICADA"
+      : "PENDIENTE";
+  }
+
+  if (userRoleEl) userRoleEl.textContent = (data.rol || "Jugador").toUpperCase();
+  if (welcomeAvatarEl) {
+    welcomeAvatarEl.src =
+      data.fotoPerfil || data.fotoURL || currentUser?.photoURL || "./imagenes/Logojafs.png";
+    welcomeAvatarEl.alt = `Avatar de ${displayName}`;
+  }
 
   // Stats
   const wins = Number(data.victorias || 0);
   const played = Number(data.partidosJugados || 0);
   const levelNum = Number(data.nivel || 2.5);
   const level = levelNum.toFixed(1);
+  const levelPrecise = levelNum.toFixed(2);
   const winrate = played > 0 ? Math.round((wins / played) * 100) : 0;
 
   // Points & Rank Status
@@ -353,11 +525,21 @@ async function updateDashboard(data) {
     data.puntosRanking !== undefined
       ? Number(data.puntosRanking)
       : Number(calculateBasePoints(data.nivel));
+  const currentRank = data.posicionRanking || '--';
+  const rankEl = document.getElementById("user-rank");
+  const rankTotalEl = document.getElementById("user-rank-total");
+  const eloDisplayEl = document.getElementById("user-elo-display");
+  const lvlDisplayEl = document.getElementById("user-lvl-display");
   const ptsEl = document.getElementById("stat-pts");
   const winsEl = document.getElementById("stat-wins");
   const matchesEl = document.getElementById("stat-matches");
   const wrEl = document.getElementById("stat-winrate");
   const lvlEl = document.getElementById("stat-level");
+
+  if (rankEl) rankEl.textContent = `#${currentRank}`;
+  if (rankTotalEl) rankTotalEl.textContent = "de --";
+  if (eloDisplayEl) eloDisplayEl.textContent = `${Math.round(currentPts)}`;
+  if (lvlDisplayEl) lvlDisplayEl.textContent = levelPrecise;
 
   if (ptsEl) countUp(ptsEl, Number(currentPts));
   if (winsEl) winsEl.textContent = wins;
@@ -368,15 +550,11 @@ async function updateDashboard(data) {
   // Level Progress (Home) - Optimized V9.0
   const lvlNum = levelNum || 2.5;
   const currentBracket = Math.floor(lvlNum * 2) / 2;
-  const nextBracket = currentBracket + 0.5;
-  const prevBracket = Math.max(1, currentBracket - 0.5);
   const progress = ((lvlNum - currentBracket) / 0.5) * 100;
-  
-  // Points logic: 1.00 nivel = 400 pts, siguiente paso cada 0.01 (4 pts)
-  const pointsSinceBracket = Math.round((lvlNum - currentBracket) * 800);
-  const pointsToPrev = pointsSinceBracket;
-  const nextStep = Math.round(lvlNum * 100) / 100 + 0.01;
-  const pointsToNext = Math.max(0, Math.ceil((nextStep - lvlNum) * 400));
+  const prevStep = Math.max(1, Number((lvlNum - 0.01).toFixed(2)));
+  const nextStep = Number((lvlNum + 0.01).toFixed(2));
+  const pointsToUp01 = Math.max(1, Math.ceil((nextStep - lvlNum) * 400));
+  const pointsToDown01 = Math.max(1, Math.ceil((lvlNum - prevStep) * 400));
 
   const homeBar = document.getElementById("home-level-bar");
   const homePts = document.getElementById("home-level-points");
@@ -386,27 +564,31 @@ async function updateDashboard(data) {
 
   if (homeBar) homeBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
   if (homePts) {
-    const pointsToLevel = Math.round((nextBracket - lvlNum) * 400);
-    homePts.innerHTML = `<span class="text-primary font-black">+${pointsToLevel} PTS PARA NV ${nextBracket.toFixed(1)}</span>`;
+    homePts.innerHTML = `
+      <span class="lvl-shift-chip up">+${pointsToUp01} PTS · NV ${nextStep.toFixed(2)}</span>
+      <span class="lvl-shift-chip down">-${pointsToDown01} PTS · NV ${prevStep.toFixed(2)}</span>
+    `;
   }
-  if (homeLower) homeLower.textContent = currentBracket.toFixed(1);
+  if (homeLower) homeLower.textContent = prevStep.toFixed(2);
   if (homeCurrent) homeCurrent.textContent = `NIVEL ${lvlNum.toFixed(2)}`;
-  if (homeUpper) homeUpper.textContent = nextBracket.toFixed(1);
+  if (homeUpper) homeUpper.textContent = nextStep.toFixed(2);
 
   // Get rank
   window.getDocsSafe(
     query(
       collection(db, "usuarios"),
       orderBy("puntosRanking", "desc"),
-      limit(100),
     ),
   ).then((snap) => {
+    const total = snap.size || 0;
     const rank = snap.docs.findIndex((d) => d.id === currentUser.uid) + 1;
     const rankEl = document.getElementById("user-rank");
+    const rankTotalEl = document.getElementById("user-rank-total");
     if (rankEl) {
-      rankEl.textContent = rank > 0 ? `#${rank}` : "-";
+      rankEl.textContent = rank > 0 ? `#${rank}` : `#${currentRank || "-"}`;
       rankEl.classList.add("text-primary");
     }
+    if (rankTotalEl) rankTotalEl.textContent = total > 0 ? `de ${total}` : "de --";
   });
 
   // XP & Achievements
@@ -414,10 +596,6 @@ async function updateDashboard(data) {
     renderXpWidget("xp-widget-container", data);
   if (typeof renderAchievements === "function")
     renderAchievements("achievements-list", data);
-
-  // Family Points
-  const famPtsEl = document.getElementById("user-family-pts");
-  if (famPtsEl) countUp(famPtsEl, data.familyPoints || 0);
 
   // Stats Horizontal Horizontal (Top)
   const streakNum = data.rachaActual || 0;
@@ -438,22 +616,29 @@ async function updateDashboard(data) {
   const aiBox = document.getElementById("ai-welcome-box");
   if (aiBox) {
     const quoteEl = aiBox.querySelector(".ai-quote");
+    const insightMetaEl = aiBox.querySelector("#ai-insight-meta");
     const nameBrief = (data.nombreUsuario || "Jugador").split(" ")[0];
 
     const hour = new Date().getHours();
-    let intro = "Buenos días";
+    let intro = "Buenos dias";
     if (hour >= 14 && hour < 21) intro = "Buenas tardes";
     else if (hour >= 21 || hour < 5) intro = "Buenas noches";
 
     const tips = [
-      `¿Sabías que el Rival Intel analiza tu Némesis y Socio ideal?`,
-      `El AI Brain (La Vecina) predice resultados según el clima y niveles.`,
-      `Registra tus partidos en el Diario para que mi cerebro IA aprenda de ti.`,
-      `Tu Rival Intel te dirá a quién evitar y con quién formar equipo.`,
-      `Soy tu analista táctica: uso la Matrix para que ganes más puntos.`
+      `Rival Intel analiza a tu nemesis y tu mejor socio de juego.`,
+      `La IA predice resultados segun clima, nivel y estado reciente.`,
+      `Registra tus partidos en el Diario para mejorar tus recomendaciones.`,
+      `Puedes pedirme tacticas para rivales concretos antes de jugar.`,
+      `Tu panel IA cruza ranking, racha y nivel para darte objetivos.`
     ];
     const tip = data.aiProfile?.dailyTip || tips[Math.floor(Math.random() * tips.length)];
-    if (quoteEl) quoteEl.textContent = `¡${intro} ${nameBrief}! ${tip}`;
+    if (quoteEl) quoteEl.textContent = `${intro}, ${nameBrief}. ${tip}`;
+
+    if (insightMetaEl) {
+      const myUpcoming = allMatches.filter((m) => m.jugadores?.includes(currentUser.uid)).length;
+      const rankTxt = rankEl?.textContent || `#${currentRank || "--"}`;
+      insightMetaEl.textContent = `${rankTxt} · ELO ${Math.round(currentPts)} · ${myUpcoming} partido(s) en agenda`;
+    }
 
     aiBox.onclick = async () => {
       const fab = document.getElementById("vecina-chat-fab");
@@ -466,7 +651,7 @@ async function updateDashboard(data) {
   }
 
   // Rival Intelligence Sync
-  syncRivalIntelligence(data.uid);
+  syncRivalIntelligence(currentUser?.uid || data.uid);
 
   // Analysis section updates - Tip Box / Events Box
   const tipBox = document.getElementById("tip-box");
@@ -479,15 +664,15 @@ async function updateDashboard(data) {
       tipBox.innerHTML = `
                 <i class="fas fa-brain text-xl text-accent mb-1"></i>
                 <span class="font-bold text-xs text-white uppercase">ESTRATEGIA</span>
-                <span class="text-xs text-muted">Prepárate para el reto</span>
+                <span class="text-xs text-muted">PrepÃ¡rate para el reto</span>
             `;
       tipBox.onclick = () =>
-        showToast("Táctica", `Enfócate en tu juego hoy.`, "info");
+        showToast("TÃ¡ctica", `EnfÃ³cate en tu juego hoy.`, "info");
     } else {
       tipBox.innerHTML = `
                 <i class="fas fa-calendar-star text-xl text-primary mb-1"></i>
                 <span class="font-bold text-xs text-white uppercase">EVENTOS</span>
-                <span class="text-xs text-muted">Ver próximos eventos</span>
+                <span class="text-xs text-muted">Ver prÃ³ximos eventos</span>
             `;
       tipBox.onclick = () => (window.location.href = "eventos.html");
     }
@@ -598,8 +783,311 @@ async function loadMatches() {
   const myNext = myMatches[0];
 
   renderNextMatch(myNext);
-  renderUpcomingMatches(myMatches.slice(1, 4));
+  renderUpcomingMatches(myMatches.slice(1));
   renderMatchFeed("all");
+}
+
+/* Unified Match Renderer V11 */
+async function createMatchCardV10(match, idx = 0, context = "default") {
+  const date = toDateSafe(match.fecha);
+  const filledPlayers = (match.jugadores || []).filter((id) => id).length;
+  const slots = Math.max(0, 4 - filledPlayers);
+  const isComp = match.col === "partidosReto" || match.isComp;
+  const lvlMin = match.restriccionNivel?.min || 2.0;
+  const lvlMax = match.restriccionNivel?.max || 6.0;
+  const typeLabel = isComp ? "RETO ELO" : "AMISTOSO";
+  const weatherHTML = buildWeatherPill(date);
+  const players = await getDetailedMatchSlots(match);
+  const creatorUser = await getCachedUserProfile(match.creador);
+  const creatorName = creatorUser?.name || "Atleta";
+  const courtName = (match.courtType || "CENTRAL").toUpperCase();
+  const surfaceName = (match.surface || "PADEL").toUpperCase();
+
+  const predictionHTML =
+    match.preMatchPrediction?.winProbability !== undefined
+      ? `<div class="ai-prediction-badge">
+           <i class="fas fa-brain animate-pulse text-primary"></i>
+           <span>${Math.round(match.preMatchPrediction.winProbability)}%</span>
+         </div>`
+      : `<div class="ai-prediction-badge opacity-30">
+           <i class="fas fa-robot text-muted"></i>
+           <span>--%</span>
+         </div>`;
+
+  const statusCls = slots === 0 ? "status-full" : slots === 1 ? "status-urgent" : "status-open";
+  const statusText = slots === 0 ? "SQUAD CERRADO" : slots === 1 ? "ÚLTIMA PLAZA" : `${slots} PLAZAS LIBRES`;
+
+  return `
+    <div class="match-card-premium-v12 ${context === "next" ? "special-next" : ""} animate-up" 
+         style="animation-delay:${idx * 0.05}s;" 
+         onclick="openMatch('${match.id}', '${match.col}')">
+      
+      <div class="m-v12-header">
+        <div class="m-v12-type-tag ${isComp ? "reto" : "amistoso"}">
+          <i class="fas ${isComp ? "fa-bolt" : "fa-handshake"}"></i>
+          <span>${typeLabel}</span>
+        </div>
+        <div class="m-v12-weather-box">${weatherHTML}</div>
+      </div>
+
+      <div class="m-v12-time-row">
+        <span class="m-v12-hour">${formatHour(date)}</span>
+        <span class="m-v12-date-box">${date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" }).toUpperCase()}</span>
+      </div>
+
+      <div class="m-v12-battle-field">
+         <div class="m-v12-team">
+            <div class="m-v12-avatars">
+               <img src="${players[0]?.photo}" class="m-v12-avatar ${players[0]?.isEmpty ? "empty" : ""}">
+               <img src="${players[1]?.photo}" class="m-v12-avatar ${players[1]?.isEmpty ? "empty" : ""}">
+            </div>
+            <span class="m-v12-team-names">${shortPlayerName(players[0]?.name)} + ${shortPlayerName(players[1]?.name)}</span>
+         </div>
+         
+         <div class="m-v12-vs-node">VS</div>
+
+         <div class="m-v12-team right">
+            <div class="m-v12-avatars justify-end">
+               <img src="${players[2]?.photo}" class="m-v12-avatar ${players[2]?.isEmpty ? "empty" : ""}">
+               <img src="${players[3]?.photo}" class="m-v12-avatar ${players[3]?.isEmpty ? "empty" : ""}">
+            </div>
+            <span class="m-v12-team-names">${shortPlayerName(players[2]?.name)} + ${shortPlayerName(players[3]?.name)}</span>
+         </div>
+      </div>
+
+      <div class="m-v12-meta-grid">
+         <div class="m-v12-meta-item">
+            <i class="fas fa-location-dot"></i>
+            <span>${courtName}</span>
+         </div>
+         <div class="m-v12-meta-item">
+            <i class="fas fa-layer-group"></i>
+            <span>${surfaceName}</span>
+         </div>
+         <div class="m-v12-meta-item status ${statusCls}">
+            <div class="status-dot"></div>
+            <span>${statusText}</span>
+         </div>
+      </div>
+
+      <div class="m-v12-footer">
+        <div class="m-v12-host">
+           <span class="label">HOST</span>
+           <span class="val">@${shortPlayerName(creatorName).split(" ")[0]}</span>
+        </div>
+        <div class="m-v12-level flex-row gap-1">
+           <span class="label">NIVEL</span>
+           <span class="val">${lvlMin.toFixed(1)}-${lvlMax.toFixed(1)}</span>
+        </div>
+        ${predictionHTML}
+      </div>
+    </div>
+  `;
+}
+
+async function createOpenMatchCardV11(match, idx = 0) {
+  const date = toDateSafe(match.fecha);
+  const isComp = match.col === "partidosReto" || match.isComp;
+  const typeLabel = isComp ? "RETO" : "AMISTOSO";
+  const weatherHTML = buildWeatherPill(date, true);
+  const players = await getDetailedMatchSlots(match);
+  const teamA = players.slice(0, 2);
+  const teamB = players.slice(2, 4);
+  const filled = (match.jugadores || []).filter((id) => id).length;
+  const slots = Math.max(0, 4 - filled);
+  const levelMin = Number(match.restriccionNivel?.min ?? 2.0);
+  const levelMax = Number(match.restriccionNivel?.max ?? 6.0);
+  const slotText = slots === 1 ? "ULTIMA PLAZA" : `${slots} PLAZAS`;
+
+  const avatarNode = (player) => `
+    <img
+      src="${player?.photo || "./imagenes/Logojafs.png"}"
+      alt="${shortPlayerName(player?.name)}"
+      class="open-netflix-avatar ${player?.isEmpty ? "empty" : ""}"
+      loading="lazy"
+    >
+  `;
+
+  return `
+    <article class="open-netflix-card animate-fade-in" style="animation-delay:${idx * 0.04}s;" onclick="openMatch('${match.id}', '${match.col}')">
+      <div class="open-netflix-top">
+        <span class="open-netflix-type ${isComp ? "reto" : "amistoso"}">${typeLabel}</span>
+        <span class="open-netflix-weather">${weatherHTML || '<span class="open-netflix-weather-fallback"><i class="fas fa-cloud"></i> --</span>'}</span>
+      </div>
+      <div class="open-netflix-hour">${formatHour(date)}</div>
+      <div class="open-netflix-date">${date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" }).toUpperCase()}</div>
+
+      <div class="open-netflix-duel">
+        <div class="open-netflix-side">
+          <div class="open-netflix-avatars">
+            ${avatarNode(teamA[0])}
+            ${avatarNode(teamA[1])}
+          </div>
+          <span class="open-netflix-name">${buildTeamLabel(teamA)}</span>
+        </div>
+        <span class="open-netflix-vs">VS</span>
+        <div class="open-netflix-side right">
+          <div class="open-netflix-avatars right">
+            ${avatarNode(teamB[0])}
+            ${avatarNode(teamB[1])}
+          </div>
+          <span class="open-netflix-name">${buildTeamLabel(teamB)}</span>
+        </div>
+      </div>
+
+      <div class="open-netflix-foot">
+        <span class="open-netflix-slot ${slots <= 1 ? "urgent" : ""}">${slotText}</span>
+        <span class="open-netflix-level">NV ${levelMin.toFixed(1)}-${levelMax.toFixed(1)}</span>
+      </div>
+    </article>
+  `;
+}
+
+async function createUpcomingMiniItem(match, idx = 0) {
+  const date = toDateSafe(match.fecha);
+  const isComp = match.col === "partidosReto" || match.isComp;
+  const players = await getDetailedMatchSlots(match);
+  const teamA = players.slice(0, 2);
+  const teamB = players.slice(2, 4);
+  const sideA = buildTeamLabel(teamA);
+  const sideB = buildTeamLabel(teamB);
+  const weatherHTML = buildWeatherPill(date, true);
+  const filled = (match.jugadores || []).filter((id) => id).length;
+  const slots = Math.max(0, 4 - filled);
+
+  return `
+    <div class="upcoming-mini-v12 animate-fade-in" style="animation-delay:${idx * 0.03}s" onclick="openMatch('${match.id}', '${match.col}')">
+      <div class="up-mini-time">${formatHour(date)} ${weatherHTML}</div>
+      <div class="up-mini-duel">
+        <span class="up-mini-team">${sideA}</span>
+        <span class="up-mini-vs">VS</span>
+        <span class="up-mini-team right">${sideB}</span>
+      </div>
+      <div class="up-mini-meta">
+        <span>${date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })}</span>
+        <span>${isComp ? "RETO" : "AMISTOSO"}</span>
+        <span class="${slots === 0 ? "filled" : ""}">${slots === 0 ? "COMPLETO" : `${slots} HUECOS`}</span>
+      </div>
+    </div>
+  `;
+}
+
+window.scrollOpenMatches = (direction = 1) => {
+  const container = document.getElementById("open-matches-panel");
+  if (!container) return;
+  const step = Math.max(240, container.clientWidth);
+  container.scrollBy({
+    left: step * (direction >= 0 ? 1 : -1),
+    behavior: "smooth",
+  });
+};
+
+function updateOpenMatchesControls(totalOpen) {
+  const moreBtn = document.getElementById("open-matches-more-btn");
+  const hintEl = document.getElementById("open-matches-hint");
+  const prevBtn = document.getElementById("open-matches-prev-btn");
+  const nextBtn = document.getElementById("open-matches-next-btn");
+  const canScroll = totalOpen > 2;
+
+  if (moreBtn) moreBtn.style.display = totalOpen > 4 ? "inline-flex" : "none";
+  if (hintEl) hintEl.classList.toggle("hidden", totalOpen <= 2);
+
+  [prevBtn, nextBtn].forEach((btn) => {
+    if (!btn) return;
+    btn.disabled = !canScroll;
+    btn.classList.toggle("disabled", !canScroll);
+  });
+}
+
+window.showAllOpenMatches = async () => {
+  if (!openMatchesCache.length) {
+    showToast("Partidos abiertos", "No hay partidos abiertos disponibles ahora mismo.", "info");
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay active";
+  overlay.style.zIndex = "10020";
+  overlay.innerHTML = `
+    <div class="modal-card glass-strong animate-up" style="max-width: 540px; max-height: 85vh; overflow: hidden;">
+      <div class="modal-header">
+        <div class="flex-col">
+          <h3 class="modal-title font-black text-primary tracking-widest italic">PARTIDOS ABIERTOS</h3>
+          <span class="text-[10px] text-muted font-bold uppercase tracking-[3px]">${openMatchesCache.length} disponibles</span>
+        </div>
+        <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+      </div>
+      <div id="open-matches-full-list" class="modal-body custom-scroll p-4 flex-col gap-3" style="max-height: 72vh;">
+        <div class="center py-10 opacity-30"><i class="fas fa-circle-notch fa-spin"></i></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const listContainer = overlay.querySelector("#open-matches-full-list");
+  const html = await Promise.all(openMatchesCache.map((m, i) => createMatchCardV10(m, i, "openlist")));
+  listContainer.innerHTML = html.join("");
+
+  listContainer.addEventListener("click", (e) => {
+    if (e.target.closest(".match-card-premium-v12")) overlay.remove();
+  });
+};
+
+async function createNextMatchPoster(match) {
+  const date = toDateSafe(match.fecha);
+  const isComp = match.col === "partidosReto" || match.isComp;
+  const weatherHTML = buildWeatherPill(date);
+  const players = await getDetailedMatchSlots(match);
+  const teamA = players.slice(0, 2);
+  const teamB = players.slice(2, 4);
+  const filledPlayers = (match.jugadores || []).filter((id) => id).length;
+  const slots = Math.max(0, 4 - filledPlayers);
+  const slotText = slots === 0 ? "COMPLETO" : (slots === 1 ? "ULTIMA PLAZA" : `${slots} PLAZAS LIBRES`);
+  const levelMin = Number(match.restriccionNivel?.min ?? 2.0);
+  const levelMax = Number(match.restriccionNivel?.max ?? 6.0);
+  const courtName = (match.courtType || "CENTRAL").toUpperCase();
+
+  const avatarNode = (player) => `
+    <img
+      src="${player?.photo || "./imagenes/Logojafs.png"}"
+      alt="${shortPlayerName(player?.name)}"
+      class="next-poster-avatar ${player?.isEmpty ? "empty" : ""}"
+      loading="lazy"
+    >
+  `;
+
+  return `
+    <article class="next-poster-v13 animate-up" onclick="openMatch('${match.id}', '${match.col}')">
+      <div class="next-poster-head">
+        <span class="next-poster-type ${isComp ? "reto" : "amistoso"}">${isComp ? "RETO ELO" : "AMISTOSO"}</span>
+        <span class="next-poster-hour">${formatHour(date)}</span>
+      </div>
+
+      <div class="next-poster-sub">
+        <span class="next-poster-day">${date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" }).toUpperCase()}</span>
+        <span class="next-poster-weather">${weatherHTML || '<span class="next-poster-weather-fallback"><i class="fas fa-cloud"></i> CLIMA N/D</span>'}</span>
+      </div>
+
+      <div class="next-poster-court"><i class="fas fa-location-dot"></i> ${courtName}</div>
+
+      <div class="next-poster-duel">
+        <div class="next-poster-team">
+          <div class="next-poster-avatars">${avatarNode(teamA[0])}${avatarNode(teamA[1])}</div>
+          <span class="next-poster-name">${buildTeamLabel(teamA)}</span>
+        </div>
+        <div class="next-poster-vs">VS</div>
+        <div class="next-poster-team right">
+          <div class="next-poster-avatars right">${avatarNode(teamB[0])}${avatarNode(teamB[1])}</div>
+          <span class="next-poster-name">${buildTeamLabel(teamB)}</span>
+        </div>
+      </div>
+
+      <div class="next-poster-foot">
+        <span class="next-poster-slot ${slots <= 1 ? "urgent" : ""}">${slotText}</span>
+        <span class="next-poster-level">NIVEL ${levelMin.toFixed(1)} - ${levelMax.toFixed(1)}</span>
+      </div>
+    </article>
+  `;
 }
 
 async function renderNextMatch(match) {
@@ -609,138 +1097,37 @@ async function renderNextMatch(match) {
   if (!match) {
     container.innerHTML = `
             <div class="empty-state-card-v7 animate-up">
-                <div class="empty-icon-v7">
-                    <i class="fas fa-calendar-plus text-primary"></i>
-                </div>
+                <div class="empty-icon-v7"><i class="fas fa-calendar-plus text-primary"></i></div>
                 <div class="flex-col center">
-                    <span class="empty-title-v7 italic">AGENDA LIBRE</span>
-                    <span class="empty-desc-v7">No tienes despliegues activos en la Matrix.</span>
-                    <button class="btn-booking-v7 mt-6" onclick="window.location.href='calendario.html'">
-                        RESERVAR PISTA <i class="fas fa-chevron-right ml-2 text-[8px]"></i>
-                    </button>
+                    <span class="empty-title-v7 italic">DIARIO LIBRE</span>
+                    <button class="btn-booking-v7 mt-6" onclick="window.location.href='calendario.html'">RESERVAR PISTA</button>
                 </div>
             </div>
         `;
     return;
   }
 
-  const date = match.fecha.toDate
-    ? match.fecha.toDate()
-    : new Date(match.fecha);
-  const players = await Promise.all(
-    (match.jugadores || []).map(async (uid) => {
-      if (!uid) return "Libre";
-      return await getPlayerName(uid);
-    }),
-  );
-
-  while (players.length < 4) players.push("Libre");
-
-  const creator = await getPlayerName(match.creador);
-  const isFull = (match.jugadores || []).filter(id => id).length >= 4;
-
   container.innerHTML = `
-        <div class="next-match-card-premium-v7 animate-up" onclick="openMatch('${match.id}', '${match.col}')">
-            <div class="nm-glass-overlay"></div>
-            <div class="nm-glow-v7"></div>
-            
-            <div class="nm-header-v7 flex-row between items-center mb-6">
-                <div class="flex-col">
-                    <div class="flex-row items-baseline gap-2">
-                         <span class="text-4xl font-black text-white italic tracking-tighter">${date.getHours()}:${date.getMinutes().toString().padStart(2, "0")}</span>
-                         <span class="text-[12px] font-black text-primary uppercase tracking-[2px]">HRS</span>
-                    </div>
-                    <span class="text-[11px] font-black text-white/40 uppercase tracking-[4px] mt-1">
-                        <i class="far fa-calendar-alt mr-1"></i> ${date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
-                    </span>
-                </div>
-                
-                <div class="nm-badge-pro-v7 ${match.isComp ? "reto" : "amistoso"}">
-                    <div class="badge-scanline"></div>
-                    <i class="fas ${match.isComp ? "fa-bolt" : "fa-handshake"}"></i>
-                    <span>${match.isComp ? "RETO ELO" : "AMISTOSO"}</span>
-                </div>
-            </div>
-
-            <div class="nm-court-premium mb-6">
-                <div class="flex-row between items-center relative gap-6">
-                    <div class="team-side-v7 flex-1 flex-col gap-3">
-                        <div class="player-slot-v7 ${match.jugadores[0] ? "filled" : "empty"}">
-                            <i class="fas fa-user-astronaut mr-2 opacity-40"></i>
-                            <span class="truncate">${players[0].toUpperCase()}</span>
-                        </div>
-                        <div class="player-slot-v7 ${match.jugadores[1] ? "filled" : "empty"}">
-                            <i class="fas fa-user-astronaut mr-2 opacity-40"></i>
-                            <span class="truncate">${players[1].toUpperCase()}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="vs-container-v7">
-                        <div class="vs-line"></div>
-                        <div class="vs-circle">VS</div>
-                        <div class="vs-line"></div>
-                    </div>
-                    
-                    <div class="team-side-v7 flex-1 flex-col gap-3">
-                        <div class="player-slot-v7 ${match.jugadores[2] ? "filled" : "empty"}">
-                            <i class="fas fa-user-astronaut mr-2 opacity-40"></i>
-                            <span class="truncate">${players[2].toUpperCase()}</span>
-                        </div>
-                        <div class="player-slot-v7 ${match.jugadores[3] ? "filled" : "empty"}">
-                            <i class="fas fa-user-astronaut mr-2 opacity-40"></i>
-                            <span class="truncate">${players[3].toUpperCase()}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- PREDICTION COMPONENT (PHASE 3.5) -->
-            ${match.preMatchPrediction ? `
-            <div class="mb-5 animate-fade-in">
-                <div class="prediction-card-v7">
-                    <div class="flex-row items-center gap-4">
-                        <div class="prediction-gauge-v7">
-                            <svg viewBox="0 0 36 36" class="circular-chart primary">
-                                <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                <path class="circle" stroke-dasharray="${match.preMatchPrediction.winProbability}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                            </svg>
-                            <span class="gauge-val">${match.preMatchPrediction.winProbability}%</span>
-                        </div>
-                        <div class="flex-col">
-                            <span class="text-[9px] font-black text-white/40 uppercase tracking-[3px]">Análisis Predictivo IA</span>
-                            <span class="text-[12px] font-black uppercase tracking-wider ${match.preMatchPrediction.winProbability > 50 ? 'text-sport-green' : 'text-red-400'}">
-                                ${match.preMatchPrediction.winProbability > 50 ? 'VICTORIA PROBABLE' : 'DESAFÍO CRÍTICO'}
-                            </span>
-                        </div>
-                        ${match.tags?.includes('high_volatility') ? `
-                            <div class="volatility-badge-v7 ml-auto">
-                                <i class="fas fa-triangle-exclamation mr-1"></i> VOLÁTIL
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>
-            ` : ''}
-
-             <div class="flex-row between items-center pt-2 border-t border-white-05">
-                <div class="flex-row items-center gap-3">
-                    <div class="creator-avatar-v7">
-                         <i class="fas fa-crown text-yellow-500"></i>
-                    </div>
-                    <div class="flex-col">
-                        <span class="text-[9px] font-black text-white/30 uppercase tracking-[2px]">Organizador</span>
-                        <span class="text-[11px] font-black text-white uppercase italic">${creator}</span>
-                    </div>
-                </div>
-
-                <div class="btn-primary-v7 sm">
-                    DESPLEGAR DATOS <i class="fas fa-chevron-right ml-2 text-[8px]"></i>
-                </div>
-             </div>
-        </div>
-    `;
+    <div class="next-match-header-v11 next-match-header-v13">
+        <span class="next-match-title-v11">PROXIMO PARTIDO</span>
+        <span class="next-match-sub-v11">Cartel principal de tu agenda</span>
+    </div>
+    ${await createNextMatchPoster(match)}
+  `;
 }
 
+async function renderUpcomingMatches(matches) {
+  const container = document.getElementById("upcoming-matches-panel");
+  if (!container) return;
+
+  if (!matches || matches.length === 0) {
+    container.innerHTML = '<div class="text-[8px] text-muted center py-6 opacity-40">SIN MAS PARTIDOS PROGRAMADOS</div>';
+    return;
+  }
+
+  const html = await Promise.all(matches.map((m, i) => createUpcomingMiniItem(m, i + 1)));
+  container.innerHTML = html.join("");
+}
 async function renderMatchFeed(param) {
   const container = document.getElementById("match-feed");
   if (!container) return;
@@ -781,59 +1168,7 @@ async function renderMatchFeed(param) {
   }
 
   const html = await Promise.all(
-    list.map(async (m, i) => {
-      const date = m.fecha.toDate ? m.fecha.toDate() : new Date(m.fecha);
-      const playersCount = (m.jugadores || []).filter(id => id).length;
-      const creatorName = await getPlayerName(m.creador);
-      const isFull = playersCount >= 4;
-      const isMine = m.jugadores?.includes(currentUser.uid);
-      const p = m.jugadores || [];
-
-      return `
-            <div class="feed-match-card-v7 animate-up ${isFull ? "closed" : "open"} ${isMine ? "me" : ""}" 
-                 style="animation-delay: ${i * 0.05}s" 
-                 onclick="openMatch('${m.id}', '${m.col}')">
-                
-                <div class="f-date-col">
-                    <span class="f-hour">${date.getHours()}:${date.getMinutes().toString().padStart(2, "0")}</span>
-                    <span class="f-day">${date.getDate()} ${date.toLocaleDateString("es-ES", { month: "short" }).toUpperCase()}</span>
-                </div>
-                
-                <div class="f-main-col">
-                    <div class="f-header-row mb-1">
-                        <span class="f-creator">${creatorName.toUpperCase()}</span>
-                        ${isMine ? '<span class="f-badge-me">T</span>' : ""}
-                    </div>
-                    <div class="f-info-row flex-row items-center gap-2">
-                         <span class="f-type-tag ${m.isComp ? "reto" : "am"}">
-                            <i class="fas ${m.isComp ? "fa-bolt" : "fa-handshake"}"></i> ${m.isComp ? "RETO" : "AM"}
-                         </span>
-                         ${m.visibility === 'private' ? '<span class="f-type-tag private"><i class="fas fa-lock"></i></span>' : ''}
-                         <span class="f-lvl-tag">NV ${(m.nivelMin || 2.0).toFixed(1)}-${(m.nivelMax || 5.0).toFixed(1)}</span>
-                    </div>
-                </div>
-                
-                <div class="f-court-visual">
-                    <div class="f-court-schema">
-                        <div class="f-court-net"></div>
-                        <div class="f-p-grid">
-                            <div class="f-p-slot ${p[0] ? 'occupied' : ''}"></div>
-                            <div class="f-p-slot ${p[1] ? 'occupied' : ''}"></div>
-                            <div class="f-p-slot ${p[2] ? 'occupied' : ''}"></div>
-                            <div class="f-p-slot ${p[3] ? 'occupied' : ''}"></div>
-                        </div>
-                    </div>
-                    <span class="f-spots-label ${isFull ? "full" : ""}">
-                        ${isFull ? "LLENO" : `${playersCount}/4`}
-                    </span>
-                </div>
-                
-                <div class="f-arrow">
-                    <i class="fas fa-chevron-right"></i>
-                </div>
-            </div>
-        `;
-    }),
+    list.map(async (m, i) => await createMatchCardV10(m, i, "feed"))
   );
   container.innerHTML = html.join("");
 }
@@ -845,6 +1180,7 @@ async function loadInsights() {
 
   try {
     const w = await getDetailedWeather();
+    weatherForecast = w; // Store for other components
     if (w && w.current) {
       const cond = calculateCourtCondition(
         w.current.temperature_2m,
@@ -852,7 +1188,7 @@ async function loadInsights() {
         w.current.wind_speed_10m,
       );
       if (quickWeather)
-        quickWeather.innerHTML = `<i class="fas ${cond.icon} mr-1 ${cond.color}"></i> ${cond.condition} - ${Math.round(w.current.temperature_2m)}°C`;
+        quickWeather.innerHTML = `<i class="fas ${cond.icon} mr-1 ${cond.color}"></i> ${cond.condition} - ${Math.round(w.current.temperature_2m)}Â°C`;
 
       if (weatherList) {
         const daily = w.daily || {
@@ -866,11 +1202,11 @@ async function loadInsights() {
                             <div class="flex-col gap-1">
                                 <span class="text-xs font-bold text-muted uppercase tracking-widest">Estado de la Pista</span>
                                 <span class="text-xl font-black text-white">${cond.condition.toUpperCase()}</span>
-                                <span class="text-xs text-muted italic">${cond.advice || "Condiciones ideales para el pádel."}</span>
+                                <span class="text-xs text-muted italic">${cond.advice || "Condiciones ideales para el pÃ¡del."}</span>
                             </div>
                             <div class="flex-col items-end gap-0">
                                 <i class="fas ${cond.icon} text-3xl ${cond.color} mb-1"></i>
-                                <span class="text-xs font-bold text-white">${Math.round(w.current.temperature_2m)}°C</span>
+                                <span class="text-xs font-bold text-white">${Math.round(w.current.temperature_2m)}Â°C</span>
                                 <span class="text-xs text-muted uppercase font-black">${w.current.wind_speed_10m} km/h viento</span>
                             </div>
                         </div>
@@ -886,7 +1222,7 @@ async function loadInsights() {
                                     <div class="flex-col center flex-1 ${isToday ? "opacity-100" : "opacity-40"}">
                                         <span class="text-xs font-bold uppercase">${isToday ? "Hoy" : d.toLocaleDateString("es-ES", { weekday: "short" })}</span>
                                         <i class="fas ${getIconFromCode(daily.weather_code[i])} text-sm my-1 text-primary"></i>
-                                        <span class="text-xs font-bold">${Math.round(daily.temperature_2m_max[i])}°</span>
+                                        <span class="text-xs font-bold">${Math.round(daily.temperature_2m_max[i])}Â°</span>
                                     </div>
                                 `;
                               })
@@ -958,21 +1294,56 @@ async function initMatrixFeed() {
 
   listenToNotifications(async (list) => {
     if (!list || list.length === 0) {
+      if (!notifToastBaselineReady) notifToastBaselineReady = true;
       container.innerHTML = `
         <div class="feed-node opacity-40">
             <div class="node-pulse bg-white/20"></div>
             <i class="fas fa-satellite opacity-40 ml-1"></i>
-            <span class="font-black opacity-60 uppercase text-[9px]">Sincronización estable: Sin anomalías</span>
+            <span class="font-black opacity-60 uppercase text-[9px]">SincronizaciÃ³n estable: Sin anomalÃ­as</span>
         </div>
       `;
       return;
     }
 
-    const html = list.slice(0, 4).map(n => {
+    const ordered = [...list].sort(
+      (a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0),
+    );
+
+    if (!notifToastBaselineReady) {
+      ordered.forEach((n) => shownNotifToastIds.add(n.id));
+      notifToastBaselineReady = true;
+    } else {
+      ordered
+        .filter((n) => n?.id && !shownNotifToastIds.has(n.id))
+        .slice(0, 3)
+        .forEach((n) => {
+          const type =
+            n.tipo === "warning"
+              ? "warning"
+              : n.tipo === "error"
+                ? "error"
+                : n.tipo === "success" ||
+                    n.tipo === "match_full" ||
+                    n.tipo === "match_join" ||
+                    n.tipo === "private_invite" ||
+                    n.tipo === "match_opened" ||
+                    n.tipo === "ranking_up" ||
+                    n.tipo === "level_up"
+                  ? "success"
+                  : "info";
+          showToast(n.titulo || "Padeluminatis", n.mensaje || "Nueva actualización.", type);
+          shownNotifToastIds.add(n.id);
+        });
+    }
+
+    const html = ordered.slice(0, 4).map(n => {
       let icon = 'fa-bolt';
       let color = 'primary';
-      if (n.tipo === 'success' || n.tipo === 'match_full') { icon = 'fa-trophy'; color = 'sport-green'; }
+      if (n.tipo === 'success' || n.tipo === 'match_full' || n.tipo === 'ranking_up' || n.tipo === 'level_up') { icon = 'fa-trophy'; color = 'sport-green'; }
       if (n.tipo === 'warning') { icon = 'fa-triangle-exclamation'; color = 'sport-red'; }
+      if (n.tipo === 'ranking_down' || n.tipo === 'match_cancelled') { icon = 'fa-arrow-down'; color = 'sport-red'; }
+      if (n.tipo === 'match_opened' || n.tipo === 'new_rival') { icon = 'fa-user-plus'; color = 'primary'; }
+      if (n.tipo === 'chat_mention') { icon = 'fa-at'; color = 'primary'; }
       
       return `
         <div class="feed-node animate-fade-in">
@@ -987,7 +1358,7 @@ async function initMatrixFeed() {
 
     // Mark as seen after a short delay to allow visual reading
     setTimeout(() => {
-        list.forEach(n => markAsSeen(n.id));
+        ordered.forEach(n => markAsSeen(n.id));
     }, 8000);
   });
 }
@@ -1005,38 +1376,43 @@ async function renderVerticalPodium() {
         const medals = ['gold', 'silver', 'bronze'];
         const colors = ['#FFD700', '#C0C0C0', '#CD7F32'];
         
-        container.innerHTML = snap.docs.map((d, i) => {
+        // Compact Container
+        let html = `
+            <div class="card-premium-v7 p-3 border-glow-cyan" style="background: rgba(10,15,25,0.6); backdrop-filter: blur(10px);">
+                <div class="flex-row between items-center mb-3 px-2">
+                    <span class="text-[9px] font-black text-white/40 uppercase tracking-[2px]">Muro de la Fama</span>
+                    <span class="text-[8px] font-bold text-primary italic">Top 3 Elite</span>
+                </div>
+                <div class="flex-row gap-2">
+        `;
+
+        html += snap.docs.map((d, i) => {
             const u = d.data();
             const photo = u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png';
             const isMe = currentUser && d.id === currentUser.uid;
             
             return `
-            <div class="podium-row-v7 ${medals[i]} ${isMe ? 'podium-me' : ''} animate-up shadow-glow-${medals[i]}" style="animation-delay: ${i * 0.1}s; padding: 15px; margin-bottom: 12px; border-radius: 20px;">
-                <div class="pr-rank" style="font-size: 1.2rem; min-width: 30px;">#${i + 1}</div>
-                <div class="pr-avatar" style="border-width: 3px; width: 60px; height: 60px; border-color: ${colors[i]}; box-shadow: 0 0 15px ${colors[i]}44">
-                    <img src="${photo}" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="pr-info flex-1 ml-4">
-                    <div class="flex-row items-center gap-2">
-                        <span class="pr-name font-black tracking-tighter" style="font-size: 1rem;">${(u.nombreUsuario || u.nombre || 'Jugador').toUpperCase()}</span>
-                        ${isMe ? '<span class="badge-premium-v7 sm cyan" style="font-size: 7px;">TÚ</span>' : ''}
+                <div class="elite-item-v7 flex-1 flex-col center p-2 rounded-xl bg-white/5 border border-white/5 relative overflow-hidden ${medals[i]}">
+                    <div class="pr-rank-small">#${i + 1}</div>
+                    <div class="pr-avatar-small mb-1" style="border-color: ${colors[i]}">
+                        <img src="${photo}" class="w-full h-full object-cover">
                     </div>
-                    <div class="flex-row items-center gap-3 mt-1">
-                        <span class="pr-pts font-black text-white/90" style="font-size: 0.8rem;">${Math.round(u.puntosRanking || 1000)} <small class="text-[7px] text-muted tracking-widest">PTS</small></span>
-                        <span class="text-[9px] font-bold text-primary italic">Lvl ${(u.nivel || 2.5).toFixed(2)}</span>
-                    </div>
-                </div>
-                <div class="pr-medal"><i class="fas fa-medal text-xl" style="color: ${colors[i]}; filter: drop-shadow(0 0 5px ${colors[i]})"></i></div>
-            </div>`;
+                    <span class="text-[9px] font-black text-white truncate w-full text-center">${(u.nombreUsuario || u.nombre || 'Player').split(' ')[0].toUpperCase()}</span>
+                    <span class="text-[8px] font-bold text-muted">${Math.round(u.puntosRanking || 1000)} <small class="text-[6px]">PTS</small></span>
+                    ${isMe ? '<div class="absolute top-0 right-0 p-1"><div class="w-1.5 h-1.5 bg-primary rounded-full"></div></div>' : ''}
+                </div>`;
         }).join('');
 
-        // Auto-scroll to me if present
-        if (currentUser && snap.docs.some(d => d.id === currentUser.uid)) {
-            setTimeout(() => {
-               const me = container.querySelector('.podium-me');
-               if(me) me.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 500);
-        }
+        html += `
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = html;
+        container.classList.add('p-0');
+        container.style.background = 'none';
+        container.style.border = 'none';
+
     } catch(e) { console.error("Error rendering podium:", e); }
 }
 
@@ -1044,20 +1420,22 @@ function renderHallOfFame(user) {
   const container = document.getElementById("home-achievements");
   if (!container) return;
 
+  const diaryEntries = Array.isArray(user.diario) ? user.diario.length : 0;
   const achievements = [
-    { id: 'first_win', name: 'ASCENSO', icon: 'fa-bolt', check: u => u.victorias > 0, tier: 'bronze' },
-    { id: 'streak_3', name: 'LEGADO', icon: 'fa-fire', check: u => u.rachaActual >= 3, tier: 'silver' },
-    { id: 'veteran', name: 'ELITE', icon: 'fa-crown', check: u => u.partidosJugados >= 50, tier: 'gold' }
+    { id: 'first_win', name: 'Ascenso', icon: 'fa-bolt', check: u => u.victorias > 0, tier: 'bronze' },
+    { id: 'streak_3', name: 'Racha', icon: 'fa-fire', check: u => u.rachaActual >= 3, tier: 'silver' },
+    { id: 'veteran', name: 'Elite', icon: 'fa-crown', check: u => u.partidosJugados >= 50, tier: 'gold' },
+    { id: 'diary_master', name: 'Bitacora', icon: 'fa-book-open', check: () => diaryEntries >= 10, tier: 'cyan' }
   ];
 
   const html = achievements.map(a => {
     const active = a.check(user);
     return `
-      <div class="ach-item-v9 ${active ? 'active' : ''} ${a.tier}" style="width: 80px;">
-          <div class="ach-icon-box" style="width: 44px; height: 44px; font-size: 16px;">
+      <div class="ach-item-v9 ${active ? 'active' : ''} ${a.tier}">
+          <div class="ach-icon-box" style="width: 40px; height: 40px; font-size: 14px;">
               <i class="fas ${a.icon}"></i>
           </div>
-          <span class="ach-lbl-v9" style="font-size: 7px;">${a.name}</span>
+          <span class="ach-lbl-v9" style="font-size: 8px;">${a.name}</span>
       </div>
     `;
   }).join('');
@@ -1123,7 +1501,7 @@ function renderActiveMode(user) {
                   <i class="fas ${iconClass} text-lg ${colorClass}"></i>
               </div>
               <div class="flex-col flex-1">
-                  <span class="text-[9px] font-bold text-muted uppercase tracking-widest">INTERVENCIÓN ACTIVA</span>
+                  <span class="text-[9px] font-bold text-muted uppercase tracking-widest">INTERVENCIÃ“N ACTIVA</span>
                   <span class="text-xs font-black text-white italic leading-tight">${intervention}</span>
               </div>
           </div>
@@ -1142,7 +1520,7 @@ function renderActiveMode(user) {
               <div class="ai-metric-chip">
                   <i class="fas fa-crosshairs text-purple-400"></i>
                   <span>${metrics.predictiveConfidence || 80}%</span>
-                  <span class="label">PRECISIÓN</span>
+                  <span class="label">PRECISIÃ“N</span>
               </div>
               <div class="ai-metric-chip">
                   <i class="fas fa-chart-line ${(metrics.eloTrend || 0) >= 0 ? 'text-sport-green' : 'text-red-400'}"></i>
@@ -1181,10 +1559,13 @@ function renderActiveMode(user) {
 async function updateEcosystemHealth() {
     try {
         const usersSnap = await window.getDocsSafe(collection(db, "usuarios"));
-        const matchesSnap = await window.getDocsSafe(collection(db, "partidosReto"), limit(50));
+        const [matchesRetoSnap, matchesAmSnap] = await Promise.all([
+            window.getDocsSafe(query(collection(db, "partidosReto"), limit(50))),
+            window.getDocsSafe(query(collection(db, "partidosAmistosos"), limit(50))),
+        ]);
         
         const totalUsers = usersSnap.size || 1;
-        const totalMatches = matchesSnap.size || 0;
+        const totalMatches = (matchesRetoSnap.size || 0) + (matchesAmSnap.size || 0);
         
         // activity: users active in last 24h
         const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -1201,13 +1582,21 @@ async function updateEcosystemHealth() {
         
         const finalScore = Math.round(activityScore + matchScore + achievementBonus + 10); // +10 base
         const score = Math.min(100, finalScore);
+        const stateLabel =
+          score >= 80
+            ? "ÓPTIMO"
+            : score >= 60
+              ? "ESTABLE"
+              : score >= 40
+                ? "ALERTA"
+                : "CRÍTICO";
 
         // Update UI
         const valEl = document.getElementById('eco-health-index');
         const aiValEl = document.getElementById('eco-health-val');
         const aiBarEl = document.getElementById('eco-health-bar');
 
-        if (valEl) valEl.textContent = `ESTADO: ${score}%`;
+        if (valEl) valEl.textContent = `SINCRONIZANDO: ${stateLabel} ${score}%`;
         if (aiValEl) aiValEl.textContent = `${score}/100`;
         if (aiBarEl) aiBarEl.style.width = `${score}%`;
 
@@ -1217,8 +1606,8 @@ async function updateEcosystemHealth() {
 async function syncRivalIntelligence(uid) {
     try {
         const { RivalIntelligence } = await import('./rival-intelligence.js');
-        const reSnap = await window.getDocsSafe(query(collection(db, "partidosReto"), where("participantes", "array-contains", uid), limit(30)));
-        const amSnap = await window.getDocsSafe(query(collection(db, "partidosAmistosos"), where("participantes", "array-contains", uid), limit(30)));
+        const reSnap = await window.getDocsSafe(query(collection(db, "partidosReto"), where("jugadores", "array-contains", uid), limit(30)));
+        const amSnap = await window.getDocsSafe(query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", uid), limit(30)));
         const matches = [...reSnap.docs, ...amSnap.docs].map(d => d.data());
         
         const partners = {};
@@ -1226,9 +1615,9 @@ async function syncRivalIntelligence(uid) {
 
         matches.forEach(m => {
             if (m.estado !== 'jugado' || !m.resultado) return;
-            const isT1 = m.equipo1?.includes(uid);
-            const userTeam = isT1 ? m.equipo1 : m.equipo2;
-            const rivalTeam = isT1 ? m.equipo2 : m.equipo1;
+            const isT1 = m.equipoA?.includes(uid);
+            const userTeam = isT1 ? m.equipoA : m.equipoB;
+            const rivalTeam = isT1 ? m.equipoB : m.equipoA;
             const userWon = m.resultado.ganador === (isT1 ? 1 : 2);
 
             userTeam?.forEach(p => { if (p && p !== uid) partners[p] = (partners[p] || 0) + 1; });
@@ -1270,8 +1659,8 @@ async function syncRivalIntelligence(uid) {
             }
         };
 
-        await renderIntel(topNem, 'intel-nemesis', 'NÉMESIS', 'fa-skull text-magenta');
-        await renderIntel(topVic, 'intel-victim', 'VÍCTIMA', 'fa-crown text-sport-green');
+        await renderIntel(topNem, 'intel-nemesis', 'NÃ‰MESIS', 'fa-skull text-magenta');
+        await renderIntel(topVic, 'intel-victim', 'VÃCTIMA', 'fa-crown text-sport-green');
         await renderIntel(topPar, 'intel-partner', 'SOCIO', 'fa-user-group text-cyan');
 
     } catch(e) { console.warn("Rival Intel sync error:", e); }
@@ -1284,7 +1673,7 @@ function setupStatInteractions() {
         el.onclick = () => showVisualBreakdown(title, msg);
     };
 
-    bind('home-stat-level', 'Fórmula de Nivel', 'Calculado basándose en ELO: (ELO-1000)/400 + 2.5. Se pondera por dificultad del rival.');
+    bind('home-stat-level', 'FÃ³rmula de Nivel', 'Calculado basÃ¡ndose en ELO: (ELO-1000)/400 + 2.5. Se pondera por dificultad del rival.');
     bind('home-stat-points', 'Puntos Ranking', 'Puntos ELO acumulados. Suman por victorias, restan por derrotas considerando el ELO esperado.');
     bind('home-stat-streak', 'Efecto Racha', 'Ratio de victorias recientes. Activa multiplicadores x1.25 (3), x1.6 (6), x2.5 (10).');
     
@@ -1293,7 +1682,7 @@ function setupStatInteractions() {
     if(rivalPanel) {
         const header = rivalPanel.querySelector('span'); // First span is the header
         if(header) {
-            header.innerHTML += ' <i class="fas fa-question-circle text-[8px] opacity-30 cursor-help" onclick="event.stopPropagation(); window.showVisualBreakdown(\'Rival Intelligence\', \'Este panel identifica a tus contactos clave basándose en tu historial de partidos. Pulsa en Némesis para ver cómo derrotarle, o en Socio para ver vuestra compatibilidad.\')"></i>';
+            header.innerHTML += ' <i class="fas fa-question-circle text-[8px] opacity-30 cursor-help" onclick="event.stopPropagation(); window.showVisualBreakdown(\'Rival Intelligence\', \'Este panel identifica a tus contactos clave basÃ¡ndose en tu historial de partidos. Pulsa en NÃ©mesis para ver cÃ³mo derrotarle, o en Socio para ver vuestra compatibilidad.\')"></i>';
         }
     }
 }
@@ -1327,15 +1716,26 @@ window.openAIHub = async () => {
     updateEcosystemHealth();
 };
 
+window.runAIQuickCommand = async (command) => {
+    if (!command) return;
+    const { toggleChat, sendMessage } = await import("./modules/vecina-chat.js?v=6.5");
+    const panel = document.getElementById("vecina-chat-panel");
+    const isOpen = panel?.classList.contains("open");
+    if (!isOpen) await toggleChat();
+    await sendMessage(command);
+};
+
 window.aiAction = (action) => {
     document.getElementById('modal-ai-hub').classList.remove('active');
     switch(action) {
         case 'profile': window.location.href = 'perfil.html'; break;
         case 'matches': window.location.href = 'historial.html'; break; 
-        case 'ranking': window.location.href = 'ranking.html'; break;
+        case 'ranking': window.location.href = 'puntosRanking.html'; break;
         case 'rivals': window.location.href = 'perfil.html'; break; 
         case 'diary': window.location.href = 'diario.html'; break;
         case 'admin': window.location.href = 'admin.html'; break;
+        case 'open': window.showAllOpenMatches(); break;
+        case 'chat': window.runAIQuickCommand("Dame un informe completo de mi estado actual y proximos objetivos"); break;
     }
 };
 
@@ -1400,7 +1800,6 @@ window.analyzeRival = async (rivalId) => {
     
     // Dynamic Import Rival Intelligence
     const { RivalIntelligence } = await import('./rival-intelligence.js');
-    const { getPlayerName } = await import('./firebase-service.js'); // Ensure import
 
     // Calculate Stats
     // Assuming allMatches is global in home-logic.js
@@ -1425,7 +1824,7 @@ window.analyzeRival = async (rivalId) => {
                 <div class="absolute inset-0 opacity-20" style="background: radial-gradient(circle at top right, var(--${themeColor}), transparent 70%);"></div>
                 
                 <div class="relative z-20">
-                    <span class="text-[9px] font-black uppercase text-white/60 tracking-[3px]">EXPEDIENTE TÁCTICO</span>
+                    <span class="text-[9px] font-black uppercase text-white/60 tracking-[3px]">EXPEDIENTE TÃCTICO</span>
                     <h2 class="text-2xl font-black italic text-white leading-none mt-1 tracking-tighter">${rivalName.toUpperCase()}</h2>
                     <div class="flex-row items-center gap-2 mt-3">
                          <div class="badge-premium sm" style="background: var(--${themeColor}); color: black; border:none">
@@ -1457,22 +1856,22 @@ window.analyzeRival = async (rivalId) => {
 
                 <div class="flex-row center">
                     <div class="px-4 py-1 rounded-full border border-white/10 bg-white/5">
-                        <span class="text-[9px] font-black text-muted uppercase tracking-widest">WINRATE HISTÓRICO: <span class="text-white">${h2h.winRate}%</span></span>
+                        <span class="text-[9px] font-black text-muted uppercase tracking-widest">WINRATE HISTÃ“RICO: <span class="text-white">${h2h.winRate}%</span></span>
                     </div>
                 </div>
             </div>
         </div>
     `;
-    document.body.appendChild(overlay);
+document.body.appendChild(overlay);
 };
-async function renderUpcomingMatches(matches) {
+async function renderUpcomingMatchesLegacy(matches) {
     const container = document.getElementById('upcoming-matches-panel');
     if (!container) return;
 
     if (!matches || matches.length === 0) {
         container.innerHTML = `
             <div class="flex-col center py-6 opacity-30">
-                <span class="text-[9px] font-black uppercase tracking-widest">Sin más despliegues programados</span>
+                <span class="text-[9px] font-black uppercase tracking-widest">Sin mÃ¡s despliegues programados</span>
             </div>
         `;
         return;
@@ -1507,73 +1906,62 @@ async function renderOpenMatches() {
     if (!container) return;
 
     try {
-        // Fetch open matches from both collections
         const [am, re] = await Promise.all([
-            window.getDocsSafe(query(collection(db, "partidosAmistosos"), where("estado", "==", "abierto"), limit(10))),
-            window.getDocsSafe(query(collection(db, "partidosReto"), where("estado", "==", "abierto"), limit(10)))
+            window.getDocsSafe(query(collection(db, "partidosAmistosos"), orderBy("fecha", "asc"), limit(40))),
+            window.getDocsSafe(query(collection(db, "partidosReto"), orderBy("fecha", "asc"), limit(40)))
         ]);
 
         let list = [];
         am.forEach(d => list.push({ id: d.id, col: 'partidosAmistosos', ...d.data() }));
         re.forEach(d => list.push({ id: d.id, col: 'partidosReto', ...d.data() }));
 
-        // Filter and sort
+        const seen = new Set();
+        list = list.filter(m => {
+            const key = `${m.col}:${m.id}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
         const now = new Date();
         list = list.filter(m => {
             const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
-            const slots = (m.jugadores || []).filter(id => id).length;
-            return slots < 4 && date > new Date(now - 3600000); // Only matches not full and not older than 1h
+            const filled = (m.jugadores || []).filter(id => id).length;
+            const notPlayed = m.estado !== 'jugado' && m.estado !== 'anulado' && m.estado !== 'cancelado';
+            const upcoming = date > new Date(now - 7200000);
+            return filled < 4 && notPlayed && upcoming;
         });
 
-        list.sort((a,b) => (a.fecha?.toDate() || 0) - (b.fecha?.toDate() || 0));
+        const uid = currentUser?.uid;
+        list = list.filter((m) => {
+            if (m.visibility === "private") {
+                return m.organizerId === uid || m.creador === uid || (m.invitedUsers || []).includes(uid) || (m.jugadores || []).includes(uid);
+            }
+            return true;
+        });
+
+        list.sort((a,b) => (a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha)) - (b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha)));
+        openMatchesCache = list;
+        updateOpenMatchesControls(list.length);
         
         if (list.length === 0) {
             container.innerHTML = `
                 <div class="flex-col center py-8 opacity-40 w-full">
                     <i class="fas fa-satellite-dish mb-2 text-primary opacity-20"></i>
-                    <span class="text-[9px] font-black uppercase tracking-widest text-muted">Escaneo completado: 0 Retos</span>
+                    <span class="text-[9px] font-black uppercase tracking-widest text-muted">0 Partidos Disponibles</span>
                 </div>
             `;
             return;
         }
 
-        const html = await Promise.all(list.map(async m => {
-            const date = m.fecha?.toDate() || new Date();
-            const filled = (m.jugadores || []).filter(id => id).length;
-            const slots = 4 - filled;
-            const creator = await getPlayerName(m.creador);
-            const isComp = m.col === 'partidosReto';
-            
-            return `
-                <div class="open-match-card-v7 animate-up min-w-[200px]" onclick="openMatch('${m.id}', '${m.col}')">
-                    <div class="om-tag ${isComp ? 'reto' : 'am'}">${isComp ? 'RETO' : 'AMISTOSO'}</div>
-                    <div class="flex-row between items-start mb-3">
-                        <div class="flex-col">
-                            <span class="text-xl font-black text-white italic tracking-tighter">${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}</span>
-                            <span class="text-[9px] text-muted font-black uppercase">${date.toLocaleDateString('es-ES', {weekday:'short', day:'numeric'})}</span>
-                        </div>
-                        <div class="slots-pill ${slots === 1 ? 'critical' : ''}">
-                            <span class="text-[9px] font-black">${slots} ${slots === 1 ? 'HUECO' : 'HUECOS'}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="flex-col gap-2 mt-auto">
-                        <div class="flex-row items-center gap-2">
-                             <div class="w-5 h-5 rounded-full bg-primary/20 flex center"><i class="fas fa-crown text-[8px] text-primary"></i></div>
-                             <span class="text-[10px] font-bold text-white/60 truncate">${creator.toUpperCase()}</span>
-                        </div>
-                        <div class="flex-row -space-x-1.5 mt-1">
-                            ${(m.jugadores || []).filter(id => id).map(id => `<div class="w-6 h-6 rounded-full border border-[#0a0a0f] bg-white/10 overflow-hidden"><img src="./imagenes/Logojafs.png" class="w-full h-full object-cover"></div>`).join('')}
-                            ${Array(slots).fill(0).map(() => `<div class="w-6 h-6 rounded-full border border-dashed border-white/10 bg-white/5 flex center"><i class="fas fa-plus text-[8px] text-white/20"></i></div>`).join('')}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }));
-
+        const html = await Promise.all(list.map((m, idx) => createOpenMatchCardV11(m, idx)));
         container.innerHTML = html.join('');
 
-    } catch(e) { console.error("Error loading open matches:", e); }
+    } catch(e) { 
+        openMatchesCache = [];
+        updateOpenMatchesControls(0);
+        console.error("Error loading open matches:", e); 
+    }
 }
 
 // Global cache cleaner helper

@@ -24,27 +24,61 @@
 
     <main class="page-content home-main" style="padding-top: 75px; padding-bottom: 95px;">
         <div class="container px-2">
-            <section class="card card-premium animate-fade-in">
+            <section class="card card-premium animate-fade-in welcome-hero-card">
                 <div class="card-glow"></div>
-                <div class="flex-row between items-center gap-3">
-                    <div class="flex-col gap-1">
-                        <div class="flex-row items-center gap-2">
-                            <span class="text-xs font-black uppercase tracking-widest text-primary">Bienvenida</span>
-                            <i class="fas fa-redo-alt text-[10px] text-white/20 cursor-pointer hover:text-primary transition-colors"
+                <div class="welcome-hero-grid">
+                    <div class="welcome-hero-main">
+                        <div class="welcome-kicker-row">
+                            <span id="greeting-text"
+                                class="text-[10px] font-black uppercase tracking-[4px] text-primary/80">ACCESO
+                                AUTORIZADO</span>
+                            <i class="fas fa-redo-alt text-[9px] text-white/20 cursor-pointer hover:text-primary transition-colors"
                                 onclick="window.clearAppCache()" title="Limpiar Caché"></i>
                         </div>
-                        <h1 id="greeting-text" class="text-2xl font-black italic">BIENVENIDO</h1>
-                        <div class="flex-row items-center gap-2">
-                            <span id="user-name" class="text-sm font-bold text-white">Jugador</span>
-                            <span id="user-rank" class="text-xs font-black text-primary">#-</span>
+                        <div class="welcome-hero-strip">
+                            <span class="welcome-strip-item strong">PANEL ACTIVO</span>
+                            <span id="welcome-sync-time" class="welcome-strip-item">--:--</span>
+                            <span id="welcome-status-pill" class="welcome-strip-item muted">TEMPORADA</span>
                         </div>
-                        <div id="online-count-display" class="text-xs text-muted mt-1">0 ONLINE</div>
-                        <span id="user-family-pts" class="text-[10px] text-muted uppercase tracking-widest"></span>
+
+                        <h1 id="user-name" class="welcome-hero-name">JUGADOR</h1>
+
+                        <div class="welcome-meta-row mb-6">
+                            <span id="user-handle" class="welcome-meta-pill">@padelero</span>
+                            <span id="user-role" class="welcome-meta-pill muted">RANKING PRO</span>
+                        </div>
+
+                        <div class="welcome-stats-grid">
+                            <div class="welcome-stat-pill">
+                                <span class="label">RANGO</span>
+                                <div class="val-box">
+                                    <span id="user-rank" class="value">#--</span>
+                                    <span id="user-rank-total" class="sub">/--</span>
+                                </div>
+                            </div>
+                            <div class="welcome-stat-pill">
+                                <span class="label">NIVEL</span>
+                                <span id="user-lvl-display" class="value text-primary">2.50</span>
+                            </div>
+                            <div class="welcome-stat-pill">
+                                <span class="label">ELO</span>
+                                <span id="user-elo-display" class="value silver">1000</span>
+                            </div>
+                        </div>
+
+                        <div id="online-count-display" class="mt-4">
+                            <!-- Dynamic online count -->
+                        </div>
                     </div>
-                    <div class="avatar-xl"
-                        style="width:64px;height:64px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.1)">
-                        <img id="welcome-avatar" src="./imagenes/Logojafs.png" alt="Avatar"
-                            style="width:100%;height:100%;object-fit:cover;">
+
+                    <div class="welcome-avatar-wrap">
+                        <div class="avatar-xl shadow-glow-primary welcome-avatar-frame">
+                            <img id="welcome-avatar" src="./imagenes/Logojafs.png" alt="Avatar"
+                                style="width:100%;height:100%;object-fit:cover;">
+                        </div>
+                        <div class="welcome-sync-pill">
+                            <span class="text-[8px] font-black text-primary">EN VIVO</span>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -52,18 +86,36 @@
             <section id="next-match-container" class="mt-3"></section>
 
             <!-- OPEN MATCHES SCANNER (MOVED HIGHER) -->
-            <section class="mt-3 card-premium-v7 p-4 animate-up border-glow-cyan" style="animation-delay: 0.1s;">
+            <section class="mt-3 card-premium-v7 p-4 animate-up border-glow-cyan open-matches-section"
+                style="animation-delay: 0.1s;">
                 <div class="flex-row between items-center mb-4">
                     <div class="flex-col">
-                        <span class="text-[10px] font-black text-primary uppercase tracking-[3px]">Retos Abiertos</span>
-                        <span class="text-[8px] text-muted uppercase font-bold">Pistas buscando guerreros</span>
+                        <span class="text-[10px] font-black text-primary uppercase tracking-[3px]">Partidos
+                            Abiertos</span>
+                        <span class="text-[8px] text-muted uppercase font-bold">Únete a un partido disponible</span>
                     </div>
-                    <i class="fas fa-satellite-dish text-primary text-xs animate-pulse"></i>
+                    <div class="flex-row items-center gap-2">
+                        <button id="open-matches-prev-btn" class="open-nav-btn" onclick="window.scrollOpenMatches(-1)"
+                            aria-label="Ver partidos anteriores">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button id="open-matches-next-btn" class="open-nav-btn" onclick="window.scrollOpenMatches(1)"
+                            aria-label="Ver más partidos">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <span id="open-matches-hint" class="open-scroll-hint hidden">
+                            <i class="fas fa-arrows-left-right"></i> DESLIZA
+                        </span>
+                        <button id="open-matches-more-btn" class="open-more-btn" style="display:none;"
+                            onclick="window.showAllOpenMatches()">
+                            VER MÁS
+                        </button>
+                    </div>
                 </div>
-                <div id="open-matches-panel" class="flex-row gap-3 overflow-x-auto pb-2 custom-scroll no-scrollbar">
+                <div id="open-matches-panel" class="open-matches-strip custom-scroll no-scrollbar">
                     <div class="flex-row center py-4 opacity-40 w-full">
                         <i class="fas fa-satellite-dish mb-2 mr-2"></i>
-                        <span class="text-[9px] font-black uppercase tracking-widest">Escaneando Pistas...</span>
+                        <span class="text-[9px] font-black uppercase tracking-widest">Escaneando Partidos...</span>
                     </div>
                 </div>
             </section>
@@ -72,9 +124,10 @@
             <section class="mt-3 card-premium-v7 p-4 animate-up" style="animation-delay: 0.2s;">
                 <div class="flex-row between items-center mb-4">
                     <div class="flex-col">
-                        <span class="text-[10px] font-black text-muted uppercase tracking-[3px]">Próximos
-                            Despliegues</span>
-                        <span class="text-[8px] text-muted uppercase font-bold">Agenda de la Matrix</span>
+                        <span class="text-[10px] font-black text-muted uppercase tracking-[3px]">Tus Próximos
+                            Partidos</span>
+                        <span class="text-[8px] text-muted uppercase font-bold">Planificación de juego · lista
+                            completa</span>
                     </div>
                     <i class="fas fa-calendar-alt text-muted text-xs"></i>
                 </div>
@@ -96,6 +149,16 @@
                 <div class="stat-card-v7 lime clickable" id="home-stat-streak">
                     <span class="text-[10px] font-black uppercase text-muted tracking-widest">Racha</span>
                     <span id="stat-streak" class="text-xl font-black italic">0</span>
+                </div>
+            </section>
+
+            <section class="mt-3 card-premium-v7 p-3 animate-up" style="animation-delay: 0.15s;">
+                <div class="flex-row between items-center mb-2">
+                    <span class="text-[10px] font-black text-muted uppercase tracking-[3px]">Logros</span>
+                    <span class="text-[8px] font-bold text-primary uppercase tracking-[2px]">Progreso</span>
+                </div>
+                <div id="home-achievements" class="home-achievements-grid">
+                    <div class="opacity-30 text-[9px] font-black uppercase py-2">Sincronizando logros...</div>
                 </div>
             </section>
 
@@ -188,7 +251,21 @@
                                 Insight</span>
                             <p class="ai-quote text-[11px] font-bold text-white leading-tight mt-1">Conectando con la
                                 Matrix de Padel...</p>
+                            <p id="ai-insight-meta" class="text-[9px] text-white/50 mt-1">Sincronizando datos de
+                                ranking y partidos...</p>
                         </div>
+                    </div>
+                    <div id="ai-quick-home" class="ai-home-quick-row mt-3">
+                        <button class="ai-home-quick-btn"
+                            onclick="event.stopPropagation(); window.runAIQuickCommand('Mi ranking actual y como subir posiciones')">Ranking</button>
+                        <button class="ai-home-quick-btn"
+                            onclick="event.stopPropagation(); window.runAIQuickCommand('Analiza mi proximo partido y dame tactica')">Táctica</button>
+                        <button class="ai-home-quick-btn"
+                            onclick="event.stopPropagation(); window.runAIQuickCommand('Que partidos abiertos me convienen hoy')">Abiertos</button>
+                        <button class="ai-home-quick-btn"
+                            onclick="event.stopPropagation(); window.runAIQuickCommand('Dame un informe rapido de hoy')">Informe</button>
+                        <button class="ai-home-quick-btn"
+                            onclick="event.stopPropagation(); window.location.href='diario.html?open=note'">Nota</button>
                     </div>
                 </div>
             </section>
@@ -311,6 +388,14 @@
                     <div class="ai-action-card orange" onclick="window.aiAction('admin')">
                         <i class="fas fa-shield-halved"></i>
                         <span>Admin</span>
+                    </div>
+                    <div class="ai-action-card cyan" onclick="window.aiAction('open')">
+                        <i class="fas fa-table-list"></i>
+                        <span>Abiertos</span>
+                    </div>
+                    <div class="ai-action-card magenta" onclick="window.aiAction('chat')">
+                        <i class="fas fa-comments"></i>
+                        <span>Asistente</span>
                     </div>
                 </div>
 

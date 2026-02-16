@@ -326,6 +326,18 @@
   max-width: 100%;
 }
 
+.slot-owner-v5 {
+  margin-top: 2px;
+  font-size: 0.48rem;
+  color: rgba(255, 255, 255, 0.62);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
 /* Break Row */
 .break-v5 {
   grid-column: 1 / -1;
@@ -515,6 +527,12 @@
 /* calendar-polish */
 .calendar-page { padding: 14px 16px 90px; }
 .calendar-header-v5 { gap: 12px; }
+.calendar-main-v5 .container {
+  max-width: 100% !important;
+  width: 100%;
+  padding-left: 6px;
+  padding-right: 6px;
+}
 #calendar-grid-v5 { border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); background: rgba(2,6,23,0.6); }
 .grid-header-v5 { background: linear-gradient(180deg, rgba(15,23,42,0.9), rgba(2,6,23,0.9)); }
 .day-header-v5 { padding: 12px 6px; border-right: 1px solid rgba(255,255,255,0.04); }
@@ -528,6 +546,7 @@
 .break-v5 { font-weight: 900; letter-spacing: 3px; }
 @media (max-width: 640px) {
   .calendar-page { padding: 10px 10px 86px; }
+  .calendar-main-v5 .container { padding-left: 2px; padding-right: 2px; }
   .slot-v5 { min-height: 56px; }
   .time-col-v5 { width: 56px; }
 }
@@ -545,6 +564,77 @@
 }
 .slot-v5:hover {
   border-color: rgba(255,255,255,0.18);
+}
+
+/* === Production Polish: Calendar Space + Mobile Targets === */
+.calendar-main-v5 .container {
+  width: 100%;
+  max-width: 1200px;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.calendar-wrapper-v5 {
+  padding: 8px;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+#calendar-grid-v5 {
+  width: 100%;
+  min-width: 760px;
+}
+
+.slot-v5.libre:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 212, 255, 0.38);
+}
+
+.btn-cal-nav {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.users-list-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.user-option {
+  align-items: center;
+}
+
+.user-option-avatar {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .calendar-main-v5 {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .calendar-wrapper-v5 {
+    padding: 6px;
+  }
+
+  #calendar-grid-v5 {
+    min-width: 700px;
+  }
+
+  .slot-v5 {
+    min-height: 58px;
+  }
+
+  .slot-chip-v5 {
+    font-size: 0.58rem;
+  }
+
+  .users-list-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .user-option {
+    padding: 10px 12px;
+  }
 }
 
 

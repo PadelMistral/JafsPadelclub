@@ -1,11 +1,21 @@
 ﻿/* js/modules/ui-loader.js - Dynamic Layout Injection v5.0 */
-import { getDocument, auth, subscribeCol } from '../firebase-service.js';
+import { getDocument, auth, db, subscribeCol } from '../firebase-service.js';
 import { initThemeSystem } from './theme-manager.js';
 
 // Initialize theme system immediately  
 initThemeSystem();
 
 const PUBLIC_PAGES = ['index.html', 'registro.html', 'recuperar.html'];
+
+function emitToast(title, body = '', type = 'info') {
+    if (typeof window !== 'undefined' && typeof window.__appToast === 'function') {
+        window.__appToast(title, body, type);
+        return;
+    }
+    if (type === 'error') {
+        try { alert(`${title}${body ? `: ${body}` : ''}`); } catch (_) {}
+    }
+}
 
 /**
  * Checks if the current page is public
@@ -70,19 +80,22 @@ export async function injectHeader(userData = null) {
     
     document.body.prepend(header);
     
-    if (auth.currentUser) {
-        subscribeCol("notificaciones", (list) => {
-            const unread = list.filter(n => !n.leido && !n.read).length; // Check both naming conventions if exist
-            const badge = document.getElementById('notif-badge');
-            if (badge) {
+    if (auth.currentUser && !window.__notifBadgeManagedByUICore) {
+        Promise.resolve(
+            subscribeCol("notificaciones", (list) => {
+                const unread = list.filter(n => !n.leido && !n.read).length;
+                const badge = document.getElementById('notif-badge');
+                if (!badge) return;
                 if (unread > 0) {
                     badge.style.display = 'flex';
                     badge.textContent = unread > 9 ? '9+' : unread;
                 } else {
                     badge.style.display = 'none';
                 }
-            }
-        }, [['destinatario', '==', auth.currentUser.uid]]); // Standard in our app is destinatario
+            }, [['destinatario', '==', auth.currentUser.uid]])
+        ).then((unsub) => {
+            if (typeof unsub === 'function') window.__headerNotifUnsub = unsub;
+        }).catch(() => {});
     }
 }
 
@@ -255,10 +268,10 @@ window.clearGlobalNotifications = async () => {
     const q = query(collection(db, 'notificaciones'), where('destinatario', '==', auth.currentUser.uid));
     const snap = await getDocs(q);
     
-    if (snap.empty) return showToast('Info', 'Ya está todo limpio', 'info');
+    if (snap.empty) return emitToast('Info', 'Ya está todo limpio', 'info');
     
     const batch = writeBatch(db);
     snap.docs.forEach(d => batch.delete(doc(db, 'notificaciones', d.id)));
     await batch.commit();
-    showToast('Limpieza Completa', 'Se han borrado todas las notificaciones.', 'success');
+    emitToast('Limpieza Completa', 'Se han borrado todas las notificaciones.', 'success');
 };

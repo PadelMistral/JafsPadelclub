@@ -396,6 +396,36 @@ function _detectIntent(query) {
   if (q.includes("vecina") || q.includes("maruja") || q.includes("qué dices"))
     return "CMD_PERSONALITY_CHAT";
 
+  // --- NEW V15 INTENTS ---
+  if (q.includes("cabeza a cabeza") || q.includes("h2h") || q.includes("historial con") || q.includes("versus"))
+    return "CMD_H2H";
+  if (q.includes("momento") || q.includes("tendencia") || q.includes("momentum") || q.includes("forma actual"))
+    return "CMD_MOMENTUM";
+  if (q.includes("evolución") || q.includes("progreso") || q.includes("crecimiento") || q.includes("mejorado"))
+    return "CMD_EVOLUTION";
+  if (q.includes("semana") || q.includes("semanal") || q.includes("esta semana") || q.includes("resumen semanal"))
+    return "CMD_WEEKLY";
+  if (q.includes("récord") || q.includes("record") || q.includes("máximo") || q.includes("mejor racha") || q.includes("personal best"))
+    return "CMD_RECORD";
+  if (q.includes("zona caliente") || q.includes("horario") || q.includes("mejor hora") || q.includes("cuándo gano"))
+    return "CMD_HOT_ZONE";
+  if (q.includes("rival más fuerte") || q.includes("quien manda") || q.includes("quién es el jefe"))
+    return "CMD_COMPARE_ELITE";
+  if (q.includes("posición") || q.includes("drive") || q.includes("revés") || q.includes("zurdo") || q.includes("diestro"))
+    return "CMD_TACTIC_OVERVIEW";
+  if (q.includes("mental") || q.includes("nervios") || q.includes("presión") || q.includes("ansiedad"))
+    return "CMD_MENTAL_COACH";
+  if (q.includes("entrenamiento") || q.includes("plan") || q.includes("preparar") || q.includes("rutina"))
+    return "CMD_TRAINING_PLAN";
+  if (q.includes("golpe") || q.includes("smash") || q.includes("volea") || q.includes("bandeja") || q.includes("víbora"))
+    return "CMD_SHOT_FOCUS";
+  if (q.includes("pronóstico") || q.includes("predicción") || q.includes("forecast") || q.includes("quién va a ganar"))
+    return "CMD_MATCH_FORECAST";
+  if (q.includes("métricas") || q.includes("avanzadas") || q.includes("galaxia") || q.includes("estructura"))
+    return "CMD_METRICS_ADVANCED";
+  if (q.includes("precalentamiento") || q.includes("warmup") || q.includes("antes del partido"))
+    return "CMD_PREMATCH";
+
   return "GENERAL";
 }
 
@@ -780,9 +810,16 @@ export async function generateResponse(query) {
       else focus = "Estás fuerte. Entra en retos oficiales para escalar ELO.";
       return respond(
         `<div class="ai-result-card">
-                    <span class="res-title">Estado del Jugador</span>
+                    <span class="res-title">Informe Integral V2</span>
                     <div class="res-val">${trend}</div>
-                    <div class="res-sub">ELO ${Math.round(DATA_CACHE.user.puntosRanking)} • Nivel ${(DATA_CACHE.user.nivel || 2.5).toFixed(2)} • Efectividad ${wr.winrate}% (${wr.wins}V/${wr.total - wr.wins}D). ${focus}</div>
+                    <div class="flex-col gap-2 mt-3">
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">ELO</span><b class="text-white">${Math.round(DATA_CACHE.user.puntosRanking)}</b></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">Nivel</span><b class="text-white">${(DATA_CACHE.user.nivel || 2.5).toFixed(2)}</b></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">Efectividad</span><b class="text-white">${wr.winrate}% (${wr.wins}V/${wr.total - wr.wins}D)</b></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">Racha</span><b class="${(DATA_CACHE.user.rachaActual||0) > 0?'text-sport-green':'text-sport-red'}">${DATA_CACHE.user.rachaActual||0}</b></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">K-Factor</span><b class="text-primary">${DATA_CACHE.user.nivel > 4 ? 'K=15 (Pro)' : DATA_CACHE.user.nivel > 3 ? 'K=25 (Estándar)' : 'K=40 (Rookie)'}</b></div>
+                    </div>
+                    <div class="mt-3 p-3 bg-white/5 rounded-xl text-[9px] text-muted">${focus}</div>
                 </div>`,
         "Cariñito, estás que te sales. Sigue así y te veo en el World Padel Tour (o no...).",
       );
@@ -1155,15 +1192,32 @@ export async function generateResponse(query) {
 
     case "CMD_ELO_FORMULA":
       return `<div class="ai-result-card">
-                <span class="res-title">Algoritmo de la Matrix</span>
-                <p style="font-size:0.75rem; color:#ccc; line-height:1.4;">
-                    Tu ELO se calcula mediante: <b>R = Ro + K * (S - Se)</b><br><br>
-                    • <b>Ro:</b> ELO actual.<br>
-                    • <b>K:</b> Factor de volatilidad (32 estándar).<br>
-                    • <b>S:</b> Resultado real (1 gana / 0 pierde).<br>
-                    • <b>Se:</b> Probabilidad esperada según el ELO del rival.<br><br>
-                    Si ganas a alguien superior, tu K sube exponencialmente.
-                </p>
+                <span class="res-title">Algoritmo ELO V2 (Dinámico)</span>
+                <div class="flex-col gap-3">
+                    <p style="font-size:0.75rem; color:#ccc; line-height:1.4;">
+                        Tu ELO se calcula mediante: <b>R = Ro + K × (S - Se)</b>
+                    </p>
+                    <div class="flex-col gap-2 p-3 bg-white/5 rounded-xl">
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">Ro</span><span class="text-white">ELO actual antes del partido</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-primary">K (Dinámico)</span><span class="text-white">Varía según experiencia</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">S</span><span class="text-white">1 (Victoria) / 0 (Derrota)</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">Se</span><span class="text-white">Probabilidad esperada vs rival</span></div>
+                    </div>
+                    <div class="p-3 bg-primary/10 rounded-xl border border-primary/20">
+                        <span class="text-[9px] font-black text-primary uppercase block mb-2">K-Factor Adaptativo V2</span>
+                        <div class="flex-row between text-[10px]"><span class="text-white/50">Rookie (< 3.0)</span><b class="text-white">K = 40</b></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/50">Estándar</span><b class="text-white">K = 25</b></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/50">Pro (> 4.0)</span><b class="text-white">K = 15</b></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/50">Inactivo (> 30 días)</span><b class="text-sport-red">K × 1.5</b></div>
+                    </div>
+                    <div class="p-3 bg-white/3 rounded-xl">
+                        <span class="text-[9px] font-black text-sport-gold uppercase block mb-2">Multiplicadores Especiales</span>
+                        <div class="flex-row between text-[10px]"><span class="text-white/50">Racha 3+</span><b class="text-sport-green">× 1.25</b></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/50">Racha 6+</span><b class="text-sport-green">× 1.60</b></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/50">Matagigantes</span><b class="text-sport-gold">× 1.50</b></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/50">Clean Sheet</span><b class="text-cyan-400">+5 pts</b></div>
+                    </div>
+                </div>
             </div>`;
 
     case "CMD_CLUB_CENSUS":
@@ -1259,10 +1313,25 @@ export async function generateResponse(query) {
       const myPts = DATA_CACHE.user?.puntosRanking || 1000;
       const tPts = target.puntosRanking || 1000;
       const diff = tPts - myPts;
+      const tPhoto = target.fotoPerfil || target.fotoURL;
+      const tViv = target.vivienda || {};
+      const tAddr = (tViv.bloque || tViv.piso || tViv.puerta) 
+        ? `Blq ${tViv.bloque || '-'}, Piso ${tViv.piso || '-'}` : null;
       return `<div class="ai-result-card">
                 <span class="res-title">Perfil de ${target.nombreUsuario || target.nombre}</span>
-                <div class="res-val">Nivel ${(target.nivel || 2.5).toFixed(2)}</div>
-                <div class="res-sub">Ranking: ${Math.round(tPts)} Pts. ${diff > 0 ? `Te lleva ${Math.round(diff)} puntos.` : `Le sacas ${Math.round(Math.abs(diff))} puntos.`}</div>
+                <div class="flex-row items-center gap-3 mb-3">
+                    ${tPhoto ? `<img src="${tPhoto}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid rgba(198,255,0,0.3)">` : `<div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-weight:900;color:white">${(target.nombreUsuario||'J').charAt(0)}</div>`}
+                    <div class="flex-col">
+                        <span class="text-xs font-black text-white">${(target.nombreUsuario || target.nombre || 'Jugador').toUpperCase()}</span>
+                        <span class="text-[8px] text-muted font-bold">Nivel ${(target.nivel || 2.5).toFixed(2)}</span>
+                    </div>
+                </div>
+                <div class="flex-col gap-1">
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">ELO</span><b class="text-white">${Math.round(tPts)}</b></div>
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">Diferencia</span><b class="${diff > 0 ? 'text-sport-red' : 'text-sport-green'}">${diff > 0 ? `Te lleva +${Math.round(diff)}` : `Le sacas ${Math.round(Math.abs(diff))}`}</b></div>
+                    ${tAddr ? `<div class="flex-row between text-[10px]"><span class="text-white/40">Vivienda</span><span class="text-white/60">${tAddr}</span></div>` : ''}
+                    ${target.telefono ? `<div class="flex-row between text-[10px]"><span class="text-white/40">Teléfono</span><span class="text-white/60">${target.telefono}</span></div>` : ''}
+                </div>
             </div>`;
     }
 
@@ -1415,16 +1484,135 @@ export async function generateResponse(query) {
                 <div class="res-sub">La Matrix detecta una ejecución táctica de nivel ${ (DATA_CACHE.user?.nivel || 2.5).toFixed(2) }. Revisa tu diario para optimizar errores.</div>
             </div>`;
 
+    // --- NEW V15 COMMANDS ---
+    case "CMD_H2H": {
+      let rName = query.split(/con |versus |vs /i).pop().trim();
+      const rival = _findUserByName(rName);
+      if (!rival) return noData(`No encuentro a '${rName}' para comparar.`);
+      const record = { wins: 0, losses: 0 };
+      DATA_CACHE.matches.forEach(m => {
+        if (!m.resultado?.sets || !m.jugadores?.includes(uid) || !m.jugadores?.includes(rival.id)) return;
+        _didUserWinMatch(m, uid) ? record.wins++ : record.losses++;
+      });
+      const total = record.wins + record.losses;
+      if (total === 0) return noData(`No tengo partidos registrados contra ${rival.nombreUsuario || 'ese jugador'}.`);
+      return `<div class="ai-result-card">
+                <span class="res-title">H2H: Tú vs ${rival.nombreUsuario || rival.nombre}</span>
+                <div class="res-val">${record.wins}V - ${record.losses}D</div>
+                <div class="res-sub">Efectividad: ${Math.round(record.wins / total * 100)}% en ${total} enfrentamientos directos.</div>
+            </div>`;
+    }
+
+    case "CMD_MOMENTUM": {
+      const last5 = DATA_CACHE.matches.filter(m => m.resultado).slice(0, 5);
+      if (last5.length === 0) return noData("Sin partidos para medir tu momento.");
+      let w = 0;
+      last5.forEach(m => { if (_didUserWinMatch(m, uid)) w++; });
+      const momentum = w >= 4 ? "🔥 EN LLAMAS" : w >= 3 ? "📈 AL ALZA" : w >= 2 ? "⚖️ ESTABLE" : "📉 EN CAÍDA";
+      const momColor = w >= 4 ? "text-sport-green" : w >= 2 ? "text-sport-gold" : "text-sport-red";
+      return respond(
+        `<div class="ai-result-card">
+            <span class="res-title">Momentum (5 últimos)</span>
+            <div class="res-val ${momColor}">${momentum}</div>
+            <div class="res-sub">${w} victorias en los últimos 5 partidos. ${w>=4?'Mantén la presión.':w>=2?'Estás estable, busca rachas.':'Toca resetear mentalidad y centrarse.'}</div>
+        </div>`,
+        w >= 4 ? "¡Vas como un tiro, chaval!" : "Venga, que se puede remontar siempre."
+      );
+    }
+
+    case "CMD_EVOLUTION": {
+      const history = DATA_CACHE.eloHistory;
+      if (history.length < 2) return noData("Necesito más registros. Juega más.");
+      const newest = history[0]?.newTotal || 1000;
+      const oldest = history[history.length - 1]?.newTotal || 1000;
+      const totalChange = newest - oldest;
+      const period = history.length;
+      return `<div class="ai-result-card">
+                <span class="res-title">Evolución ELO (${period} registros)</span>
+                <div class="res-val ${totalChange >= 0 ? 'text-sport-green' : 'text-sport-red'}">${totalChange >= 0 ? '+' : ''}${Math.round(totalChange)} puntos</div>
+                <div class="flex-col gap-2 mt-3">
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">ELO Inicial</span><b class="text-white">${Math.round(oldest)}</b></div>
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">ELO Actual</span><b class="text-primary">${Math.round(newest)}</b></div>
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">Promedio/Partido</span><b class="text-white">${(totalChange / period).toFixed(1)} pts</b></div>
+                </div>
+            </div>`;
+    }
+
+    case "CMD_WEEKLY": {
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const thisWeek = DATA_CACHE.matches.filter(m => {
+        const d = _getMatchDate(m);
+        return d >= weekAgo && d <= now;
+      });
+      const played = thisWeek.filter(m => m.resultado);
+      const wins = played.filter(m => _didUserWinMatch(m, uid)).length;
+      return `<div class="ai-result-card">
+                <span class="res-title">Resumen Semanal</span>
+                <div class="res-val">${thisWeek.length} partidos esta semana</div>
+                <div class="flex-col gap-2 mt-3">
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">Jugados</span><b class="text-white">${played.length}</b></div>
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">Victorias</span><b class="text-sport-green">${wins}</b></div>
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">Pendientes</span><b class="text-sport-gold">${thisWeek.length - played.length}</b></div>
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">WR Semanal</span><b class="text-primary">${played.length > 0 ? Math.round(wins/played.length*100) : 0}%</b></div>
+                </div>
+            </div>`;
+    }
+
+    case "CMD_RECORD": {
+      const u = DATA_CACHE.user;
+      return `<div class="ai-result-card">
+                <span class="res-title">Records Personales</span>
+                <div class="flex-col gap-2">
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">Racha Máxima</span><b class="text-sport-green">${u.rachaMaxima || u.rachaActual || 0} victorias</b></div>
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">ELO Máximo</span><b class="text-primary">${Math.round(u.eloMaximo || u.puntosRanking || 1000)}</b></div>
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">Nivel Alcanzado</span><b class="text-white">${(u.nivelMaximo || u.nivel || 2.5).toFixed(2)}</b></div>
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">Total Partidos</span><b class="text-white">${u.partidosJugados || 0}</b></div>
+                    <div class="flex-row between text-[10px]"><span class="text-white/40">Total Victorias</span><b class="text-sport-green">${u.victorias || 0}</b></div>
+                </div>
+            </div>`;
+    }
+
+    case "CMD_HOT_ZONE": {
+      const matchDays = {};
+      DATA_CACHE.matches.filter(m => m.resultado).forEach(m => {
+        const d = _getMatchDate(m);
+        const day = d.toLocaleDateString('es-ES', { weekday: 'long' });
+        if (!matchDays[day]) matchDays[day] = { total: 0, wins: 0 };
+        matchDays[day].total++;
+        if (_didUserWinMatch(m, uid)) matchDays[day].wins++;
+      });
+      const sorted = Object.entries(matchDays).sort((a, b) => b[1].total - a[1].total);
+      if (sorted.length === 0) return noData("Sin datos de patrones aún.");
+      const bestDay = sorted.reduce((best, curr) => {
+        const wr = curr[1].total > 0 ? curr[1].wins / curr[1].total : 0;
+        return wr > (best[1].total > 0 ? best[1].wins / best[1].total : 0) ? curr : best;
+      });
+      return `<div class="ai-result-card">
+                <span class="res-title">Zona Caliente</span>
+                <div class="res-val">Mejor día: ${bestDay[0].toUpperCase()}</div>
+                <div class="flex-col gap-1 mt-3">
+                    ${sorted.map(([day, s]) => `<div class="flex-row between text-[10px]"><span class="text-white/40">${day}</span><b class="text-white">${s.wins}V/${s.total-s.wins}D (${Math.round(s.wins/s.total*100)}%)</b></div>`).join('')}
+                </div>
+            </div>`;
+    }
+
     default:
       const helpCard = `
                 <div class="ai-result-card animate-up">
-                    <span class="res-title">Vecina Maruja: Módulo IA</span>
-                    <div class="res-val">No te entiendo ni con un traductor galáctico... ¡céntrate un poco!</div>
-                    <div class="res-sub">La Matrix aún está aprendiendo. Prueba estos patrones:<br><br>
-                        • 📈 "Mi ranking"<br>
-                        • 🏆 "Top 5"<br>
-                        • 🎾 "Hay partidas abiertas?"<br>
-                        • 💬 "Analiza a [Nombre]"
+                    <span class="res-title">Vecina AP: Inteligencia V15</span>
+                    <div class="res-val">No te entiendo... ¡pero se me dan bien muchas cosas!</div>
+                    <div class="flex-col gap-2 mt-3">
+                        <span class="text-[9px] font-black text-primary uppercase tracking-widest">Comandos Disponibles</span>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">📊</span><span class="text-white">"informe", "mi ranking"</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">🔍</span><span class="text-white">"busca a Juan"</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">⚔️</span><span class="text-white">"h2h con Pedro"</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">📈</span><span class="text-white">"evolución", "momentum"</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">🏆</span><span class="text-white">"record", "mejor racha"</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">📅</span><span class="text-white">"resumen semanal"</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">🔥</span><span class="text-white">"zona caliente", "mejor hora"</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">🧮</span><span class="text-white">"fórmula ELO"</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">🌧️</span><span class="text-white">"llueve?", "clima"</span></div>
                     </div>
                 </div>`;
       if (currentPersonality === "vecina") {

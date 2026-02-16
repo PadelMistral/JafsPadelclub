@@ -8,18 +8,33 @@ import { initAppUI, showToast } from './ui-core.js';
 
 let currentUser = null;
 let allNotifs = [];
+let currentFilter = 'all';
+let notifUnsub = null;
+let notifBootUid = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     initAppUI('notifications');
 
-    observerAuth((user) => {
+    observerAuth(async (user) => {
         if (!user) {
+            if (notifUnsub) {
+                try { notifUnsub(); } catch (_) {}
+                notifUnsub = null;
+            }
+            notifBootUid = null;
             window.location.href = 'index.html';
             return;
         }
+        if (notifBootUid === user.uid) return;
+        notifBootUid = user.uid;
         currentUser = user;
 
-        subscribeCol(
+        if (notifUnsub) {
+            try { notifUnsub(); } catch (_) {}
+            notifUnsub = null;
+        }
+
+        const unsub = await subscribeCol(
             'notificaciones',
             (list) => {
                 allNotifs = list.sort((a, b) => (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0));
@@ -27,29 +42,46 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             [['destinatario', '==', user.uid]]
         );
+        notifUnsub = typeof unsub === 'function' ? unsub : null;
     });
 
     document.getElementById('btn-read-all')?.addEventListener('click', markAllAsRead);
     document.getElementById('btn-clear-all')?.addEventListener('click', clearAllNotifications);
+    document.querySelectorAll('#filter-tabs .filter-tab').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            currentFilter = btn.dataset.filter || 'all';
+            document.querySelectorAll('#filter-tabs .filter-tab').forEach((b) => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderList();
+        });
+    });
 });
 
 async function markAllAsRead() {
-    if (!currentUser || allNotifs.length === 0) return;
+    if (!currentUser) return;
+    if (allNotifs.length === 0) {
+        showToast('Sin cambios', 'No hay notificaciones para marcar.', 'info');
+        return;
+    }
     const batch = writeBatch(db);
-    allNotifs.filter(n => !n.leido).forEach(n => {
+    allNotifs.filter(n => n.leido !== true && n.read !== true).forEach(n => {
         const ref = doc(db, 'notificaciones', n.id);
-        batch.update(ref, { leido: true, read: true });
+        batch.update(ref, { leido: true, read: true, seen: true });
     });
     try {
         await batch.commit();
         showToast('¡Hecho!', 'Todas las notificaciones marcadas como leídas', 'success');
     } catch (e) {
         console.error(e);
+        showToast('Error', 'No se pudieron marcar como leídas.', 'error');
     }
 }
 
 async function clearAllNotifications() {
-    if (allNotifs.length === 0) return;
+    if (allNotifs.length === 0) {
+        showToast('Sin cambios', 'La bandeja ya está vacía.', 'info');
+        return;
+    }
     if (!confirm('¿Estás seguro de que quieres vaciar toda tu bandeja de entrada? Esta acción es irreversible.')) return;
     
     const batch = writeBatch(db);
@@ -71,7 +103,14 @@ function renderList() {
     const container = document.getElementById('notif-list');
     if (!container) return;
 
-    if (allNotifs.length === 0) {
+    const listToRender = allNotifs.filter((n) => {
+        const isUnread = n.leido !== true && n.read !== true;
+        if (currentFilter === 'unread') return isUnread;
+        if (currentFilter === 'read') return !isUnread;
+        return true;
+    });
+
+    if (listToRender.length === 0) {
         container.innerHTML = `
             <div class="empty-state-v5 py-20 opacity-30">
                 <i class="fas fa-bell-slash text-4xl mb-4"></i>
@@ -82,12 +121,12 @@ function renderList() {
         return;
     }
 
-    container.innerHTML = allNotifs.map(n => {
+    container.innerHTML = listToRender.map(n => {
         const date = n.timestamp?.toDate?.() || new Date();
         const iconInfo = getIconInfo(n.tipo);
         const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
         const dateStr = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).toUpperCase();
-        const isUnread = !n.leido;
+        const isUnread = n.leido !== true && n.read !== true;
 
         return `
             <div class="notif-item-v7 ${isUnread ? 'unread' : ''} animate-up" onclick="handleNotifClick('${n.id}', '${n.enlace || ''}')">
@@ -119,12 +158,26 @@ function renderList() {
 function getIconInfo(type) {
     switch (type) {
         case 'match_invite':
-        case 'private_invite': 
+        case 'private_invite':
+        case 'match_opened':
             return { icon: 'fa-envelope-open-text', variant: 'type-match' };
         case 'match_join': 
             return { icon: 'fa-user-plus', variant: 'type-match' };
+        case 'match_full':
+            return { icon: 'fa-users', variant: 'type-match' };
+        case 'match_cancelled':
+            return { icon: 'fa-ban', variant: 'type-system' };
+        case 'chat_mention':
+            return { icon: 'fa-at', variant: 'type-match' };
+        case 'new_rival':
+            return { icon: 'fa-user-shield', variant: 'type-challenge' };
+        case 'new_challenge':
+            return { icon: 'fa-bolt-lightning', variant: 'type-challenge' };
         case 'match_result':
-        case 'ranking_change': 
+        case 'ranking_change':
+        case 'ranking_up':
+        case 'ranking_down':
+        case 'level_up':
             return { icon: 'fa-trophy', variant: 'type-challenge' };
         case 'reto': 
             return { icon: 'fa-bolt-lightning', variant: 'type-challenge' };
@@ -138,17 +191,28 @@ function getIconInfo(type) {
 }
 
 window.handleNotifClick = async (id, link) => {
-    await updateDocument('notificaciones', id, { leido: true, read: true });
-    if (link) window.location.href = link;
+    try {
+        showToast('Procesando...', 'Marcando notificación como leída.', 'info');
+        await updateDocument('notificaciones', id, { leido: true, read: true, seen: true });
+        if (link) {
+            window.location.href = link;
+            return;
+        }
+        showToast('Notificación', 'Marcada como leída.', 'success');
+    } catch (e) {
+        console.error(e);
+        showToast('Error', 'No se pudo actualizar la notificación.', 'error');
+    }
 };
 
 window.deleteNotification = async (id) => {
     if (!confirm('¿Borrar esta notificación?')) return;
     try {
+        showToast('Procesando...', 'Eliminando notificación.', 'info');
         await deleteDoc(doc(db, 'notificaciones', id));
         showToast('Borrado', 'Notificación eliminada', 'info');
     } catch (e) {
         console.error(e);
+        showToast('Error', 'No se pudo borrar la notificación.', 'error');
     }
 };
-

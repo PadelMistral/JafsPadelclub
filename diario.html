@@ -239,12 +239,14 @@
 
                 <!-- STEP 1: CONTEXTO -->
                 <div id="step-1" class="wizard-step active">
-                    <div class="cfg-group-v9 mb-6">
-                        <label class="cfg-label-v7">PARTIDO VINCULADO (REQUERIDO)</label>
+                    <div id="match-selector-block" class="cfg-group-v9 mb-6">
+                        <label class="cfg-label-v7">PARTIDO VINCULADO</label>
                         <select id="inp-match-selector" class="select-v9"
                             onchange="window.onMatchSelectChange(this.value)">
                             <option value="">-- Selecciona un partido --</option>
                         </select>
+                        <p class="text-[9px] text-muted italic mt-2">Solo aparecen tus partidos completados en la
+                            Matrix.</p>
                     </div>
 
                     <div class="cfg-grid-v9 mb-6">
@@ -269,13 +271,13 @@
                     </div>
 
                     <div class="cfg-group-v9 mb-6">
-                        <label class="cfg-label-v7">VINCULAR PARTIDO OFICIAL</label>
-                        <select id="inp-match-selector" class="select-v9"
-                            onchange="window.onMatchSelectChange(this.value)">
-                            <option value="">-- SELECCIONAR PARTIDO --</option>
-                        </select>
-                        <p class="text-[9px] text-muted italic mt-2">Solo aparecen tus partidos completados en la
-                            Matrix.</p>
+                        <label class="cfg-label-v7">MODO DE ENTRADA</label>
+                        <div class="segmented-v9" id="entry-mode-selector">
+                            <button class="seg-node-v9 active" data-val="match">Con Partido</button>
+                            <button class="seg-node-v9" data-val="note">Nota Libre</button>
+                        </div>
+                        <p class="text-[9px] text-muted italic mt-2">Con Nota Libre puedes registrar aprendizajes sin
+                            haber jugado partido.</p>
                     </div>
 
                     <div id="linked-match-info" class="link-hook-v9 hidden mb-6">

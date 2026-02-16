@@ -1,7 +1,6 @@
-﻿/* js/ranking-service.js - Premium ELO & Gamification Engine v8.0 */
-import { updateDocument, getDocument, db } from './firebase-service.js';
-import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, limit, doc, getDoc, runTransaction } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
-import { showToast } from './ui-core.js';
+import { getDocument, db, auth } from './firebase-service.js';
+import { serverTimestamp, doc, runTransaction } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import { getDynamicKFactor } from './modules/stats-evolution.js';
 
 /**
  * Predicts ELO impact with Dynamic K-Factor and Streak Multipliers
@@ -15,17 +14,21 @@ export function predictEloImpact({
     streak = 0, 
     matchesPlayed = 0, 
     setsDifference = 0, 
-    gameDiff = 0, 
+    gameDiff = 0,
+    dynamicK = null, // New Parameter
     extraParams = {} 
 }) {
     const myTeamAvg = (myLevel + (partnerLevel || myLevel)) / 2;
     const rivalTeamAvg = (rival1Level + rival2Level) / 2;
     
     // 1. DYNAMIC K-FACTOR (ELITE TUNING)
-    let K = 32;
-    if (myLevel < 3.0) K = 40; 
-    if (myLevel >= 4.5) K = 20; 
-    if (matchesPlayed < 10) K = 64; 
+    // Use provided dynamic K if available, otherwise fall back to basic logic
+    let K = dynamicK || 32;
+    if (!dynamicK) {
+        if (myLevel < 3.0) K = 40; 
+        if (myLevel >= 4.5) K = 20; 
+        if (matchesPlayed < 10) K = 64; 
+    } 
 
     // 2. DISCREPANCY & RECOVERY (Rubber-banding)
     const suggestedPoints = 1000 + (myLevel - 2.5) * 400;
@@ -90,6 +93,39 @@ export function predictEloImpact({
         emotionalBonus = 1.15; // Resilience
     }
 
+    // 10. ADVANCED PROFILE VARIABLES (Competitive Personalization)
+    const consistency = Math.max(0, Math.min(100, Number(extraParams.consistency ?? 50)));
+    const pressure = Math.max(0, Math.min(100, Number(extraParams.pressure ?? 50)));
+    const aggression = Math.max(0, Math.min(100, Number(extraParams.aggression ?? 50)));
+    const winnersAvg = Math.max(0, Number(extraParams.winnersAvg ?? 0));
+    const ueAvg = Math.max(0, Number(extraParams.ueAvg ?? 0));
+    const teamChemistry = Math.max(0.2, Math.min(1, Number(extraParams.teamChemistry ?? 0.5)));
+    const rivalPointsAvg = Number(extraParams.rivalPointsAvg ?? myPoints);
+    const partnerPoints = Number(extraParams.partnerPoints ?? myPoints);
+
+    const consistencyMult = 0.9 + (consistency / 100) * 0.2;
+    const pressureMult = 0.92 + (pressure / 100) * 0.16;
+    const chemistryMult = 0.95 + (teamChemistry * 0.12);
+
+    const shotVolume = winnersAvg + ueAvg;
+    const disciplineRatio = shotVolume > 0 ? (winnersAvg - ueAvg) / shotVolume : 0;
+    const disciplineMult = Math.max(0.9, Math.min(1.1, 1 + disciplineRatio * 0.1));
+
+    const rivalStrengthGap = (rivalPointsAvg - myPoints) / 600;
+    const rivalStrengthMult = Math.max(0.9, Math.min(1.12, 1 + rivalStrengthGap * 0.09));
+
+    const partnerGap = (partnerPoints - myPoints) / 800;
+    const partnerSyncMult = Math.max(0.92, Math.min(1.1, 1 + partnerGap * 0.06));
+
+    let fatigueMult = 1.0;
+    if (extraParams.daysSinceLastMatch <= 1) fatigueMult = 0.95;
+    else if (extraParams.daysSinceLastMatch <= 3) fatigueMult = 0.98;
+    else if (extraParams.daysSinceLastMatch >= 10) fatigueMult = 1.03;
+
+    let aggressionMult = 1.0;
+    if (didWin) aggressionMult = 0.96 + (aggression / 100) * 0.12;
+    else aggressionMult = 1.02 + (aggression / 100) * 0.06;
+
     // Core Elo Formula
     const levelToRating = (lvl) => 1000 + (lvl - 2.5) * 400;
     const myR = levelToRating(myTeamAvg);
@@ -98,7 +134,7 @@ export function predictEloImpact({
     
     // Final Calculation
     let gain = Math.round(
-        (K * (1 - expectedScore) * streakMult * perfBonus * gapMult * mentalBonus * discrepancyBoost * dominanceMult * clutchMult * compMult * inactivityMult * emotionalBonus) + conditionBonus
+        (K * (1 - expectedScore) * streakMult * perfBonus * gapMult * mentalBonus * discrepancyBoost * dominanceMult * clutchMult * compMult * inactivityMult * emotionalBonus * consistencyMult * pressureMult * disciplineMult * chemistryMult * rivalStrengthMult * partnerSyncMult * fatigueMult * aggressionMult) + conditionBonus
     );
     
     // Loss logic (Forgiveness for underdogs)
@@ -106,7 +142,8 @@ export function predictEloImpact({
     if (absGameDiff >= 6) lossMult = 1.1;
     if (absGameDiff >= 10) lossMult = 1.25;
     if (isCloseMatch) lossMult = Math.max(0.85, lossMult - 0.15);
-    let loss = Math.round(K * (0 - expectedScore) * lossMult);
+    const stabilityShield = Math.max(0.86, Math.min(1.15, (consistencyMult + pressureMult + disciplineMult) / 3));
+    let loss = Math.round(K * (0 - expectedScore) * lossMult * aggressionMult / stabilityShield);
     if (levelDiff > 0.5) loss = Math.round(loss * 0.6); // Underdog protection
     if (discrepancyBoost > 1) loss = Math.round(loss * 0.75); // Recovery protection
 
@@ -126,7 +163,15 @@ export function predictEloImpact({
             recovery: discrepancyBoost,
             conditions: conditionBonus,
             inactivity: inactivityMult,
-            resilience: emotionalBonus
+            resilience: emotionalBonus,
+            consistency: Number(consistencyMult.toFixed(3)),
+            pressure: Number(pressureMult.toFixed(3)),
+            discipline: Number(disciplineMult.toFixed(3)),
+            chemistry: Number(chemistryMult.toFixed(3)),
+            rivalStrength: Number(rivalStrengthMult.toFixed(3)),
+            partnerSync: Number(partnerSyncMult.toFixed(3)),
+            fatigue: Number(fatigueMult.toFixed(3)),
+            aggression: Number(aggressionMult.toFixed(3))
         }
     };
 }
@@ -154,6 +199,11 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
             const matchDoc = await transaction.get(matchRef);
             if (!matchDoc.exists()) throw "Match does not exist!";
             const match = matchDoc.data();
+
+            // Avoid duplicate processing when the same result is retried.
+            if (match.rankingProcessedResult === resultStr && match.rankingProcessedAt) {
+                return { success: true, skipped: true, changes: [] };
+            }
 
             const sets = resultStr.trim().split(/\s+/);
             let t1Sets = 0, t2Sets = 0;
@@ -204,12 +254,18 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                 const amIteam1 = i < 2;
                 const partnerIdx = amIteam1 ? (i === 0 ? 1 : 0) : (i === 2 ? 3 : 2);
                 const partner = rawPlayers[partnerIdx];
+                const opponentPlayers = (amIteam1 ? rawPlayers.slice(2, 4) : rawPlayers.slice(0, 2)).filter(
+                    (op) => op && !op.isGuest
+                );
                 
                 const didIWin = (amIteam1 && t1Wins) || (!amIteam1 && !t1Wins);
                 const oppAvg = amIteam1 ? t2Avg : t1Avg;
                 const diffSets = Math.abs(t1Sets - t2Sets);
                 const setsCount = sets.length;
                 const isCloseMatch = setsCount === 3 && diffSets === 1;
+                const oppPointsAvg = opponentPlayers.length
+                    ? opponentPlayers.reduce((sum, op) => sum + Number(op.puntosRanking || getBaseEloByLevel(op.nivel || 2.5)), 0) / opponentPlayers.length
+                    : Number(p.puntosRanking || getBaseEloByLevel(p.nivel || 2.5));
                 
                 let myGames = 0, oppGames = 0;
                 sets.forEach(s => {
@@ -231,6 +287,11 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                 const now = new Date();
                 const daysSinceLastMatch = Math.floor((now - lastMatchDate) / (1000 * 60 * 60 * 24));
                 const mood = extraMatchData.playerMoods?.[p.id] || 'Normal';
+                const stats = p.advancedStats || { consistency: 50, pressure: 50, aggression: 50, modelAccuracy: 85, upsets: 0 };
+                const teamChemistry = estimateTeamChemistry(p, partner, stats);
+                
+                // --- PHASE 4: DYNAMIC K from STATS EVOLUTION ---
+                const kFactor = getDynamicKFactor(p);
 
                 const elo = predictEloImpact({
                     myLevel: p.nivel || 2.5, 
@@ -242,6 +303,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                     matchesPlayed: p.partidosJugados || 0,
                     setsDifference: diffSets,
                     gameDiff: gameDiff,
+                    dynamicK: kFactor,
                     extraParams: { 
                         weight: p.peso || 75,
                         isComeback: didIWin && sets.length === 3 && sets[0].split('-').map(Number)[amIteam1 ? 0 : 1] < sets[0].split('-').map(Number)[amIteam1 ? 1 : 0],
@@ -252,7 +314,15 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                         surface: surface,
                         weatherCondition: extraMatchData.weather || 'normal',
                         daysSinceLastMatch: daysSinceLastMatch,
-                        mood: mood
+                        mood: mood,
+                        consistency: stats.consistency || 50,
+                        pressure: stats.pressure || 50,
+                        aggression: stats.aggression || 50,
+                        winnersAvg: stats.winnersAvg || 0,
+                        ueAvg: stats.ueAvg || 0,
+                        teamChemistry: teamChemistry,
+                        rivalPointsAvg: oppPointsAvg,
+                        partnerPoints: Number(partner?.puntosRanking || currentPoints),
                     }
                 });
 
@@ -272,8 +342,6 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                 const currentSurfElo = eloData[surfKey] || currentPoints;
                 const newSurfElo = currentSurfElo + delta;
 
-                const stats = p.advancedStats || { consistency: 50, pressure: 50, aggression: 50, modelAccuracy: 85, upsets: 0 };
-                
                 let consDelta = didIWin && diffSets === 2 ? 0.5 : (didIWin ? 0.2 : (diffSets === 2 ? -0.5 : -0.2));
                 stats.consistency = Math.min(100, Math.max(0, (stats.consistency || 50) + consDelta));
                 let pressDelta = isCloseMatch ? (didIWin ? 1.5 : -0.5) : 0;
@@ -291,6 +359,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
 
                 const analysis = {
                     matchId: matchId,
+                    matchCollection: col,
                     won: didIWin,
                     delta: delta,
                     pointsBefore: currentPoints,
@@ -320,9 +389,11 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                     lastMatchDate: serverTimestamp()
                 });
 
-                transaction.set(doc(collection(db, "rankingLogs")), {
+                const logId = `${matchId}_${p.id}`;
+                transaction.set(doc(db, "rankingLogs", logId), {
                     uid: p.id,
                     matchId: matchId,
+                    matchCollection: col,
                     diff: delta,
                     newTotal: newPts,
                     details: analysis,
@@ -343,7 +414,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
             }
 
             // Save details
-            transaction.set(doc(collection(db, "matchPointDetails")), {
+            transaction.set(doc(db, "matchPointDetails", matchId), {
                 matchId: matchId,
                 col: col,
                 sets: resultStr,
@@ -359,7 +430,10 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                     totalPoints: pointDetails.totalPoints,
                     pointsPerSet: pointDetails.pointsPerSet,
                     updatedAt: serverTimestamp()
-                }
+                },
+                rankingProcessedAt: serverTimestamp(),
+                rankingProcessedResult: resultStr,
+                rankingProcessedBy: auth.currentUser?.uid || null
             });
 
             return { success: true, changes };
@@ -426,6 +500,21 @@ function estimatePointDetailsFromSets(resultStr) {
     return { points, totalPoints: totalPoints || 1, pointsPerSet };
 }
 
+function estimateTeamChemistry(player, partner, stats) {
+    if (!partner || partner.isGuest) return 0.5;
+    const myLvl = Number(player?.nivel || 2.5);
+    const partnerLvl = Number(partner?.nivel || 2.5);
+    const myPts = Number(player?.puntosRanking || getBaseEloByLevel(myLvl));
+    const partnerPts = Number(partner?.puntosRanking || getBaseEloByLevel(partnerLvl));
+    const consistency = Math.max(0, Math.min(100, Number(stats?.consistency || 50))) / 100;
+
+    const lvlGapPenalty = Math.min(0.24, Math.abs(myLvl - partnerLvl) * 0.12);
+    const ptsGapPenalty = Math.min(0.18, Math.abs(myPts - partnerPts) / 2500);
+
+    const chemistry = 0.55 + consistency * 0.35 - lvlGapPenalty - ptsGapPenalty;
+    return Number(Math.max(0.2, Math.min(1, chemistry)).toFixed(3));
+}
+
 function buildPointImpact({ delta, teamPointCount, amIteam1, team1Avg, team2Avg, myLevel, partnerLevel }) {
     const myTeamAvg = amIteam1 ? team1Avg : team2Avg;
     const rivalAvg = amIteam1 ? team2Avg : team1Avg;
@@ -442,3 +531,4 @@ function buildPointImpact({ delta, teamPointCount, amIteam1, team1Avg, team2Avg,
         multiplier: Number((diffMult * partnerMult).toFixed(3))
     };
 }
+

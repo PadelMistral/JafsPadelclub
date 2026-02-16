@@ -440,4 +440,8 @@
   margin-bottom: 10px;
 }
 
+#match-selector-block.hidden {
+  display: none !important;
+}
+
 

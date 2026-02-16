@@ -1,5 +1,6 @@
 ﻿// diario-logic.js - Premium Diary V9.0 (Advanced Data & Wizard)
 import { auth, db, subscribeDoc, updateDocument, getDocument } from './firebase-service.js';
+import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast } from './ui-core.js';
 import { getDetailedWeather } from './external-data.js';
 
@@ -11,19 +12,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentUser = null;
     let userData = null;
     let wizardData = {};
+    let entryMode = 'match';
+
+    function syncEntryModeUI() {
+        const matchBlock = document.getElementById('match-selector-block');
+        const linkedInfo = document.getElementById('linked-match-info');
+        const modeBtns = document.querySelectorAll('#entry-mode-selector .seg-node-v9');
+
+        modeBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.val === entryMode));
+        if (matchBlock) matchBlock.classList.toggle('hidden', entryMode === 'note');
+        if (linkedInfo && entryMode === 'note') linkedInfo.classList.add('hidden');
+
+        if (entryMode === 'note') {
+            const hiddenMatch = document.getElementById('inp-match-id');
+            const selector = document.getElementById('inp-match-selector');
+            const typeSel = document.getElementById('inp-tipo');
+            if (hiddenMatch) hiddenMatch.value = '';
+            if (selector) selector.value = '';
+            if (typeSel) typeSel.value = 'Entrenamiento';
+        }
+    }
 
     // --- WIZARD LOGIC ---
     window.openWizard = (matchId = null) => {
         const modal = document.getElementById('modal-entry');
         modal.classList.add('active');
         currentStep = 1;
+        entryMode = 'match';
         updateWizardUI();
         loadAvailableMatches(); // Always try to load played matches
+        syncEntryModeUI();
         if (matchId) loadLinkedMatch(matchId);
     };
 
     window.closeWizard = () => {
         document.getElementById('modal-entry').classList.remove('active');
+    };
+
+    window.unlinkMatch = () => {
+        const hiddenMatch = document.getElementById('inp-match-id');
+        const selector = document.getElementById('inp-match-selector');
+        const linkedInfo = document.getElementById('linked-match-info');
+        if (hiddenMatch) hiddenMatch.value = '';
+        if (selector) selector.value = '';
+        if (linkedInfo) linkedInfo.classList.add('hidden');
     };
 
     // --- DETAILS MODAL ---
@@ -119,22 +151,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.wizardNext = async () => {
         // Validation for step 1
         if (currentStep === 1) {
-            const mId = document.getElementById('inp-match-id').value || document.getElementById('inp-match-selector').value;
-            if (!mId) {
-                showToast('ACCIÓN REQUERIDA', 'Debes seleccionar un partido completado para crear un reporte.', 'warning');
-                return;
-            }
-
-            // Verify match is played
-            try {
-                const match = await getDocument('partidosReto', mId) || await getDocument('partidosAmistosos', mId);
-                if (!match || !match.resultado) {
-                     showToast('PARTIDO PENDIENTE', 'El partido seleccionado aún no tiene resultado registrado. Juega primero, analiza después.', 'warning');
-                     return;
+            if (entryMode !== 'note') {
+                const mId = document.getElementById('inp-match-id').value || document.getElementById('inp-match-selector').value;
+                if (!mId) {
+                    showToast('ACCIÓN REQUERIDA', 'Debes seleccionar un partido completado para crear un reporte.', 'warning');
+                    return;
                 }
-            } catch(e) {
-                 showToast('ERROR', 'No se pudo verificar el estado del partido.', 'error');
-                 return;
+
+                // Verify match is played
+                try {
+                    const match = await getDocument('partidosReto', mId) || await getDocument('partidosAmistosos', mId);
+                    if (!match || !match.resultado) {
+                        showToast('PARTIDO PENDIENTE', 'El partido seleccionado aún no tiene resultado registrado. Juega primero, analiza después.', 'warning');
+                        return;
+                    }
+                } catch(e) {
+                    showToast('ERROR', 'No se pudo verificar el estado del partido.', 'error');
+                    return;
+                }
             }
         }
 
@@ -205,6 +239,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    document.querySelectorAll('#entry-mode-selector .seg-node-v9').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            entryMode = btn.dataset.val === 'note' ? 'note' : 'match';
+            syncEntryModeUI();
+        });
+    });
+
     // Mood Matrix
     document.querySelectorAll('.mood-face').forEach(btn => {
         btn.onclick = function() {
@@ -240,9 +281,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Check URL params for match linking
     const urlParams = new URLSearchParams(window.location.search);
     const mId = urlParams.get('matchId');
+    const openMode = urlParams.get('open');
     if (mId) {
         window.openWizard();
         loadLinkedMatch(mId);
+    }
+    if (openMode === 'note') {
+        window.openWizard();
+        entryMode = 'note';
+        syncEntryModeUI();
     }
 
     async function loadAvailableMatches() {
@@ -251,18 +298,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!selector) return;
 
         try {
-            const { query, collection, where, getDocs, orderBy } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
+            const { query, collection, where, getDocs } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
             
-            // Fetch from both collections
-            const qA = query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", currentUser.uid), where("estado", "==", "jugado"), orderBy("fecha", "desc"));
-            const qR = query(collection(db, "partidosReto"), where("jugadores", "array-contains", currentUser.uid), where("estado", "==", "jugado"), orderBy("fecha", "desc"));
+            // Avoid composite-index dependency: fetch by player and filter/sort client-side
+            const qA = query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", currentUser.uid));
+            const qR = query(collection(db, "partidosReto"), where("jugadores", "array-contains", currentUser.uid));
             
             const [snapA, snapR] = await Promise.all([getDocs(qA), getDocs(qR)]);
             
             let all = [
                 ...snapA.docs.map(d => ({ id: d.id, ...d.data(), type: 'Amistoso' })),
                 ...snapR.docs.map(d => ({ id: d.id, ...d.data(), type: 'Reto' }))
-            ].sort((a,b) => (b.fecha?.toMillis?.() || 0) - (a.fecha?.toMillis?.() || 0));
+            ]
+            .filter(m => m.estado === "jugado")
+            .sort((a,b) => (b.fecha?.toMillis?.() || 0) - (a.fecha?.toMillis?.() || 0));
 
             selector.innerHTML = '<option value="">-- Selecciona un partido --</option>';
             all.forEach(m => {
@@ -280,6 +329,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.onMatchSelectChange = (id) => {
         if (id) loadLinkedMatch(id);
+        else window.unlinkMatch();
     };
 
     async function loadLinkedMatch(id) {
@@ -325,16 +375,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         const originalText = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESANDO...';
+        showToast("Guardando...", "Sincronizando entrada del diario.", "info");
 
         try {
             // 1. Gather Data
+            const selectedMatchId = entryMode === 'match'
+                ? (document.getElementById('inp-match-id').value || null)
+                : null;
+
             const entry = {
                 id: Date.now().toString(),
                 fecha: new Date().toISOString(),
-                matchId: document.getElementById('inp-match-id').value || null,
+                matchId: selectedMatchId,
+                sessionMode: entryMode,
                 
                 // Context
-                tipo: document.getElementById('inp-tipo').value,
+                tipo: entryMode === 'note' ? 'Nota Libre' : document.getElementById('inp-tipo').value,
                 hora: document.getElementById('inp-hora').value,
                 surface: document.querySelector('#surface-selector .active')?.dataset.val || 'indoor',
                 pista: document.getElementById('inp-court-type').value,
@@ -420,24 +476,38 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
 
-            // 4. Save to Firebase
+            // 4. Save to Firebase (Legacy + New System)
+            
+            // A. New Technical System (Phase 2)
+            try {
+                const { submitTechnicalEntry } = await import('./modules/diary-technical.js');
+                await submitTechnicalEntry(entry);
+            } catch (err) {
+                console.warn("Technical Diary Module Error:", err);
+            }
+
+            // B. Existing Logic (Legacy Array for backward compatibility)
             const currentJournal = userData.diario || [];
-            // Limit journal size? No, keep history.
             await updateDocument("usuarios", currentUser.uid, { diario: [...currentJournal, entry] });
             
             // 5. Update Advanced Stats in User Profile (Accumulated)
             const currentStats = userData.advancedStats || { winners: 0, ue: 0, matches: 0 };
-            currentStats.winners = (currentStats.winners || 0) + entry.stats.winners;
-            currentStats.ue = (currentStats.ue || 0) + entry.stats.ue;
-            currentStats.matches = (currentStats.matches || 0) + 1;
-            
-            // Update average
-            currentStats.winnersAvg = Math.round(currentStats.winners / currentStats.matches);
-            currentStats.ueAvg = Math.round(currentStats.ue / currentStats.matches);
+            if (entry.sessionMode !== 'note') {
+                currentStats.winners = (currentStats.winners || 0) + entry.stats.winners;
+                currentStats.ue = (currentStats.ue || 0) + entry.stats.ue;
+                currentStats.matches = (currentStats.matches || 0) + 1;
+                
+                // Update average
+                currentStats.winnersAvg = Math.round(currentStats.winners / Math.max(1, currentStats.matches));
+                currentStats.ueAvg = Math.round(currentStats.ue / Math.max(1, currentStats.matches));
+            } else {
+                currentStats.notes = (currentStats.notes || 0) + 1;
+            }
             
             await updateDocument("usuarios", currentUser.uid, { advancedStats: currentStats });
 
-            showToast("DATA UPLOADED", "Entrada registrada en la Matrix", "success");
+            // Feedback handled by submitTechnicalEntry mostly, but global toast here too
+            showToast("ANOTACIÓN GUARDADA", "Tu diario táctico se ha sincronizado correctamente.", "success");
             window.closeWizard();
             resetWizard();
 
@@ -452,10 +522,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function resetWizard() {
         currentStep = 1;
+        entryMode = 'match';
+        syncEntryModeUI();
         document.getElementById('inp-key-moment').value = '';
         document.getElementById('inp-damage-received').value = '';
         document.getElementById('inp-damage-inflicted').value = '';
         document.getElementById('entry-notes').value = '';
+        document.getElementById('inp-match-id').value = '';
+        document.getElementById('inp-match-selector').value = '';
         document.getElementById('val-winners').innerText = '0';
         document.getElementById('val-ue').innerText = '0';
         // Reset others...
@@ -473,6 +547,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         list.innerHTML = [...entries].reverse().map(e => {
             const date = new Date(e.fecha);
+            const isNote = e.sessionMode === 'note' || !e.matchId;
             const moodColor = {
                 'Frustrado': 'text-red-400',
                 'Cansado': 'text-orange-400',
@@ -489,8 +564,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <span class="text-[9px] font-black uppercase tracking-widest text-primary">${e.tipo || 'SESIÓN'}</span>
                             <span class="text-xs font-black text-white">${date.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
                         </div>
-                        <div class="mood-badge ${moodColor} border border-white/10 px-3 py-1 rounded-full bg-black/40">
-                            <span class="text-[10px] font-black uppercase">${e.biometria?.mood || 'N/A'}</span>
+                        <div class="mood-badge ${isNote ? 'text-cyan-300' : moodColor} border border-white/10 px-3 py-1 rounded-full bg-black/40">
+                            <span class="text-[10px] font-black uppercase">${isNote ? 'NOTA' : (e.biometria?.mood || 'N/A')}</span>
                         </div>
                     </div>
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "padeluminatis-v6.6";
+const CACHE_NAME = "padeluminatis-v6.8";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -25,71 +25,97 @@ self.addEventListener("install", (event) => {
     caches
       .open(CACHE_NAME)
       .then((cache) => cache.addAll(CORE_ASSETS))
-      .then(() => self.skipWaiting()), // Force activation
+      .then(() => self.skipWaiting()),
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) =>
-      Promise.all(
+    (async () => {
+      const cacheNames = await caches.keys();
+      await Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-             console.log("Deleting old cache:", cacheName); 
-             return caches.delete(cacheName);
+            console.log("Deleting old cache:", cacheName);
+            return caches.delete(cacheName);
           }
+          return Promise.resolve();
         }),
-      ),
-    ),
+      );
+      await self.clients.claim();
+    })(),
   );
-  self.clients.claim(); // Take control immediatey
 });
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
+async function cachePut(request, response) {
+  if (!response || (!response.ok && response.type !== "opaque")) return response;
+  const cache = await caches.open(CACHE_NAME);
+  await cache.put(request, response.clone());
+  return response;
+}
+
+async function networkFirst(request, fallbackUrl = null) {
+  try {
+    const response = await fetch(request, { cache: "no-store" });
+    return await cachePut(request, response);
+  } catch (error) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    if (fallbackUrl) {
+      const fallback = await caches.match(fallbackUrl);
+      if (fallback) return fallback;
+    }
+    throw error;
+  }
+}
+
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  return cachePut(request, response);
+}
+
+async function staleWhileRevalidate(request) {
+  const cached = await caches.match(request);
+  const networkFetch = fetch(request)
+    .then((response) => cachePut(request, response))
+    .catch(() => null);
+  return cached || networkFetch || fetch(request);
+}
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
   const url = new URL(event.request.url);
-  
-  // Strategy 1: HTML (Navigation) -> Network First
+  if (url.origin !== self.location.origin) return;
+
+  // HTML (Navigation): Network first for instant updates in browser + PWA.
   if (event.request.mode === "navigate") {
-    event.respondWith(
-      fetch(event.request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          return res;
-        })
-        .catch(() => caches.match("./index.html")),
-    );
+    event.respondWith(networkFirst(event.request, "./index.html"));
     return;
   }
 
-  // Strategy 3: Images -> Cache First
+  // JS/CSS: Network first to avoid "manual cache clear" updates.
+  if (url.pathname.match(/\.(js|css)$/)) {
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
+
+  // Images: Cache first.
   if (url.pathname.match(/\.(png|jpg|jpeg|svg|webp|gif)$/)) {
-     event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached;
-        return fetch(event.request).then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-            return res;
-        });
-      })
-    );
+    event.respondWith(cacheFirst(event.request));
     return;
   }
 
-  // Strategy 2: Assets (CSS/JS) -> Stale While Revalidate
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const networkFetch = fetch(event.request).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        return res;
-      });
-      return cached || networkFetch;
-    })
-  );
+  // Default static assets.
+  event.respondWith(staleWhileRevalidate(event.request));
 });
 
 // --- PUSH NOTIFICATIONS HANDLING ---
@@ -113,6 +139,8 @@ self.addEventListener("push", (event) => {
     icon: data.icon || "./imagenes/Logojafs.png",
     badge: "./imagenes/Logojafs.png",
     vibrate: [200, 100, 200],
+    tag: data.tag || `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    renotify: true,
     data: {
       url: data.url || "./home.html",
     },
@@ -130,20 +158,20 @@ self.addEventListener("notificationclick", (event) => {
 
   if (event.action === "close") return;
 
-  const urlToOpen = event.notification.data.url || "./home.html";
+  const rawUrl = event.notification.data?.url || "./home.html";
+  const urlToOpen = new URL(rawUrl, self.location.origin).href;
 
   event.waitUntil(
     clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((windowClients) => {
-        // Look for an existing app window and focus it
-        for (let i = 0; i < windowClients.length; i++) {
-          const client = windowClients[i];
-          if (client.url === urlToOpen && "focus" in client) {
-            return client.focus();
-          }
+        // Prefer reusing an existing window to avoid duplicates.
+        for (const client of windowClients) {
+          if (!("focus" in client)) continue;
+          if (client.url === urlToOpen) return client.focus();
+          if (client.url.startsWith(self.location.origin)) return client.focus();
         }
-        // If no window found, open a new one
+
         if (clients.openWindow) {
           return clients.openWindow(urlToOpen);
         }

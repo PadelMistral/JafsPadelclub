@@ -1,5 +1,4 @@
-﻿// perfil.js - Pro Player Profile (v15.0) with Address, ELO Graph & Enhanced Palas
-import {
+﻿import {
   auth,
   db,
   observerAuth,
@@ -27,6 +26,7 @@ import { AI } from './ai-engine.js';
 import { PredictiveEngine } from './predictive-engine.js';
 import { RivalIntelligence } from './rival-intelligence.js';
 import { DashboardEvolution } from './dashboard-evolution.js';
+import { SmartNotifier } from './modules/smart-notifications.js';
 
 document.addEventListener("DOMContentLoaded", () => {
   initBackground();
@@ -44,9 +44,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     currentUser = user;
+    
+    // --- PHASE 6: Contextual Checks ---
+    SmartNotifier.checkInactivity({ id: user.uid, lastMatchDate: user.limitMatchDate }); 
+    // Note: ensure lastMatchDate is populated correctly in user object from getDocument later, 
+    // but here user object is from Auth. We need DB data.
+    // Ideally call this inside subscribeDoc or after getDocument.
+    
     const data = await getDocument("usuarios", user.uid);
     await injectHeader(data || {});
     injectNavbar("profile");
+
+    // Check inactivity after loading data
+    if (data) SmartNotifier.checkInactivity({ id: user.uid, lastMatchDate: data.lastMatchDate });
 
     subscribeDoc("usuarios", user.uid, (data) => {
       if (data) {
@@ -186,8 +196,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function loadCompetitiveData(uid) {
     try {
-        const amSnap = await window.getDocsSafe(query(collection(db, "partidosAmistosos"), where("participantes", "array-contains", uid), limit(50)));
-        const reSnap = await window.getDocsSafe(query(collection(db, "partidosReto"), where("participantes", "array-contains", uid), limit(50)));
+        const amSnap = await window.getDocsSafe(query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", uid), limit(50)));
+        const reSnap = await window.getDocsSafe(query(collection(db, "partidosReto"), where("jugadores", "array-contains", uid), limit(50)));
         
         const allMatches = [...amSnap.docs, ...reSnap.docs].map(d => d.data());
         
@@ -197,9 +207,9 @@ document.addEventListener("DOMContentLoaded", () => {
         allMatches.forEach(m => {
             if (m.estado !== 'jugado' || !m.resultado) return;
             
-            const isT1 = m.equipo1?.includes(uid);
-            const userTeam = isT1 ? m.equipo1 : m.equipo2;
-            const rivalTeam = isT1 ? m.equipo2 : m.equipo1;
+            const isT1 = m.equipoA?.includes(uid);
+            const userTeam = isT1 ? m.equipoA : m.equipoB;
+            const rivalTeam = isT1 ? m.equipoB : m.equipoA;
             
             // Assume result format "6-4 6-4" means T1 won if not specified otherwise
             let userWon = false;
@@ -353,9 +363,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const canvas = document.getElementById("tactical-radar-chart");
     if (!canvas) return;
 
-    // Use Advanced Stats if available or fallback
-    const stats = user.tacticalAnalysis || { mental: 5, tactica: 5, fisico: 5, tecnica: 5, defensa: 5, ataque: 5 };
-    const data = [stats.mental, stats.tactica, stats.fisico, stats.tecnica, stats.defensa, stats.ataque];
+    // Use Advanced Stats Evolution (Phase 3)
+    // Scale: 0-100 internally, display 0-10 on chart
+    const attrs = user.atributosTecnicos || { 
+        mentalidad: 50, tactica: 50, fisico: 50, 
+        tecnica: 50, fondo: 50, volea: 50, remate: 50 
+    };
+
+    // Mapping relevant stats for the Radar
+    const dataPoints = [
+        attrs.mentalidad / 10,
+        (attrs.tactica || attrs.lecturaJuego || 50) / 10,
+        attrs.fisico / 10,
+        (attrs.tecnica || attrs.consistencia || 50) / 10,
+        attrs.fondo / 10,
+        ((attrs.volea + attrs.remate) / 2) / 10 // Attack composite
+    ];
     
     if (radarChart) radarChart.destroy();
 
@@ -365,12 +388,13 @@ document.addEventListener("DOMContentLoaded", () => {
         labels: ['MENTAL', 'TÁCTICA', 'FÍSICO', 'TÉCNICA', 'DEFENSA', 'ATAQUE'],
         datasets: [{
           label: 'ADN',
-          data: data,
-          backgroundColor: 'rgba(0, 212, 255, 0.2)',
-          borderColor: '#00d4ff',
+          data: dataPoints,
+          backgroundColor: 'rgba(163, 230, 53, 0.2)', // Sport Lime
+          borderColor: '#a3e635',
           borderWidth: 2,
-          pointBackgroundColor: '#00d4ff',
-          pointBorderColor: '#fff'
+          pointBackgroundColor: '#a3e635',
+          pointBorderColor: '#fff',
+          pointRadius: 4
         }]
       },
       options: {
@@ -378,9 +402,12 @@ document.addEventListener("DOMContentLoaded", () => {
         maintainAspectRatio: false,
         scales: {
           r: {
-            angleLines: { color: 'rgba(255,255,255,0.05)' },
-            grid: { color: 'rgba(255,255,255,0.05)' },
-            pointLabels: { color: 'rgba(255,255,255,0.6)', font: { size: 9, weight: 'bold' } },
+            angleLines: { color: 'rgba(255,255,255,0.1)' },
+            grid: { color: 'rgba(255,255,255,0.1)' },
+            pointLabels: { 
+                color: 'rgba(255,255,255,0.8)', 
+                font: { size: 10, weight: 'bold', family: "'Orbitron', sans-serif" } 
+            },
             ticks: { display: false, max: 10 },
             suggestedMin: 0, requestedMax: 10
           }
@@ -388,6 +415,30 @@ document.addEventListener("DOMContentLoaded", () => {
         plugins: { legend: { display: false } }
       }
     });
+
+    // Render Attribute Bars (List below radar)
+    const attrList = document.getElementById('attribute-list');
+    if (attrList) {
+        const createBar = (label, val) => `
+            <div class="mb-3">
+                <div class="flex-row between text-[9px] font-black uppercase mb-1">
+                    <span class="text-white">${label}</span>
+                    <span class="text-primary">${Math.round(val)}/99</span>
+                </div>
+                <div class="m-bar" style="height:4px; background:rgba(255,255,255,0.1)">
+                    <div class="m-fill" style="width:${val}%; background:var(--primary); box-shadow: 0 0 10px var(--primary)"></div>
+                </div>
+            </div>
+        `;
+
+        attrList.innerHTML = `
+            ${createBar('VOLEA', attrs.volea)}
+            ${createBar('REMATE', attrs.remate)}
+            ${createBar('FONDO DE PISTA', attrs.fondo)}
+            ${createBar('FÍSICO', attrs.fisico)}
+            ${createBar('MENTALIDAD', attrs.mentalidad)}
+        `;
+    }
   }
 
   function renderAchievements(user) {
@@ -557,12 +608,14 @@ document.addEventListener("DOMContentLoaded", () => {
   window.openGearModal = () => document.getElementById("modal-gear")?.classList.add("active");
   
   window.savePala = async () => {
+    if (!currentUser?.uid) return showToast("Sesión", "Debes iniciar sesión de nuevo.", "warning");
     const marca = document.getElementById("gear-marca").value;
     const modelo = document.getElementById("gear-modelo").value;
     if(!marca || !modelo) return showToast("Error", "Datos incompletos", "error");
     
     const newPala = { marca, modelo, matchesUsed: 0, createdAt: new Date().toISOString() };
     try {
+        showToast("Guardando...", "Registrando pala en tu inventario.", "info");
         const updated = [...(userData.palas || []), newPala];
         await updateDocument("usuarios", currentUser.uid, { palas: updated });
         document.getElementById("modal-gear").classList.remove("active");
@@ -571,11 +624,14 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.removePala = async (idx) => {
+    if (!currentUser?.uid) return showToast("Sesión", "Debes iniciar sesión de nuevo.", "warning");
     if(!confirm("¿Eliminar pala?")) return;
     try {
+        showToast("Eliminando...", "Actualizando inventario.", "info");
         const updated = [...(userData.palas || [])];
         updated.splice(idx, 1);
         await updateDocument("usuarios", currentUser.uid, { palas: updated });
+        showToast("Inventario", "Pala eliminada correctamente.", "success");
     } catch(e) { showToast("Error", "Fallo al eliminar", "error"); }
   };
 
@@ -588,11 +644,37 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
         const rival = await getDocument('usuarios', rivalId);
         const { RivalIntelligence } = await import('./rival-intelligence.js');
-        const amSnap = await window.getDocsSafe(query(collection(db, "partidosAmistosos"), where("participantes", "array-contains", currentUser.uid)));
-        const reSnap = await window.getDocsSafe(query(collection(db, "partidosReto"), where("participantes", "array-contains", currentUser.uid)));
-        const matches = [...amSnap.docs, ...reSnap.docs].filter(m => m.data().participantes.includes(rivalId)).map(d => d.data());
+        const { comparePlayers } = await import('./modules/player-comparator.js');
         
+        // Parallel Data Fetching
+        const [amSnap, reSnap, comparison] = await Promise.all([
+             window.getDocsSafe(query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", currentUser.uid))),
+             window.getDocsSafe(query(collection(db, "partidosReto"), where("jugadores", "array-contains", currentUser.uid))),
+             comparePlayers(currentUser.uid, rivalId)
+        ]);
+
+        const matches = [...amSnap.docs, ...reSnap.docs].filter(m => m.data().jugadores?.includes(rivalId)).map(d => d.data());
         const intel = RivalIntelligence.parseMatches(currentUser.uid, rivalId, matches);
+        
+        // Power Difference Calculation
+        let powerVisual = "";
+        if (comparison) {
+             const p1 = comparison.powerLevel.p1; // Me
+             const p2 = comparison.powerLevel.p2; // Rival
+             const diff = p1 - p2;
+             const color = diff > 0 ? "text-sport-green" : (diff < 0 ? "text-sport-red" : "text-white");
+             const icon = diff > 0 ? "fa-bolt" : "fa-shield-halved";
+             powerVisual = `
+                <div class="p-3 bg-black/40 rounded-xl border border-white/5 mb-2 flex-between">
+                    <span class="text-[9px] font-black uppercase text-muted tracking-widest">POWER LEVEL</span>
+                    <div class="flex-row gap-4 items-center">
+                        <span class="text-xs font-black text-white opacity-50">YO: ${Math.round(p1)}</span>
+                        <div class="h-4 w-[1px] bg-white/10"></div>
+                        <span class="text-xs font-black ${color}"><i class="fas ${icon} mr-1"></i>${Math.round(p2)}</span>
+                    </div>
+                </div>
+             `;
+        }
         
         dashboard.innerHTML = `
             <div class="flex-row items-center gap-4 mb-4">
@@ -602,6 +684,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     <span class="text-[8px] font-bold text-muted uppercase">Nivel ${rival.nivel || '---'}</span>
                 </div>
             </div>
+            
+            ${powerVisual}
+
             <div class="grid grid-cols-2 gap-2 mb-4">
                 <div class="p-3 bg-white/5 rounded-xl border border-white/5">
                     <span class="text-[8px] font-black text-muted uppercase block">Balance H2H</span>
@@ -625,13 +710,105 @@ document.addEventListener("DOMContentLoaded", () => {
   // Theme Manager Init
   import("./modules/theme-manager.js?v=6.5").then(m => m.renderThemeSelector("theme-selector-container")).catch(console.error);
   
+  function setActionBusy(buttonId, busy, loadingText = '...') {
+    const btn = document.getElementById(buttonId);
+    if (!btn) return () => {};
+    if (!busy) return () => {};
+    const prevHtml = btn.innerHTML;
+    btn.disabled = true;
+    if (btn.classList.contains('setting-save-btn')) {
+      btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
+    } else {
+      btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${loadingText}`;
+    }
+    return () => {
+      btn.disabled = false;
+      btn.innerHTML = prevHtml;
+    };
+  }
+
   // Save profile handlers
+  document.getElementById("p-save-name")?.addEventListener("click", async () => {
+    if (!currentUser?.uid) return showToast("Sesión", "Debes iniciar sesión de nuevo.", "warning");
+    const val = document.getElementById("p-username-inp").value.trim();
+    if(!val) return showToast("Error", "Nombre vacío", "error");
+    const unlock = setActionBusy("p-save-name", true, "Guardando");
+    try {
+      showToast("Guardando...", "Actualizando tu alias de combate.", "info");
+      await updateDocument("usuarios", currentUser.uid, { nombreUsuario: val, nombre: val });
+      showToast("Identidad", "Alias de combate actualizado", "success");
+      if(document.getElementById("p-name")) document.getElementById("p-name").textContent = val.toUpperCase();
+    } catch (e) {
+      showToast("Error", "No se pudo actualizar el alias.", "error");
+    } finally {
+      unlock();
+    }
+  });
+
+  document.getElementById("p-save-phone")?.addEventListener("click", async () => {
+    if (!currentUser?.uid) return showToast("Sesión", "Debes iniciar sesión de nuevo.", "warning");
+    const val = document.getElementById("p-phone-inp").value.trim();
+    if(!val) return showToast("Error", "Teléfono vacío", "error");
+    const unlock = setActionBusy("p-save-phone", true, "Guardando");
+    try {
+      showToast("Guardando...", "Actualizando teléfono de contacto.", "info");
+      await updateDocument("usuarios", currentUser.uid, { telefono: val });
+      showToast("Enlace", "Frecuencia de contacto guardada", "success");
+    } catch (e) {
+      showToast("Error", "No se pudo guardar el teléfono.", "error");
+    } finally {
+      unlock();
+    }
+  });
+
+  // --- PASSWORD CHANGE ---
+  document.getElementById("btn-change-password")?.addEventListener("click", async () => {
+    if (!currentUser?.uid) return showToast("Sesión", "Debes iniciar sesión de nuevo.", "warning");
+    const newPass = document.getElementById("p-new-password").value;
+    const confirmPass = document.getElementById("p-confirm-password").value;
+    
+    if (!newPass || newPass.length < 6) {
+      return showToast("Error", "La contraseña debe tener mínimo 6 caracteres", "error");
+    }
+    if (newPass !== confirmPass) {
+      return showToast("Error", "Las contraseñas no coinciden", "error");
+    }
+
+    const unlock = setActionBusy("btn-change-password", true, "Actualizando");
+    try {
+      showToast("Actualizando...", "Aplicando nueva contraseña.", "info");
+      const { updatePassword } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js');
+      await updatePassword(auth.currentUser, newPass);
+      document.getElementById("p-new-password").value = "";
+      document.getElementById("p-confirm-password").value = "";
+      showToast("Seguridad", "Contraseña actualizada con éxito ✓", "success");
+    } catch (e) {
+      console.error("Password change error:", e);
+      if (e.code === 'auth/requires-recent-login') {
+        showToast("Reautenticación", "Por seguridad, cierra sesión y vuelve a entrar antes de cambiar la contraseña", "warning");
+      } else {
+        showToast("Error", "No se pudo cambiar la contraseña: " + (e.message || "Error desconocido"), "error");
+      }
+    } finally {
+      unlock();
+    }
+  });
+
   document.getElementById("save-address")?.addEventListener("click", async () => {
+    if (!currentUser?.uid) return showToast("Sesión", "Debes iniciar sesión de nuevo.", "warning");
     const b = document.getElementById("addr-bloque").value;
     const pi = document.getElementById("addr-piso").value;
     const pu = document.getElementById("addr-puerta").value;
-    await updateDocument("usuarios", currentUser.uid, { vivienda: { bloque: b, piso: pi, puerta: pu } });
-    showToast("Ubicación", "Guardada", "success");
+    const unlock = setActionBusy("save-address", true, "Guardando");
+    try {
+      showToast("Guardando...", "Actualizando dirección.", "info");
+      await updateDocument("usuarios", currentUser.uid, { vivienda: { bloque: b, piso: pi, puerta: pu } });
+      showToast("Ubicación", "Coordenadas guardadas", "success");
+    } catch (e) {
+      showToast("Error", "No se pudo guardar la dirección.", "error");
+    } finally {
+      unlock();
+    }
   });
 
   const btnLogout = document.getElementById("btn-logout");
