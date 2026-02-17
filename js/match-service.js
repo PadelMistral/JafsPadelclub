@@ -1006,7 +1006,7 @@ window.openResultForm = async (id, col) => {
             }
             showToast("Guardando...", "Registrando resultado oficial del partido.", "info");
             const resultStr = res.join(' ');
-            await updateDoc(doc(db, col, id), { resultado: { sets: resultStr }, estado: 'jugado' });
+            // We only call processMatchResults, it will handle estado: 'jugado' atomically
             const rankingSync = await processMatchResults(id, col, resultStr);
             if (!rankingSync?.success) {
                 throw new Error(rankingSync?.error || 'ranking-sync-failed');

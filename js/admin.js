@@ -4,6 +4,7 @@ import { collection, getDocs, deleteDoc, doc, query, orderBy, where, writeBatch 
 import { injectHeader } from './modules/ui-loader.js?v=6.5';
 import { showToast } from './ui-core.js';
 import { AIOrchestrator } from './ai-orchestrator.js'; // Phase 7 Integration
+import { computePlacementProjection, getPlacementMatchesCount } from './provisional-ranking-logic.js';
 
 let allUsers = [];
 let allMatches = [];
@@ -471,8 +472,24 @@ window.editUser = async (uid) => {
         
         <div class="form-stack">
             <div class="input-group">
-                <label class="input-label">Nombre</label>
+                <label class="input-label">Nombre visible</label>
                 <input type="text" id="edit-name" class="sport-input" value="${name}">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div class="input-group">
+                    <label class="input-label">Nombre (perfil)</label>
+                    <input type="text" id="edit-fullname" class="sport-input" value="${user.nombre || ''}">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Telefono</label>
+                    <input type="text" id="edit-phone" class="sport-input" value="${user.telefono || ''}">
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label class="input-label">Vivienda</label>
+                <input type="text" id="edit-home" class="sport-input" value="${user.vivienda || ''}" placeholder="Bloque / Piso / Puerta">
             </div>
             
             <div class="grid grid-cols-2 gap-3">
@@ -493,6 +510,10 @@ window.editUser = async (uid) => {
                     <option value="Admin" ${user.rol === 'Admin' ? 'selected' : ''}>Administrador</option>
                 </select>
             </div>
+
+            <button class="btn-secondary w-full justify-center" onclick="recalculateUserRanking('${uid}')">
+                <i class="fas fa-calculator mr-2"></i>Recalcular Ranking de este Usuario
+            </button>
             
             <div class="flex-row gap-3 mt-4">
                 <button class="btn-primary flex-1" onclick="saveUser('${uid}')">
@@ -508,15 +529,23 @@ window.editUser = async (uid) => {
 
 window.saveUser = async (uid) => {
     const name = document.getElementById('edit-name').value.trim();
+    const fullName = document.getElementById('edit-fullname').value.trim();
+    const phone = document.getElementById('edit-phone').value.trim();
+    const home = document.getElementById('edit-home').value.trim();
     const nivel = parseFloat(document.getElementById('edit-level').value);
     const pts = parseInt(document.getElementById('edit-pts').value);
     const rol = document.getElementById('edit-rol').value;
+    const safeLevel = Number.isFinite(nivel) ? Math.max(1, Math.min(7, nivel)) : 2.5;
+    const safePoints = Number.isFinite(pts) ? Math.max(0, pts) : 1000;
     
     try {
         await updateDocument('usuarios', uid, {
-            nombreUsuario: name,
-            nivel: Math.max(1, Math.min(7, nivel)),
-            puntosRanking: Math.max(0, pts),
+            nombreUsuario: name || 'Jugador',
+            nombre: fullName || null,
+            telefono: phone || null,
+            vivienda: home || null,
+            nivel: safeLevel,
+            puntosRanking: safePoints,
             rol: rol || null
         });
         
@@ -531,6 +560,42 @@ window.saveUser = async (uid) => {
         await loadData();
     } catch (e) {
         showToast('Error al actualizar', 'error');
+    }
+};
+
+window.recalculateUserRanking = async (uid) => {
+    const totalPlacementMatches = getPlacementMatchesCount();
+    try {
+        const user = await getDocument('usuarios', uid);
+        if (!user) {
+            showToast('Usuario no encontrado', 'error');
+            return;
+        }
+
+        const projection = computePlacementProjection(user);
+        await updateDocument('usuarios', uid, {
+            nivel: projection.suggestedLevel,
+            puntosRanking: projection.suggestedPoints,
+            rankingCalibration: {
+                mode: projection.isProvisional ? 'placement' : 'stable',
+                played: projection.played,
+                wins: projection.wins,
+                confidence: projection.confidence,
+                placementTarget: totalPlacementMatches,
+                updatedAt: new Date().toISOString(),
+                updatedBy: auth.currentUser?.uid || null
+            }
+        });
+
+        showToast(
+            'Ranking recalculado',
+            `${projection.modeLabel} · Nivel ${projection.suggestedLevel} · ${projection.suggestedPoints} pts`,
+            'success'
+        );
+        await loadData();
+    } catch (e) {
+        console.error(e);
+        showToast('Error', 'No se pudo recalcular el usuario', 'error');
     }
 };
 
@@ -604,11 +669,15 @@ window.editMatch = async (id, col) => {
         </div>
         
         <div class="flex-col gap-2">
-            ${!isPlayed && players.length === 4 ? `
-                <button class="btn-action w-full" onclick="openResultForm('${id}', '${col}')">
+            ${isPlayed ? `
+                <button class="btn-secondary w-full" onclick="window.openResultForm('${id}', '${col}', true)">
+                    <i class="fas fa-rotate mr-2"></i>Reprocesar Ranking
+                </button>
+            ` : (players.length === 4 ? `
+                <button class="btn-action w-full" onclick="window.openResultForm('${id}', '${col}')">
                     <i class="fas fa-flag-checkered mr-2"></i>Finalizar y Puntuar
                 </button>
-            ` : ''}
+            ` : '')}
             <div class="flex-row gap-2">
                 <button class="btn-secondary flex-1" onclick="changeMatchDate('${id}', '${col}')">
                     <i class="fas fa-calendar mr-2"></i>Fecha
@@ -639,9 +708,13 @@ window.changeMatchDate = async (id, col) => {
     }
 };
 
-window.openResultForm = (id, col) => {
-    const res = prompt("Introduce el resultado (Ej: 6-4 6-3):");
-    if(res) saveResult(id, col, res);
+window.openResultForm = (id, col, isReprocess = false) => {
+    const msg = isReprocess ? "Introduce el resultado para REPROCESAR (Ej: 6-4 6-3):" : "Introduce el resultado (Ej: 6-4 6-3):";
+    const res = prompt(msg);
+    if (res) {
+        showToast("Procesando...", "Sincronizando puntos con el ranking central.", "info");
+        saveResult(id, col, res);
+    }
 };
 
 window.removePlayer = async (id, col, idx) => {
@@ -666,12 +739,13 @@ window.deleteMatch = async (id, col) => {
 
 async function saveResult(id, col, result) {
     try {
-        await updateDocument(col, id, { resultado: { sets: result }, estado: 'jugado' });
-        
-        // Trigger Ranking Update
         const { processMatchResults } = await import('./ranking-service.js');
-        await processMatchResults(id, col, result);
+        const res = await processMatchResults(id, col, result);
         
+        if (!res.success) {
+            throw new Error(res.error || "Error desconocido al procesar ranking");
+        }
+
         // Phase 8: Notify Orchestrator for ALL players in the match
         try {
             const match = await getDocument(col, id);
@@ -684,11 +758,12 @@ async function saveResult(id, col, result) {
             }
         } catch(err) { console.warn("Admin AI sync:", err); }
         
-        showToast('Partido finalizado y puntos procesados', 'success');
+        showToast('Partido finalizado y puntos procesados', 'Ranking actualizado correctamente', 'success');
         document.getElementById('modal-edit-match').classList.remove('active');
         loadData();
     } catch (e) {
-        showToast('Error al finalizar', 'error');
+        console.error("Save Result Error:", e);
+        showToast('Error al finalizar', e.message || 'Error en la sincronización', 'error');
     }
 }
 
@@ -762,6 +837,47 @@ window.recalculateAllRankings = async () => {
     }
 };
 
+window.syncAllMatchesToRanking = async () => {
+    if (!confirm('Esta acción buscará todos los partidos jugados NO procesados y actualizará el Ranking. ¿Continuar?')) return;
+    
+    try {
+        showToast("Sincronizando...", "Escaneando base de datos táctica.", "info");
+        const { processMatchResults } = await import('./ranking-service.js');
+        
+        // Fetch ALL matches to avoid Index Requirement for a one-time sync tool
+        const amSnap = await getDocs(query(collection(db, "partidosAmistosos"), orderBy("fecha", "asc")));
+        const reSnap = await getDocs(query(collection(db, "partidosReto"), orderBy("fecha", "asc")));
+        
+        const allMatches = [
+            ...amSnap.docs.map(d => ({ id: d.id, data: d.data(), col: "partidosAmistosos" })),
+            ...reSnap.docs.map(d => ({ id: d.id, data: d.data(), col: "partidosReto" }))
+        ].filter(m => m.data.estado === 'jugado' && m.data.resultado?.sets && !m.data.rankingProcessedAt)
+         .sort((a,b) => (a.data.fecha?.toDate?.() || 0) - (b.data.fecha?.toDate?.() || 0));
+
+        if (allMatches.length === 0) {
+            return showToast("Sincronización Terminada", "No se encontraron partidos pendientes de procesar.", "info");
+        }
+
+        let processed = 0;
+        let errors = 0;
+
+        for (const m of allMatches) {
+            const res = await processMatchResults(m.id, m.col, m.data.resultado.sets);
+            if (res.success && !res.skipped) processed++;
+            else if (!res.success) {
+                console.warn(`Error procesando partido ${m.id}:`, res.error);
+                errors++;
+            }
+        }
+
+        showToast("Sincronización Completa", `Procesados: ${processed} | Errores: ${errors}`, processed > 0 ? "success" : "info");
+        loadData();
+    } catch (e) {
+        console.error("Sync error:", e);
+        showToast("Error de Sincronización", e.message, "error");
+    }
+};
+
 window.resetAllStreaks = async () => {
     if (!confirm('¿Reiniciar rachas de todos los usuarios?')) return;
     const snap = await window.getDocsSafe(collection(db, "usuarios"));
@@ -785,15 +901,12 @@ window.approveUser = async (uid) => {
 };
 
 window.rejectUser = async (uid) => {
-    if(!confirm("¿Rechazar solicitud? El usuario será eliminado.")) return;
+    if (!confirm("¿Rechazar solicitud? El usuario será eliminado.")) return;
     try {
-        await deleteDoc(doc(db, 'usuarios', uid)); // Clean reject
+        await deleteDoc(doc(db, 'usuarios', uid)); 
         showToast('Solicitud Rechazada', 'Usuario eliminado', 'info');
         await loadData();
     } catch (e) {
         showToast('Error', 'No se pudo rechazar', 'error');
     }
 };
-
-
-

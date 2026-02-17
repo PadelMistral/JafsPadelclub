@@ -328,14 +328,15 @@
 
 .slot-owner-v5 {
   margin-top: 2px;
-  font-size: 0.48rem;
-  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.55rem;
+  color: rgba(198, 255, 0, 0.92);
+  font-weight: 800;
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.5px;
 }
 
 /* Break Row */

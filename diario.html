@@ -141,6 +141,63 @@
             background: rgba(0, 0, 0, 0.3);
             border-top: 1px solid rgba(255, 255, 255, 0.05);
         }
+
+        .player-eval-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .player-eval-card:hover {
+            border-color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.05);
+        }
+
+        .eval-range {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .eval-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--primary);
+        }
+
+        .mvp-radio {
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            background: transparent;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .mvp-radio:checked {
+            background: var(--sport-gold);
+            border-color: var(--sport-gold);
+            box-shadow: 0 0 10px var(--sport-gold);
+        }
+
+        .mvp-radio:checked::after {
+            content: "\f00c";
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            font-size: 8px;
+            color: black;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
     </style>
 </head>
 
@@ -172,7 +229,7 @@
                     </div>
                     <div class="p-stat">
                         <span class="p-val" id="stat-streak">0</span>
-                        <span class="p-lbl">FIRE</span>
+                        <span class="p-lbl">PUNTOS</span>
                     </div>
                 </div>
             </div>
@@ -270,6 +327,24 @@
                         </div>
                     </div>
 
+                    <div class="cfg-grid-v9 mb-6">
+                        <div class="cfg-group-v9">
+                            <label class="cfg-label-v7">SUPERFICIE</label>
+                            <div class="segmented-v9" id="surface-selector">
+                                <button class="seg-node-v9 active" data-val="indoor">INDOOR</button>
+                                <button class="seg-node-v9" data-val="outdoor">OUTDOOR</button>
+                            </div>
+                        </div>
+                        <div class="cfg-group-v9">
+                            <label class="cfg-label-v7">TIPO DE PISTA</label>
+                            <select id="inp-court-type" class="select-v9">
+                                <option value="cristal">Cristal</option>
+                                <option value="muro">Muro / Pared</option>
+                                <option value="panoramica">Panorámica</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="cfg-group-v9 mb-6">
                         <label class="cfg-label-v7">MODO DE ENTRADA</label>
                         <div class="segmented-v9" id="entry-mode-selector">
@@ -331,46 +406,18 @@
                     </div>
                 </div>
 
-                <!-- STEP 3: METRICAS -->
+                <!-- STEP 3: EVALUACIÓN DE JUGADORES (NUEVO) -->
                 <div id="step-3" class="wizard-step">
-                    <label class="cfg-label-v7 mb-4">ESTADÍSTICAS ESTIMADAS</label>
-
-                    <div class="stat-grid-v10 mb-6">
-                        <div class="stat-item-v10">
-                            <span class="stat-label">Winners</span>
-                            <div class="flex-row gap-2 items-center">
-                                <button class="btn-icon-xs" onclick="stepCount('winners', -1)"><i
-                                        class="fas fa-minus"></i></button>
-                                <span class="text-xl font-black text-sport-green" id="val-winners">0</span>
-                                <button class="btn-icon-xs" onclick="stepCount('winners', 1)"><i
-                                        class="fas fa-plus"></i></button>
-                            </div>
-                        </div>
-                        <div class="stat-item-v10">
-                            <span class="stat-label">Errores No Forzados</span>
-                            <div class="flex-row gap-2 items-center">
-                                <button class="btn-icon-xs" onclick="stepCount('ue', -1)"><i
-                                        class="fas fa-minus"></i></button>
-                                <span class="text-xl font-black text-sport-red" id="val-ue">0</span>
-                                <button class="btn-icon-xs" onclick="stepCount('ue', 1)"><i
-                                        class="fas fa-plus"></i></button>
-                            </div>
-                        </div>
+                    <div class="flex-col gap-2 mb-4">
+                        <label class="cfg-label-v7">EVALUACIÓN DE RENDIMIENTO</label>
+                        <p class="text-[9px] text-muted italic">Califica el desempeño de cada jugador (1-10). Los datos
+                            son <b>PRIVADOS</b> y solo podrá verlos el administrador.</p>
                     </div>
 
-                    <div class="cfg-group-v9 mb-6">
-                        <label class="cfg-label-v7">% PUNTOS GANADOS (ESTIMADO)</label>
-                        <div class="stat-item-v10 w-full mb-2">
-                            <span class="stat-label">EN LA RED (VOLEA/REMATE)</span>
-                            <input type="range" id="rng-net" class="w-full form-range" min="0" max="100" value="50"
-                                oninput="document.getElementById('lbl-net').innerText=this.value+'%'">
-                            <span class="text-xs font-bold text-right block" id="lbl-net">50%</span>
-                        </div>
-                        <div class="stat-item-v10 w-full">
-                            <span class="stat-label">DESDE EL FONDO</span>
-                            <input type="range" id="rng-back" class="w-full form-range" min="0" max="100" value="50"
-                                oninput="document.getElementById('lbl-back').innerText=this.value+'%'">
-                            <span class="text-xs font-bold text-right block" id="lbl-back">50%</span>
+                    <div id="player-eval-container" class="flex-col gap-4">
+                        <div class="center py-10 opacity-30 flex-col">
+                            <i class="fas fa-link-slash text-2xl mb-2"></i>
+                            <span class="text-[10px] font-black uppercase">Vincula un partido en el Paso 1</span>
                         </div>
                     </div>
                 </div>

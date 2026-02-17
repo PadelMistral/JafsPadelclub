@@ -20,7 +20,9 @@ import {
 
 // Store active listeners to clean up
 const activeListeners = [];
-const NOTIF_DEDUP_TTL_MS = 1000 * 60 * 60 * 6; // 6h
+const NOTIF_DEDUP_TTL_MS = 1000 * 60 * 60 * 6; // Session-based filtering
+export const SESSION_START_TIME = Date.now();
+const notifiedDuringSession = new Set();
 const LISTENER_POLL_INTERVAL_MS = 25000;
 const NOTIF_TYPES = Object.freeze({
   INFO: "info",
@@ -347,19 +349,22 @@ export async function initAutoNotifications(uid) {
 
     // Find the latest unread AND unseen and notify
     const newest = list
-      .filter((n) => !n.seen)
+      .filter((n) => {
+        const ts = n.timestamp?.toMillis?.() || n.createdAt?.toMillis?.() || 0;
+        return !n.seen && ts > SESSION_START_TIME - 30000; // Only recent ones
+      })
       .sort(
         (a, b) =>
           (b.timestamp?.toMillis?.() || 0) - (a.timestamp?.toMillis?.() || 0),
       )[0];
-    if (newest && !window.__notifPushSentIds.has(newest.id)) {
+    if (newest && !notifiedDuringSession.has(newest.id)) {
       sendPushNotification(
         newest.titulo || "Padeluminatis",
         newest.mensaje,
         "./imagenes/Logojafs.png",
         { tag: `notif_${newest.id}`, url: newest.enlace || "./home.html" },
       );
-      window.__notifPushSentIds.add(newest.id);
+      notifiedDuringSession.add(newest.id);
     }
   });
   if (typeof stopPushBridge === "function") activeListeners.push(stopPushBridge);
@@ -489,6 +494,10 @@ async function watchVacancies(uid) {
           const isPublic = !m.visibility || m.visibility === "public";
 
           if (!isMine && isPublic && realCount > 0 && realCount < 4) {
+            // Check if match was recently updated or created
+            const updateTs = m.timestamp?.toMillis?.() || m.fecha?.toMillis?.() || 0;
+            if (updateTs < SESSION_START_TIME - 120000) return; // Ignore old match vacancies on boot
+
             createNotification(
               uid,
               "Nuevo rival disponible",
@@ -526,6 +535,9 @@ async function watchNewGlobalMatches(uid) {
             : "--:--";
           let creatorName = "Un jugador";
           try {
+            const createTs = m.timestamp?.toMillis?.() || m.fecha?.toMillis?.() || 0;
+            if (createTs < SESSION_START_TIME - 30000) return; // Skip initial fire
+
             const creator = await getDocument("usuarios", m.creador);
             creatorName = creator?.nombreUsuario || creator?.nombre || creatorName;
           } catch (_) {}
@@ -575,6 +587,9 @@ async function watchMatchesFilling(uid) {
               hour: "2-digit",
               minute: "2-digit",
             });
+
+            const matchTs = match.timestamp?.toMillis?.() || match.fecha?.toMillis?.() || 0;
+            if (matchTs < SESSION_START_TIME - 60000) return; // Only notify if it filled AFTER login or very recently
 
             await createNotification(
               uid,

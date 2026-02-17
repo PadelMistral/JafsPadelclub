@@ -315,6 +315,37 @@
   font-weight: 700;
 }
 
+#level-progress-detail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.lvl-shift-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.lvl-shift-chip.up {
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.lvl-shift-chip.down {
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.12);
+}
+
 /* ELO Chart Card */
 .elo-chart-card {
   background: var(--bg-glass);

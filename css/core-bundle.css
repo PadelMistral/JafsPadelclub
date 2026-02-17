@@ -1406,6 +1406,7 @@ h4 {
   color: var(--text-muted);
   font-size: 0.95rem;
   position: relative;
+  overflow: visible;
 }
 
 .header-admin:hover,
@@ -1427,20 +1428,24 @@ h4 {
 
 .notification-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  background: var(--sport-red);
+  top: 4px;
+  right: 6px;
+  transform: translate(48%, -48%);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
   color: #fff;
-  font-size: 0.6rem;
-  font-weight: 800;
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0.2px;
   border-radius: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 2px solid rgba(2, 6, 23, 0.95);
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+  z-index: 2;
 }
 
 .header-avatar {

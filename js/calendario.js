@@ -284,24 +284,24 @@ function renderSlot(date, hour) {
                     state = 'propia';
                     label = 'TU PARTIDO';
                     sub = 'VER DETALLES';
-                    ownerSub = `Reserva: ${shortName(match.creatorName || "Tú")}`;
+                    ownerSub = `ORGANIZA: ${shortName(match.creatorName || "Tú")}`;
                 }
                 else if (isFull) {
                     state = 'cerrada';
                     label = 'COMPLETO';
                     sub = 'SQUAD LLENO';
-                    ownerSub = `Reserva: ${shortName(match.creatorName)}`;
+                    ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
                 }
                 else {
                     state = 'abierta';
                     label = 'DISPONIBLE';
                     sub = `${4 - count} PLAZAS`;
-                    ownerSub = `Reserva: ${shortName(match.creatorName)}`;
+                    ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
                 }
             }
 
             if (!ownerSub && match.creatorName) {
-                ownerSub = `Reserva: ${shortName(match.creatorName)}`;
+                ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
             }
         }
     }

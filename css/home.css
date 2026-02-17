@@ -3673,11 +3673,16 @@
 
 .next-match-header-v13 {
   padding: 0 2px 10px;
+  max-width: 720px;
+  margin: 0 auto;
 }
 
 .next-poster-v13 {
   position: relative;
   overflow: hidden;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
   border-radius: 22px;
   border: 1px solid rgba(198, 255, 0, 0.35);
   background: linear-gradient(
@@ -3918,5 +3923,313 @@
     width: 30px;
     height: 30px;
     font-size: 8px;
+  }
+}
+
+/* ===== Home Welcome Compact Final ===== */
+.home-main .welcome-hero-grid {
+  align-items: center;
+  gap: 12px;
+}
+
+.home-main .welcome-kicker-row {
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.home-main .welcome-hero-strip.compact {
+  margin: 4px 0 6px;
+}
+
+.home-main .welcome-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.home-main .welcome-hero-name {
+  margin: 0;
+  font-size: clamp(1.45rem, 6.2vw, 2.15rem);
+}
+
+.welcome-rank-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  color: #0a0f12;
+  background: linear-gradient(135deg, #c6ff00, #9be021);
+  box-shadow: 0 6px 14px rgba(198, 255, 0, 0.25);
+}
+
+.welcome-rank-total {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.welcome-stats-compact {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.welcome-stat-mini {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.welcome-stat-mini .label {
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.welcome-stat-mini .value {
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.1;
+}
+
+.home-main .welcome-hero-card #online-count-display {
+  width: 100%;
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.welcome-online-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #86efac;
+  text-transform: uppercase;
+  font-weight: 900;
+  letter-spacing: 1.1px;
+  cursor: pointer;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.welcome-online-link:hover {
+  color: #bbf7d0;
+  transform: translateY(-1px);
+}
+
+.welcome-online-link:focus-visible {
+  outline: 2px solid rgba(34, 197, 94, 0.5);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.welcome-online-dot-stack {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.welcome-online-dot-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.42);
+  animation: welcomeOnlinePulse 1.5s ease-out infinite;
+}
+
+.welcome-online-dot-core {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 14px rgba(34, 197, 94, 0.7);
+}
+
+@keyframes welcomeOnlinePulse {
+  0% { transform: scale(0.85); opacity: 0.95; }
+  80% { transform: scale(1.8); opacity: 0; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.welcome-online-label {
+  color: #86efac;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.welcome-online-count {
+  color: #d9f99d;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.welcome-online-small {
+  color: rgba(187, 247, 208, 0.82);
+  font-size: 8px;
+  letter-spacing: 0.8px;
+}
+
+/* ===== Next Match Poster - Centered 2v2 ===== */
+.next-poster-duel {
+  justify-items: center;
+}
+
+.next-poster-team {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.next-poster-team.right {
+  text-align: right;
+}
+
+.next-poster-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 8px;
+  width: 100%;
+}
+
+.next-poster-team.right .next-poster-player {
+  flex-direction: row-reverse;
+}
+
+.next-poster-player.empty {
+  opacity: 0.56;
+}
+
+.next-poster-player-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.next-poster-team.right .next-poster-player-meta {
+  align-items: flex-end;
+}
+
+.next-poster-player-name {
+  font-size: 8px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.next-poster-player-lvl {
+  font-size: 7px;
+  font-weight: 900;
+  color: rgba(198, 255, 0, 0.9);
+  letter-spacing: 0.8px;
+}
+
+.next-poster-ai {
+  margin-top: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  background: rgba(0, 212, 255, 0.08);
+  padding: 9px 10px;
+}
+
+.next-poster-ai-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #67e8f9;
+}
+
+.next-poster-ai-badge {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+  padding: 2px 7px;
+}
+
+.next-poster-ai-title {
+  margin: 6px 0 4px;
+  font-size: 10px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+
+.next-poster-ai-text {
+  margin: 0;
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.35;
+}
+
+.next-poster-ai-note {
+  margin: 4px 0 0;
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.62);
+  line-height: 1.28;
+}
+
+@media (max-width: 640px) {
+  .home-main .welcome-hero-name {
+    font-size: clamp(1.25rem, 7vw, 1.8rem);
+  }
+
+  .home-main .welcome-avatar-frame {
+    width: 70px;
+    height: 70px;
+    border-radius: 18px;
+  }
+
+  .welcome-stat-mini .value {
+    font-size: 12px;
+  }
+
+  .next-poster-player {
+    padding: 5px 6px;
+    gap: 6px;
   }
 }

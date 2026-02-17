@@ -1,7 +1,10 @@
 ﻿// ui-core.js - Unified Application Guard & Portal Management (v2.0)
-import { observerAuth, getDocument, subscribeCol } from './firebase-service.js';
+import { observerAuth, getDocument, subscribeCol, db, getDocsSafe } from './firebase-service.js';
 
 const PUBLIC_PAGES = ['index.html', 'registro.html', 'recuperar.html'];
+let onlineNexusCurrentUid = null;
+let onlineNexusViewerIsAdmin = false;
+let onlineNexusRoleResolvedFor = null;
 
 function requestWaitingServiceWorkerActivation(reg) {
     if (!reg?.waiting) return;
@@ -50,6 +53,230 @@ function safeNavigate(url) {
     if (!target || current === target) return;
     window.__appRedirectLock = true;
     window.location.replace(url);
+}
+
+function toLastSeenDate(value) {
+    if (!value) return null;
+    if (typeof value?.toDate === 'function') return value.toDate();
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+}
+
+function formatLastSeen(value) {
+    const d = toLastSeenDate(value);
+    if (!d) return 'SIN REGISTRO';
+    const datePart = d.toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+    });
+    const timePart = d.toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+    return `${datePart} · ${timePart}`;
+}
+
+async function resolveOnlineNexusViewerRole() {
+    if (!onlineNexusCurrentUid) return false;
+    if (onlineNexusRoleResolvedFor === onlineNexusCurrentUid) return onlineNexusViewerIsAdmin;
+
+    onlineNexusRoleResolvedFor = onlineNexusCurrentUid;
+    onlineNexusViewerIsAdmin = false;
+    try {
+        const me = await getDocument('usuarios', onlineNexusCurrentUid);
+        const email = String(me?.email || '').toLowerCase();
+        onlineNexusViewerIsAdmin = me?.rol === 'Admin' || email === 'juanan221091@gmail.com';
+    } catch (_) {
+        onlineNexusViewerIsAdmin = false;
+    }
+
+    return onlineNexusViewerIsAdmin;
+}
+
+async function fetchPresenceBuckets(limitOnline = 80, limitRecent = 140, includeOffline = true) {
+    const { collection, query, where, limit, orderBy } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
+    const threshold = new Date(Date.now() - 5 * 60 * 1000);
+
+    const onlineSnap = await getDocsSafe(
+        query(
+            collection(db, 'usuarios'),
+            where('ultimoAcceso', '>', threshold),
+            limit(limitOnline),
+        ),
+        'online-nexus-online',
+    );
+
+    const online = (onlineSnap?.docs || [])
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => Number(b.puntosRanking || 1000) - Number(a.puntosRanking || 1000));
+
+    let offline = [];
+    if (includeOffline) {
+        const recentSnap = await getDocsSafe(
+            query(
+                collection(db, 'usuarios'),
+                orderBy('ultimoAcceso', 'desc'),
+                limit(limitRecent),
+            ),
+            'online-nexus-recent',
+        );
+
+        const onlineIds = new Set(online.map((u) => u.id));
+        offline = (recentSnap?.docs || [])
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((u) => !onlineIds.has(u.id))
+            .sort((a, b) => {
+                const aMs = toLastSeenDate(a.ultimoAcceso)?.getTime() || 0;
+                const bMs = toLastSeenDate(b.ultimoAcceso)?.getTime() || 0;
+                return bMs - aMs;
+            });
+    }
+
+    return { online, offline };
+}
+
+function ensureOnlineNexusStyles() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('online-nexus-inline-style')) return;
+    const style = document.createElement('style');
+    style.id = 'online-nexus-inline-style';
+    style.textContent = `
+      .online-nexus-section { display:flex; flex-direction:column; gap:8px; margin-top: 2px; }
+      .online-nexus-section-title { font-size: 10px; font-weight: 900; color: rgba(255,255,255,0.72); letter-spacing: 1.1px; text-transform: uppercase; }
+      .online-nexus-item { display:flex; align-items:center; gap:10px; padding:8px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.04); cursor:pointer; transition:all .2s ease; }
+      .online-nexus-item:hover { border-color: rgba(198,255,0,0.4); background: rgba(198,255,0,0.08); }
+      .online-nexus-item.me { border-color: rgba(198,255,0,0.4); background: rgba(198,255,0,0.1); }
+      .online-nexus-item.offline { border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
+      .online-nexus-avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; border:1px solid rgba(255,255,255,0.2); }
+      .online-nexus-main { min-width:0; display:flex; flex-direction:column; }
+      .online-nexus-name { font-size:11px; font-weight:900; color:#fff; text-transform:uppercase; letter-spacing:.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .online-nexus-sub { font-size:9px; font-weight:800; color:rgba(255,255,255,0.62); text-transform:uppercase; letter-spacing:.6px; }
+      .online-nexus-pill { margin-left:auto; font-size:9px; font-weight:900; color:#c6ff00; border:1px solid rgba(198,255,0,0.35); border-radius:999px; padding:2px 7px; }
+      .online-nexus-pill.offline { color: rgba(255,255,255,0.74); border-color: rgba(255,255,255,0.16); }
+      .online-nexus-empty { font-size:11px; font-weight:700; color: rgba(255,255,255,0.45); padding: 8px 4px; text-transform: uppercase; letter-spacing: .8px; }
+    `;
+    document.head.appendChild(style);
+}
+
+async function openOnlineNexusModal() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('online-nexus-modal')) return;
+    ensureOnlineNexusStyles();
+    const canSeeOffline = await resolveOnlineNexusViewerRole();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'online-nexus-modal';
+    overlay.className = 'modal-overlay active';
+    overlay.innerHTML = `
+      <div class="modal-card glass-strong animate-up" style="max-width:420px; border:1px solid rgba(255,255,255,0.12);">
+        <div class="modal-header">
+          <div class="flex-col">
+            <h3 class="modal-title font-black text-primary tracking-widest">NEXUS ONLINE</h3>
+            <span id="online-nexus-count" class="text-[10px] text-muted font-bold uppercase">Sincronizando...</span>
+          </div>
+          <button class="close-btn" aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="modal-body custom-scroll p-3 flex-col gap-2" style="max-height:68vh;">
+          <div class="online-nexus-section">
+            <div class="online-nexus-section-title">ONLINE</div>
+            <div id="online-nexus-online-list" class="flex-col gap-2"></div>
+          </div>
+          ${canSeeOffline ? `<div class="online-nexus-section">
+            <div class="online-nexus-section-title">OFFLINE (ULTIMA ACTIVIDAD)</div>
+            <div id="online-nexus-offline-list" class="flex-col gap-2"></div>
+          </div>` : ''}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const onlineListEl = overlay.querySelector('#online-nexus-online-list');
+    const offlineListEl = canSeeOffline ? overlay.querySelector('#online-nexus-offline-list') : null;
+    const countEl = overlay.querySelector('#online-nexus-count');
+
+    const render = async () => {
+      if (!onlineListEl || !countEl) return;
+      let onlineUsers = [];
+      let offlineUsers = [];
+      try {
+        const buckets = await fetchPresenceBuckets(80, 160, canSeeOffline);
+        onlineUsers = buckets.online;
+        offlineUsers = buckets.offline;
+      } catch (_) {
+        countEl.textContent = 'Sin conexión';
+        onlineListEl.innerHTML = '<div class="online-nexus-empty">No se pudo cargar online</div>';
+        if (offlineListEl) offlineListEl.innerHTML = '<div class="online-nexus-empty">No se pudo cargar offline</div>';
+        return;
+      }
+
+      countEl.textContent = canSeeOffline
+        ? `${onlineUsers.length} ONLINE · ${offlineUsers.length} OFFLINE RECIENTES`
+        : `${onlineUsers.length} ONLINE AHORA`;
+
+      onlineListEl.innerHTML = onlineUsers.length
+        ? onlineUsers.map((u) => {
+        const photo = u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png';
+        const lvl = Number(u.nivel || 2.5).toFixed(2);
+        const meCls = u.id === onlineNexusCurrentUid ? 'me' : '';
+        return `
+          <div class="online-nexus-item ${meCls}" onclick="window.viewProfile('${u.id}')">
+            <img src="${photo}" alt="${u.nombreUsuario || u.nombre || 'Jugador'}" class="online-nexus-avatar" loading="lazy">
+            <div class="online-nexus-main">
+              <span class="online-nexus-name">${(u.nombreUsuario || u.nombre || 'Jugador').toUpperCase()}</span>
+              <span class="online-nexus-sub">${(u.rol || 'Jugador').toUpperCase()} · ACTIVO AHORA</span>
+            </div>
+            <span class="online-nexus-pill">NV ${lvl}</span>
+          </div>
+        `;
+      }).join('')
+        : '<div class="online-nexus-empty">No hay usuarios online ahora</div>';
+
+      if (offlineListEl) {
+        offlineListEl.innerHTML = offlineUsers.length
+          ? offlineUsers.map((u) => {
+            const photo = u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png';
+            const lvl = Number(u.nivel || 2.5).toFixed(2);
+            const seen = formatLastSeen(u.ultimoAcceso);
+            const meCls = u.id === onlineNexusCurrentUid ? 'me' : '';
+            return `
+              <div class="online-nexus-item offline ${meCls}" onclick="window.viewProfile('${u.id}')">
+                <img src="${photo}" alt="${u.nombreUsuario || u.nombre || 'Jugador'}" class="online-nexus-avatar" loading="lazy">
+                <div class="online-nexus-main">
+                  <span class="online-nexus-name">${(u.nombreUsuario || u.nombre || 'Jugador').toUpperCase()}</span>
+                  <span class="online-nexus-sub">${(u.rol || 'Jugador').toUpperCase()} · ${seen}</span>
+                </div>
+                <span class="online-nexus-pill offline">NV ${lvl}</span>
+              </div>
+            `;
+        }).join('')
+          : '<div class="online-nexus-empty">Sin offline recientes</div>';
+      }
+    };
+
+    await render();
+    const refreshId = setInterval(render, 5 * 60 * 1000);
+
+    const close = () => {
+      clearInterval(refreshId);
+      overlay.remove();
+    };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('.close-btn')?.addEventListener('click', close);
+}
+
+function initOnlineNexusBindings(uid) {
+    if (uid && uid !== onlineNexusCurrentUid) {
+        onlineNexusRoleResolvedFor = null;
+    }
+    onlineNexusCurrentUid = uid || onlineNexusCurrentUid;
+    if (typeof window === 'undefined') return;
+    if (window.__onlineNexusBound) return;
+    window.__onlineNexusBound = true;
+
+    window.showOnlineNexus = () => openOnlineNexusModal();
+    window.showOnlineUsers = () => openOnlineNexusModal();
 }
 
 if (typeof window !== 'undefined' && !window.viewProfile) {
@@ -143,6 +370,7 @@ export function initAppUI(activePageName) {
         console.log("Auth State Changed. User:", !!user, "Path:", path);
 
         if (user) {
+            initOnlineNexusBindings(user.uid);
             document.body.style.opacity = '1';
             document.body.style.pointerEvents = 'auto';
             // Logged in user on index/login -> Redirect to Home
@@ -171,6 +399,9 @@ export function initAppUI(activePageName) {
                 console.error("Error loading user data:", e);
             }
         } else {
+            onlineNexusCurrentUid = null;
+            onlineNexusViewerIsAdmin = false;
+            onlineNexusRoleResolvedFor = null;
             // Guest user on private page -> Redirect to Index
             if (!isPublic) {
                 console.log("Redirecting to login (Not logged in)");

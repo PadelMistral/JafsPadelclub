@@ -1,540 +1,102 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
+    
+    // --- FUNCIONES CORE ---
+    function signedIn() { 
+      return request.auth != null; 
+    }
+    
+    function currentUid() { 
+      return request.auth.uid; 
     }
 
-    function currentUid() {
-      return request.auth.uid;
-    }
-
-    function userPath(uid) {
-      return /databases/$(database)/documents/usuarios/$(uid);
-    }
-
-    function meExists() {
-      return signedIn() && exists(userPath(currentUid()));
-    }
-
-    function me() {
-      return get(userPath(currentUid())).data;
-    }
-
+    // EXCEPCIÓN MAESTRA PARA ADMIN (Email directo o Rol en DB)
     function isAdmin() {
-      return meExists() && (
-        me().rol == 'Admin' ||
-        request.auth.token.email == 'Juanan221091@gmail.com'
+      return signedIn() && (
+        request.auth.token.email == 'Juanan221091@gmail.com' || 
+        (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'Admin')
       );
     }
 
     function isApproved() {
-      return meExists() && (
-        isAdmin() ||
-        me().status == 'approved' ||
-        me().aprobado == true
-      );
+      return isAdmin() || (signedIn() && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) && 
+             (get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.status == 'approved' ||
+              get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.aprobado == true));
     }
 
-    function isSelf(uid) {
-      return signedIn() && currentUid() == uid;
-    }
-
-    function validMatchCollection(col) {
-      return col == 'partidosAmistosos' || col == 'partidosReto';
-    }
-
-    function matchPath(col, matchId) {
-      return /databases/$(database)/documents/$(col)/$(matchId);
-    }
-
-    function rankingLogPath(logId) {
-      return /databases/$(database)/documents/rankingLogs/$(logId);
-    }
-
-    function hasFourSlots(players) {
-      return players is list && players.size() == 4;
-    }
-
-    function filledCount(players) {
-      return (players[0] != null ? 1 : 0) +
-        (players[1] != null ? 1 : 0) +
-        (players[2] != null ? 1 : 0) +
-        (players[3] != null ? 1 : 0);
-    }
-
-    function teamsInSync(data) {
-      return hasFourSlots(data.jugadores) &&
-        data.equipoA is list &&
-        data.equipoB is list &&
-        data.equipoA.size() == 2 &&
-        data.equipoB.size() == 2 &&
-        data.equipoA[0] == data.jugadores[0] &&
-        data.equipoA[1] == data.jugadores[1] &&
-        data.equipoB[0] == data.jugadores[2] &&
-        data.equipoB[1] == data.jugadores[3];
-    }
-
-    function allPlayersRegistered(matchData) {
-      return hasFourSlots(matchData.jugadores) &&
-        matchData.jugadores[0] is string &&
-        matchData.jugadores[1] is string &&
-        matchData.jugadores[2] is string &&
-        matchData.jugadores[3] is string &&
-        exists(userPath(matchData.jugadores[0])) &&
-        exists(userPath(matchData.jugadores[1])) &&
-        exists(userPath(matchData.jugadores[2])) &&
-        exists(userPath(matchData.jugadores[3]));
-    }
-
-    function isMatchOwner(matchData) {
-      return signedIn() && (
-        matchData.creador == currentUid() ||
-        matchData.organizerId == currentUid()
-      );
-    }
-
-    function isMatchParticipant(matchData) {
-      return signedIn() &&
-        hasFourSlots(matchData.jugadores) &&
-        currentUid() in matchData.jugadores;
-    }
-
-    function canJoinPrivateMatch(matchData) {
-      return matchData.visibility != 'private' ||
-        isMatchOwner(matchData) ||
-        (matchData.invitedUsers is list && currentUid() in matchData.invitedUsers);
-    }
-
-    function levelAllowedForMatch(matchData) {
-      return !(matchData.restriccionNivel is map) ||
-        !meExists() ||
-        (
-          matchData.restriccionNivel.min is number &&
-          matchData.restriccionNivel.max is number &&
-          (me().nivel is number ? me().nivel : 2.5) >= matchData.restriccionNivel.min &&
-          (me().nivel is number ? me().nivel : 2.5) <= matchData.restriccionNivel.max
-        );
-    }
-
-    function isValidUserSelfCreate(uid) {
-      let level = request.resource.data.nivel;
-      let points = request.resource.data.puntosRanking;
-      return isSelf(uid) &&
-        request.resource.data.keys().hasOnly([
-          'uid', 'nombre', 'nombreUsuario', 'email', 'telefono', 'vivienda',
-          'nivel', 'puntosRanking', 'partidosJugados', 'victorias', 'rachaActual',
-          'rol', 'status', 'aprobado', 'diario', 'palas', 'advancedStats',
-          'fotoURL', 'fotoPerfil', 'createdAt', 'fechaRegistro', 'ultimoAcceso'
-        ]) &&
-        (!(request.resource.data.uid is string) || request.resource.data.uid == uid) &&
-        request.resource.data.rol == 'Jugador' &&
-        request.resource.data.status == 'pending' &&
-        (!(request.resource.data.aprobado is bool) || request.resource.data.aprobado == false) &&
-        level is number &&
-        level >= 1 &&
-        level <= 7 &&
-        points is number &&
-        points >= 700 &&
-        points <= 2500 &&
-        request.resource.data.partidosJugados == 0 &&
-        request.resource.data.victorias == 0 &&
-        request.resource.data.rachaActual == 0;
-    }
-
-    function isAllowedSelfProfileUpdate() {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
-        'nombre', 'nombreUsuario', 'telefono', 'vivienda',
-        'fotoPerfil', 'fotoURL', 'palas', 'diario',
-        'advancedStats', 'ultimoAcceso',
-        'aiProfile', 'playerState', 'lastAnalysisDate',
-        'atributosTecnicos', 'statsCompetitivas'
-      ]);
-    }
-
-    function isLinkedRankingUserUpdate(userId) {
-      let changed = request.resource.data.diff(resource.data).changedKeys();
-      let analysis = request.resource.data.lastMatchAnalysis;
-      let col = analysis.matchCollection;
-      let matchId = analysis.matchId;
-      let logId = matchId + '_' + userId;
-      let matchData = get(matchPath(col, matchId)).data;
-      let prevPoints = resource.data.puntosRanking is number ? resource.data.puntosRanking : 0;
-      let prevMatches = resource.data.partidosJugados is number ? resource.data.partidosJugados : 0;
-      let prevWins = resource.data.victorias is number ? resource.data.victorias : 0;
-      return changed.hasOnly([
-          'puntosRanking', 'nivel', 'victorias', 'partidosJugados', 'rachaActual',
-          'lastMatchAnalysis', 'elo', 'advancedStats', 'lastMatchDate'
-        ]) &&
-        analysis is map &&
-        analysis.matchId is string &&
-        analysis.matchCollection is string &&
-        validMatchCollection(col) &&
-        exists(matchPath(col, matchId)) &&
-        userId in matchData.jugadores &&
-        allPlayersRegistered(matchData) &&
-        (isAdmin() || currentUid() == matchData.creador || currentUid() == matchData.organizerId) &&
-        matchData.estado == 'jugado' &&
-        (
-          isAdmin() ||
-          (
-            !exists(rankingLogPath(logId)) &&
-            getAfter(rankingLogPath(logId)).exists() &&
-            getAfter(rankingLogPath(logId)).data.uid == userId &&
-            getAfter(rankingLogPath(logId)).data.matchId == matchId &&
-            getAfter(rankingLogPath(logId)).data.matchCollection == col
-          )
-        ) &&
-        request.resource.data.nivel is number &&
-        request.resource.data.nivel >= 1 &&
-        request.resource.data.nivel <= 7 &&
-        request.resource.data.puntosRanking is number &&
-        request.resource.data.puntosRanking >= 0 &&
-        (request.resource.data.puntosRanking - prevPoints) <= 200 &&
-        (request.resource.data.puntosRanking - prevPoints) >= -200 &&
-        request.resource.data.partidosJugados == (prevMatches + 1) &&
-        (request.resource.data.victorias - prevWins) >= 0 &&
-        (request.resource.data.victorias - prevWins) <= 1;
-    }
-
-    function isValidMatchCreate() {
-      return isApproved() &&
-        request.resource.data.creador == currentUid() &&
-        request.resource.data.organizerId == currentUid() &&
-        request.resource.data.estado == 'abierto' &&
-        request.resource.data.fecha is timestamp &&
-        hasFourSlots(request.resource.data.jugadores) &&
-        request.resource.data.jugadores[0] == currentUid() &&
-        teamsInSync(request.resource.data) &&
-        (!(request.resource.data.visibility is string) || request.resource.data.visibility in ['public', 'private']) &&
-        (!(request.resource.data.restriccionNivel is map) || (
-          request.resource.data.restriccionNivel.min is number &&
-          request.resource.data.restriccionNivel.max is number &&
-          request.resource.data.restriccionNivel.min <= request.resource.data.restriccionNivel.max
-        )) &&
-        (!(request.resource.data.invitedUsers is list) || request.resource.data.invitedUsers.size() <= 3);
-    }
-
-    function isJoinUpdate() {
-      let oldData = resource.data;
-      let newData = request.resource.data;
-      return newData.diff(oldData).changedKeys().hasOnly(['jugadores', 'equipoA', 'equipoB']) &&
-        oldData.estado == 'abierto' &&
-        hasFourSlots(oldData.jugadores) &&
-        hasFourSlots(newData.jugadores) &&
-        filledCount(oldData.jugadores) < 4 &&
-        !(currentUid() in oldData.jugadores) &&
-        currentUid() in newData.jugadores &&
-        filledCount(newData.jugadores) == filledCount(oldData.jugadores) + 1 &&
-        canJoinPrivateMatch(oldData) &&
-        levelAllowedForMatch(oldData) &&
-        teamsInSync(newData);
-    }
-
-    function isLeaveUpdate() {
-      let oldData = resource.data;
-      let newData = request.resource.data;
-      return newData.diff(oldData).changedKeys().hasOnly(['jugadores', 'equipoA', 'equipoB', 'creador']) &&
-        oldData.estado == 'abierto' &&
-        hasFourSlots(oldData.jugadores) &&
-        hasFourSlots(newData.jugadores) &&
-        currentUid() in oldData.jugadores &&
-        !(currentUid() in newData.jugadores) &&
-        filledCount(newData.jugadores) == filledCount(oldData.jugadores) - 1 &&
-        teamsInSync(newData) &&
-        (
-          newData.creador == oldData.creador ||
-          newData.creador == null ||
-          (newData.creador is string && newData.creador in newData.jugadores)
-        );
-    }
-
-    function isOwnerRosterUpdate() {
-      let oldData = resource.data;
-      let newData = request.resource.data;
-      return (isAdmin() || isMatchOwner(oldData)) &&
-        oldData.estado == 'abierto' &&
-        newData.diff(oldData).changedKeys().hasOnly(['jugadores', 'equipoA', 'equipoB']) &&
-        hasFourSlots(oldData.jugadores) &&
-        hasFourSlots(newData.jugadores) &&
-        filledCount(newData.jugadores) >= (filledCount(oldData.jugadores) - 1) &&
-        filledCount(newData.jugadores) <= (filledCount(oldData.jugadores) + 1) &&
-        teamsInSync(newData);
-    }
-
-    function isResultUpdate() {
-      let oldData = resource.data;
-      let newData = request.resource.data;
-      return (isAdmin() || isMatchOwner(oldData)) &&
-        newData.diff(oldData).changedKeys().hasOnly(['resultado', 'estado']) &&
-        oldData.estado != 'jugado' &&
-        newData.estado == 'jugado' &&
-        filledCount(oldData.jugadores) == 4 &&
-        allPlayersRegistered(oldData) &&
-        newData.resultado is map &&
-        newData.resultado.sets is string &&
-        newData.resultado.sets.size() > 0;
-    }
-
-    function isRankingSummaryUpdate() {
-      let oldData = resource.data;
-      let newData = request.resource.data;
-      return (isAdmin() || isMatchOwner(oldData)) &&
-        oldData.estado == 'jugado' &&
-        newData.diff(oldData).changedKeys().hasOnly([
-          'eloSummary', 'rankingProcessedAt', 'rankingProcessedBy', 'rankingProcessedResult'
-        ]) &&
-        newData.rankingProcessedBy == currentUid();
-    }
-
-    function chatAccessAllowed(col, matchId) {
-      let matchData = get(matchPath(col, matchId)).data;
-      return isApproved() &&
-        exists(matchPath(col, matchId)) &&
-        (isAdmin() || (hasFourSlots(matchData.jugadores) && currentUid() in matchData.jugadores));
-    }
-
-    function notifOwner(data) {
-      return data.destinatario == currentUid() ||
-        data.receptorId == currentUid() ||
-        data.uid == currentUid();
-    }
-
-    function senderLinkedToMatch(matchData) {
-      return isAdmin() ||
-        matchData.creador == currentUid() ||
-        matchData.organizerId == currentUid() ||
-        (hasFourSlots(matchData.jugadores) && currentUid() in matchData.jugadores);
-    }
-
-    function targetLinkedToMatch(matchData, targetUid) {
-      return targetUid == matchData.creador ||
-        targetUid == matchData.organizerId ||
-        (hasFourSlots(matchData.jugadores) && targetUid in matchData.jugadores) ||
-        (matchData.invitedUsers is list && targetUid in matchData.invitedUsers);
-    }
-
-    function canNotifyByMatchId(targetUid, matchId) {
-      let amPath = matchPath('partidosAmistosos', matchId);
-      let rePath = matchPath('partidosReto', matchId);
-      let hasAm = exists(amPath);
-      let hasRe = exists(rePath);
-      let amData = hasAm ? get(amPath).data : null;
-      let reData = hasRe ? get(rePath).data : null;
-      return (
-          hasAm &&
-          senderLinkedToMatch(amData) &&
-          targetLinkedToMatch(amData, targetUid)
-        ) || (
-          hasRe &&
-          senderLinkedToMatch(reData) &&
-          targetLinkedToMatch(reData, targetUid)
-        );
-    }
-
-    function canNotifyByMatch(targetUid) {
-      return request.resource.data.data is map &&
-        request.resource.data.data.matchId is string &&
-        canNotifyByMatchId(targetUid, request.resource.data.data.matchId);
-    }
-
-    function validNotificationCreate() {
-      return isApproved() &&
-        request.resource.data.keys().hasOnly([
-          'destinatario', 'receptorId', 'uid', 'remitente',
-          'tipo', 'type', 'titulo', 'title', 'mensaje', 'message',
-          'enlace', 'data', 'leido', 'read', 'seen',
-          'timestamp', 'createdAt', 'dedupKey', 'dedupTTLms'
-        ]) &&
-        request.resource.data.destinatario is string &&
-        (!(request.resource.data.receptorId is string) || request.resource.data.receptorId == request.resource.data.destinatario) &&
-        (!(request.resource.data.uid is string) || request.resource.data.uid == request.resource.data.destinatario) &&
-        request.resource.data.remitente is string &&
-        (request.resource.data.remitente == currentUid() || isAdmin()) &&
-        (
-          request.resource.data.destinatario == currentUid() ||
-          isAdmin() ||
-          canNotifyByMatch(request.resource.data.destinatario)
-        ) &&
-        request.resource.data.tipo is string &&
-        request.resource.data.type is string &&
-        request.resource.data.tipo == request.resource.data.type &&
-        request.resource.data.titulo is string &&
-        request.resource.data.mensaje is string &&
-        request.resource.data.leido == false &&
-        request.resource.data.read == false &&
-        request.resource.data.seen == false &&
-        request.resource.data.timestamp == request.time &&
-        request.resource.data.createdAt == request.time;
-    }
-
-    function validRankingLogCreate() {
-      let col = request.resource.data.matchCollection;
-      let matchId = request.resource.data.matchId;
-      let uid = request.resource.data.uid;
-      let matchData = get(matchPath(col, matchId)).data;
-      return isApproved() &&
-        request.resource.data.keys().hasOnly([
-          'uid', 'matchId', 'matchCollection', 'diff', 'newTotal',
-          'details', 'subEloIndices', 'timestamp'
-        ]) &&
-        request.resource.id == (matchId + '_' + uid) &&
-        validMatchCollection(col) &&
-        exists(matchPath(col, matchId)) &&
-        uid is string &&
-        uid in matchData.jugadores &&
-        allPlayersRegistered(matchData) &&
-        (isAdmin() || currentUid() == matchData.creador || currentUid() == matchData.organizerId) &&
-        matchData.estado == 'jugado' &&
-        request.resource.data.diff is number &&
-        request.resource.data.diff >= -200 &&
-        request.resource.data.diff <= 200 &&
-        request.resource.data.newTotal is number &&
-        request.resource.data.newTotal >= 0 &&
-        request.resource.data.timestamp == request.time;
-    }
-
-    function validPointDetailsCreate() {
-      let col = request.resource.data.col;
-      let matchId = request.resource.data.matchId;
-      let matchData = get(matchPath(col, matchId)).data;
-      return isApproved() &&
-        request.resource.data.keys().hasOnly([
-          'matchId', 'col', 'sets', 'totalPoints', 'points',
-          'playerAllocations', 'createdAt'
-        ]) &&
-        request.resource.id == matchId &&
-        validMatchCollection(col) &&
-        exists(matchPath(col, matchId)) &&
-        allPlayersRegistered(matchData) &&
-        (isAdmin() || currentUid() == matchData.creador || currentUid() == matchData.organizerId) &&
-        matchData.estado == 'jugado' &&
-        request.resource.data.sets is string &&
-        request.resource.data.totalPoints is number &&
-        request.resource.data.totalPoints >= 1 &&
-        request.resource.data.createdAt == request.time &&
-        (!exists(/databases/$(database)/documents/matchPointDetails/$(matchId)) || isAdmin());
-    }
+    // --- REGLAS POR COLECCIÓN ---
 
     match /usuarios/{uid} {
-      allow get: if isSelf(uid) || isApproved();
+      allow get: if signedIn();
       allow list: if isApproved();
-      allow create: if isAdmin() || isValidUserSelfCreate(uid);
-      allow update: if isAdmin() ||
-        (isSelf(uid) && isAllowedSelfProfileUpdate()) ||
-        isLinkedRankingUserUpdate(uid);
+      allow create: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow delete: if isAdmin();
     }
 
     match /partidosAmistosos/{matchId} {
-      allow get, list: if isApproved();
-      allow create: if isValidMatchCreate();
-      allow update: if isAdmin() || isJoinUpdate() || isLeaveUpdate() || isOwnerRosterUpdate() || isResultUpdate() || isRankingSummaryUpdate();
-      allow delete: if isAdmin() ||
-        isMatchOwner(resource.data) ||
-        (isMatchParticipant(resource.data) && filledCount(resource.data.jugadores) == 1);
-
-      match /chat/{messageId} {
-        allow get, list: if chatAccessAllowed('partidosAmistosos', matchId);
-        allow create: if chatAccessAllowed('partidosAmistosos', matchId) &&
-          request.resource.data.keys().hasOnly(['uid', 'authorId', 'text', 'timestamp']) &&
-          request.resource.data.uid == currentUid() &&
-          (!(request.resource.data.authorId is string) || request.resource.data.authorId == currentUid()) &&
-          request.resource.data.text is string &&
-          request.resource.data.text.size() > 0 &&
-          request.resource.data.text.size() <= 500 &&
-          request.resource.data.timestamp == request.time;
-        allow update: if false;
-        allow delete: if isAdmin() ||
-          (chatAccessAllowed('partidosAmistosos', matchId) && resource.data.uid == currentUid());
+      allow read, list: if isApproved();
+      allow create: if isApproved();
+      allow update: if isAdmin() || (isApproved() && (resource.data.creador == currentUid() || resource.data.organizerId == currentUid()));
+      allow delete: if isAdmin() || (isApproved() && resource.data.creador == currentUid());
+      
+      match /chat/{msgId} {
+        allow read, write: if isApproved();
       }
     }
 
     match /partidosReto/{matchId} {
-      allow get, list: if isApproved();
-      allow create: if isValidMatchCreate();
-      allow update: if isAdmin() || isJoinUpdate() || isLeaveUpdate() || isOwnerRosterUpdate() || isResultUpdate() || isRankingSummaryUpdate();
-      allow delete: if isAdmin() ||
-        isMatchOwner(resource.data) ||
-        (isMatchParticipant(resource.data) && filledCount(resource.data.jugadores) == 1);
+      allow read, list: if isApproved();
+      allow create: if isApproved();
+      allow update: if isAdmin() || (isApproved() && (resource.data.creador == currentUid() || resource.data.organizerId == currentUid()));
+      allow delete: if isAdmin() || (isApproved() && resource.data.creador == currentUid());
 
-      match /chat/{messageId} {
-        allow get, list: if chatAccessAllowed('partidosReto', matchId);
-        allow create: if chatAccessAllowed('partidosReto', matchId) &&
-          request.resource.data.keys().hasOnly(['uid', 'authorId', 'text', 'timestamp']) &&
-          request.resource.data.uid == currentUid() &&
-          (!(request.resource.data.authorId is string) || request.resource.data.authorId == currentUid()) &&
-          request.resource.data.text is string &&
-          request.resource.data.text.size() > 0 &&
-          request.resource.data.text.size() <= 500 &&
-          request.resource.data.timestamp == request.time;
-        allow update: if false;
-        allow delete: if isAdmin() ||
-          (chatAccessAllowed('partidosReto', matchId) && resource.data.uid == currentUid());
+      match /chat/{msgId} {
+        allow read, write: if isApproved();
       }
     }
 
     match /rankingLogs/{logId} {
-      allow get, list: if isApproved();
-      allow create: if validRankingLogCreate();
+      allow read, list: if isApproved();
+      allow create: if isAdmin() || (isApproved() && request.resource.data.uid == currentUid());
       allow update, delete: if isAdmin();
     }
 
-    match /matchPointDetails/{detailId} {
-      allow get, list: if isApproved();
-      allow create: if validPointDetailsCreate();
+    match /matchPointDetails/{id} {
+      allow read, list: if isApproved();
+      allow create: if isAdmin() || isApproved();
       allow update, delete: if isAdmin();
     }
 
-    match /notificaciones/{notifId} {
-      allow get, list: if isApproved() && notifOwner(resource.data);
-      allow create: if validNotificationCreate();
-      allow update: if isApproved() &&
-        notifOwner(resource.data) &&
-        request.resource.data.diff(resource.data).changedKeys().hasOnly(['leido', 'read', 'seen']) &&
-        (request.resource.data.leido == null || request.resource.data.leido is bool) &&
-        (request.resource.data.read == null || request.resource.data.read is bool) &&
-        (request.resource.data.seen == null || request.resource.data.seen is bool);
-      allow delete: if isApproved() && notifOwner(resource.data);
+    match /notificaciones/{id} {
+      allow read, delete: if signedIn() && (resource.data.destinatario == currentUid() || resource.data.uid == currentUid());
+      allow create: if isApproved();
+      allow update: if signedIn() && (resource.data.destinatario == currentUid() || resource.data.uid == currentUid());
     }
 
-    match /diarioTecnico/{entryId} {
-      allow get, list: if isApproved() && (isAdmin() || resource.data.uid == currentUid());
-      allow create: if isApproved() &&
-        (isAdmin() || request.resource.data.uid == currentUid()) &&
-        request.resource.data.uid is string &&
-        request.resource.data.timestamp is string &&
-        request.resource.data.createdAt is timestamp;
-      allow update, delete: if isApproved() && (isAdmin() || resource.data.uid == currentUid());
+    match /palasCatalogo/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
     }
 
-    match /diario/{entryId} {
-      allow get, list: if isApproved() && (isAdmin() || resource.data.uid == currentUid());
-      allow create: if isApproved() && (isAdmin() || request.resource.data.uid == currentUid());
-      allow update, delete: if isApproved() && (isAdmin() || resource.data.uid == currentUid());
+    match /diarioTecnico/{id} {
+      allow read, write: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
     }
 
-    match /eventos/{eventId} {
-      allow get, list: if isApproved();
-      allow create, update, delete: if isAdmin();
+    match /diario/{id} {
+      allow read, write: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
     }
 
-    match /palas/{palaId} {
-      allow get, list: if isApproved();
-      allow create: if isApproved() &&
-        request.resource.data.name is string &&
-        request.resource.data.brand is string &&
-        (!(request.resource.data.createdBy is string) || request.resource.data.createdBy == currentUid());
-      allow update, delete: if isAdmin() || resource.data.createdBy == currentUid();
+    match /palas/{id} {
+      allow read: if signedIn();
+      allow write: if signedIn() && (isAdmin() || resource.data.createdBy == currentUid());
     }
 
-    match /palasCatalogo/{itemId} {
-      allow get, list: if isApproved();
-      allow create, update, delete: if isAdmin();
-    }
-
+    // REGLA DE SEGURIDAD GLOBAL (BLOQUEO POR DEFECTO PERO PERMISO ADMIN)
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isAdmin();
     }
   }
 }

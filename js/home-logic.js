@@ -38,6 +38,8 @@ let homePresenceInterval = null;
 let homeRefreshInterval = null;
 let homeUserDocUnsub = null;
 let homeBootUid = null;
+let lastOnlineRefreshAt = 0;
+const PROVISIONAL_MATCHES = 5;
 const userProfileCache = new Map();
 const shownNotifToastIds = new Set();
 let notifToastBaselineReady = false;
@@ -137,6 +139,12 @@ async function getCachedUserProfile(uid) {
     photo: raw?.fotoPerfil || raw?.fotoURL || "./imagenes/Logojafs.png",
     role: raw?.rol || "Jugador",
     points: Math.round(Number(raw?.puntosRanking || 1000)),
+    streak: Number(raw?.rachaActual || 0),
+    wins: Number(raw?.victorias || 0),
+    matches: Number(raw?.partidosJugados || 0),
+    winRate: Number(raw?.partidosJugados || 0) > 0
+      ? Math.round((Number(raw?.victorias || 0) / Number(raw?.partidosJugados || 1)) * 100)
+      : 50,
   };
   userProfileCache.set(uid, profile);
   return profile;
@@ -184,6 +192,25 @@ async function getDetailedMatchSlots(match) {
   );
 }
 
+function getPendingMatchesCount() {
+  if (!currentUser?.uid || !Array.isArray(allMatches)) return 0;
+  const now = new Date();
+  return allMatches.filter((m) => {
+    const isMine = Array.isArray(m.jugadores) && m.jugadores.includes(currentUser.uid);
+    if (!isMine) return false;
+    const state = String(m.estado || "").toLowerCase();
+    const isClosed = state === "jugado" || state === "cancelado" || state === "anulado";
+    if (isClosed) return false;
+    const when = toDateSafe(m.fecha);
+    return when > new Date(now.getTime() - 2 * 60 * 60 * 1000);
+  }).length;
+}
+
+function updateWelcomePendingMetric() {
+  const pendingEl = document.getElementById("welcome-pending");
+  if (pendingEl) pendingEl.textContent = String(getPendingMatchesCount());
+}
+
 // Real Online Count Logic - Only counts users active in the last 5 minutes (Real-time)
 async function injectOnlineCount() {
   try {
@@ -200,18 +227,26 @@ async function injectOnlineCount() {
     const elLibrary = document.getElementById("online-count-library");
     if (el) {
       el.innerHTML = `
-        <div class="flex-row items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-sm">
-          <span class="relative flex h-2 w-2">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        <button type="button" class="welcome-online-link" aria-label="Abrir Nexus online">
+          <span class="welcome-online-dot-stack" aria-hidden="true">
+            <span class="welcome-online-dot-pulse"></span>
+            <span class="welcome-online-dot-core"></span>
           </span>
-          <span class="text-[9px] font-black text-emerald-400 uppercase tracking-widest whitespace-nowrap">
-            ${onlineCount} JUGADORES ACTIVOS
-          </span>
-        </div>
+          <span class="welcome-online-label">ONLINE</span>
+          <span class="welcome-online-count">${onlineCount}</span>
+          <span class="welcome-online-small">jugadores</span>
+        </button>
       `;
       el.style.cursor = "pointer";
-      el.onclick = () => window.showOnlineUsers();
+      el.onclick = () => {
+        if (typeof window.showOnlineNexus === "function") {
+          window.showOnlineNexus();
+          return;
+        }
+        if (typeof window.showOnlineUsers === "function") {
+          window.showOnlineUsers();
+        }
+      };
     }
     if (elLibrary) {
       elLibrary.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-sport-green animate-pulse"></span> ${onlineCount} ONLINE`;
@@ -221,114 +256,17 @@ async function injectOnlineCount() {
   }
 }
 
-// Show Online Users Modal (Elite Rebirth v8.0)
-window.showOnlineUsers = async () => {
-    const updateModalList = async () => {
-        const threshold = new Date(Date.now() - 5 * 60 * 1000);
-        const q = query(
-            collection(db, "usuarios"),
-            where("ultimoAcceso", ">", threshold),
-            limit(50),
-        );
-        const snap = await window.getDocsSafe(q);
-
-        const listContainer = document.getElementById('online-users-list');
-        const countTxt = document.getElementById('online-users-count');
-        if (!listContainer) return;
-
-        countTxt.innerText = `${snap.docs.length} GUERREROS INTERACTUANDO`;
-        listContainer.innerHTML = snap.docs.map((d) => {
-            const u = d.data();
-            const photo = u.fotoPerfil || u.fotoURL || "./imagenes/Logojafs.png";
-            const isMe = d.id === currentUser?.uid;
-            const lvl = Number(u.nivel || 2.5).toFixed(1);
-            const isGold = (u.puntosRanking || 1000) > 1800;
-
-            return `
-                <div class="flex-row items-center gap-3 p-2 rounded-xl bg-white/5 border border-white/5 hover:border-primary/40 transition-all cursor-pointer group ${isMe ? "bg-primary/5 border-primary/20" : ""}" 
-                     onclick="window.viewProfile('${d.id}')">
-                    <div class="relative flex-shrink-0">
-                        <div class="w-7 h-7 rounded-full p-0.5 ${isGold ? 'gradient-gold' : 'bg-white/10'}">
-                            <img src="${photo}" class="w-full h-full rounded-full object-cover">
-                        </div>
-                        <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-sport-green rounded-full border-2 border-[#0a0a0f] shadow-glow flex center">
-                            <i class="fas fa-bolt text-[5px] text-black"></i>
-                        </div>
-                    </div>
-                    <div class="flex-col flex-1 truncate">
-                        <span class="text-[12px] font-black text-white italic uppercase tracking-tighter truncate ${isMe ? "text-primary" : ""}">
-                            ${u.nombreUsuario || u.nombre || "Jugador"}
-                        </span>
-                        <div class="flex-row items-center gap-2">
-                            <span class="text-[7px] text-muted font-black uppercase tracking-widest opacity-60">${u.rol || "Atleta"}</span>
-                            <span class="text-[9px] text-primary font-black">NV ${lvl}</span>
-                        </div>
-                    </div>
-                    <i class="fas fa-chevron-right text-[7px] text-white/10 group-hover:text-primary transition-all"></i>
-                </div>
-            `;
-        }).join("");
-        if (snap.docs.length === 0) listContainer.innerHTML = '<div class="text-center text-xs text-muted py-14 opacity-20 uppercase tracking-[4px]">Silencio...</div>';
-    };
-
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay active";
-    overlay.style.backdropFilter = "blur(15px) saturate(180%)";
-    overlay.innerHTML = `
-        <div class="modal-card animate-up glass-strong" style="max-width: 360px; border: 1px solid rgba(255,255,255,0.1);">
-            <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding: 20px;">
-                <div class="flex-col">
-                    <div class="flex-row items-center gap-3 mb-1">
-                        <div class="w-2.5 h-2.5 bg-sport-green rounded-full animate-pulse shadow-glow"></div>
-                        <h3 class="text-lg font-black italic text-white tracking-[1px] m-0 uppercase">Nexus Online</h3>
-                    </div>
-                    <span id="online-users-count" class="text-[9px] text-muted font-black uppercase opacity-60">Sincronizando...</span>
-                </div>
-                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-
-            <div id="online-users-list" class="modal-body custom-scroll p-3 flex-col gap-2" style="max-height: 60vh;">
-                <!-- Content injected via updateModalList -->
-            </div>
-
-            <div class="modal-footer p-3 text-center border-t border-white/5">
-                <p class="text-[9px] text-muted font-black uppercase tracking-widest m-0 opacity-40">DetecciÃ³n de presencia activa</p>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(overlay);
-    updateModalList();
-    const refreshInterval = setInterval(updateModalList, 15000);
-
-    overlay.addEventListener("click", (e) => {
-        if (e.target === overlay) {
-            clearInterval(refreshInterval);
-            overlay.remove();
-        }
-    });
-
-    const closeBtn = overlay.querySelector('.close-btn');
-    if (closeBtn) {
-        closeBtn.onclick = () => {
-            clearInterval(refreshInterval);
-            overlay.remove();
-        };
-    }
-};
-
 document.addEventListener("DOMContentLoaded", () => {
   // AUTO-CLEAN CACHE ON HARD RELOAD OR VERSION MISMATCH
-  if (localStorage.getItem('app_version') !== '6.8') {
+  if (localStorage.getItem('app_version') !== '7.0') {
       console.log("Actualizando versiÃ³n... Limpiando cachÃ©.");
       sessionStorage.clear();
-      localStorage.setItem('app_version', '6.8');
+      localStorage.setItem('app_version', '7.0');
   }
 
   initAppUI("home");
   injectOnlineCount();
+  lastOnlineRefreshAt = Date.now();
 
   observerAuth(async (user) => {
     if (!user) {
@@ -388,7 +326,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const { updatePresence } = await import("./firebase-service.js");
     updatePresence(user.uid);
     if (homePresenceInterval) clearInterval(homePresenceInterval);
-    homePresenceInterval = setInterval(() => updatePresence(user.uid), 60000);
+    homePresenceInterval = setInterval(() => updatePresence(user.uid), 5 * 60 * 1000);
 
     // Init Auto Notifications System (V7.0) - Unified Service
     initAutoNotifications(user.uid);
@@ -442,12 +380,15 @@ document.addEventListener("DOMContentLoaded", () => {
     await loadMatches();
     const podiumRefresh = await renderVerticalPodium();
     
-    // Auto-refresh dynamic data every 30 seconds
+    // Auto-refresh dynamic data
     if (homeRefreshInterval) clearInterval(homeRefreshInterval);
     homeRefreshInterval = setInterval(() => {
-        injectOnlineCount();
+        if (Date.now() - lastOnlineRefreshAt >= 5 * 60 * 1000) {
+          injectOnlineCount();
+          lastOnlineRefreshAt = Date.now();
+        }
         renderOpenMatches();
-    }, 30000);
+    }, 60000);
   });
 
   // Filter tabs logic...
@@ -472,40 +413,13 @@ async function updateDashboard(data) {
   else if (hour >= 21 || hour < 5) greet = "BUENAS NOCHES";
 
   const userNameEl = document.getElementById("user-name");
-  const userHandleEl = document.getElementById("user-handle");
-  const userRoleEl = document.getElementById("user-role");
   const greetingEl = document.getElementById("greeting-text");
   const welcomeAvatarEl = document.getElementById("welcome-avatar");
-  const syncTimeEl = document.getElementById("welcome-sync-time");
-  const statusPillEl = document.getElementById("welcome-status-pill");
 
   const displayName =
     data.nombreUsuario || data.nombre || currentUser?.displayName || "Jugador";
   if (userNameEl) userNameEl.textContent = displayName.toUpperCase();
-  if (userHandleEl) {
-    const handle = displayName
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim()
-      .replace(/\s+/g, "")
-      .replace(/[^a-zA-Z0-9_]/g, "")
-      .toLowerCase();
-    userHandleEl.textContent = `@${handle || "padelero"}`;
-  }
   if (greetingEl) greetingEl.textContent = greet;
-  if (syncTimeEl) {
-    syncTimeEl.textContent = new Date().toLocaleTimeString("es-ES", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-  if (statusPillEl) {
-    statusPillEl.textContent = (data.status === "approved" || data.rol === "Admin")
-      ? "CUENTA VERIFICADA"
-      : "PENDIENTE";
-  }
-
-  if (userRoleEl) userRoleEl.textContent = (data.rol || "Jugador").toUpperCase();
   if (welcomeAvatarEl) {
     welcomeAvatarEl.src =
       data.fotoPerfil || data.fotoURL || currentUser?.photoURL || "./imagenes/Logojafs.png";
@@ -528,18 +442,60 @@ async function updateDashboard(data) {
   const currentRank = data.posicionRanking || '--';
   const rankEl = document.getElementById("user-rank");
   const rankTotalEl = document.getElementById("user-rank-total");
-  const eloDisplayEl = document.getElementById("user-elo-display");
-  const lvlDisplayEl = document.getElementById("user-lvl-display");
+  const pointsDisplayEl = document.getElementById("welcome-points");
+  const lvlDisplayEl = document.getElementById("welcome-level");
+  const pendingDisplayEl = document.getElementById("welcome-pending");
   const ptsEl = document.getElementById("stat-pts");
   const winsEl = document.getElementById("stat-wins");
   const matchesEl = document.getElementById("stat-matches");
   const wrEl = document.getElementById("stat-winrate");
   const lvlEl = document.getElementById("stat-level");
+  const currentElo = Math.round(Number(data.elo || currentPts));
+  const pendingMatches = getPendingMatchesCount();
 
   if (rankEl) rankEl.textContent = `#${currentRank}`;
   if (rankTotalEl) rankTotalEl.textContent = "de --";
-  if (eloDisplayEl) eloDisplayEl.textContent = `${Math.round(currentPts)}`;
+  if (pointsDisplayEl) pointsDisplayEl.textContent = `${Math.round(currentPts)}`;
   if (lvlDisplayEl) lvlDisplayEl.textContent = levelPrecise;
+  if (pendingDisplayEl) pendingDisplayEl.textContent = `${pendingMatches}`;
+
+  // Trend logic from Logs
+  try {
+    const logsSnap = await window.getDocsSafe(query(
+        collection(db, "rankingLogs"),
+        where("uid", "==", currentUser.uid),
+        orderBy("timestamp", "desc"),
+        limit(2)
+    ));
+    if (!logsSnap.empty) {
+        const latest = logsSnap.docs[0].data();
+        const trendEl = document.getElementById("user-rank-trend");
+        const lvlTrendEl = document.getElementById("welcome-level-trend");
+
+        // Level Trend
+        if (lvlTrendEl && latest.details?.levelAfter && latest.details?.levelBefore) {
+            const lDiff = latest.details.levelAfter - latest.details.levelBefore;
+            if (lDiff > 0) {
+                lvlTrendEl.className = "up";
+                lvlTrendEl.innerHTML = '<i class="fas fa-caret-up"></i>';
+            } else if (lDiff < 0) {
+                lvlTrendEl.className = "down";
+                lvlTrendEl.innerHTML = '<i class="fas fa-caret-down"></i>';
+            }
+        }
+
+        // Rank Trend (Approx from last net diff)
+        if (trendEl && latest.diff !== undefined) {
+             if (latest.diff > 0) {
+                trendEl.className = "welcome-trend-pill up";
+                trendEl.innerHTML = '<i class="fas fa-arrow-up mr-1"></i> SUBE';
+             } else if (latest.diff < 0) {
+                trendEl.className = "welcome-trend-pill down";
+                trendEl.innerHTML = '<i class="fas fa-arrow-down mr-1"></i> BAJA';
+             }
+        }
+    }
+  } catch(e) { console.warn("Trend sync error:", e); }
 
   if (ptsEl) countUp(ptsEl, Number(currentPts));
   if (winsEl) winsEl.textContent = wins;
@@ -781,6 +737,7 @@ async function loadMatches() {
   allMatches = list;
   const myMatches = list.filter((m) => m.jugadores?.includes(currentUser.uid));
   const myNext = myMatches[0];
+  updateWelcomePendingMetric();
 
   renderNextMatch(myNext);
   renderUpcomingMatches(myMatches.slice(1));
@@ -1033,6 +990,120 @@ window.showAllOpenMatches = async () => {
   });
 };
 
+function isProvisionalPlayer(player) {
+  if (!player || player.isEmpty) return false;
+  return Number(player.matches || 0) < PROVISIONAL_MATCHES;
+}
+
+function getPlayerAnalysisLevel(player) {
+  if (!player || player.isEmpty) return 2.5;
+  const rawLevel = Number(player.level || 2.5);
+  const byPoints = 2.5 + ((Number(player.points || 1000) - 1000) / 420);
+  const wr = Number(player.winRate || 50);
+  const byWinRate = 2.5 + ((wr - 50) / 20);
+  const streakAdj = Number(player.streak || 0) * 0.03;
+
+  const blended = isProvisionalPlayer(player)
+    ? (byPoints * 0.65 + byWinRate * 0.35 + streakAdj)
+    : (rawLevel * 0.55 + byPoints * 0.25 + byWinRate * 0.20 + streakAdj);
+
+  return Math.max(1, Math.min(7, blended));
+}
+
+function computePlayerPower(player) {
+  const lvl = getPlayerAnalysisLevel(player);
+  const pts = Number(player?.points || 1000);
+  const streak = Number(player?.streak || 0);
+  const wr = Number(player?.winRate || 50);
+  return (lvl * 36) + (pts / 85) + (streak * 2.5) + (wr / 4);
+}
+
+function computeTeamPower(team) {
+  const valid = team.filter((p) => p && !p.isEmpty);
+  if (!valid.length) return 0;
+  const total = valid.reduce((acc, p) => acc + computePlayerPower(p), 0);
+  return total / valid.length;
+}
+
+function averageLevel(team) {
+  const valid = team.filter((p) => p && !p.isEmpty);
+  if (!valid.length) return 2.5;
+  return valid.reduce((acc, p) => acc + getPlayerAnalysisLevel(p), 0) / valid.length;
+}
+
+function describePlayerForm(player) {
+  if (!player || player.isEmpty) return "plaza libre";
+  const name = shortPlayerName(player.name);
+  const wr = Number(player.winRate || 50);
+  const streak = Number(player.streak || 0);
+  const lvl = getPlayerAnalysisLevel(player).toFixed(2);
+  const provisional = isProvisionalPlayer(player) ? "en modo provisional" : `nivel IA ${lvl}`;
+
+  let form = "llega estable";
+  if (streak >= 3 || wr >= 67) form = "llega encendido";
+  else if (streak <= -2 || wr <= 43) form = "llega irregular";
+
+  return `${name} ${form} (${provisional})`;
+}
+
+function buildNextMatchAiPrediction(match, teamA, teamB) {
+  const teamAReady = teamA.filter((p) => !p.isEmpty).length === 2;
+  const teamBReady = teamB.filter((p) => !p.isEmpty).length === 2;
+  const complete = teamAReady && teamBReady;
+
+  if (!complete) {
+    return {
+      probA: null,
+      headline: "Me falta una pareja completa para mojarme",
+      summary: "Cuando el 2vs2 esté cerrado, te doy favorito y lectura táctica personalizada.",
+      editorial: "Sin alineación cerrada no hay pronóstico serio.",
+      badge: "AÚN ABIERTO",
+    };
+  }
+
+  let probA = null;
+  const rawWin = match?.preMatchPrediction?.winProbability;
+  if (typeof rawWin === "number") {
+    probA = rawWin > 1 ? rawWin : rawWin * 100;
+  }
+  if (probA == null || Number.isNaN(probA)) {
+    const powerA = computeTeamPower(teamA);
+    const powerB = computeTeamPower(teamB);
+    const delta = powerA - powerB;
+    probA = 50 + Math.max(-28, Math.min(28, delta * 1.65));
+  }
+
+  probA = Math.max(5, Math.min(95, Math.round(probA)));
+  const probB = 100 - probA;
+  const winnerIsA = probA >= probB;
+  const advantage = Math.abs(probA - probB);
+  const avgA = averageLevel(teamA).toFixed(2);
+  const avgB = averageLevel(teamB).toFixed(2);
+  const leadA = [...teamA].sort((a, b) => computePlayerPower(b) - computePlayerPower(a))[0];
+  const leadB = [...teamB].sort((a, b) => computePlayerPower(b) - computePlayerPower(a))[0];
+  const leadAName = shortPlayerName(leadA?.name || "Jugador A");
+  const leadBName = shortPlayerName(leadB?.name || "Jugador B");
+  const leadLabel = winnerIsA ? `${leadAName} y su pareja` : `${leadBName} y su pareja`;
+
+  let tone = "ligero";
+  if (advantage >= 16) tone = "alto";
+  else if (advantage >= 8) tone = "moderado";
+
+  const meInA = teamA.some((p) => p?.id && p.id === currentUser?.uid);
+  const meInB = teamB.some((p) => p?.id && p.id === currentUser?.uid);
+  const personal = meInA || meInB
+    ? `Tu dupla tiene ${meInA ? probA : probB}% según mi modelo actual.`
+    : `Mi favorito ahora mismo es ${leadLabel}.`;
+
+  return {
+    probA,
+    headline: `Si me tengo que mojar: ${leadLabel} parte por delante (${winnerIsA ? probA : probB}%)`,
+    summary: `${personal} Clave A: ${describePlayerForm(leadA)}. Clave B: ${describePlayerForm(leadB)}.`,
+    editorial: `Partido ${tone}: media IA A ${avgA} vs B ${avgB}. Si el saque inicial entra bien, puede romperse pronto.`,
+    badge: `${probA}% · ${probB}%`,
+  };
+}
+
 async function createNextMatchPoster(match) {
   const date = toDateSafe(match.fecha);
   const isComp = match.col === "partidosReto" || match.isComp;
@@ -1046,15 +1117,28 @@ async function createNextMatchPoster(match) {
   const levelMin = Number(match.restriccionNivel?.min ?? 2.0);
   const levelMax = Number(match.restriccionNivel?.max ?? 6.0);
   const courtName = (match.courtType || "CENTRAL").toUpperCase();
+  const aiPred = buildNextMatchAiPrediction(match, teamA, teamB);
 
-  const avatarNode = (player) => `
-    <img
-      src="${player?.photo || "./imagenes/Logojafs.png"}"
-      alt="${shortPlayerName(player?.name)}"
-      class="next-poster-avatar ${player?.isEmpty ? "empty" : ""}"
-      loading="lazy"
-    >
-  `;
+  const playerNode = (player) => {
+    const lvl = player?.isEmpty ? "--" : getPlayerAnalysisLevel(player).toFixed(2);
+    const lvlLabel = player?.isEmpty
+      ? "NV --"
+      : (isProvisionalPlayer(player) ? `PROV ${lvl}` : `NV ${lvl}`);
+    return `
+      <div class="next-poster-player ${player?.isEmpty ? "empty" : ""}">
+        <img
+          src="${player?.photo || "./imagenes/Logojafs.png"}"
+          alt="${shortPlayerName(player?.name)}"
+          class="next-poster-avatar ${player?.isEmpty ? "empty" : ""}"
+          loading="lazy"
+        >
+        <div class="next-poster-player-meta">
+          <span class="next-poster-player-name">${shortPlayerName(player?.name)}</span>
+          <span class="next-poster-player-lvl">${lvlLabel}</span>
+        </div>
+      </div>
+    `;
+  };
 
   return `
     <article class="next-poster-v13 animate-up" onclick="openMatch('${match.id}', '${match.col}')">
@@ -1072,19 +1156,29 @@ async function createNextMatchPoster(match) {
 
       <div class="next-poster-duel">
         <div class="next-poster-team">
-          <div class="next-poster-avatars">${avatarNode(teamA[0])}${avatarNode(teamA[1])}</div>
-          <span class="next-poster-name">${buildTeamLabel(teamA)}</span>
+          ${playerNode(teamA[0])}
+          ${playerNode(teamA[1])}
         </div>
         <div class="next-poster-vs">VS</div>
         <div class="next-poster-team right">
-          <div class="next-poster-avatars right">${avatarNode(teamB[0])}${avatarNode(teamB[1])}</div>
-          <span class="next-poster-name">${buildTeamLabel(teamB)}</span>
+          ${playerNode(teamB[0])}
+          ${playerNode(teamB[1])}
         </div>
       </div>
 
       <div class="next-poster-foot">
         <span class="next-poster-slot ${slots <= 1 ? "urgent" : ""}">${slotText}</span>
         <span class="next-poster-level">NIVEL ${levelMin.toFixed(1)} - ${levelMax.toFixed(1)}</span>
+      </div>
+
+      <div class="next-poster-ai">
+        <div class="next-poster-ai-head">
+          <span><i class="fas fa-brain"></i> PRONOSTICO IA</span>
+          <span class="next-poster-ai-badge">${aiPred.badge}</span>
+        </div>
+        <p class="next-poster-ai-title">${aiPred.headline}</p>
+        <p class="next-poster-ai-text">${aiPred.summary}</p>
+        <p class="next-poster-ai-note">${aiPred.editorial || ""}</p>
       </div>
     </article>
   `;

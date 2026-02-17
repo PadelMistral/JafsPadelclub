@@ -38,24 +38,31 @@ document.addEventListener("DOMContentLoaded", () => {
     await injectHeader(userData);
     injectNavbar("ranking");
 
-    await loadRanking();
-    await loadPointsHistory();
+    await initRankingRealTime();
+    await window.loadPointsHistory('mine');
   });
 });
 
-async function loadRanking() {
-  const snap = await window.getDocsSafe(
-    query(
-      collection(db, "usuarios"),
-      orderBy("puntosRanking", "desc"),
-    ),
-  );
-  const list = snap.docs.map((d, i) => ({
-    id: d.id,
-    rank: i + 1,
-    ...d.data(),
-  }));
+window.switchHistoryTab = async (mode) => {
+  const tabs = document.querySelectorAll('.hist-tab');
+  tabs.forEach(t => t.classList.remove('active'));
+  const activeTab = document.getElementById(`tab-hist-${mode}`);
+  if (activeTab) activeTab.classList.add('active');
+  
+  await window.loadPointsHistory(mode);
+};
 
+async function initRankingRealTime() {
+    const { subscribeCol } = await import('./firebase-service.js');
+    return subscribeCol("usuarios", async (users) => {
+        // Filter out guests or inactive if needed, but here we want all for ranking
+        users.sort((a, b) => (b.puntosRanking || 1000) - (a.puntosRanking || 1000));
+        const list = users.map((u, i) => ({ ...u, rank: i + 1 }));
+        await renderRanking(list);
+    }, [], [["puntosRanking", "desc"]]);
+}
+
+async function renderRanking(list) {
   // My position
   const myIdx = list.findIndex((u) => u.id === currentUser.uid);
   const totalPlayers = list.length || 1;
@@ -69,15 +76,13 @@ async function loadRanking() {
 
     document.getElementById("my-rank").textContent = `#${me.rank}`;
     countUp(document.getElementById("my-pts"), myPts);
-    document.getElementById("my-level").textContent = (me.nivel || 2.5).toFixed(
-      2,
-    );
+    document.getElementById("my-level").textContent = (me.nivel || 2.5).toFixed(2);
     const playedEl = document.getElementById("my-played");
     const levelCardEl = document.getElementById("my-level-card");
     if (playedEl) playedEl.textContent = `${played}`;
     if (levelCardEl) levelCardEl.textContent = (me.nivel || 2.5).toFixed(2);
 
-    // Level progress (simplified: decimal part as percentage)
+    // Level progress
     const lvl = me.nivel || 2.5;
     const progress = (lvl % 1) * 100;
     const base = Math.floor(lvl);
@@ -85,7 +90,7 @@ async function loadRanking() {
     document.getElementById("level-prev").textContent = base.toFixed(1);
     document.getElementById("level-next").textContent = (base + 1).toFixed(1);
 
-    // Trend
+    // Trend - Neutral by default, then updated by movementMap
     const trendEl = document.getElementById("rank-trend");
     if (trendEl) {
       trendEl.style.display = "inline-flex";
@@ -93,13 +98,9 @@ async function loadRanking() {
       trendEl.innerHTML = `<i class="fas fa-minus"></i> 0`;
     }
 
-    // Extra: Meta de posición respecto al resto de jugadores
     const metaEl = document.getElementById("rank-meta-text");
     if (metaEl) {
-      const percentile = Math.max(
-        1,
-        Math.min(100, Math.round((1 - (me.rank - 1) / totalPlayers) * 100)),
-      );
+      const percentile = Math.max(1, Math.min(100, Math.round((1 - (me.rank - 1) / totalPlayers) * 100)));
       metaEl.textContent = `Estás en el TOP ${percentile}% (${me.rank}/${totalPlayers}) del circuito activo`;
     }
   }
@@ -128,9 +129,6 @@ async function loadRanking() {
 
   // Leaderboard (4th onwards)
   renderLeaderboard(list.slice(3), totalPlayers, movementMap);
-
-  // Auto scroll to me after 1s
-  setTimeout(() => window.scrollToMe(), 1000);
 }
 
 async function getRecentRankMovements(users) {
@@ -272,19 +270,32 @@ function renderLeaderboard(
     .join("");
 }
 
-async function loadPointsHistory() {
+window.loadPointsHistory = async (mode = 'mine') => {
   const container = document.getElementById("points-history");
   if (!container) return;
 
+  container.innerHTML = '<div class="center py-6 opacity-30"><i class="fas fa-circle-notch fa-spin"></i></div>';
+
+  if (!window.logCache) window.logCache = new Map();
+
   try {
-    const logs = await window.getDocsSafe(
-      query(
-        collection(db, "rankingLogs"),
-        where("uid", "==", currentUser.uid),
-        orderBy("timestamp", "desc"),
-        limit(10),
-      ),
-    );
+    let qBase;
+    if (mode === 'global') {
+        qBase = query(
+            collection(db, "rankingLogs"),
+            orderBy("timestamp", "desc"),
+            limit(20)
+        );
+    } else {
+        qBase = query(
+            collection(db, "rankingLogs"),
+            where("uid", "==", currentUser.uid),
+            orderBy("timestamp", "desc"),
+            limit(20)
+        );
+    }
+    
+    const logs = await window.getDocsSafe(qBase);
 
     if (logs.empty) {
       container.innerHTML =
@@ -293,9 +304,18 @@ async function loadPointsHistory() {
     }
 
     const entries = await Promise.all(
-      logs.docs.map(async (doc) => {
-        const log = doc.data();
+      logs.docs.map(async (docSnap) => {
+        const log = docSnap.data();
+        window.logCache.set(docSnap.id, log);
         const isWin = log.diff > 0;
+
+        // Level change indicator
+        let levelIcon = "";
+        if (log.details?.levelAfter && log.details?.levelBefore) {
+            const lDiff = log.details.levelAfter - log.details.levelBefore;
+            if (lDiff > 0) levelIcon = `<span class="text-[8px] text-sport-green ml-1"><i class="fas fa-caret-up"></i></span>`;
+            else if (lDiff < 0) levelIcon = `<span class="text-[8px] text-sport-red ml-1"><i class="fas fa-caret-down"></i></span>`;
+        }
 
         // Try to get match details
         let matchInfo = "";
@@ -323,14 +343,24 @@ async function loadPointsHistory() {
           });
         }
 
+        const isDiary = log.type === "DIARY_BONUS";
+        const title = isDiary ? "Análisis Diario" : (isWin ? "Victoria" : "Derrota");
+        
+        let userNameLabel = "";
+        if (mode === 'global' && log.uid !== currentUser.uid) {
+            const u = await getDocument('usuarios', log.uid);
+            userNameLabel = `<span class="text-[9px] font-black opacity-40 uppercase block">${u?.nombreUsuario || 'Jugador'}</span>`;
+        }
+
         return `
-                <div class="history-entry ${isWin ? "win" : "loss"}" onclick="showMatchBreakdown('${log.matchId}', ${log.diff}, ${log.newTotal})">
+                <div class="history-entry ${isDiary ? "bonus" : (isWin ? "win" : "loss")}" onclick="window.showMatchBreakdownV3('${docSnap.id}')">
                     <div class="history-icon">
-                        <i class="fas ${isWin ? "fa-arrow-up" : "fa-arrow-down"}"></i>
+                        <i class="fas ${isDiary ? "fa-book" : (isWin ? "fa-arrow-up" : "fa-arrow-down")}"></i>
                     </div>
                     <div class="history-details">
-                        <span class="history-title">${isWin ? "Victoria" : "Derrota"} ${matchInfo ? `<span class="history-score">${matchInfo}</span>` : ""}</span>
-                        <span class="history-date">${date || "N/A"}</span>
+                        ${userNameLabel}
+                        <span class="history-title">${title} ${matchInfo ? `<span class="history-score">${matchInfo}</span>` : ""} ${levelIcon}</span>
+                        <span class="history-date">${date || "N/A"} ${isDiary ? `<span class="text-[9px] opacity-60 ml-1">(${log.reason || 'Bonus'})</span>` : ''}</span>
                     </div>
                     <span class="history-value">${isWin ? "+" : ""}${log.diff}</span>
                 </div>
@@ -346,131 +376,235 @@ async function loadPointsHistory() {
   }
 }
 
-window.showMatchBreakdown = async (matchId, diff, total) => {
-  const overlay = document.getElementById("modal-match-detail");
-  const area = document.getElementById("match-breakdown-area");
-  overlay.classList.add("active");
+window.showMatchBreakdownV3 = async (logId) => {
+  const log = window.logCache?.get(logId);
+  if (!log) return showToast("Error", "No se encontró el registro en memoria", "error");
 
-  if (!matchId) {
-    area.innerHTML = `
-            <div class="modal-header-row mb-4">
-                <h3 class="modal-title">Desglose de Puntos</h3>
-                <button class="btn-icon-glass sm" onclick="document.getElementById('modal-match-detail').classList.remove('active')"><i class="fas fa-times"></i></button>
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay active";
+  overlay.style.zIndex = "11000";
+
+  const isDiary = log.type === 'DIARY_BONUS';
+  const diff = log.diff;
+  const total = log.newTotal;
+  const matchId = log.matchId;
+
+  overlay.innerHTML = `
+        <div class="modal-card glass-strong animate-up p-0 overflow-hidden" style="max-width:380px">
+            <div class="modal-header">
+                <span class="modal-title font-black italic tracking-widest">${isDiary ? 'RECOMPENSA DIARIO' : 'DESGLOSE TÁCTICO'}</span>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
             </div>
-            <div class="sport-card p-4 text-center">
-                <span class="font-display font-black text-3xl ${diff > 0 ? "text-sport-green" : "text-danger"}">${diff > 0 ? "+" : ""}${diff}</span>
-                <span class="block text-sm text-muted mt-2">Detalles no disponibles</span>
+            <div id="breakdown-content" class="modal-body custom-scroll p-4">
+                <div class="center py-10"><i class="fas fa-circle-notch fa-spin text-primary"></i></div>
             </div>
-        `;
-    return;
-  }
-
-  area.innerHTML =
-    '<div class="loading-state"><div class="spinner-neon"></div></div>';
-
-  const match =
-    (await getDocument("partidosReto", matchId)) ||
-    (await getDocument("partidosAmistosos", matchId));
-
-  if (!match) {
-    area.innerHTML =
-      '<div class="empty-state text-danger">Partido no encontrado</div>';
-    return;
-  }
-
-  const date = match.fecha?.toDate();
-  const players = match.jugadores || [];
-  const isComp = matchId.includes("reto") || match.tipo === "reto";
-
-  // Get player names
-  const playerNames = await Promise.all(
-    players.map(async (uid) => {
-      if (!uid) return "Libre";
-      if (uid.startsWith("GUEST_")) return uid.split("_")[1] + " (Inv)";
-      const u = await getDocument("usuarios", uid);
-      return u?.nombreUsuario || u?.nombre || "Jugador";
-    }),
-  );
-
-  const team1 = playerNames.slice(0, 2).join(" & ");
-  const team2 = playerNames
-    .slice(2, 4)
-    .map((n) => n || "Libre")
-    .join(" & ");
-  const myTeam = players.indexOf(currentUser.uid) < 2 ? 1 : 2;
-  const won = diff > 0;
-
-  // Detailed Point Breakdown Logic
-  const basePoints = 25; // Standard base
-  const levelFactor = Math.round(diff * 0.4); // Points from level difference
-  const streakBonus = Math.round(diff * 0.1); // Streak bonus
-  const resultFactor = diff - levelFactor - streakBonus; // Remaining is result weight
-
-  area.innerHTML = `
-        <div class="modal-header-row mb-4">
-            <h3 class="modal-title">Análisis de Puntuación</h3>
-            <button class="btn-icon-glass sm" onclick="document.getElementById('modal-match-detail').classList.remove('active')">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        
-        <div class="sport-card p-4 mb-4 ${won ? "glow-green" : "glow-red"}">
-            <div class="flex-row between mb-3">
-                <span class="status-badge ${won ? "badge-green" : "badge-orange"}">${won ? "VICTORIA" : "DERROTA"}</span>
-                <span class="text-xs text-muted">${date ? date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" }) : ""}</span>
-            </div>
-            
-            <div class="text-center mb-4">
-                <span class="font-display font-black text-4xl text-white tracking-widest">${match.resultado?.sets || "-"}</span>
-                <span class="block text-xs text-muted mt-1 uppercase tracking-widest">${isComp ? "Partido Oficial" : "Amistoso"}</span>
-            </div>
-            
-            <div class="match-teams-display">
-                <span class="team-name ${myTeam === 1 ? "chk" : ""}">${team1}</span>
-                <span class="vs-label">VS</span>
-                <span class="team-name ${myTeam === 2 ? "chk" : ""}">${team2}</span>
-            </div>
-        </div>
-        
-        <h4 class="section-subtitle mb-3">Desglose de Rendimiento</h4>
-        
-        <div class="flex-col gap-3 mb-4">
-            <div class="point-factor-row">
-                <div class="factor-icon bg-blue-500/20 text-blue-400"><i class="fas fa-trophy"></i></div>
-                <div class="factor-info">
-                    <span class="factor-name">Resultado Base</span>
-                    <span class="factor-desc">Puntos por ${won ? "ganar" : "perder"} el encuentro</span>
-                </div>
-                <span class="factor-val text-white">${resultFactor > 0 ? "+" : ""}${resultFactor}</span>
-            </div>
-
-            <div class="point-factor-row">
-                <div class="factor-icon bg-purple-500/20 text-purple-400"><i class="fas fa-layer-group"></i></div>
-                <div class="factor-info">
-                    <span class="factor-name">Diferencia Nivel</span>
-                    <span class="factor-desc">Ajuste por nivel de rivales</span>
-                </div>
-                <span class="factor-val ${levelFactor >= 0 ? "text-sport-green" : "text-danger"}">${levelFactor > 0 ? "+" : ""}${levelFactor}</span>
-            </div>
-
-            <div class="point-factor-row">
-                <div class="factor-icon bg-orange-500/20 text-orange-400"><i class="fas fa-fire"></i></div>
-                <div class="factor-info">
-                    <span class="factor-name">Racha Actual</span>
-                    <span class="factor-desc">Bonus por consistencia</span>
-                </div>
-                <span class="factor-val text-white">${streakBonus > 0 ? "+" : ""}${streakBonus}</span>
-            </div>
-        </div>
-        
-        <div class="sport-card p-4 gradient-card flex-row between items-center">
-            <div class="flex-col">
-                <span class="font-bold text-white text-sm uppercase opacity-90">Impacto Total</span>
-                <span class="text-xs text-white opacity-60">Nuevo ELO: ${total}</span>
-            </div>
-            <span class="font-display font-black text-3xl text-white">${diff > 0 ? "+" : ""}${diff}</span>
         </div>
     `;
+  document.body.appendChild(overlay);
+
+  const content = document.getElementById("breakdown-content");
+
+  try {
+    if (isDiary) {
+        content.innerHTML = `
+                <div class="text-center py-6">
+                    <div class="text-5xl font-black mb-2 text-sport-green animate-bounce-soft">+${diff}</div>
+                    <span class="text-[10px] text-muted uppercase tracking-[4px] font-black">Bonus de Constancia</span>
+                    <div class="mt-8 p-5 bg-white/5 rounded-2xl border border-white/5 mx-2">
+                        <p class="text-[11px] text-white/70 italic leading-relaxed">Sincronización completada. La Matrix ha procesado tu análisis diario y ha inyectado puntos de experiencia en tu perfil.</p>
+                        <div class="mt-6 pt-4 border-t border-white/10 flex-row between">
+                            <span class="text-[9px] font-black text-muted uppercase">PUNTOS TOTALES</span>
+                            <span class="text-[11px] font-black text-primary">${total} PTS</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        return;
+    }
+
+    if (!matchId) {
+       content.innerHTML = `
+                <div class="text-center py-6">
+                    <div class="text-5xl font-black mb-2 ${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${diff >= 0 ? "+" : ""}${diff}</div>
+                    <span class="text-[10px] text-muted uppercase tracking-[4px] font-black">Ajuste de Sistema</span>
+                    <div class="mt-8 p-5 bg-white/5 rounded-2xl border border-white/10 mx-2 text-left">
+                        <p class="text-[11px] text-white/60 mb-4">Esta es una modificación directa en la Matrix realizada por un administrador o corrección de red.</p>
+                        <div class="flex-row between items-center pt-4 border-t border-white/5">
+                            <span class="text-[10px] font-black text-muted uppercase">NUEVO TOTAL:</span>
+                            <span class="text-lg font-black text-white italic">${total}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+       return;
+    }
+
+    const m = (await getDocument("partidosReto", matchId)) || (await getDocument("partidosAmistosos", matchId));
+    if (!m) throw new Error("Partido no encontrado");
+
+    const date = m.fecha?.toDate ? m.fecha.toDate().toLocaleDateString("es-ES", { day: "numeric", month: "long" }) : "N/A";
+    const res = m.resultado?.sets || "0-0";
+    const won = diff > 0;
+    const analysis = log.details || {};
+    const br = analysis.breakdown || {};
+    
+    // Level change info
+    const lBefore = analysis.levelBefore || 2.5;
+    const lAfter = analysis.levelAfter || lBefore;
+    const lDiff = lAfter - lBefore;
+    const lArrow = lDiff > 0 ? '<i class="fas fa-caret-up text-sport-green ml-1"></i>' : (lDiff < 0 ? '<i class="fas fa-caret-down text-sport-red ml-1"></i>' : '');
+
+    // Factors mapping for the view
+    const factors = [
+        { id: 'streak', name: 'Racha', icon: 'fa-fire', color: 'orange', label: 'Multiplicador de consistencia' },
+        { id: 'underdog', name: 'Nivel Rival', icon: 'fa-balance-scale', color: 'purple', label: 'Ajuste por dificultad' },
+        { id: 'performance', name: 'Sets', icon: 'fa-trophy', color: 'blue', label: 'Dominio del marcador' },
+        { id: 'dominance', name: 'Juegos', icon: 'fa-bolt', color: 'cyan', label: 'Margen de victoria' },
+        { id: 'clutch', name: 'Presión', icon: 'fa-gauge-high', color: 'magenta', label: 'Rendimiento en deuces' },
+        { id: 'resilience', name: 'Resiliencia', icon: 'fa-heart-pulse', color: 'lime', label: 'Remontada / Estado' }
+    ];
+
+    let factorsHtml = factors.map(f => {
+        const val = br[f.id];
+        if (val === undefined || val === 1) return '';
+        const isPos = val > 1;
+        const pct = Math.abs(Math.round((val - 1) * 100));
+        return `
+            <div class="flex-row between items-center p-3 bg-white/5 rounded-2xl border border-white/5 mb-2">
+                <div class="flex-row items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-${f.color}-500/20 flex center text-${f.color}-400"><i class="fas ${f.icon} text-xs"></i></div>
+                    <div class="flex-col">
+                        <span class="text-[10px] font-black text-white uppercase">${f.name}</span>
+                        <span class="text-[8px] text-muted font-bold">${f.label}</span>
+                    </div>
+                </div>
+                <div class="flex-col items-end">
+                    <span class="text-[11px] font-black ${isPos ? 'text-sport-green' : 'text-sport-red'}">${isPos ? '+' : '-'}${pct}%</span>
+                    <span class="text-[8px] opacity-40 font-bold">x${val.toFixed(2)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const math = analysis.math || {};
+    const hasMath = Object.keys(math).length > 0;
+
+    const myL = analysis.myLevel || 2.5;
+    const partL = analysis.partnerLevel || 2.5;
+    const rivalsL = analysis.rivalLevels || [2.5, 2.5];
+    const prediction = analysis.prediction || 50;
+
+    content.innerHTML = `
+            <div class="flex-col gap-4">
+                <!-- Main Header -->
+                <div class="p-5 rounded-3xl bg-gradient-to-br ${won ? 'from-sport-green/20 to-transparent border-sport-green/30' : 'from-sport-red/20 to-transparent border-sport-red/30'} border">
+                    <div class="flex-row between items-center mb-4">
+                        <span class="text-[10px] font-black ${won ? 'text-sport-green' : 'text-sport-red'} uppercase tracking-widest">${won ? 'VICTORIA' : 'DERROTA'}</span>
+                        <span class="text-[10px] text-white/40 font-bold uppercase tracking-widest">${date}</span>
+                    </div>
+                    <div class="text-center mb-2">
+                        <span class="text-5xl font-black italic text-white tracking-widest">${res}</span>
+                    </div>
+                </div>
+
+                <!-- NEW: Tactical Context (Levels) -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="p-3 bg-white/5 rounded-2xl border border-white/5 flex-col gap-1">
+                        <span class="text-[7px] font-black text-muted uppercase tracking-widest">Alineación</span>
+                        <div class="flex-row between items-center">
+                            <span class="text-[10px] font-bold text-white">Yo: ${myL}</span>
+                            <span class="text-[10px] font-bold text-white/60">Socio: ${partL}</span>
+                        </div>
+                    </div>
+                    <div class="p-3 bg-white/5 rounded-2xl border border-white/5 flex-col gap-1">
+                        <span class="text-[7px] font-black text-muted uppercase tracking-widest">Rivales</span>
+                        <div class="flex-row between items-center">
+                            <span class="text-[10px] font-bold text-white">${rivalsL[0] || 2.5}</span>
+                            <span class="text-[10px] font-bold text-white">${rivalsL[1] || 2.5}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-primary/10 rounded-2xl border border-primary/20 flex-row between items-center">
+                    <div class="flex-col">
+                        <span class="text-[8px] font-black text-primary uppercase">Diagnóstico IA</span>
+                        <span class="text-xs font-black text-white italic">Pronóstico: ${prediction}% Victoria</span>
+                    </div>
+                    <div class="text-[9px] font-bold text-primary italic uppercase">Matrix Optimized</div>
+                </div>
+
+                <!-- NEW: Real Mathematical Breakdown -->
+                <div class="p-4 bg-black/40 rounded-2xl border border-white/10">
+                    <h4 class="text-[9px] font-black text-primary uppercase tracking-[2px] mb-3">Cálculo de Ingeniería</h4>
+                    <div class="flex-col gap-2">
+                        ${hasMath ? `
+                            <div class="flex-row between text-[10px] items-center">
+                                <span class="text-white/40">Factor K Volatilidad</span>
+                                <span class="text-white font-mono">${math.K}</span>
+                            </div>
+                            <div class="flex-row between text-[10px] items-center">
+                                <span class="text-white/40">Valoración Probabilística</span>
+                                <span class="text-white font-mono">${math.expected}</span>
+                            </div>
+                            <div class="h-[1px] bg-white/5 my-1"></div>
+                            <!-- Multipliers list -->
+                            <div class="flex-col gap-1 opacity-70">
+                                <div class="flex-row between text-[9px]">
+                                    <span class="text-muted italic">Multiplicador Racha</span>
+                                    <span class="text-white font-mono">x${math.streak || '1.00'}</span>
+                                </div>
+                                <div class="flex-row between text-[9px]">
+                                    <span class="text-muted italic">Dominio Sets/Escalado</span>
+                                    <span class="text-white font-mono">x${math.performance || '1.00'}</span>
+                                </div>
+                                <div class="flex-row between text-[9px]">
+                                    <span class="text-muted italic">Underdog Boost</span>
+                                    <span class="text-white font-mono">x${math.underdog || '1.00'}</span>
+                                </div>
+                                <div class="flex-row between text-[9px]">
+                                    <span class="text-muted italic">Sincronía Socio</span>
+                                    <span class="text-white font-mono">x${math.partnerSync || '1.00'}</span>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="text-[10px] text-muted italic text-center py-2">Desglose simplificado para registros antiguos</div>
+                        `}
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-white/10 flex-row between items-center">
+                        <span class="text-[10px] font-black text-white uppercase">SUMA FINAL</span>
+                        <span class="text-xl font-black ${won ? 'text-sport-green' : 'text-sport-red'}">${won ? '+' : ''}${diff} PTS</span>
+                    </div>
+                </div>
+
+                <!-- Level & Progress -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="p-4 bg-white/5 rounded-2xl border border-white/5 flex-col gap-1 center">
+                        <span class="text-[7px] font-black text-muted uppercase">Nivel Pre</span>
+                        <span class="text-lg font-black text-white italic">${lBefore.toFixed(2)}</span>
+                    </div>
+                    <div class="p-4 bg-white/5 rounded-2xl border border-white/5 flex-col gap-1 center">
+                        <span class="text-[7px] font-black text-muted uppercase">Nivel Post</span>
+                        <div class="flex-row items-center gap-1">
+                            <span class="text-lg font-black text-white italic">${lAfter.toFixed(2)}</span>
+                            ${lArrow}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-2 text-center">
+                    <span class="text-[10px] font-black text-white uppercase tracking-widest">Nuevo Total: ${total} PTS</span>
+                </div>
+            </div>
+        <button class="btn-premium-v7 w-full py-4 uppercase text-[10px] font-black tracking-widest mt-2" onclick="this.closest('.modal-overlay').remove()">
+                    Confirmar Análisis
+                </button>
+            </div>
+        `;
+
+  } catch (e) {
+    console.error(e);
+    content.innerHTML = `<div class="center py-10 opacity-40"><i class="fas fa-exclamation-triangle mr-2"></i> ERROR DE RED</div>`;
+  }
 };
 
 window.viewProfile = async (uid) => {
@@ -612,9 +746,11 @@ async function renderUserDetailedHistory(uid) {
           }
         }
 
+        if (window.logCache) window.logCache.set(doc.id, log);
+        
         return `
                 <div class="sport-card p-3 mb-2 flex-col gap-2 border-l-4 ${isWin ? "border-l-sport-green" : "border-l-sport-red"} bg-white/5" 
-                     onclick="window.showMatchBreakdown('${log.matchId}', ${log.diff}, ${log.newTotal})" 
+                     onclick="window.showMatchBreakdownV3('${doc.id}')" 
                      style="cursor:pointer">
                     <div class="flex-row between items-start">
                         <div class="flex-col overflow-hidden mr-2">
@@ -753,174 +889,7 @@ window.openExpedient = async (uid) => {
   }
 };
 
-window.showMatchBreakdown = async (matchId, diff, total) => {
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay active";
-  overlay.style.zIndex = "11000";
-
-  overlay.innerHTML = `
-        <div class="modal-card glass-strong animate-up p-0 overflow-hidden" style="max-width:380px">
-            <div class="modal-header">
-                <span class="modal-title">DESGLOSE TÁCTICO</span>
-                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
-            </div>
-            <div id="breakdown-content" class="modal-body custom-scroll">
-                <div class="center py-10"><i class="fas fa-circle-notch fa-spin text-primary"></i></div>
-            </div>
-        </div>
-    `;
-  document.body.appendChild(overlay);
-
-  try {
-    if (!matchId || matchId === "undefined") {
-      document.getElementById("breakdown-content").innerHTML = `
-                <div class="text-center py-6">
-                    <div class="text-4xl font-black mb-2 ${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${diff >= 0 ? "+" : ""}${diff}</div>
-                    <span class="text-[10px] text-muted uppercase tracking-[3px]">Impacto en ELO</span>
-                    <div class="mt-8 p-4 bg-white/5 rounded-2xl border border-white/5 mx-4">
-                        <p class="text-[10px] text-muted italic">Este ajuste fue realizado por un administrador o es una corrección manual de sistema.</p>
-                    </div>
-                </div>
-            `;
-      return;
-    }
-
-    const m = (await getDocument("partidosReto", matchId)) || (await getDocument("partidosAmistosos", matchId));
-    if (!m) throw new Error("Partido no encontrado");
-
-    const date = m.fecha?.toDate ? m.fecha.toDate().toLocaleDateString("es-ES", { day: "numeric", month: "long" }) : "N/A";
-    const res = m.resultado?.sets || "0-0";
-    const won = diff > 0;
-    
-    // --- REAL BREAKDOWN from matchPointDetails ---
-    let detailData = null;
-    try {
-      const detailSnap = await getDocs(query(collection(db, "matchPointDetails"), where("matchId", "==", matchId), limit(1)));
-      if (!detailSnap.empty) detailData = detailSnap.docs[0].data();
-    } catch(e) {}
-    
-    // Calculate real factors from detail or estimate
-    const factorBase = detailData?.basePoints || (won ? 20 : -15);
-    const factorLevel = detailData?.levelAdjust || Math.round(diff * 0.35);
-    const factorStreak = detailData?.streakBonus || (Math.abs(diff) > 30 ? (won ? 5 : -5) : 0);
-    const factorKFactor = detailData?.kFactor || 25;
-    const factorCleanSheet = detailData?.cleanSheetBonus || 0;
-    const factorVanquisher = detailData?.vanquisherBonus || 0;
-    const netPoints = diff;
-
-    document.getElementById("breakdown-content").innerHTML = `
-            <div class="flex-col gap-5">
-                <!-- Result Card -->
-                <div class="p-5 rounded-3xl bg-gradient-to-br ${won ? 'from-sport-green/20 to-transparent border-sport-green/30' : 'from-sport-red/20 to-transparent border-sport-red/30'} border">
-                    <div class="flex-row between items-center mb-4">
-                        <span class="text-[10px] font-black ${won ? 'text-sport-green' : 'text-sport-red'} uppercase tracking-widest">${won ? 'Victoria Magistral' : 'Derrota Táctica'}</span>
-                        <span class="text-[10px] text-white/40 font-bold">${date}</span>
-                    </div>
-                    <div class="text-center">
-                        <span class="text-5xl font-black italic text-white tracking-widest">${res}</span>
-                    </div>
-                </div>
-
-                <!-- Factors Breakdown -->
-                <div class="flex-col gap-3">
-                    <h4 class="text-[10px] font-black text-muted uppercase tracking-[2px] px-1">Factores de Puntuación</h4>
-                    
-                    <div class="flex-row between items-center p-3 bg-white/5 rounded-2xl border border-white/5">
-                        <div class="flex-row items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex center text-blue-400"><i class="fas fa-trophy text-xs"></i></div>
-                            <div class="flex-col">
-                                <span class="text-[10px] font-bold text-white uppercase">Resultado</span>
-                                <span class="text-[8px] text-muted font-bold">Base por el encuentro</span>
-                            </div>
-                        </div>
-                        <span class="font-black ${factorBase > 0 ? 'text-sport-green' : 'text-sport-red'}">${factorBase > 0 ? '+' : ''}${factorBase}</span>
-                    </div>
-
-                    <div class="flex-row between items-center p-3 bg-white/5 rounded-2xl border border-white/5">
-                        <div class="flex-row items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg bg-orange-500/20 flex center text-orange-400"><i class="fas fa-fire text-xs"></i></div>
-                            <div class="flex-col">
-                                <span class="text-[10px] font-bold text-white uppercase">Racha / Bonus</span>
-                                <span class="text-[8px] text-muted font-bold">Multiplicador de consistencia</span>
-                            </div>
-                        </div>
-                        <span class="font-black ${factorStreak >= 0 ? 'text-sport-green' : 'text-sport-red'}">${factorStreak > 0 ? '+' : ''}${factorStreak}</span>
-                    </div>
-
-                    <div class="flex-row between items-center p-3 bg-white/5 rounded-2xl border border-white/5">
-                        <div class="flex-row items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg bg-purple-500/20 flex center text-purple-400"><i class="fas fa-balance-scale text-xs"></i></div>
-                            <div class="flex-col">
-                                <span class="text-[10px] font-bold text-white uppercase">Nivel Rival</span>
-                                <span class="text-[8px] text-muted font-bold">Ajuste por dificultad ELO</span>
-                            </div>
-                        </div>
-                        <span class="font-black ${factorLevel >= 0 ? 'text-sport-green' : 'text-sport-red'}">${factorLevel > 0 ? '+' : ''}${factorLevel}</span>
-                    </div>
-                </div>
-
-                <!-- Additional Factors -->
-                ${factorCleanSheet !== 0 ? `
-                    <div class="flex-row between items-center p-3 bg-white/5 rounded-2xl border border-white/5">
-                        <div class="flex-row items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg bg-cyan-500/20 flex center text-cyan-400"><i class="fas fa-broom text-xs"></i></div>
-                            <div class="flex-col">
-                                <span class="text-[10px] font-bold text-white uppercase">Clean Sheet</span>
-                                <span class="text-[8px] text-muted font-bold">Sin juegos perdidos</span>
-                            </div>
-                        </div>
-                        <span class="font-black text-sport-green">+${factorCleanSheet}</span>
-                    </div>
-                ` : ''}
-                ${factorVanquisher !== 0 ? `
-                    <div class="flex-row between items-center p-3 bg-white/5 rounded-2xl border border-white/5">
-                        <div class="flex-row items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg bg-yellow-500/20 flex center text-yellow-400"><i class="fas fa-dragon text-xs"></i></div>
-                            <div class="flex-col">
-                                <span class="text-[10px] font-bold text-white uppercase">Matagigantes</span>
-                                <span class="text-[8px] text-muted font-bold">Victoria contra superior</span>
-                            </div>
-                        </div>
-                        <span class="font-black text-sport-green">+${factorVanquisher}</span>
-                    </div>
-                ` : ''}
-                
-                <!-- K-Factor Info -->
-                <div class="flex-row between items-center p-3 bg-white/3 rounded-2xl border border-white/5 opacity-60">
-                    <div class="flex-row items-center gap-3">
-                        <div class="w-8 h-8 rounded-lg bg-white/5 flex center text-white/40"><i class="fas fa-sliders text-xs"></i></div>
-                        <div class="flex-col">
-                            <span class="text-[10px] font-bold text-white/60 uppercase">K-Factor</span>
-                            <span class="text-[8px] text-muted font-bold">Sensibilidad ELO V2</span>
-                        </div>
-                    </div>
-                    <span class="font-black text-white/40">${factorKFactor}</span>
-                </div>
-
-                <!-- Total Impact -->
-                <div class="mt-2 p-5 bg-primary/10 rounded-3xl border border-primary/20 flex-row between items-center">
-                    <div class="flex-col">
-                        <span class="text-[10px] font-black text-primary uppercase tracking-widest">Balance Final</span>
-                        <span class="text-[8px] text-primary/60 font-black">NUEVO ELO: ${total}</span>
-                    </div>
-                    <span class="text-4xl font-black italic text-white">${diff > 0 ? '+' : ''}${diff}</span>
-                </div>
-
-                <button class="btn-premium-v7 w-full py-4 uppercase text-[10px] font-black tracking-widest" onclick="this.closest('.modal-overlay').remove()">
-                    Cerrar Análisis
-                </button>
-            </div>
-        `;
-  } catch (e) {
-    console.error(e);
-    document.getElementById("breakdown-content").innerHTML = `
-            <div class="center py-10 flex-col gap-2">
-                <i class="fas fa-exclamation-triangle text-sport-red text-xl"></i>
-                <span class="text-xs text-muted">Error al vincular con la red</span>
-            </div>
-        `;
-  }
-};
+// Consolidated with showMatchBreakdownV3
 
 // Phase 3 — Auto Scroll to current user
 window.scrollToMe = () => {

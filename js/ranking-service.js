@@ -151,6 +151,28 @@ export function predictEloImpact({
         win: Math.max(6, gain),
         loss: Math.min(-3, loss),
         expectedWinrate: Math.round(expectedScore * 100),
+        math: {
+            K: K,
+            expected: parseFloat(expectedScore.toFixed(3)),
+            streak: streakMult,
+            performance: perfBonus,
+            underdog: gapMult,
+            dominance: dominanceMult,
+            clutch: clutchMult,
+            recovery: discrepancyBoost,
+            mental: mentalBonus,
+            inactivity: inactivityMult,
+            emotional: emotionalBonus,
+            consistency: Number(consistencyMult.toFixed(3)),
+            pressure: Number(pressureMult.toFixed(3)),
+            discipline: Number(disciplineMult.toFixed(3)),
+            chemistry: Number(chemistryMult.toFixed(3)),
+            rivalStrength: Number(rivalStrengthMult.toFixed(3)),
+            partnerSync: Number(partnerSyncMult.toFixed(3)),
+            fatigue: Number(fatigueMult.toFixed(3)),
+            aggression: Number(aggressionMult.toFixed(3)),
+            conditionBonus: conditionBonus
+        },
         breakdown: {
             base: K,
             streak: streakMult,
@@ -205,13 +227,22 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                 return { success: true, skipped: true, changes: [] };
             }
 
-            const sets = resultStr.trim().split(/\s+/);
+            const sets = resultStr.trim().split(/\s+/).filter(Boolean);
+            if (sets.length < 2) throw "El resultado debe tener al menos 2 sets (Ej: 6-4 6-3)";
+
             let t1Sets = 0, t2Sets = 0;
             sets.forEach(s => {
                 if (!s.includes('-')) return;
-                const [g1, g2] = s.split('-').map(Number);
-                if (g1 > g2) t1Sets++; else if (g2 > g1) t2Sets++;
+                const parts = s.split('-');
+                const g1 = parseInt(parts[0]);
+                const g2 = parseInt(parts[1]);
+                if (isNaN(g1) || isNaN(g2)) return;
+
+                if (g1 > g2) t1Sets++; 
+                else if (g2 > g1) t2Sets++;
             });
+            
+            if (t1Sets === 0 && t2Sets === 0) throw "Formato de resultado inválido (Ej: 6-4 6-3)";
             
             const t1Wins = t1Sets > t2Sets;
             const isComp = col === 'partidosReto' || match.tipo === 'reto';
@@ -247,24 +278,26 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
             for (let i = 0; i < 4; i++) {
                 const p = rawPlayers[i];
                 if (!p || p.isGuest) {
-                    changes.push({ id: p ? p.id : null, isGuest: true });
+                    changes.push({ uid: p ? p.id : null, isGuest: true });
                     continue;
                 }
 
                 const amIteam1 = i < 2;
                 const partnerIdx = amIteam1 ? (i === 0 ? 1 : 0) : (i === 2 ? 3 : 2);
                 const partner = rawPlayers[partnerIdx];
-                const opponentPlayers = (amIteam1 ? rawPlayers.slice(2, 4) : rawPlayers.slice(0, 2)).filter(
-                    (op) => op && !op.isGuest
-                );
-                
+                const opponentPlayers = (amIteam1 ? rawPlayers.slice(2, 4) : rawPlayers.slice(0, 2)).filter(op => op);
                 const didIWin = (amIteam1 && t1Wins) || (!amIteam1 && !t1Wins);
                 const oppAvg = amIteam1 ? t2Avg : t1Avg;
                 const diffSets = Math.abs(t1Sets - t2Sets);
                 const setsCount = sets.length;
                 const isCloseMatch = setsCount === 3 && diffSets === 1;
+
+                // Estimate opponent points even if they are guests
                 const oppPointsAvg = opponentPlayers.length
-                    ? opponentPlayers.reduce((sum, op) => sum + Number(op.puntosRanking || getBaseEloByLevel(op.nivel || 2.5)), 0) / opponentPlayers.length
+                    ? opponentPlayers.reduce((sum, op) => {
+                        const pts = op.isGuest ? getBaseEloByLevel(op.nivel) : Number(op.puntosRanking || getBaseEloByLevel(op.nivel));
+                        return sum + pts;
+                    }, 0) / opponentPlayers.length
                     : Number(p.puntosRanking || getBaseEloByLevel(p.nivel || 2.5));
                 
                 let myGames = 0, oppGames = 0;
@@ -327,7 +360,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                 });
 
                 let delta = didIWin ? elo.win : elo.loss;
-                if (!isComp) delta = Math.round(delta * 0.5); 
+                if (!isComp) delta = Math.round(delta * 0.7); 
 
                 const newPts = Math.max(0, currentPoints + delta);
                 const levelChange = calculateLevelChange(p.nivel || 2.5, oppAvg, didIWin);
@@ -364,14 +397,21 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                     delta: delta,
                     pointsBefore: currentPoints,
                     pointsAfter: newPts,
+                    levelBefore: levelBefore,
+                    levelAfter: parseFloat(newLevel.toFixed(2)),
+                    myLevel: p.nivel || 2.5,
+                    partnerLevel: partner ? (partner.nivel || 2.5) : (p.nivel || 2.5),
+                    rivalLevels: opponentPlayers.map(op => (op.nivel || 2.5)),
                     opponentAvg: oppAvg,
                     sets: resultStr,
                     breakdown: elo.breakdown,
+                    math: elo.math,
                     isComp: isComp,
                     closeMatch: isCloseMatch,
                     gameDiff: gameDiff,
                     prediction: elo.expectedWinrate,
                     pointImpact: pointImpact,
+                    mvpBonus: 0, // Will be filled if diary is processed simultaneously or updated later
                     timestamp: new Date().toISOString()
                 };
 
@@ -426,6 +466,8 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
 
             // Match Summary
             transaction.update(matchRef, {
+                estado: 'jugado', // Atomic status update
+                resultado: { sets: resultStr }, // Save sets officially
                 eloSummary: {
                     totalPoints: pointDetails.totalPoints,
                     pointsPerSet: pointDetails.pointsPerSet,

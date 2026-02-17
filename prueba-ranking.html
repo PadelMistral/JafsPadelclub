@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#020617">
+  <title>Prueba Ranking Provisional | Padeluminatis</title>
+  <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/core-bundle.css">
+  <link rel="stylesheet" href="./css/themes.css">
+  <style>
+    .placement-page {
+      padding-top: 74px;
+      padding-bottom: 98px;
+    }
+
+    .placement-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .placement-kpi {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .placement-kpi .lbl {
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.9px;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.62);
+    }
+
+    .placement-kpi .val {
+      font-size: 20px;
+      font-weight: 900;
+      color: #fff;
+      line-height: 1;
+    }
+
+    .placement-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 62vh;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .placement-row {
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .placement-row-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .placement-name {
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #fff;
+    }
+
+    .placement-mode {
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.86);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .placement-mode.provisional {
+      color: #fcd34d;
+      border-color: rgba(250, 204, 21, 0.42);
+      background: rgba(250, 204, 21, 0.14);
+    }
+
+    .placement-row-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .placement-cell {
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 7px 8px;
+      background: rgba(255, 255, 255, 0.03);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .placement-cell .k {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: rgba(255, 255, 255, 0.56);
+      font-weight: 800;
+    }
+
+    .placement-cell .v {
+      font-size: 12px;
+      font-weight: 900;
+      color: #fff;
+      line-height: 1.1;
+    }
+
+    .placement-footer {
+      font-size: 9px;
+      color: rgba(255, 255, 255, 0.62);
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    @media (max-width: 560px) {
+      .placement-summary-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="sport-bg"></div>
+
+  <main class="page-content placement-page">
+    <div class="container px-2">
+      <section class="card card-premium animate-fade-in mb-3">
+        <div class="flex-row between items-center gap-2">
+          <div class="flex-col">
+            <span class="text-[10px] font-black tracking-[3px] uppercase text-primary">Prueba Ranking Provisional</span>
+            <span id="placement-subtitle" class="text-[9px] font-bold uppercase text-muted">Cargando simulacion...</span>
+          </div>
+          <button id="placement-refresh-btn" class="btn-icon-glass">
+            <i class="fas fa-rotate"></i>
+          </button>
+        </div>
+        <p class="text-[10px] text-muted mt-2">
+          Esta pantalla es de prueba y no recalcula automaticamente produccion.
+        </p>
+      </section>
+
+      <section class="card card-premium animate-up mb-3" style="animation-delay: 0.08s;">
+        <div class="placement-summary-grid" id="placement-summary">
+          <div class="placement-kpi">
+            <span class="lbl">Usuarios</span>
+            <span class="val">0</span>
+          </div>
+          <div class="placement-kpi">
+            <span class="lbl">Provisionales</span>
+            <span class="val">0</span>
+          </div>
+          <div class="placement-kpi">
+            <span class="lbl">Nivel Medio IA</span>
+            <span class="val">0.00</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card card-premium animate-up" style="animation-delay: 0.12s;">
+        <div id="placement-list" class="placement-list">
+          <div class="loading-state">
+            <div class="spinner-neon"></div>
+            <span>Analizando usuarios...</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="./js/prueba-ranking.js?v=6.5"></script>
+</body>
+
+</html>
+

@@ -145,8 +145,12 @@
 
         <!-- Points History (Fourth) -->
         <section class="history-section animate-fade-in" style="animation-delay: 0.3s;">
-            <div class="section-header">
-                <h2 class="section-title">Historial de Puntos</h2>
+            <div class="section-header flex-row between items-center">
+                <h2 class="section-title">Actividad Reciente</h2>
+                <div class="history-tabs flex-row gap-2">
+                    <button id="tab-hist-mine" class="hist-tab active" onclick="switchHistoryTab('mine')">MÍO</button>
+                    <button id="tab-hist-global" class="hist-tab" onclick="switchHistoryTab('global')">GLOBAL</button>
+                </div>
             </div>
             <div id="points-history" class="history-list">
                 <!-- Loaded by JS -->

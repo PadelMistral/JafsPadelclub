@@ -153,27 +153,33 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateLevelProgress(nivel, puntos) {
-    const currentBracket = Math.floor(nivel * 2) / 2;
-    const nextBracket = currentBracket + 0.5;
-    
-    const fraction = nivel - currentBracket;
-    const progress = (fraction / 0.5) * 100;
+    const lvlNum = Number(nivel || 2.5);
+    const currentBracket = Math.floor(lvlNum * 2) / 2;
+    const progress = ((lvlNum - currentBracket) / 0.5) * 100;
+    const prevStep = Math.max(1, Number((lvlNum - 0.01).toFixed(2)));
+    const nextStep = Number((lvlNum + 0.01).toFixed(2));
+    const pointsToUp01 = Math.max(1, Math.ceil((nextStep - lvlNum) * 400));
+    const pointsToDown01 = Math.max(1, Math.ceil((lvlNum - prevStep) * 400));
 
     const bar = document.getElementById("level-bar");
     const currentLabel = document.getElementById("p-level-current");
     const detailEl = document.getElementById("level-progress-detail");
     const lowerLabel = document.getElementById("level-lower");
     const upperLabel = document.getElementById("level-upper");
+    const upperBottomLabel = document.getElementById("level-upper-bottom");
 
     if (bar) bar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+    if (currentLabel) currentLabel.textContent = `NIVEL ${lvlNum.toFixed(2)}`;
+    if (detailEl) {
+      detailEl.innerHTML = `
+        <span class="lvl-shift-chip up">+${pointsToUp01} PTS · NV ${nextStep.toFixed(2)}</span>
+        <span class="lvl-shift-chip down">-${pointsToDown01} PTS · NV ${prevStep.toFixed(2)}</span>
+      `;
+    }
 
-    const pointsToLevel = Math.round((nextBracket - nivel) * 400);
-    
-    if (currentLabel) currentLabel.textContent = `NIVEL ACTUAL: ${nivel.toFixed(2)}`;
-    if (detailEl) detailEl.innerHTML = `<span class="text-primary">+${pointsToLevel} PTS PARA NV ${nextBracket.toFixed(1)}</span>`;
-    
-    if (lowerLabel) lowerLabel.textContent = currentBracket.toFixed(1);
-    if (upperLabel) upperLabel.textContent = nextBracket.toFixed(1);
+    if (lowerLabel) lowerLabel.textContent = prevStep.toFixed(2);
+    if (upperLabel) upperLabel.textContent = nextStep.toFixed(2);
+    if (upperBottomLabel) upperBottomLabel.textContent = nextStep.toFixed(2);
   }
 
   async function loadEloHistory(uid) {

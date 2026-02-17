@@ -1,8 +1,10 @@
-const CACHE_NAME = "padeluminatis-v6.8";
+const CACHE_NAME = "padeluminatis-v7.0";
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./home.html",
+  "./admin.html",
+  "./prueba-ranking.html",
   "./css/core-bundle.css",
   "./css/themes.css",
   "./css/layout.css",
@@ -12,6 +14,9 @@ const CORE_ASSETS = [
   "./css/components-premium.css",
   "./css/auth.css",
   "./js/home-logic.js",
+  "./js/admin.js",
+  "./js/prueba-ranking.js",
+  "./js/provisional-ranking-logic.js",
   "./js/ui-core.js",
   "./js/firebase-service.js",
   "./js/modules/theme-manager.js",

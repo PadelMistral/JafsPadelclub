@@ -1,5 +1,5 @@
 ﻿/* js/modules/ui-loader.js - Dynamic Layout Injection v5.0 */
-import { getDocument, auth, db, subscribeCol } from '../firebase-service.js';
+import { getDocument, auth, db, subscribeCol, getDocsSafe } from '../firebase-service.js';
 import { initThemeSystem } from './theme-manager.js';
 
 // Initialize theme system immediately  
@@ -72,6 +72,10 @@ export async function injectHeader(userData = null) {
                 <i class="fas fa-bell"></i>
                 <span class="notification-badge" id="notif-badge" style="display:none">0</span>
             </div>
+            <button type="button" class="header-online" id="header-online-btn" title="Usuarios conectados">
+                <span class="header-online-dot"></span>
+                <span id="header-online-count">--</span>
+            </button>
             <div class="header-avatar avatar-premium" onclick="window.location.href='perfil.html'" id="header-avatar-container" title="Mi Perfil">
                 <img src="${photo}" alt="Perfil" id="header-avatar-img">
             </div>
@@ -97,6 +101,36 @@ export async function injectHeader(userData = null) {
             if (typeof unsub === 'function') window.__headerNotifUnsub = unsub;
         }).catch(() => {});
     }
+
+    const onlineBtn = document.getElementById('header-online-btn');
+    const onlineCountEl = document.getElementById('header-online-count');
+    if (onlineBtn) {
+        onlineBtn.onclick = () => {
+            if (typeof window.showOnlineNexus === 'function') window.showOnlineNexus();
+            else emitToast('ONLINE', 'Nexus no disponible ahora mismo.', 'warning');
+        };
+    }
+
+    const syncHeaderOnline = async () => {
+        try {
+            const { collection, query, where, limit } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
+            const threshold = new Date(Date.now() - 5 * 60 * 1000);
+            const q = query(
+                collection(db, 'usuarios'),
+                where('ultimoAcceso', '>', threshold),
+                limit(80),
+            );
+            const snap = await getDocsSafe(q, 'header-online');
+            const count = snap?.docs?.length || 0;
+            if (onlineCountEl) onlineCountEl.textContent = count > 0 ? String(count) : '--';
+        } catch (_) {
+            if (onlineCountEl) onlineCountEl.textContent = '--';
+        }
+    };
+
+    syncHeaderOnline();
+    if (window.__headerOnlineInterval) clearInterval(window.__headerOnlineInterval);
+    window.__headerOnlineInterval = setInterval(syncHeaderOnline, 5 * 60 * 1000);
 }
 
 /**

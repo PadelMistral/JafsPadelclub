@@ -84,15 +84,21 @@ async function clearAllNotifications() {
     }
     if (!confirm('¿Estás seguro de que quieres vaciar toda tu bandeja de entrada? Esta acción es irreversible.')) return;
     
-    const batch = writeBatch(db);
-    allNotifs.forEach(n => {
-        const ref = doc(db, 'notificaciones', n.id);
-        batch.delete(ref);
-    });
-    
     try {
-        await batch.commit();
-        showToast('Matrix Limpia', 'Se han eliminado todas las trazas de comunicación.', 'info');
+        showToast('Procesando...', 'Eliminando historial de notificaciones.', 'info');
+        
+        // Firestore batches are limited to 500 operations. Process in chunks.
+        const CHUNK_SIZE = 450;
+        for (let i = 0; i < allNotifs.length; i += CHUNK_SIZE) {
+            const chunk = allNotifs.slice(i, i + CHUNK_SIZE);
+            const batch = writeBatch(db);
+            chunk.forEach(n => {
+                batch.delete(doc(db, 'notificaciones', n.id));
+            });
+            await batch.commit();
+        }
+        
+        showToast('Matrix Limpia', 'Se han eliminado todas las trazas de comunicación.', 'success');
     } catch (e) {
         console.error("Error clearing notifications:", e);
         showToast('Error', 'No se pudieron borrar todas las notificaciones.', 'error');

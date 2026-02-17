@@ -261,8 +261,16 @@
                     <button class="btn-secondary w-full justify-start" onclick="recalculateAllRankings()">
                         <i class="fas fa-calculator w-6"></i> Recalcular Rankings
                     </button>
+                    <button class="btn-secondary w-full justify-start"
+                        onclick="window.location.href='prueba-ranking.html'">
+                        <i class="fas fa-flask-vial w-6"></i> Prueba Ranking Provisional
+                    </button>
                     <button class="btn-secondary w-full justify-start" onclick="resetAllStreaks()">
                         <i class="fas fa-refresh w-6"></i> Resetear Rachas
+                    </button>
+                    <button class="btn-secondary w-full justify-start text-sport-green border-sport-green/20"
+                        onclick="syncAllMatchesToRanking()">
+                        <i class="fas fa-sync fa-spin-hover w-6"></i> Sincronizar Historial Maestro
                     </button>
                     <button class="btn-danger-glass w-full justify-start" onclick="clearOldMatches()">
                         <i class="fas fa-trash-alt w-6"></i> Limpiar Partidos Antiguos
@@ -333,7 +341,7 @@
         </div>
     </div>
 
-    <script type="module" src="./js/admin.js?v=6.5"></script>
+    <script type="module" src="./js/admin.js?v=6.6"></script>
 
     <style>
         .admin-page {

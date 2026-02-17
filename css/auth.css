@@ -19,7 +19,7 @@
   padding: 24px;
   position: relative;
   z-index: 10;
-  overflow: hidden;
+  overflow: auto;
 }
 
 /* ===== AUTH CARD & CONTAINER ===== */
@@ -88,6 +88,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+  border-radius: 30px;
   filter: drop-shadow(0 0 20px var(--primary-glow));
   animation: logoFloat 4s ease-in-out infinite;
 }

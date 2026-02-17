@@ -61,7 +61,7 @@ export async function sendPushNotification(
   // Try via Service Worker (Better for background/mobile)
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await navigator.serviceWorker.getRegistration();
       if (registration) {
         await registration.showNotification(title, options);
         return;
