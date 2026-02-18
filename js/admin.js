@@ -9,6 +9,7 @@ import { computePlacementProjection, getPlacementMatchesCount } from './provisio
 let allUsers = [];
 let allMatches = [];
 let catalogPalas = [];
+let aiSuggestions = [];
 
 document.addEventListener('DOMContentLoaded', () => {
     // Check Auth
@@ -141,6 +142,7 @@ async function loadData() {
 
     // Render Premium Dashboard
     renderDashboard();
+    await loadSuggestions();
 }
 
 function renderDashboard() {
@@ -383,6 +385,61 @@ function renderMatches(list) {
         `;
     }).join('');
 }
+
+async function loadSuggestions() {
+    try {
+        const snap = await window.getDocsSafe(collection(db, "sugerenciasIA"));
+        aiSuggestions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        aiSuggestions.sort((a, b) => {
+            const ta = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+            const tb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+            return tb - ta;
+        });
+        renderSuggestions(aiSuggestions);
+    } catch (e) {
+        console.error("Suggestions load error:", e);
+        renderSuggestions([]);
+    }
+}
+
+function renderSuggestions(list) {
+    const container = document.getElementById('suggestions-list');
+    if (!container) return;
+
+    if (!list || list.length === 0) {
+        container.innerHTML = '<div class="empty-state"><span class="empty-state-text">Sin sugerencias por ahora</span></div>';
+        return;
+    }
+
+    container.innerHTML = list.map((s) => {
+        const date = s.createdAt?.toDate ? s.createdAt.toDate() : new Date();
+        const when = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) + ' ' + date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        return `
+            <div class="sport-card p-4 flex-col gap-3">
+                <div class="flex-row between items-center">
+                    <span class="text-xs font-black text-primary uppercase">${(s.title || 'Sin título')}</span>
+                    <span class="text-[9px] text-muted">${when}</span>
+                </div>
+                <p class="text-xs text-white/80 leading-relaxed">${(s.body || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+                <div class="flex-row between items-center">
+                    <span class="text-[9px] text-muted">Estado: ${(s.status || 'new').toUpperCase()}</span>
+                    <button class="btn-primary sm" onclick="markSuggestionDone('${s.id}')">Marcar revisada</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+window.markSuggestionDone = async (id) => {
+    try {
+        await updateDocument('sugerenciasIA', id, { status: 'reviewed' });
+        showToast('Actualizado', 'Sugerencia marcada como revisada.', 'success');
+        await loadSuggestions();
+    } catch (e) {
+        console.error(e);
+        showToast('Error', 'No se pudo actualizar la sugerencia.', 'error');
+    }
+};
 
 function renderPalasCatalog() {
     const container = document.getElementById('palas-catalog');
@@ -910,3 +967,4 @@ window.rejectUser = async (uid) => {
         showToast('Error', 'No se pudo rechazar', 'error');
     }
 };
+

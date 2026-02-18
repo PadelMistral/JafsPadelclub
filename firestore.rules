@@ -1,4 +1,4 @@
-rules_version = '2';
+﻿rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
@@ -11,7 +11,16 @@ service cloud.firestore {
       return request.auth.uid; 
     }
 
-    // EXCEPCIÓN MAESTRA PARA ADMIN (Email directo o Rol en DB)
+    function isMatchOwner(matchData) {
+      return matchData.creador == currentUid() || matchData.organizerId == currentUid();
+    }
+
+    function isParticipantAfterUpdate() {
+      return request.resource.data.jugadores is list &&
+             request.resource.data.jugadores.hasAny([currentUid()]);
+    }
+
+    // EXCEPCIÃ“N MAESTRA PARA ADMIN (Email directo o Rol en DB)
     function isAdmin() {
       return signedIn() && (
         request.auth.token.email == 'Juanan221091@gmail.com' || 
@@ -26,7 +35,7 @@ service cloud.firestore {
               get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.aprobado == true));
     }
 
-    // --- REGLAS POR COLECCIÓN ---
+    // --- REGLAS POR COLECCIÃ“N ---
 
     match /usuarios/{uid} {
       allow get: if signedIn();
@@ -34,12 +43,25 @@ service cloud.firestore {
       allow create: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow update: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow delete: if isAdmin();
+
+      match /devices/{deviceId} {
+        allow read, write: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      }
     }
 
     match /partidosAmistosos/{matchId} {
       allow read, list: if isApproved();
       allow create: if isApproved();
-      allow update: if isAdmin() || (isApproved() && (resource.data.creador == currentUid() || resource.data.organizerId == currentUid()));
+      allow update: if isAdmin() || (isApproved() && (
+        isMatchOwner(resource.data) ||
+        (isParticipantAfterUpdate() &&
+         request.resource.data.resultado == resource.data.resultado &&
+         request.resource.data.estado == resource.data.estado &&
+         request.resource.data.creador == resource.data.creador &&
+         request.resource.data.organizerId == resource.data.organizerId &&
+         request.resource.data.fecha == resource.data.fecha &&
+         request.resource.data.visibility == resource.data.visibility)
+      ));
       allow delete: if isAdmin() || (isApproved() && resource.data.creador == currentUid());
       
       match /chat/{msgId} {
@@ -50,7 +72,16 @@ service cloud.firestore {
     match /partidosReto/{matchId} {
       allow read, list: if isApproved();
       allow create: if isApproved();
-      allow update: if isAdmin() || (isApproved() && (resource.data.creador == currentUid() || resource.data.organizerId == currentUid()));
+      allow update: if isAdmin() || (isApproved() && (
+        isMatchOwner(resource.data) ||
+        (isParticipantAfterUpdate() &&
+         request.resource.data.resultado == resource.data.resultado &&
+         request.resource.data.estado == resource.data.estado &&
+         request.resource.data.creador == resource.data.creador &&
+         request.resource.data.organizerId == resource.data.organizerId &&
+         request.resource.data.fecha == resource.data.fecha &&
+         request.resource.data.visibility == resource.data.visibility)
+      ));
       allow delete: if isAdmin() || (isApproved() && resource.data.creador == currentUid());
 
       match /chat/{msgId} {
@@ -76,22 +107,34 @@ service cloud.firestore {
       allow update: if signedIn() && (resource.data.destinatario == currentUid() || resource.data.uid == currentUid());
     }
 
+    match /sugerenciasIA/{id} {
+      allow create: if isApproved();
+      allow get: if isAdmin() || (signedIn() && resource.data.uid == currentUid());
+      allow list: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
     match /palasCatalogo/{id} {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
 
     match /diarioTecnico/{id} {
-      allow read, write: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
+      allow read: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
+      allow create: if signedIn() && (isAdmin() || request.resource.data.uid == currentUid());
+      allow update, delete: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
     }
 
     match /diario/{id} {
-      allow read, write: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
+      allow read: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
+      allow create: if signedIn() && (isAdmin() || request.resource.data.uid == currentUid());
+      allow update, delete: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
     }
 
     match /palas/{id} {
       allow read: if signedIn();
-      allow write: if signedIn() && (isAdmin() || resource.data.createdBy == currentUid());
+      allow create: if signedIn() && (isAdmin() || request.resource.data.createdBy == currentUid());
+      allow update, delete: if signedIn() && (isAdmin() || resource.data.createdBy == currentUid());
     }
 
     // REGLA DE SEGURIDAD GLOBAL (BLOQUEO POR DEFECTO PERO PERMISO ADMIN)
@@ -100,3 +143,5 @@ service cloud.firestore {
     }
   }
 }
+
+

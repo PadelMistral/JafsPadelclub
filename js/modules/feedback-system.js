@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file feedback-system.js
  * @version 1.0 (Phase 1 Global System)
  * @description Centralized Feedback Manager for Padeluminatis V7.
@@ -14,28 +14,28 @@ export const FEEDBACK = {
     // AUTHENTICATION
     AUTH: {
         LOGIN_SUCCESS: { title: "CONECTADO", msg: "Acceso autorizado a la Matrix.", type: "success" },
-        LOGIN_ERROR: { title: "ERROR DE ACCESO", msg: "Credenciales inválidas.", type: "error" },
+        LOGIN_ERROR: { title: "ERROR DE ACCESO", msg: "Credenciales invÃ¡lidas.", type: "error" },
         REGISTER_SUCCESS: { title: "REGISTRO COMPLETADO", msg: "Tu perfil ha sido creado.", type: "success" },
-        PENDING_APPROVAL: { title: "CUENTA PENDIENTE", msg: "Tu acceso requiere aprobación de un administrador.", type: "warning" },
-        LOGOUT: { title: "DESCONECTADO", msg: "Sesión finalizada.", type: "info" },
-        NETWORK_ERROR: { title: "ERROR DE RED", msg: "Verifica tu conexión a internet.", type: "error" }
+        PENDING_APPROVAL: { title: "CUENTA PENDIENTE", msg: "Tu acceso requiere aprobaciÃ³n de un administrador.", type: "warning" },
+        LOGOUT: { title: "DESCONECTADO", msg: "SesiÃ³n finalizada.", type: "info" },
+        NETWORK_ERROR: { title: "ERROR DE RED", msg: "Verifica tu conexiÃ³n a internet.", type: "error" }
     },
 
     // MATCHES
     MATCH: {
-        CREATED: { title: "PARTIDO CREADO", msg: "Despliegue táctico confirmado.", type: "success" },
+        CREATED: { title: "PARTIDO CREADO", msg: "Despliegue tÃ¡ctico confirmado.", type: "success" },
         JOINED: { title: "UNIDO AL SQUAD", msg: "Te has unido al partido correctamente.", type: "success" },
         LEFT: { title: "ABANDONO", msg: "Has salido del partido.", type: "info" },
         CANCELLED: { title: "PARTIDO CANCELADO", msg: "El evento ha sido eliminado.", type: "warning" },
         RESULT_SAVED: { title: "RESULTADO GUARDADO", msg: "Ranking actualizado.", type: "success" },
         FULL: { title: "SQUAD COMPLETO", msg: "No quedan plazas disponibles.", type: "warning" },
-        PERMISSION_DENIED: { title: "ACCESO DENEGADO", msg: "No tienes permisos para esta acción.", type: "error" }
+        PERMISSION_DENIED: { title: "ACCESO DENEGADO", msg: "No tienes permisos para esta acciÃ³n.", type: "error" }
     },
 
     // RANKING & STATS
     RANKING: {
         LEVEL_UP: (lvl) => ({ title: "LEVEL UP!", msg: `Has ascendido al nivel ${lvl}.`, type: "success" }),
-        STREAK_NEW: (count) => ({ title: "RACHA IMPARABLE", msg: `¡${count} victorias consecutivas!`, type: "success" }),
+        STREAK_NEW: (count) => ({ title: "RACHA IMPARABLE", msg: `Â¡${count} victorias consecutivas!`, type: "success" }),
         ELO_CHANGE: (diff) => ({ 
             title: diff >= 0 ? "PUNTOS GANADOS" : "PUNTOS PERDIDOS", 
             msg: `Tu ELO ha cambiado en ${diff > 0 ? '+' : ''}${diff}.`, 
@@ -46,8 +46,8 @@ export const FEEDBACK = {
     // SYSTEM
     SYSTEM: {
         SYNCING: { title: "SINCRONIZANDO...", msg: "Actualizando datos con el servidor.", type: "info" },
-        UPDATE_AVAILABLE: { title: "ACTUALIZACIÓN", msg: "Nueva versión disponible. Recargando...", type: "info" },
-        ACTION_CONFIRM: { title: "CONFIRMADO", msg: "Acción realizada con éxito.", type: "success" },
+        UPDATE_AVAILABLE: { title: "ACTUALIZACIÃ“N", msg: "Nueva versiÃ³n disponible. Recargando...", type: "info" },
+        ACTION_CONFIRM: { title: "CONFIRMADO", msg: "AcciÃ³n realizada con Ã©xito.", type: "success" },
         COPY_SUCCESS: { title: "COPIADO", msg: "Enlace copiado al portapapeles.", type: "success" }
     }
 };
@@ -60,7 +60,7 @@ export const FEEDBACK = {
 export function triggerFeedback(eventDef, customMsg = null) {
     if (!eventDef) return;
     
-    const title = eventDef.title || "NOTIFICACIÓN";
+    const title = eventDef.title || "NOTIFICACIÃ“N";
     const msg = customMsg || eventDef.msg || "";
     const type = eventDef.type || "info";
 
@@ -86,3 +86,4 @@ export function handleOperationError(error) {
          triggerFeedback(feedback);
     }
 }
+

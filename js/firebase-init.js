@@ -1,4 +1,4 @@
-// firebase-init.js - Single initialization point
+﻿// firebase-init.js - Single initialization point
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
@@ -19,4 +19,15 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+// FCM Web Push (VAPID public key)
+// Public key is safe to ship in client code.
+const FCM_VAPID_PUBLIC_KEY = "BNtt-g94tWGb6LPZjBWS0fO9MixrnclGyMHcDClTx0isC3uA-Bg-mCoO-yCeNzRoNFwdjXJGqLHdeOpD6w7eGRo";
+if (typeof window !== "undefined") {
+  window.__FCM_VAPID_PUBLIC_KEY = FCM_VAPID_PUBLIC_KEY;
+  try {
+    localStorage.setItem("fcm_vapid_public_key", FCM_VAPID_PUBLIC_KEY);
+  } catch (_) {}
+}
+
 export { app, auth, db, storage };
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file stats-evolution.js
  * @version 1.5 (Phase 3 & 4 - RPG Engine V2)
  * @description Advanced Gamification Engine. Calculates dynamic technical attributes and manages ELO V2 based on performance, consistency, and inactivity.
@@ -85,7 +85,7 @@ export async function evolveUserAttributes(uid, technicalEntry) {
         if (improvements.length > 0) {
             // Immediate Toast
             triggerFeedback({ 
-                title: "EVOLUCIÓN TÉCNICA", 
+                title: "EVOLUCIÃ“N TÃ‰CNICA", 
                 msg: `Mejoras detectadas: ${improvements.join(', ')}`, 
                 type: "success" 
             });
@@ -147,11 +147,11 @@ function detectImprovements(oldA, newA) {
     const changes = [];
     const significant = 0.5; // Threshold to notify
 
-    if (newA.volea - oldA.volea >= significant) changes.push("Volea 🔺");
-    if (newA.remate - oldA.remate >= significant) changes.push("Potencia 🔺");
-    if (newA.fondo - oldA.fondo >= significant) changes.push("Defensa 🔺");
-    if (newA.mentalidad - oldA.mentalidad >= significant) changes.push("Mentalidad 🧠");
-    if (newA.fisico - oldA.fisico >= significant) changes.push("Físico 💪");
+    if (newA.volea - oldA.volea >= significant) changes.push("Volea ðŸ”º");
+    if (newA.remate - oldA.remate >= significant) changes.push("Potencia ðŸ”º");
+    if (newA.fondo - oldA.fondo >= significant) changes.push("Defensa ðŸ”º");
+    if (newA.mentalidad - oldA.mentalidad >= significant) changes.push("Mentalidad ðŸ§ ");
+    if (newA.fisico - oldA.fisico >= significant) changes.push("FÃ­sico ðŸ’ª");
 
     return changes;
 }
@@ -177,3 +177,4 @@ export function getDynamicKFactor(userDoc) {
     
     return CONFIG.ELO.K_NORMAL;
 }
+

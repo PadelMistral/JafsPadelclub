@@ -1,7 +1,7 @@
 ﻿// registro.js - Definitive Identity Generation
 import { auth, db } from './firebase-service.js';
 import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js";
-import { doc, setDoc, getDocs, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
+import { doc, setDoc, getDocs, collection, query, where, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI, showToast } from './ui-core.js';
 
 initAppUI('register');
@@ -71,6 +71,33 @@ document.addEventListener('DOMContentLoaded', () => {
                     createdAt: serverTimestamp()
                 });
 
+
+                // 5. Notify admins about new pending user
+                try {
+                    const adminsSnap = await window.getDocsSafe(query(collection(db, "usuarios"), where("rol", "==", "Admin")));
+                    const admins = adminsSnap.docs.map(d => d.id).filter(id => id && id !== uid);
+                    const nowIso = new Date().toISOString().slice(0, 16);
+
+                    await Promise.all(admins.map((adminUid) => addDoc(collection(db, "notificaciones"), {
+                        destinatario: adminUid,
+                        receptorId: adminUid,
+                        remitente: uid,
+                        tipo: "new_user",
+                        type: "new_user",
+                        titulo: "Nuevo usuario pendiente",
+                        mensaje: `${name} (@${user}) se registró y está pendiente de aprobación.`,
+                        enlace: "admin.html",
+                        data: { uid, email, createdAt: nowIso },
+                        leido: false,
+                        seen: false,
+                        read: false,
+                        timestamp: serverTimestamp(),
+                        createdAt: serverTimestamp(),
+                        dedupKey: `new_user_${uid}`,
+                    })));
+                } catch (notifErr) {
+                    console.warn("Admin notification skipped:", notifErr);
+                }
                 showToast("Solicitud Enviada", "Tu identidad está en revisión por el Consejo.", "info");
                 setTimeout(() => window.location.href = 'index.html', 2500);
 
@@ -94,5 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+
 
 

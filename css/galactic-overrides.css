@@ -1,4 +1,4 @@
-/* css/galactic-overrides.css */
+﻿/* css/galactic-overrides.css */
 /* Extreme responsiveness and UI polish for Padeluminatis */
 
 :root {
@@ -87,3 +87,4 @@
 .main-nav-v4 {
   padding-bottom: var(--safe-bottom) !important;
 }
+

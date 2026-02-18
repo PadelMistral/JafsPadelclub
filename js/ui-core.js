@@ -256,7 +256,7 @@ async function openOnlineNexusModal() {
     };
 
     await render();
-    const refreshId = setInterval(render, 5 * 60 * 1000);
+    const refreshId = setInterval(render, 60 * 1000);
 
     const close = () => {
       clearInterval(refreshId);
@@ -371,6 +371,10 @@ export function initAppUI(activePageName) {
 
         if (user) {
             initOnlineNexusBindings(user.uid);
+            try {
+                const { initPushNotifications } = await import('./modules/push-notifications.js');
+                initPushNotifications(user.uid).catch(() => {});
+            } catch (_) {}
             document.body.style.opacity = '1';
             document.body.style.pointerEvents = 'auto';
             // Logged in user on index/login -> Redirect to Home
@@ -619,4 +623,6 @@ export function countUp(el, target, duration = 2000) {
     }
     requestAnimationFrame(animation);
 }
+
+
 

@@ -405,3 +405,4 @@ function renderPlayerCard(p, log, teamIdx) {
 
 
 
+

@@ -8,6 +8,13 @@ import {
   orderBy,
   limit,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
+import {
+  isFinishedMatch,
+  isCancelledMatch,
+  resolveWinnerTeam,
+  isExpiredOpenMatch,
+  getResultSetsString,
+} from "../utils/match-utils.js";
 
 // --- ATOMIC STATE & CACHE ---
 let chatOpen = false;
@@ -137,7 +144,10 @@ async function _syncData() {
     DATA_CACHE.openMatches = [
       ...openAmis.docs.map((d) => ({ ...d.data(), _col: "amistoso" })),
       ...openReto.docs.map((d) => ({ ...d.data(), _col: "reto" })),
-    ].filter((m) => (m.jugadores || []).filter((id) => id).length < 4);
+    ].filter((m) => {
+      const filled = (m.jugadores || []).filter((id) => id).length;
+      return filled < 4 && !isFinishedMatch(m) && !isCancelledMatch(m) && !isExpiredOpenMatch(m);
+    });
 
     DATA_CACHE.lastUpdate = now;
     userData = uData;
@@ -161,7 +171,7 @@ const Analyzer = {
   },
 
   getMatchStats: () => {
-    const played = DATA_CACHE.matches.filter((m) => m.resultado);
+    const played = DATA_CACHE.matches.filter((m) => isFinishedMatch(m) && !isCancelledMatch(m));
     if (played.length === 0) return null;
 
     let best = played[0],
@@ -169,7 +179,7 @@ const Analyzer = {
     let maxDiff = -1;
 
     played.forEach((m) => {
-      const sets = m.resultado.sets.split(" ");
+      const sets = getResultSetsString(m).split(" ");
       let myS = 0,
         rivS = 0;
       const myIdx = m.jugadores.indexOf(auth.currentUser.uid);
@@ -200,7 +210,7 @@ const Analyzer = {
   findNemesis: (uid) => {
     const record = {};
     DATA_CACHE.matches.forEach((m) => {
-      if (!m.resultado?.sets || !m.jugadores) return;
+      if (!m.jugadores || !isFinishedMatch(m) || isCancelledMatch(m)) return;
       const myIdx = m.jugadores.indexOf(uid);
       if (myIdx === -1) return;
       const isTeam1 = myIdx < 2;
@@ -208,24 +218,12 @@ const Analyzer = {
         ? [m.jugadores[2], m.jugadores[3]]
         : [m.jugadores[0], m.jugadores[1]];
 
-      const sets = m.resultado.sets.split(" ");
-      let won = false;
-      let myS = 0,
-        rivS = 0;
-      sets.forEach((s) => {
-        const p = s.split("-").map(Number);
-        if (p.length === 2) {
-          if (isTeam1) {
-            p[0] > p[1] ? myS++ : rivS++;
-          } else {
-            p[1] > p[0] ? myS++ : rivS++;
-          }
-        }
-      });
-      won = myS > rivS;
+      const winnerTeam = resolveWinnerTeam(m);
+      if (winnerTeam !== 1 && winnerTeam !== 2) return;
+      const won = isTeam1 ? winnerTeam === 1 : winnerTeam === 2;
 
       rivs.forEach((rid) => {
-        if (!rid || rid === uid) return;
+        if (!rid || rid === uid || String(rid).startsWith("GUEST_")) return;
         if (!record[rid]) record[rid] = { wins: 0, losses: 0 };
         won ? record[rid].wins++ : record[rid].losses++;
       });
@@ -256,27 +254,17 @@ function _getMatchDate(m) {
 }
 
 function _didUserWinMatch(m, uid) {
-  if (!m?.resultado?.sets || !m?.jugadores) return false;
+  if (!m?.jugadores || !isFinishedMatch(m) || isCancelledMatch(m)) return false;
   const myIdx = m.jugadores.indexOf(uid);
   if (myIdx === -1) return false;
   const isTeam1 = myIdx < 2;
-  const sets = m.resultado.sets.split(" ");
-  let myS = 0,
-    rivS = 0;
-  sets.forEach((s) => {
-    const p = s.split("-").map(Number);
-    if (p.length < 2) return;
-    if (isTeam1) {
-      p[0] > p[1] ? myS++ : rivS++;
-    } else {
-      p[1] > p[0] ? myS++ : rivS++;
-    }
-  });
-  return myS > rivS;
+  const winnerTeam = resolveWinnerTeam(m);
+  if (winnerTeam !== 1 && winnerTeam !== 2) return false;
+  return isTeam1 ? winnerTeam === 1 : winnerTeam === 2;
 }
 
 function _calcWinrate(uid) {
-  const played = DATA_CACHE.matches.filter((m) => m.resultado);
+  const played = DATA_CACHE.matches.filter((m) => isFinishedMatch(m) && !isCancelledMatch(m));
   if (played.length === 0) return { wins: 0, total: 0, winrate: 0 };
   let wins = 0;
   played.forEach((m) => {
@@ -330,6 +318,8 @@ function _detectIntent(query) {
     return "CMD_USER_SEARCH";
   if (q.includes("proximo partido") || q.includes("cuando juego"))
     return "CMD_NEXT_MATCH";
+  if (q.includes("progreso de nivel") || q.includes("subir de nivel") || q.includes("cuanto falta para subir"))
+    return "CMD_LEVEL_PROGRESS";
   if (q.includes("llueve") || q.includes("lluvia")) return "CMD_RAIN_TODAY";
   if (
     q.includes("peor rival") ||
@@ -824,20 +814,31 @@ export async function generateResponse(query) {
         "Cariñito, estás que te sales. Sigue así y te veo en el World Padel Tour (o no...).",
       );
 
+    case "CMD_LEVEL_PROGRESS":
+      const lvl = Number(DATA_CACHE.user?.nivel || 2.5);
+      const bracketMin = Math.floor(lvl * 2) / 2;
+      const bracketMax = Math.min(7, bracketMin + 0.5);
+      const pct = Math.max(0, Math.min(100, Math.round(((lvl - bracketMin) / Math.max(0.01, bracketMax - bracketMin)) * 100)));
+      return `<div class="ai-result-card">
+                <span class="res-title">Progreso de Nivel</span>
+                <div class="res-val">Nivel ${lvl.toFixed(2)} · ${pct}%</div>
+                <div class="res-sub">Tramo actual: ${bracketMin.toFixed(1)} -> ${bracketMax.toFixed(1)}. Sigue sumando resultados y diario para estabilizar la subida.</div>
+            </div>`;
+
     case "CMD_LAST_MATCH":
-      const matches = DATA_CACHE.matches.filter((m) => m.resultado);
+      const matches = DATA_CACHE.matches.filter((m) => isFinishedMatch(m) && !isCancelledMatch(m));
       if (matches.length === 0)
         return noData("No he encontrado partidos terminados en tu historial.");
       const last = matches[0];
       return `<div class="ai-result-card">
                 <span class="res-title">Último Partido</span>
-                <div class="res-val">${last.resultado.sets}</div>
+                <div class="res-val">${getResultSetsString(last) || "Resultado registrado"}</div>
                 <div class="res-sub">${last.fecha?.toDate?.().toLocaleDateString() || last.fecha} (${last._col})</div>
             </div>`;
 
     case "CMD_NEXT_MATCH":
       const upcoming = DATA_CACHE.matches
-        .filter((m) => !m.resultado)
+        .filter((m) => !isFinishedMatch(m) && !isCancelledMatch(m))
         .map((m) => ({ ...m, _date: _getMatchDate(m) }))
         .filter((m) => m._date >= new Date())
         .sort((a, b) => a._date - b._date)[0];
@@ -861,7 +862,7 @@ export async function generateResponse(query) {
         );
       return `<div class="ai-result-card">
                 <span class="res-title">Tu Mejor Victoria</span>
-                <div class="res-val">${statsB.best.resultado.sets}</div>
+                <div class="res-val">${getResultSetsString(statsB.best)}</div>
                 <div class="res-sub">Dominaste con una diferencia de ${statsB.best.diff} sets.</div>
             </div>`;
 
@@ -871,7 +872,7 @@ export async function generateResponse(query) {
         return noData("No tengo datos de derrotas significativas.");
       return `<div class="ai-result-card">
                 <span class="res-title">Partido con más diferencia</span>
-                <div class="res-val">${statsW.worst.resultado.sets}</div>
+                <div class="res-val">${getResultSetsString(statsW.worst)}</div>
                 <div class="res-sub">Te costó seguir el ritmo, diferencia de ${statsW.worst.diff} sets.</div>
             </div>`;
 
@@ -898,7 +899,7 @@ export async function generateResponse(query) {
         if (uIdx === -1) return;
         const pIdx = uIdx < 2 ? (uIdx === 0 ? 1 : 0) : uIdx === 2 ? 3 : 2;
         const pid = m.jugadores[pIdx];
-        if (pid) pCounts[pid] = (pCounts[pid] || 0) + 1;
+        if (pid && !String(pid).startsWith("GUEST_")) pCounts[pid] = (pCounts[pid] || 0) + 1;
       });
       const topP = Object.keys(pCounts).reduce(
         (a, b) => (pCounts[a] > pCounts[b] ? a : b),
@@ -1047,24 +1048,10 @@ export async function generateResponse(query) {
       }
 
     case "CMD_HISTORY_ANALYTICS":
-      const allMatches = DATA_CACHE.matches.filter((m) => m.resultado);
+      const allMatches = DATA_CACHE.matches.filter((m) => isFinishedMatch(m) && !isCancelledMatch(m));
       if (allMatches.length === 0)
         return "Tu historial está vacío como mi base de datos de sentimientos.";
-      const wins = allMatches.filter((m) => {
-        const sets = m.resultado.sets.split(" ");
-        let myS = 0,
-          rivS = 0;
-        const myIdx = m.jugadores.indexOf(uid);
-        sets.forEach((s) => {
-          const p = s.split("-").map(Number);
-          if (myIdx < 2) {
-            p[0] > p[1] ? myS++ : rivS++;
-          } else {
-            p[1] > p[0] ? myS++ : rivS++;
-          }
-        });
-        return myS > rivS;
-      }).length;
+      const wins = allMatches.filter((m) => _didUserWinMatch(m, uid)).length;
 
       return `<div class="ai-result-card">
                 <span class="res-title">Desfase de Victorias</span>
@@ -1247,13 +1234,13 @@ export async function generateResponse(query) {
 
     case "CMD_MATCH_FORECAST":
       const nextM = DATA_CACHE.matches
-        .filter((m) => !m.resultado)
+        .filter((m) => !isFinishedMatch(m) && !isCancelledMatch(m))
         .map((m) => ({ ...m, _date: _getMatchDate(m) }))
         .filter((m) => m._date >= new Date())
         .sort((a, b) => a._date - b._date)[0];
       if (!nextM) return noData("No tengo un partido futuro en el radar.");
-      const teamA = nextM.equipo1 || [];
-      const teamB = nextM.equipo2 || [];
+      const teamA = nextM.equipoA || [];
+      const teamB = nextM.equipoB || [];
       if (teamA.length < 2 || teamB.length < 2)
         return noData("Necesito equipos completos 2v2 para pronosticar.");
       const getLvl = (id) =>
@@ -1472,15 +1459,14 @@ export async function generateResponse(query) {
     case "CMD_ANALYZE_MATCH":
       const myMatches = DATA_CACHE.matches || [];
       const lastM = myMatches
-        .filter(m => m.jugadores?.includes(uid))
+        .filter(m => m.jugadores?.includes(uid) && isFinishedMatch(m) && !isCancelledMatch(m))
         .sort((a,b) => (b.fecha?.toMillis?.() || 0) - (a.fecha?.toMillis?.() || 0))[0];
       
       if (!lastM) return noData("No hay registros de combates en tu base de datos.");
-      if (!lastM.resultado) return noData("El partido aún no se ha jugado. No puedo analizarlo todavía.");
 
       return `<div class="ai-result-card">
                 <span class="res-title">Análisis de Combate</span>
-                <div class="res-val">Resultado: ${lastM.resultado.sets}</div>
+                <div class="res-val">Resultado: ${getResultSetsString(lastM) || "Partido cerrado"}</div>
                 <div class="res-sub">La Matrix detecta una ejecución táctica de nivel ${ (DATA_CACHE.user?.nivel || 2.5).toFixed(2) }. Revisa tu diario para optimizar errores.</div>
             </div>`;
 
@@ -1491,7 +1477,7 @@ export async function generateResponse(query) {
       if (!rival) return noData(`No encuentro a '${rName}' para comparar.`);
       const record = { wins: 0, losses: 0 };
       DATA_CACHE.matches.forEach(m => {
-        if (!m.resultado?.sets || !m.jugadores?.includes(uid) || !m.jugadores?.includes(rival.id)) return;
+        if (!isFinishedMatch(m) || isCancelledMatch(m) || !m.jugadores?.includes(uid) || !m.jugadores?.includes(rival.id)) return;
         _didUserWinMatch(m, uid) ? record.wins++ : record.losses++;
       });
       const total = record.wins + record.losses;
@@ -1504,7 +1490,7 @@ export async function generateResponse(query) {
     }
 
     case "CMD_MOMENTUM": {
-      const last5 = DATA_CACHE.matches.filter(m => m.resultado).slice(0, 5);
+      const last5 = DATA_CACHE.matches.filter(m => isFinishedMatch(m) && !isCancelledMatch(m)).slice(0, 5);
       if (last5.length === 0) return noData("Sin partidos para medir tu momento.");
       let w = 0;
       last5.forEach(m => { if (_didUserWinMatch(m, uid)) w++; });
@@ -1545,7 +1531,7 @@ export async function generateResponse(query) {
         const d = _getMatchDate(m);
         return d >= weekAgo && d <= now;
       });
-      const played = thisWeek.filter(m => m.resultado);
+      const played = thisWeek.filter(m => isFinishedMatch(m) && !isCancelledMatch(m));
       const wins = played.filter(m => _didUserWinMatch(m, uid)).length;
       return `<div class="ai-result-card">
                 <span class="res-title">Resumen Semanal</span>
@@ -1575,7 +1561,7 @@ export async function generateResponse(query) {
 
     case "CMD_HOT_ZONE": {
       const matchDays = {};
-      DATA_CACHE.matches.filter(m => m.resultado).forEach(m => {
+      DATA_CACHE.matches.filter(m => isFinishedMatch(m) && !isCancelledMatch(m)).forEach(m => {
         const d = _getMatchDate(m);
         const day = d.toLocaleDateString('es-ES', { weekday: 'long' });
         if (!matchDays[day]) matchDays[day] = { total: 0, wins: 0 };
@@ -1626,18 +1612,23 @@ export async function generateResponse(query) {
 }
 
 function _getFunnyJoke() {
-  const users = DATA_CACHE.globalUsers.filter((u) => u.nombreUsuario && u.uid !== auth.currentUser?.uid);
+  const users = DATA_CACHE.globalUsers.filter((u) => (u.nombreUsuario || u.nombre) && u.id !== auth.currentUser?.uid);
   if (users.length === 0)
     return "Dicen que por aquí hay gente que calienta pidiendo una cerveza... ¡Y no miro a nadie!";
     
   const r = users[Math.floor(Math.random() * users.length)];
+  const nick = r.nombreUsuario || r.nombre || "ese jugador";
   const jokes = [
-    `¿Has visto a <b>${r.nombreUsuario}</b>? El otro día falló un remate, se quedó mirando la pala y dijo: "Es que vibra". ¡Claro, chato, vibra de miedo!`,
-    `Me han dicho que <b>${r.nombreUsuario}</b> se ha comprado una pala de 400€ a ver si así la bola pasa la red. ¡Menuda fe tiene el colega!`,
-    `Dicen que <b>${r.nombreUsuario}</b> tiene un golpe secreto: se llama 'la caña' y lo usa en todos los puntos. ¡Es un artista!`,
-    `Ojo con <b>${r.nombreUsuario}</b>, que calienta haciendo sombras en el espejo y luego en la pista no le da ni al aire.`,
-    `¿Sabes por qué <b>${r.nombreUsuario}</b> siempre pide la bola nueva? Porque a la vieja ya le tiene puesto nombre de tanto fallarla.`,
-    `He visto a <b>${r.nombreUsuario}</b> quejarse del sol... ¡en una pista indoor! Ese es el nivel, Maribel.`
+    `¿Has visto a <b>${nick}</b>? El otro día falló un remate, se quedó mirando la pala y dijo: "Es que vibra". ¡Claro, chato, vibra de miedo!`,
+    `Me han dicho que <b>${nick}</b> se ha comprado una pala de 400€ a ver si así la bola pasa la red. ¡Menuda fe tiene el colega!`,
+    `Dicen que <b>${nick}</b> tiene un golpe secreto: se llama 'la caña' y lo usa en todos los puntos. ¡Es un artista!`,
+    `Ojo con <b>${nick}</b>, que calienta haciendo sombras en el espejo y luego en la pista no le da ni al aire.`,
+    `¿Sabes por qué <b>${nick}</b> siempre pide la bola nueva? Porque a la vieja ya le tiene puesto nombre de tanto fallarla.`,
+    `He visto a <b>${nick}</b> quejarse del sol... ¡en una pista indoor! Ese es el nivel, Maribel.`,
+    `<b>${nick}</b> dice que juega agresivo, pero su volea llega por correo ordinario.`,
+    `Si <b>${nick}</b> te dice "tranqui, la saco", tú prepara ya el globo defensivo.`,
+    `Hoy <b>${nick}</b> entró tan motivado que hizo calentamiento... en la pista de al lado.`,
+    `La táctica secreta de <b>${nick}</b>: mirar al rival muy serio para que no note el miedo.`
   ];
   return jokes[Math.floor(Math.random() * jokes.length)];
 }
@@ -1699,3 +1690,4 @@ export function addTyping() {
 export function removeTyping(id) {
   document.getElementById(id)?.remove();
 }
+

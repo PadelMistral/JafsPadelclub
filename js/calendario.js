@@ -3,10 +3,11 @@
    Mistral-Inspired Modern Matrix Logic.
    ===================================================== */
 
-import { db, auth, observerAuth, subscribeDoc, getDocument, subscribeCol } from './firebase-service.js';
+import { db, auth, observerAuth, subscribeDoc, getDocument, subscribeCol, updateDocument } from './firebase-service.js';
 import { collection, getDocs, query, orderBy, limit, where, addDoc, doc, getDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast, countUp } from './ui-core.js';
 import { renderMatchDetail, renderCreationForm } from './match-service.js';
+import { isExpiredOpenMatch, isFinishedMatch, isCancelledMatch } from "./utils/match-utils.js";
 
 let currentUser = null;
 let userData = null;
@@ -17,6 +18,22 @@ const calendarUserNameCache = new Map();
 let slotInteractionBusy = false;
 let calendarMatchUnsubs = [];
 let calendarBootUid = null;
+
+async function autoCancelExpiredMatches(matches = []) {
+    const stale = matches.filter((m) => isExpiredOpenMatch(m));
+    if (!stale.length) return;
+    await Promise.all(
+        stale.map(async (m) => {
+            try {
+                await updateDocument(m.col, m.id, {
+                    estado: "anulado",
+                    cancelReason: "auto_expired",
+                    autoCancelledAt: serverTimestamp(),
+                });
+            } catch (_) {}
+        }),
+    );
+}
 
 function withTimeout(promise, ms = 12000) {
     let timeoutId = null;
@@ -148,6 +165,7 @@ async function syncMatches() {
         allMatches = [];
         snapA.forEach(d => allMatches.push({ id: d.id, col: 'partidosAmistosos', ...d.data() }));
         snapR.forEach(d => allMatches.push({ id: d.id, col: 'partidosReto', isComp: true, ...d.data() }));
+        await autoCancelExpiredMatches(allMatches);
 
         await hydrateCreatorNames();
         await fetchWeeklyWeather();
@@ -264,9 +282,15 @@ function renderSlot(date, hour) {
             const isMine = !!currentUser && match.jugadores?.includes(currentUser.uid);
             const count = (match.jugadores || []).filter(id => id).length;
             const isFull = count >= 4;
-            const isPlayed = match.estado === 'jugado';
+            const isPlayed = isFinishedMatch(match);
+            const isClosed = isCancelledMatch(match) || isExpiredOpenMatch(match);
             
-            if (isPlayed) {
+            if (isClosed) {
+                state = 'cerrada';
+                label = 'ANULADO';
+                sub = 'FUERA DE PLAZO';
+                ownerSub = `ORGANIZA: ${shortName(match.creatorName || "Sistema")}`;
+            } else if (isPlayed) {
                 state = 'jugado';
                 label = 'JUGADO';
                 sub = match.resultado?.sets || 'VER RES';
@@ -405,3 +429,4 @@ function focusToday() {
         if (todayHeader) todayHeader.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
     }, 200);
 }
+

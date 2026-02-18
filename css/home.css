@@ -4233,3 +4233,43 @@
     gap: 6px;
   }
 }
+
+/* Compact modal/card tune for easier UX */
+.modal-overlay .modal-card {
+  width: min(94vw, 430px);
+  border-radius: 20px !important;
+}
+
+.modal-overlay .modal-header {
+  padding: 14px 16px;
+}
+
+.modal-overlay .modal-body {
+  padding: 14px;
+}
+
+.home-main .card-premium-v7 {
+  border-radius: 18px;
+}
+
+#upcoming-matches-panel .upcoming-item-v7,
+#circuit-matches-panel .upcoming-item-v7 {
+  padding: 10px !important;
+  border-radius: 14px;
+}
+
+@media (max-width: 480px) {
+  .modal-overlay .modal-card {
+    width: 95vw;
+    max-height: 88vh;
+  }
+
+  .modal-overlay .modal-header {
+    padding: 12px 14px;
+  }
+
+  .modal-overlay .modal-body {
+    padding: 12px;
+  }
+}
+

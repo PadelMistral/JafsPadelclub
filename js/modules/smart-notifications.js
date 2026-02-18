@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file smart-notifications.js
  * @version 1.0 (Phase 6 - Contextual Intelligence)
  * @description Generates rich, contextual notifications based on user activity, progression, and social interactions.
@@ -36,14 +36,14 @@ export const SmartNotifier = {
             if (winner.puntosRanking < loser.puntosRanking - 100) {
                 await createNotification(
                     winnerUid, 
-                    "¡MATAGIGANTES!", 
+                    "Â¡MATAGIGANTES!", 
                     `Has derrotado a ${loser.nombreUsuario}, un rival superior. +Honor.`, 
                     NOTIF_TYPES.RIVALRY
                 );
                 await createNotification(
                     loserUid, 
                     "ALERTA DE RANGO", 
-                    `Has caído ante ${winner.nombreUsuario}. Tu estatus está en peligro.`, 
+                    `Has caÃ­do ante ${winner.nombreUsuario}. Tu estatus estÃ¡ en peligro.`, 
                     NOTIF_TYPES.RIVALRY
                 );
             }
@@ -64,7 +64,7 @@ export const SmartNotifier = {
         
         await createNotification(
             uid,
-            "EVOLUCIÓN TÉCNICA",
+            "EVOLUCIÃ“N TÃ‰CNICA",
             `Tu entrenamiento ha dado frutos. Mejoras: ${changes.join(', ')}`,
             NOTIF_TYPES.PROGRESSION,
             'perfil.html'
@@ -81,10 +81,11 @@ export const SmartNotifier = {
         const days = Math.floor((new Date() - last) / (1000 * 60 * 60 * 24));
         
         if (days === 14) {
-             await createNotification(user.id, "ZONA DE PELIGRO", "Llevas 2 semanas inactivo. Tu ELO empezará a oxidarse.", NOTIF_TYPES.INACTIVITY);
+             await createNotification(user.id, "ZONA DE PELIGRO", "Llevas 2 semanas inactivo. Tu ELO empezarÃ¡ a oxidarse.", NOTIF_TYPES.INACTIVITY);
         }
         else if (days === 30) {
-             await createNotification(user.id, "CORROSIÓN DETECTADA", "30 días sin competir. Penalización de inactividad activa.", NOTIF_TYPES.INACTIVITY);
+             await createNotification(user.id, "CORROSIÃ“N DETECTADA", "30 dÃ­as sin competir. PenalizaciÃ³n de inactividad activa.", NOTIF_TYPES.INACTIVITY);
         }
     }
 };
+

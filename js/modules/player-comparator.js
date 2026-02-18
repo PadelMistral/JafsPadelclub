@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file player-comparator.js
  * @version 1.0 (Phase 5)
  * @description Logic for comparing two players (H2H, Attributes, Stats)
@@ -66,3 +66,4 @@ function calculatePowerLevel(user) {
     // 50% Level, 25% Technical, 15% Physical, 10% Mental
     return Math.round(base + (tech * 0.25) + (phys * 0.15) + (ment * 0.1));
 }
+

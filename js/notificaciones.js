@@ -169,6 +169,12 @@ function getIconInfo(type) {
             return { icon: 'fa-envelope-open-text', variant: 'type-match' };
         case 'match_join': 
             return { icon: 'fa-user-plus', variant: 'type-match' };
+        case 'match_leave':
+            return { icon: 'fa-user-minus', variant: 'type-match' };
+        case 'match_closed':
+            return { icon: 'fa-lock', variant: 'type-system' };
+        case 'result_uploaded':
+            return { icon: 'fa-flag-checkered', variant: 'type-challenge' };
         case 'match_full':
             return { icon: 'fa-users', variant: 'type-match' };
         case 'match_cancelled':
@@ -179,16 +185,23 @@ function getIconInfo(type) {
             return { icon: 'fa-user-shield', variant: 'type-challenge' };
         case 'new_challenge':
             return { icon: 'fa-bolt-lightning', variant: 'type-challenge' };
+        case 'new_user':
+            return { icon: 'fa-user-check', variant: 'type-system' };
+        case 'suggestion':
+            return { icon: 'fa-lightbulb', variant: 'type-system' };
         case 'match_result':
         case 'ranking_change':
         case 'ranking_up':
         case 'ranking_down':
         case 'level_up':
+        case 'level_down':
             return { icon: 'fa-trophy', variant: 'type-challenge' };
         case 'reto': 
             return { icon: 'fa-bolt-lightning', variant: 'type-challenge' };
         case 'match_reminder': 
             return { icon: 'fa-clock-rotate-left', variant: 'type-system' };
+        case 'result_pending':
+            return { icon: 'fa-flag-checkered', variant: 'type-system' };
         case 'warning': 
             return { icon: 'fa-triangle-exclamation', variant: 'type-system' };
         default: 
@@ -222,3 +235,5 @@ window.deleteNotification = async (id) => {
         showToast('Error', 'No se pudo borrar la notificación.', 'error');
     }
 };
+
+

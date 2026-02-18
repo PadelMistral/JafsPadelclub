@@ -1,4 +1,4 @@
-import { db, auth, observerAuth, getDocument } from './firebase-service.js';
+﻿import { db, auth, observerAuth, getDocument } from './firebase-service.js';
 import { collection, query, orderBy } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast } from './ui-core.js';
 import { buildPlacementRanking, getPlacementMatchesCount } from './provisional-ranking-logic.js';
@@ -151,3 +151,4 @@ window.debugPlacementForCurrent = async () => {
   const me = await getDocument('usuarios', auth.currentUser.uid);
   return me ? buildPlacementRanking([me])[0] : null;
 };
+

@@ -27,6 +27,11 @@ import { PredictiveEngine } from './predictive-engine.js';
 import { RivalIntelligence } from './rival-intelligence.js';
 import { DashboardEvolution } from './dashboard-evolution.js';
 import { SmartNotifier } from './modules/smart-notifications.js';
+import {
+  isFinishedMatch,
+  isCancelledMatch,
+  resolveWinnerTeam,
+} from "./utils/match-utils.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   initBackground();
@@ -211,29 +216,23 @@ document.addEventListener("DOMContentLoaded", () => {
         const rivals = { won: {}, lost: {} };
 
         allMatches.forEach(m => {
-            if (m.estado !== 'jugado' || !m.resultado) return;
-            
+            if (!isFinishedMatch(m) || isCancelledMatch(m)) return;
+            const winnerTeam = resolveWinnerTeam(m);
+            if (winnerTeam !== 1 && winnerTeam !== 2) return;
+
             const isT1 = m.equipoA?.includes(uid);
             const userTeam = isT1 ? m.equipoA : m.equipoB;
             const rivalTeam = isT1 ? m.equipoB : m.equipoA;
-            
-            // Assume result format "6-4 6-4" means T1 won if not specified otherwise
-            let userWon = false;
-            // Basic heuristic if 'ganador' not present
-            if(m.resultado.ganador) {
-                userWon = (isT1 && m.resultado.ganador === 1) || (!isT1 && m.resultado.ganador === 2);
-            } else {
-                // Parse sets
-                // ... (Parsing logic simplified for now)
-                userWon = true; // Placeholder if no winner data
-            }
+            const userWon = isT1 ? winnerTeam === 1 : winnerTeam === 2;
 
             userTeam?.forEach(p => {
-                if (p && p !== uid) partners[p] = (partners[p] || 0) + 1;
+                if (p && p !== uid && !String(p).startsWith("GUEST_")) {
+                    partners[p] = (partners[p] || 0) + 1;
+                }
             });
 
             rivalTeam?.forEach(r => {
-                if(r) {
+                if (r && !String(r).startsWith("GUEST_")) {
                     if (userWon) rivals.won[r] = (rivals.won[r] || 0) + 1;
                     else rivals.lost[r] = (rivals.lost[r] || 0) + 1;
                 }
@@ -834,3 +833,4 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
 });
+

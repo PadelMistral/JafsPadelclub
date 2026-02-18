@@ -1,4 +1,4 @@
-/* =====================================================
+﻿/* =====================================================
    PADELUMINATIS AUTH V6.0 - GALACTIC EDITION
    Login, Register, and Recovery pages styling.
    ===================================================== */
@@ -644,3 +644,47 @@
     opacity: 0.6;
   }
 }
+
+/* Toast support for auth pages (index/registro/recuperar) */
+.toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 12000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toast {
+  min-width: 280px;
+  max-width: 360px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(8, 12, 24, 0.92);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  padding: 12px 14px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+}
+
+.toast-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.toast-msg {
+  display: block;
+  font-size: 12px;
+  color: rgba(255,255,255,0.78);
+  margin-top: 4px;
+}
+
+.toast.success { border-color: rgba(84, 255, 173, 0.4); }
+.toast.error { border-color: rgba(255, 94, 94, 0.45); }
+.toast.warning { border-color: rgba(255, 191, 73, 0.45); }
+.toast.info { border-color: rgba(80, 190, 255, 0.45); }
+

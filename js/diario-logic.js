@@ -149,11 +149,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                     <!-- Notes -->
                     ${
-                      entry.tactica?.notas
+                      (entry.memoryNote || entry.tactica?.notas)
                         ? `
                         <div class="mt-6 p-4 bg-primary/5 rounded-2xl border border-primary/10">
-                            <h4 class="text-[9px] font-black text-white/30 uppercase tracking-widest mb-2">Observaciones Libres</h4>
-                            <p class="text-xs text-white/70 leading-relaxed">${entry.tactica.notas}</p>
+                            <h4 class="text-[9px] font-black text-white/30 uppercase tracking-widest mb-2">Recordatorio Personal</h4>
+                            <p class="text-xs text-white/80 leading-relaxed">${entry.memoryNote || "Sin recuerdo personal"}</p>
+                            ${entry.tactica?.notas ? `<p class="text-xs text-white/65 leading-relaxed mt-3 border-t border-white/10 pt-3">${entry.tactica.notas}</p>` : ""}
                         </div>
                     `
                         : ""
@@ -503,6 +504,109 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
   }
 
+  function getTeamIndexByResult(resultSets) {
+    const sets = String(resultSets || "").trim().split(/\s+/).filter(Boolean);
+    let t1 = 0;
+    let t2 = 0;
+    sets.forEach((setScore) => {
+      const parts = setScore.split("-").map(Number);
+      if (parts.length !== 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return;
+      if (parts[0] > parts[1]) t1 += 1;
+      else if (parts[1] > parts[0]) t2 += 1;
+    });
+    if (t1 === t2) return 0;
+    return t1 > t2 ? 1 : 2;
+  }
+
+  function clampInt(v, min, max) {
+    return Math.max(min, Math.min(max, Math.round(Number(v) || 0)));
+  }
+
+  function computeDiaryPeerBonuses(entry, matchData, authorUid) {
+    const bonuses = [];
+    const players = matchData?.jugadores || [];
+    if (!players.length || !Array.isArray(entry.evaluations)) return bonuses;
+
+    const myIdx = players.indexOf(authorUid);
+    if (myIdx === -1) return bonuses;
+    const isAuthorTeam1 = myIdx < 2;
+    const winnerTeam = getTeamIndexByResult(matchData?.resultado?.sets || "");
+
+    entry.evaluations.forEach((ev) => {
+      const uid = ev?.uid;
+      if (!uid || uid === authorUid || String(uid).startsWith("GUEST_")) return;
+
+      const pIdx = players.indexOf(uid);
+      const sameTeam = pIdx !== -1 ? (pIdx < 2) === isAuthorTeam1 : false;
+      const isMvp = ev.isMvp === true;
+
+      let delta = 0;
+      delta += (Number(ev.performance || 5) - 5) * 0.8;
+      delta += (Number(ev.control || 5) - 5) * 0.45;
+      delta -= Math.max(0, Number(ev.weakness || 0) - 6) * 0.3;
+      delta -= Math.max(0, Number(ev.discomfort || 0) - 6) * 0.2;
+
+      if (isMvp) delta += 4;
+      if (!sameTeam && Number(ev.performance || 0) >= 7) delta += 1;
+
+      if (winnerTeam && pIdx !== -1) {
+        const playerTeam = pIdx < 2 ? 1 : 2;
+        if (winnerTeam === playerTeam) delta += 0.6;
+      }
+
+      const finalDelta = clampInt(delta, -2, 6);
+      if (finalDelta === 0) return;
+
+      bonuses.push({
+        uid,
+        diff: finalDelta,
+        reason: isMvp
+          ? "MVP del partido (evaluacion de diario)"
+          : sameTeam
+            ? "Evaluacion positiva de companero"
+            : "Evaluacion tactica de rival",
+      });
+    });
+
+    const dedup = new Map();
+    bonuses.forEach((b) => dedup.set(b.uid, b));
+    return Array.from(dedup.values());
+  }
+
+  function showDiaryRecapModal(entry) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay active";
+    overlay.style.zIndex = "12000";
+
+    const shotKeys = ["serve", "volley", "bandeja", "vibora", "smash", "lob"];
+    const avg = shotKeys.reduce((acc, k) => acc + Number(entry?.shots?.[k] || 0), 0) / shotKeys.length;
+    const memory = entry?.memoryNote || entry?.tactica?.notas || "Sin nota personal en esta entrada.";
+
+    overlay.innerHTML = `
+      <div class="modal-card glass-strong animate-up p-0 overflow-hidden" style="max-width:420px">
+        <div class="modal-header">
+          <span class="modal-title font-black italic tracking-widest">RECORDATORIO DEL PARTIDO</span>
+          <button class="close-btn" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body custom-scroll p-5 flex-col gap-4">
+          <div class="p-4 rounded-2xl border border-white/10 bg-white/5">
+            <span class="text-[9px] uppercase tracking-widest text-muted font-black">Resumen IA</span>
+            <p class="text-xs text-white mt-2">${entry.aiSummary || "Sin resumen"}</p>
+          </div>
+          <div class="p-4 rounded-2xl border border-white/10 bg-white/5">
+            <span class="text-[9px] uppercase tracking-widest text-muted font-black">Tu recuerdo personal</span>
+            <p class="text-xs text-white/90 mt-2">${memory}</p>
+          </div>
+          <div class="p-4 rounded-2xl border border-white/10 bg-black/30 flex-row between items-center">
+            <span class="text-[10px] font-black uppercase text-muted">Sensacion media en golpes</span>
+            <span class="text-lg font-black text-primary">${avg.toFixed(1)}/10</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+  }
   // --- SAVE LOGIC ---
 
   async function saveEntry() {
@@ -562,6 +666,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         })),
         mvpId: document.querySelector('input[name="match-mvp"]:checked')?.value || null,
 
+        // Technical Sensations by shot (1-10)
+        shots: {
+          serve: parseInt(document.getElementById("inp-shot-serve")?.value || 5),
+          volley: parseInt(document.getElementById("inp-shot-volley")?.value || 5),
+          bandeja: parseInt(document.getElementById("inp-shot-bandeja")?.value || 5),
+          vibora: parseInt(document.getElementById("inp-shot-vibora")?.value || 5),
+          smash: parseInt(document.getElementById("inp-shot-smash")?.value || 5),
+          lob: parseInt(document.getElementById("inp-shot-lob")?.value || 5),
+        },
+
         // Legacy/Basic Stats (Derived)
         stats: {
           netPoints: parseInt(document.getElementById("rng-net")?.value || 50),
@@ -585,6 +699,8 @@ document.addEventListener("DOMContentLoaded", async () => {
           dañoInfligido: document.getElementById("inp-damage-inflicted").value,
           notas: document.getElementById("entry-notes").value,
         },
+
+        memoryNote: document.getElementById("entry-memory")?.value || "",
       };
 
       // 2. Weather Snapshot
@@ -659,37 +775,100 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         const uData = userSnap.data();
         const currentJournal = uData.diario || [];
-        const bonus = entryMode === "note" ? 5 : 10;
+        const alreadyLoggedThisMatch = !!(entry.matchId && currentJournal.some((d) => d.matchId === entry.matchId));
+
+        const bonus = alreadyLoggedThisMatch ? 0 : (entryMode === "note" ? 5 : 10);
         const currentPoints = Number(uData.puntosRanking || 1000);
         const newRankingPoints = currentPoints + bonus;
-        
-        // Update Advanced Stats
+
         const stats = uData.advancedStats || { matches: 0 };
-        if (entry.sessionMode !== "note") {
+        if (!alreadyLoggedThisMatch && entry.sessionMode !== "note") {
             stats.matches = (stats.matches || 0) + 1;
-            // winners/ue removed as requested
-        } else {
+        } else if (!alreadyLoggedThisMatch) {
             stats.notes = (stats.notes || 0) + 1;
         }
 
-        // 1. Update User Document
         transaction.update(userRef, {
             diario: [...currentJournal, entry],
             puntosRanking: newRankingPoints,
-            advancedStats: stats
+            advancedStats: stats,
         });
 
-        // 2. Log Ranking Event
-        const logRef = doc(collection(db, "rankingLogs")); // Auto-ID
+        const logRef = doc(collection(db, "rankingLogs"));
         transaction.set(logRef, {
             uid: currentUser.uid,
             timestamp: serverTimestamp(),
             diff: bonus,
             newTotal: newRankingPoints,
             type: "DIARY_BONUS",
-            reason: entryMode === "note" ? "Sincronización de Nota" : "Análisis de Partido",
+            reason: alreadyLoggedThisMatch
+              ? "Entrada adicional del mismo partido (sin bonus duplicado)"
+              : entryMode === "note"
+                ? "Sincronizacion de Nota"
+                : "Analisis de Partido",
             matchId: entry.matchId || null,
+            details: {
+              shotAverage: Number(((entry.shots?.serve + entry.shots?.volley + entry.shots?.bandeja + entry.shots?.vibora + entry.shots?.smash + entry.shots?.lob) / 6).toFixed(2)),
+              mood: entry.biometria?.mood || "Normal",
+            },
         });
+
+        if (entry.matchId && !alreadyLoggedThisMatch) {
+          const matchRefA = doc(db, "partidosAmistosos", entry.matchId);
+          const matchRefR = doc(db, "partidosReto", entry.matchId);
+          const matchSnapA = await transaction.get(matchRefA);
+          const matchSnapR = await transaction.get(matchRefR);
+
+          const matchRef = matchSnapA.exists() ? matchRefA : (matchSnapR.exists() ? matchRefR : null);
+          const matchData = matchSnapA.exists() ? matchSnapA.data() : (matchSnapR.exists() ? matchSnapR.data() : null);
+
+          if (matchRef && matchData) {
+            const diaryImpactBy = { ...(matchData.diaryImpactBy || {}) };
+            if (!diaryImpactBy[currentUser.uid]) {
+              const peerBonuses = computeDiaryPeerBonuses(entry, matchData, currentUser.uid);
+
+              for (const peer of peerBonuses) {
+                const peerRef = doc(db, "usuarios", peer.uid);
+                const peerSnap = await transaction.get(peerRef);
+                if (!peerSnap.exists()) continue;
+
+                const peerData = peerSnap.data();
+                const peerCurrent = Number(peerData.puntosRanking || 1000);
+                const peerNew = Math.max(0, peerCurrent + Number(peer.diff || 0));
+
+                transaction.update(peerRef, {
+                  puntosRanking: peerNew,
+                  lastDiaryImpact: {
+                    fromUid: currentUser.uid,
+                    matchId: entry.matchId,
+                    diff: Number(peer.diff || 0),
+                    reason: peer.reason,
+                    at: serverTimestamp(),
+                  },
+                });
+
+                const peerLogRef = doc(collection(db, "rankingLogs"));
+                transaction.set(peerLogRef, {
+                  uid: peer.uid,
+                  timestamp: serverTimestamp(),
+                  diff: Number(peer.diff || 0),
+                  newTotal: peerNew,
+                  type: "DIARY_PEER_BONUS",
+                  reason: peer.reason,
+                  matchId: entry.matchId,
+                  fromUid: currentUser.uid,
+                  details: {
+                    mvpId: entry.mvpId || null,
+                    evaluations: entry.evaluations || [],
+                  },
+                });
+              }
+
+              diaryImpactBy[currentUser.uid] = serverTimestamp();
+              transaction.update(matchRef, { diaryImpactBy });
+            }
+          }
+        }
       });
 
       // Feedback handled by submitTechnicalEntry mostly, but global toast here too
@@ -699,6 +878,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         "success",
       );
       window.closeWizard();
+      showDiaryRecapModal(entry);
       resetWizard();
     } catch (e) {
       console.error(e);
@@ -717,11 +897,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("inp-damage-received").value = "";
     document.getElementById("inp-damage-inflicted").value = "";
     document.getElementById("entry-notes").value = "";
+    const memoryEl = document.getElementById("entry-memory");
+    if (memoryEl) memoryEl.value = "";
     document.getElementById("inp-match-id").value = "";
     document.getElementById("inp-match-selector").value = "";
-    document.getElementById("val-winners").innerText = "0";
-    document.getElementById("val-ue").innerText = "0";
-    // Reset others...
+
+    ["serve", "volley", "bandeja", "vibora", "smash", "lob"].forEach((k) => {
+      const input = document.getElementById(`inp-shot-${k}`);
+      const val = document.getElementById(`val-shot-${k}`);
+      if (input) input.value = "5";
+      if (val) val.innerText = "5";
+    });
   }
 
   // --- RENDER JOURNAL LIST ---
@@ -773,15 +959,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                     <div class="stat-mini-grid">
                         <div class="sm-item flex-col">
-                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">Winners</span>
-                            <b class="text-sport-green text-sm">${e.stats?.winners || 0}</b>
+                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">Media golpes</span>
+                            <b class="text-sport-green text-sm">${((((e.shots?.serve || 5) + (e.shots?.volley || 5) + (e.shots?.bandeja || 5) + (e.shots?.vibora || 5) + (e.shots?.smash || 5) + (e.shots?.lob || 5)) / 6).toFixed(1))}</b>
                         </div>
                         <div class="sm-item flex-col">
-                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">Errores</span>
-                            <b class="text-sport-red text-sm">${e.stats?.ue || 0}</b>
+                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">MVP elegido</span>
+                            <b class="text-sport-gold text-sm">${e.mvpId ? "SI" : "NO"}</b>
                         </div>
                         <div class="sm-item flex-col">
-                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">Posición</span>
+                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">Posicion</span>
                             <b class="text-white text-sm">${(e.posicion || "-").toUpperCase()}</b>
                         </div>
                     </div>
@@ -824,3 +1010,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     toggleChat();
   };
 });
+
+
+
+
+

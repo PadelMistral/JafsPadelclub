@@ -319,6 +319,11 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                 <div class="actions-grid-v7 flex-col gap-3">
                     ${renderMatchActions(m, isParticipant, isOrganizer, currentUser.uid, matchId, col)}
                 </div>
+                <div class="mt-4 p-3 rounded-2xl bg-white/5 border border-white/10 text-center">
+                    <a href="https://www.apoing.com" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black uppercase tracking-[2px] text-primary">
+                        <i class="fas fa-arrow-up-right-from-square mr-1"></i> Comprobar reserva en Apoing
+                    </a>
+                </div>
             </div>
         `;
         if (isParticipant) initMatchChat(matchId, col);
@@ -480,6 +485,11 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                     </div>
                     <i class="fas fa-fingerprint"></i>
                 </button>
+                <div class="mt-3 text-center">
+                    <a href="https://www.apoing.com" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black uppercase tracking-[2px] text-primary">
+                        <i class="fas fa-arrow-up-right-from-square mr-1"></i> Verificar reserva en Apoing
+                    </a>
+                </div>
             </div>
         </div>
     `;
@@ -723,9 +733,9 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                             stillInMatch,
                             "Jugador fuera de la partida",
                             `${leaveName} ha abandonado la partida del ${leaveDay}.`,
-                            'warning',
+                            'match_leave',
                             'calendario.html',
-                            { matchId: id, type: 'match_leave' }
+                            { matchId: id, type: 'match_leave', dedupId: `match_leave_${id}_${user.uid}` }
                         );
                     }
                     hideLoading();
@@ -959,6 +969,11 @@ window.openResultForm = async (id, col) => {
                 <span class="t-main">REGISTRAR DATOS</span>
                 <i class="fas fa-save"></i>
             </button>
+            <div class="mt-3 text-center">
+                <a href="https://www.apoing.com" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black uppercase tracking-[2px] text-primary">
+                    <i class="fas fa-arrow-up-right-from-square mr-1"></i> Comprobar reserva en Apoing
+                </a>
+            </div>
         </div>
     `;
 
@@ -1010,6 +1025,21 @@ window.openResultForm = async (id, col) => {
             const rankingSync = await processMatchResults(id, col, resultStr);
             if (!rankingSync?.success) {
                 throw new Error(rankingSync?.error || 'ranking-sync-failed');
+            }
+            const meData = await getDocument('usuarios', auth.currentUser.uid);
+            const meName = meData?.nombreUsuario || meData?.nombre || 'Un jugador';
+            const targetUids = (rankingSync?.changes || [])
+                .map((c) => c?.uid)
+                .filter((uid) => uid && uid !== auth.currentUser.uid && !String(uid).startsWith('GUEST_'));
+            if (targetUids.length > 0) {
+                await createNotification(
+                    targetUids,
+                    "Resultado subido",
+                    `${meName} subió el resultado: ${resultStr}.`,
+                    "result_uploaded",
+                    "puntosRanking.html",
+                    { type: "result_uploaded", matchId: id, dedupId: `result_uploaded_${id}` },
+                );
             }
             showToast(
                 "DATOS GUARDADOS",
@@ -1195,3 +1225,4 @@ window.removeUserFromNew = (idx) => {
         slot.onclick = () => window.openPlayerSelector('NEW', window._creationType, {idx});
     }
 };
+

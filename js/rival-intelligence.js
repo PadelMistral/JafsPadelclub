@@ -1,4 +1,4 @@
-export const RivalIntelligence = {
+﻿export const RivalIntelligence = {
 
     /**
      * Enhanced parsing of matchups
@@ -50,8 +50,8 @@ export const RivalIntelligence = {
 
         let brief = "";
         if (winRate >= 70) brief = "Dominas claramente el cara a cara. Juega con calma; el rival suele frustrarse ante tu consistencia.";
-        else if (winRate <= 30) brief = "Este rival es tu némesis. Suelen ganarte por volumen de juego. Prueba a cambiar el ritmo o jugar globos más profundos.";
-        else brief = "Enfrentamiento muy equilibrado. Se decidirá por los detalles y quién cometa menos errores no forzados en el tercer set.";
+        else if (winRate <= 30) brief = "Este rival es tu nÃ©mesis. Suelen ganarte por volumen de juego. Prueba a cambiar el ritmo o jugar globos mÃ¡s profundos.";
+        else brief = "Enfrentamiento muy equilibrado. Se decidirÃ¡ por los detalles y quiÃ©n cometa menos errores no forzados en el tercer set.";
 
         return {
             total,
@@ -72,7 +72,7 @@ export const RivalIntelligence = {
 
         return {
             consistency: { user: uStats.consistency || 50, rival: rStats.consistency || 50, label: "CONSISTENCIA" },
-            pressure: { user: uStats.pressure || 50, rival: rStats.pressure || 50, label: "PRESIÓN (CLUTCH)" },
+            pressure: { user: uStats.pressure || 50, rival: rStats.pressure || 50, label: "PRESIÃ“N (CLUTCH)" },
             aggression: { user: uStats.aggression || 50, rival: rStats.aggression || 50, label: "AGRESIVIDAD" },
             defense: { user: uStats.defense || 50, rival: rStats.defense || 50, label: "DEFENSA" }
         };
@@ -82,9 +82,10 @@ export const RivalIntelligence = {
      * Classifies the Rival based on difficulty.
      */
     classifyRival: (h2h) => {
-        if (!h2h || h2h.total === 0) return { class: "Incógnita", color: "gray" };
+        if (!h2h || h2h.total === 0) return { class: "IncÃ³gnita", color: "gray" };
         if (h2h.winRate < 30 && h2h.total >= 2) return { class: "KERYPTONITA", color: "red", icon: "fa-skull" };
-        if (h2h.winRate > 70 && h2h.total >= 2) return { class: "VÍCTIMA", color: "green", icon: "fa-laugh-beam" };
+        if (h2h.winRate > 70 && h2h.total >= 2) return { class: "VÃCTIMA", color: "green", icon: "fa-laugh-beam" };
         return { class: "RIVAL DIRECTO", color: "orange", icon: "fa-handshake" };
     }
 };
+

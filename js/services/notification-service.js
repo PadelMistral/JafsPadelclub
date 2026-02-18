@@ -17,6 +17,11 @@ import {
   limit,
   onSnapshot,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
+import {
+  isFinishedMatch,
+  isCancelledMatch,
+  getResultSetsString,
+} from "../utils/match-utils.js";
 
 // Store active listeners to clean up
 const activeListeners = [];
@@ -31,11 +36,16 @@ const NOTIF_TYPES = Object.freeze({
   PRIVATE_INVITE: "private_invite",
   MATCH_FULL: "match_full",
   MATCH_REMINDER: "match_reminder",
+  RESULT_PENDING: "result_pending",
   MATCH_JOIN: "match_join",
+  MATCH_LEAVE: "match_leave",
+  MATCH_CLOSED: "match_closed",
+  RESULT_UPLOADED: "result_uploaded",
   MATCH_CANCELLED: "match_cancelled",
   RANKING_UP: "ranking_up",
   RANKING_DOWN: "ranking_down",
   LEVEL_UP: "level_up",
+  LEVEL_DOWN: "level_down",
   NEW_RIVAL: "new_rival",
   CHAT_MENTION: "chat_mention",
   NEW_CHALLENGE: "new_challenge",
@@ -335,6 +345,11 @@ export async function initAutoNotifications(uid) {
   // 1. Existing Watchers
   watchMatchesFilling(uid);
   scheduleMatchReminders(uid);
+  const remindersInterval = setInterval(() => scheduleMatchReminders(uid), 10 * 60 * 1000);
+  activeListeners.push(() => clearInterval(remindersInterval));
+  schedulePendingResultAlerts(uid);
+  const resultAlertInterval = setInterval(() => schedulePendingResultAlerts(uid), 15 * 60 * 1000);
+  activeListeners.push(() => clearInterval(resultAlertInterval));
   watchNewChallenges(uid);
 
   // 3. Native Background Pulse
@@ -376,6 +391,7 @@ export async function initAutoNotifications(uid) {
   watchRankingChanges(uid);
   watchVacancies(uid);
   watchNewGlobalMatches(uid);
+  watchMatchParticipationEvents(uid);
 }
 
 /**
@@ -436,6 +452,15 @@ function watchRankingChanges(uid) {
               NOTIF_TYPES.LEVEL_UP,
               "perfil.html",
               { type: NOTIF_TYPES.LEVEL_UP, from: levelPrev, to: levelNow },
+            );
+          } else if (levelNow < levelPrev - 0.001) {
+            await createNotification(
+              uid,
+              "Ajuste de nivel",
+              `Tu nivel bajó: ${levelPrev.toFixed(2)} -> ${levelNow.toFixed(2)}. Revisa tu diario para recuperar ritmo.`,
+              NOTIF_TYPES.LEVEL_DOWN,
+              "perfil.html",
+              { type: NOTIF_TYPES.LEVEL_DOWN, from: levelPrev, to: levelNow },
             );
           }
 
@@ -606,13 +631,94 @@ async function watchMatchesFilling(uid) {
   });
 }
 
+function watchMatchParticipationEvents(uid) {
+  const collections = ["partidosReto", "partidosAmistosos"];
+
+  collections.forEach((colName) => {
+    const q = query(collection(db, colName), where("jugadores", "array-contains", uid));
+    const stateById = new Map();
+
+    safeOnSnapshot(q, async (snapshot) => {
+      const currentIds = new Set();
+
+      for (const d of snapshot.docs) {
+        const matchId = d.id;
+        const curr = d.data() || {};
+        currentIds.add(matchId);
+
+        const prev = stateById.get(matchId);
+        stateById.set(matchId, curr);
+        if (!prev) continue;
+
+        const prevPlayers = (prev.jugadores || []).filter((p) => p && !String(p).startsWith("GUEST_"));
+        const currPlayers = (curr.jugadores || []).filter((p) => p && !String(p).startsWith("GUEST_"));
+        const joined = currPlayers.find((p) => !prevPlayers.includes(p));
+        const left = prevPlayers.find((p) => !currPlayers.includes(p));
+
+        if (joined && joined !== uid) {
+          const actor = await getDocument("usuarios", joined);
+          const actorName = actor?.nombreUsuario || actor?.nombre || "Un jugador";
+          await createNotification(
+            uid,
+            "Nuevo jugador en tu partido",
+            `${actorName} se ha unido a tu partido.`,
+            NOTIF_TYPES.MATCH_JOIN,
+            "calendario.html",
+            { type: NOTIF_TYPES.MATCH_JOIN, matchId, dedupId: `join_evt_${matchId}_${joined}` },
+          );
+        }
+
+        if (left && left !== uid) {
+          const actor = await getDocument("usuarios", left);
+          const actorName = actor?.nombreUsuario || actor?.nombre || "Un jugador";
+          await createNotification(
+            uid,
+            "Cambio en el partido",
+            `${actorName} se ha salido de tu partido.`,
+            NOTIF_TYPES.MATCH_LEAVE,
+            "calendario.html",
+            { type: NOTIF_TYPES.MATCH_LEAVE, matchId, dedupId: `leave_evt_${matchId}_${left}` },
+          );
+        }
+
+        if (!isFinishedMatch(prev) && isFinishedMatch(curr)) {
+          const sets = getResultSetsString(curr) || "resultado actualizado";
+          await createNotification(
+            uid,
+            "Resultado registrado",
+            `Se ha subido resultado en tu partido: ${sets}.`,
+            NOTIF_TYPES.RESULT_UPLOADED,
+            "puntosRanking.html",
+            { type: NOTIF_TYPES.RESULT_UPLOADED, matchId, dedupId: `result_evt_${matchId}` },
+          );
+        }
+
+        if (!isCancelledMatch(prev) && isCancelledMatch(curr)) {
+          await createNotification(
+            uid,
+            "Partido cerrado",
+            "Este partido ha sido cerrado/anulado.",
+            NOTIF_TYPES.MATCH_CLOSED,
+            "calendario.html",
+            { type: NOTIF_TYPES.MATCH_CLOSED, matchId, dedupId: `closed_evt_${matchId}` },
+          );
+        }
+      }
+
+      for (const oldId of [...stateById.keys()]) {
+        if (!currentIds.has(oldId)) stateById.delete(oldId);
+      }
+    });
+  });
+}
+
 /**
  * Schedule reminders for upcoming matches (1 hour before)
  */
 async function scheduleMatchReminders(uid) {
   const now = new Date();
-  const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
-  const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const minReminderMs = 55 * 60 * 1000;
+  const maxReminderMs = 65 * 60 * 1000;
 
   const collections = ["partidosReto", "partidosAmistosos"];
 
@@ -642,21 +748,74 @@ async function scheduleMatchReminders(uid) {
         // hora is already embedded in fecha (Timestamp includes time)
         // No separate 'hora' field exists â€” fecha already has the correct time
 
-        if (matchDate >= inOneHour && matchDate <= inTwoHours) {
-          const timeUntil = Math.round((matchDate - now) / (60 * 1000));
+        const msUntil = matchDate.getTime() - now.getTime();
+        if (msUntil >= minReminderMs && msUntil <= maxReminderMs) {
+          const timeUntil = Math.max(1, Math.round(msUntil / (60 * 1000)));
+          const dayStr = matchDate.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+          const hourStr = matchDate.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 
           createNotification(
             uid,
             "Partido en 1 hora",
-            `Tu partido empieza en ${timeUntil} minutos. Calienta y revisa estrategia.`,
+            `Tu partido de ${dayStr} a las ${hourStr} empieza en ${timeUntil} minutos.`,
             NOTIF_TYPES.MATCH_REMINDER,
             "calendario.html",
-            { matchId, type: NOTIF_TYPES.MATCH_REMINDER, dedupId: `match_reminder_${matchId}` },
+            { matchId, type: NOTIF_TYPES.MATCH_REMINDER, dedupId: `match_reminder_${matchId}_${matchDate.toISOString().slice(0,13)}` },
           );
         }
       });
     } catch (e) {
       console.error(`Error scheduling reminders for ${colName}:`, e);
+    }
+  }
+}
+
+/**
+ * Notify when match should be finished but result is still missing (90 min after start).
+ */
+async function schedulePendingResultAlerts(uid) {
+  const now = Date.now();
+  const collections = ["partidosReto", "partidosAmistosos"];
+
+  for (const colName of collections) {
+    try {
+      const q = query(
+        collection(db, colName),
+        where("jugadores", "array-contains", uid),
+        where("estado", "==", "abierto"),
+      );
+
+      const snapshot = await window.getDocsSafe(q);
+      snapshot.forEach((d) => {
+        const m = d.data();
+        const matchId = d.id;
+        const date = m.fecha?.toDate?.() || new Date(m.fecha);
+        if (!date || Number.isNaN(date.getTime())) return;
+
+        const filled = (m.jugadores || []).filter(Boolean).length;
+        if (filled < 4) return;
+
+        const elapsedMs = now - date.getTime();
+        if (elapsedMs < 90 * 60 * 1000) return;
+
+        const isOwner = m.creador === uid || m.organizerId === uid;
+        const bucket = Math.floor(now / (30 * 60 * 1000));
+        const title = isOwner ? "Resultado pendiente" : "Partido sin cerrar";
+        const body = isOwner
+          ? "Tu partido ya debería haber terminado. Añade el resultado para actualizar ranking."
+          : "Tu partido terminó y aún no tiene resultado. Recuerda al organizador que lo registre.";
+
+        createNotification(
+          uid,
+          title,
+          body,
+          NOTIF_TYPES.RESULT_PENDING,
+          "home.html",
+          { type: NOTIF_TYPES.RESULT_PENDING, matchId, dedupId: `result_pending_${matchId}_${uid}_${bucket}` },
+        );
+      });
+    } catch (e) {
+      console.warn(`Result pending alerts failed for ${colName}:`, e);
     }
   }
 }
@@ -890,5 +1049,8 @@ export default {
   suggestDiaryEntry,
   cleanupAutoNotifications,
 };
+
+
+
 
 

@@ -4,6 +4,7 @@
   observerAuth,
   subscribeDoc,
   getDocument,
+  updateDocument,
   updatePresence,
 } from "./firebase-service.js";
 import { renderMatchDetail } from "./match-service.js";
@@ -14,6 +15,8 @@ import {
   limit,
   getDocs,
   where,
+  addDoc,
+  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI, countUp, showToast } from "./ui-core.js";
 import { calculateCourtCondition } from "./utils/weather-utils.js";
@@ -28,6 +31,12 @@ import {
 } from "./modules/ui-loader.js?v=6.5";
 import { initAutoNotifications } from "./services/notification-service.js";
 import { requestNotificationPermission } from "./modules/push-notifications.js";
+import {
+  isExpiredOpenMatch,
+  isFinishedMatch,
+  isCancelledMatch,
+  resolveWinnerTeam,
+} from "./utils/match-utils.js";
 
 let currentUser = null;
 let userData = null;
@@ -211,6 +220,24 @@ function updateWelcomePendingMetric() {
   if (pendingEl) pendingEl.textContent = String(getPendingMatchesCount());
 }
 
+async function autoCancelExpiredMatches(matches = []) {
+  const stale = matches.filter((m) => isExpiredOpenMatch(m));
+  if (!stale.length) return;
+
+  await Promise.all(
+    stale.map(async (m) => {
+      try {
+        await updateDocument(m.col, m.id, {
+          estado: "anulado",
+          cancelReason: "auto_expired",
+          autoCancelledAt: serverTimestamp(),
+        });
+      } catch (e) {
+        console.warn("Auto-cancel skipped:", m.col, m.id, e?.code || e?.message || e);
+      }
+    }),
+  );
+}
 // Real Online Count Logic - Only counts users active in the last 5 minutes (Real-time)
 async function injectOnlineCount() {
   try {
@@ -383,11 +410,14 @@ document.addEventListener("DOMContentLoaded", () => {
     // Auto-refresh dynamic data
     if (homeRefreshInterval) clearInterval(homeRefreshInterval);
     homeRefreshInterval = setInterval(() => {
-        if (Date.now() - lastOnlineRefreshAt >= 5 * 60 * 1000) {
+        if (Date.now() - lastOnlineRefreshAt >= 60 * 1000) {
           injectOnlineCount();
           lastOnlineRefreshAt = Date.now();
         }
         renderOpenMatches();
+        const myMatches = allMatches.filter((m) => m.jugadores?.includes(currentUser?.uid));
+        renderPendingResultReminder(myMatches);
+        renderCircuitMatches(allMatches);
     }, 60000);
   });
 
@@ -720,14 +750,14 @@ async function loadMatches() {
     return true;
   });
 
-  const now = new Date();
-  // Filter matches that are played or too old (more than 2 hours ago)
-  list = list.filter(
-    (m) =>
-      m.estado !== "jugado" &&
-      (m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha)) >
-        new Date(now - 7200000),
-  );
+  await autoCancelExpiredMatches(list);
+
+  const now = Date.now();
+  list = list.filter((m) => {
+    if (isFinishedMatch(m) || isCancelledMatch(m) || isExpiredOpenMatch(m, now)) return false;
+    const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
+    return date > new Date(now - 7200000);
+  });
   list.sort(
     (a, b) =>
       (a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha)) -
@@ -741,6 +771,8 @@ async function loadMatches() {
 
   renderNextMatch(myNext);
   renderUpcomingMatches(myMatches.slice(1));
+  renderCircuitMatches(list);
+  renderPendingResultReminder(myMatches);
   renderMatchFeed("all");
 }
 
@@ -1222,6 +1254,94 @@ async function renderUpcomingMatches(matches) {
   const html = await Promise.all(matches.map((m, i) => createUpcomingMiniItem(m, i + 1)));
   container.innerHTML = html.join("");
 }
+
+async function renderCircuitMatches(matches) {
+  const container = document.getElementById("circuit-matches-panel");
+  if (!container) return;
+
+  const uid = currentUser?.uid;
+  let list = Array.isArray(matches) ? [...matches] : [];
+
+  list = list.filter((m) => {
+    if (m.visibility === "private") {
+      return (
+        m.organizerId === uid ||
+        m.creador === uid ||
+        (m.invitedUsers || []).includes(uid) ||
+        (m.jugadores || []).includes(uid)
+      );
+    }
+    return true;
+  });
+
+  list = list
+    .filter((m) => !isFinishedMatch(m) && !isCancelledMatch(m) && !isExpiredOpenMatch(m))
+    .sort(
+      (a, b) =>
+        (a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha)) -
+        (b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha)),
+    )
+    .slice(0, 8);
+
+  if (!list.length) {
+    container.innerHTML =
+      '<div class="text-[8px] text-muted center py-6 opacity-40">NO HAY PARTIDAS PRÓXIMAS EN EL CIRCUITO</div>';
+    return;
+  }
+
+  const html = await Promise.all(
+    list.map(async (m, idx) => {
+      const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
+      const type = m.col === "partidosReto" ? "RETO" : "AMISTOSO";
+      const filled = (m.jugadores || []).filter((id) => id).length;
+      const slotLabel = filled >= 4 ? "COMPLETO" : `${4 - filled} HUECOS`;
+      return `
+        <div class="upcoming-item-v7 flex-row between items-center p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 clickable transition-all animate-fade-in" style="animation-delay:${idx * 0.04}s" onclick="openMatch('${m.id}', '${m.col}')">
+            <div class="flex-col">
+                <span class="text-[10px] font-black text-white uppercase">${date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })} · ${formatHour(date)}</span>
+                <span class="text-[9px] text-muted uppercase">${type} · ${slotLabel}</span>
+            </div>
+            <i class="fas fa-chevron-right text-[10px] text-muted"></i>
+        </div>
+      `;
+    }),
+  );
+
+  container.innerHTML = html.join("");
+}
+
+function renderPendingResultReminder(myMatches) {
+  const container = document.getElementById("next-match-container");
+  if (!container || !Array.isArray(myMatches) || !myMatches.length) return;
+
+  const now = Date.now();
+  const pending = myMatches.filter((m) => {
+    if (isFinishedMatch(m) || isCancelledMatch(m)) return false;
+    const filled = (m.jugadores || []).filter((id) => id).length;
+    if (filled < 4) return false;
+    const start = (m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha)).getTime();
+    return Number.isFinite(start) && now >= start + 90 * 60 * 1000;
+  });
+
+  if (!pending.length) return;
+
+  const p = pending[0];
+  const exists = container.querySelector(".result-reminder-v1");
+  if (exists) return;
+
+  const banner = document.createElement("div");
+  banner.className = "result-reminder-v1 card-premium-v7 p-3 mt-3 border border-yellow-500/30 bg-yellow-500/10 animate-up";
+  banner.innerHTML = `
+    <div class="flex-row between items-center gap-2">
+      <div class="flex-col">
+        <span class="text-[10px] font-black uppercase tracking-widest text-yellow-200">¿Has terminado el partido?</span>
+        <span class="text-[9px] text-white/70">Añade el resultado para actualizar ranking y estadísticas automáticamente.</span>
+      </div>
+      <button class="open-more-btn" onclick="openMatch('${p.id}', '${p.col}')">AÑADIR RESULTADO</button>
+    </div>
+  `;
+  container.appendChild(banner);
+}
 async function renderMatchFeed(param) {
   const container = document.getElementById("match-feed");
   if (!container) return;
@@ -1422,7 +1542,8 @@ async function initMatrixFeed() {
                     n.tipo === "private_invite" ||
                     n.tipo === "match_opened" ||
                     n.tipo === "ranking_up" ||
-                    n.tipo === "level_up"
+                    n.tipo === "level_up" ||
+                    n.tipo === "result_uploaded"
                   ? "success"
                   : "info";
           showToast(n.titulo || "Padeluminatis", n.mensaje || "Nueva actualización.", type);
@@ -1433,10 +1554,12 @@ async function initMatrixFeed() {
     const html = ordered.slice(0, 4).map(n => {
       let icon = 'fa-bolt';
       let color = 'primary';
-      if (n.tipo === 'success' || n.tipo === 'match_full' || n.tipo === 'ranking_up' || n.tipo === 'level_up') { icon = 'fa-trophy'; color = 'sport-green'; }
+      if (n.tipo === 'success' || n.tipo === 'match_full' || n.tipo === 'ranking_up' || n.tipo === 'level_up' || n.tipo === 'result_uploaded') { icon = 'fa-trophy'; color = 'sport-green'; }
       if (n.tipo === 'warning') { icon = 'fa-triangle-exclamation'; color = 'sport-red'; }
-      if (n.tipo === 'ranking_down' || n.tipo === 'match_cancelled') { icon = 'fa-arrow-down'; color = 'sport-red'; }
+      if (n.tipo === 'ranking_down' || n.tipo === 'match_cancelled' || n.tipo === 'level_down') { icon = 'fa-arrow-down'; color = 'sport-red'; }
       if (n.tipo === 'match_opened' || n.tipo === 'new_rival') { icon = 'fa-user-plus'; color = 'primary'; }
+      if (n.tipo === 'match_leave') { icon = 'fa-user-minus'; color = 'sport-red'; }
+      if (n.tipo === 'match_closed') { icon = 'fa-lock'; color = 'sport-red'; }
       if (n.tipo === 'chat_mention') { icon = 'fa-at'; color = 'primary'; }
       
       return `
@@ -1653,13 +1776,17 @@ function renderActiveMode(user) {
 async function updateEcosystemHealth() {
     try {
         const usersSnap = await window.getDocsSafe(collection(db, "usuarios"));
-        const [matchesRetoSnap, matchesAmSnap] = await Promise.all([
-            window.getDocsSafe(query(collection(db, "partidosReto"), limit(50))),
-            window.getDocsSafe(query(collection(db, "partidosAmistosos"), limit(50))),
+        const [matchesRetoSnap, matchesAmSnap, diarySnap] = await Promise.all([
+            window.getDocsSafe(query(collection(db, "partidosReto"), limit(150))),
+            window.getDocsSafe(query(collection(db, "partidosAmistosos"), limit(150))),
+            window.getDocsSafe(query(collection(db, "diario"), limit(200))),
         ]);
         
         const totalUsers = usersSnap.size || 1;
-        const totalMatches = (matchesRetoSnap.size || 0) + (matchesAmSnap.size || 0);
+        const matches = [...matchesRetoSnap.docs, ...matchesAmSnap.docs].map((d) => d.data() || {});
+        const totalMatches = matches.length || 1;
+        const played = matches.filter((m) => isFinishedMatch(m) && !isCancelledMatch(m)).length;
+        const completionRatio = Math.min(1, played / totalMatches);
         
         // activity: users active in last 24h
         const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -1669,13 +1796,15 @@ async function updateEcosystemHealth() {
             if (acc && acc > yesterday) activeUsers++;
         });
 
-        // score calculation
-        const activityScore = Math.min(40, (activeUsers / totalUsers) * 100 * 0.4);
-        const matchScore = Math.min(30, totalMatches * 0.5);
-        const achievementBonus = 20; // assumed high for vibe
-        
-        const finalScore = Math.round(activityScore + matchScore + achievementBonus + 10); // +10 base
-        const score = Math.min(100, finalScore);
+        const diaryEntries = diarySnap.size || 0;
+        const diaryCoverage = Math.min(1, played > 0 ? diaryEntries / played : 0);
+
+        // Weighted index: actividad (35), cierre de partidos (35), constancia en diario (20), base estabilidad (10)
+        const activityScore = (activeUsers / totalUsers) * 35;
+        const completionScore = completionRatio * 35;
+        const diaryScore = diaryCoverage * 20;
+        const stabilityBase = 10;
+        const score = Math.max(0, Math.min(100, Math.round(activityScore + completionScore + diaryScore + stabilityBase)));
         const stateLabel =
           score >= 80
             ? "ÓPTIMO"
@@ -1708,15 +1837,18 @@ async function syncRivalIntelligence(uid) {
         const rivals = { won: {}, lost: {} };
 
         matches.forEach(m => {
-            if (m.estado !== 'jugado' || !m.resultado) return;
+            if (!isFinishedMatch(m) || isCancelledMatch(m)) return;
+            const winnerTeam = resolveWinnerTeam(m);
+            if (winnerTeam !== 1 && winnerTeam !== 2) return;
+
             const isT1 = m.equipoA?.includes(uid);
             const userTeam = isT1 ? m.equipoA : m.equipoB;
             const rivalTeam = isT1 ? m.equipoB : m.equipoA;
-            const userWon = m.resultado.ganador === (isT1 ? 1 : 2);
+            const userWon = isT1 ? winnerTeam === 1 : winnerTeam === 2;
 
-            userTeam?.forEach(p => { if (p && p !== uid) partners[p] = (partners[p] || 0) + 1; });
+            userTeam?.forEach(p => { if (p && p !== uid && !String(p).startsWith("GUEST_")) partners[p] = (partners[p] || 0) + 1; });
             rivalTeam?.forEach(r => {
-                if(r) {
+                if(r && !String(r).startsWith("GUEST_")) {
                     if (userWon) rivals.won[r] = (rivals.won[r] || 0) + 1;
                     else rivals.lost[r] = (rivals.lost[r] || 0) + 1;
                 }
@@ -1830,7 +1962,82 @@ window.aiAction = (action) => {
         case 'admin': window.location.href = 'admin.html'; break;
         case 'open': window.showAllOpenMatches(); break;
         case 'chat': window.runAIQuickCommand("Dame un informe completo de mi estado actual y proximos objetivos"); break;
+        case 'suggest': window.openSuggestionModal(); break;
     }
+};
+
+window.openSuggestionModal = () => {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay active";
+  overlay.style.zIndex = "11000";
+  overlay.innerHTML = `
+    <div class="modal-card glass-strong animate-up" style="max-width:420px">
+      <div class="modal-header">
+        <span class="modal-title font-black italic tracking-widest">SUGERIR MEJORA</span>
+        <button class="close-btn" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body p-4 flex-col gap-3">
+        <p class="text-[10px] text-white/60">Tu propuesta llegará solo al admin para mejorar la app.</p>
+        <input id="sugg-title" class="input-v9" placeholder="Título corto (ej: mejorar calendario)">
+        <textarea id="sugg-body" class="area-v9" rows="5" placeholder="Describe tu idea con detalle..."></textarea>
+        <button class="btn-premium-v7 w-full py-4 uppercase text-[10px] font-black tracking-[3px]" onclick="window.submitSuggestion(this)">ENVIAR SUGERENCIA</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
+
+window.submitSuggestion = async (btnEl) => {
+  const title = document.getElementById("sugg-title")?.value?.trim();
+  const body = document.getElementById("sugg-body")?.value?.trim();
+  if (!title || !body) {
+    showToast("Campos requeridos", "Escribe título y detalle de la sugerencia.", "warning");
+    return;
+  }
+  if (!currentUser?.uid) return;
+
+  if (btnEl) btnEl.disabled = true;
+  try {
+    await addDoc(collection(db, "sugerenciasIA"), {
+      uid: currentUser.uid,
+      title,
+      body,
+      status: "new",
+      createdAt: serverTimestamp(),
+    });
+
+    const admins = await window.getDocsSafe(
+      query(collection(db, "usuarios"), where("rol", "==", "Admin"), limit(10)),
+    );
+    const me = await getDocument("usuarios", currentUser.uid);
+    const sender = me?.nombreUsuario || me?.nombre || "Jugador";
+    await Promise.all(
+      admins.docs.map((d) =>
+        addDoc(collection(db, "notificaciones"), {
+          destinatario: d.id,
+          receptorId: d.id,
+          remitente: currentUser.uid,
+          tipo: "suggestion",
+          type: "suggestion",
+          titulo: "Nueva sugerencia IA",
+          mensaje: `${sender}: ${title}`,
+          enlace: "admin.html",
+          leido: false,
+          read: false,
+          seen: false,
+          timestamp: serverTimestamp(),
+          data: { source: "sugerenciasIA" },
+        }),
+      ),
+    );
+
+    showToast("Enviado", "Tu sugerencia se envió al admin.", "success");
+    btnEl?.closest(".modal-overlay")?.remove();
+  } catch (e) {
+    console.error("Suggestion send error:", e);
+    showToast("Error", "No se pudo enviar la sugerencia.", "error");
+    if (btnEl) btnEl.disabled = false;
+  }
 };
 
 window.showRivalSelector = async () => {
@@ -2017,13 +2224,15 @@ async function renderOpenMatches() {
             return true;
         });
 
-        const now = new Date();
+        await autoCancelExpiredMatches(list);
+
+        const now = Date.now();
         list = list.filter(m => {
             const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
             const filled = (m.jugadores || []).filter(id => id).length;
-            const notPlayed = m.estado !== 'jugado' && m.estado !== 'anulado' && m.estado !== 'cancelado';
+            const isOpen = !isFinishedMatch(m) && !isCancelledMatch(m) && !isExpiredOpenMatch(m, now);
             const upcoming = date > new Date(now - 7200000);
-            return filled < 4 && notPlayed && upcoming;
+            return filled < 4 && isOpen && upcoming;
         });
 
         const uid = currentUser?.uid;
@@ -2040,9 +2249,11 @@ async function renderOpenMatches() {
         
         if (list.length === 0) {
             container.innerHTML = `
-                <div class="flex-col center py-8 opacity-40 w-full">
+                <div class="flex-col center py-8 w-full open-empty-state">
                     <i class="fas fa-satellite-dish mb-2 text-primary opacity-20"></i>
-                    <span class="text-[9px] font-black uppercase tracking-widest text-muted">0 Partidos Disponibles</span>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-white/70">No hay partidos abiertos ahora</span>
+                    <span class="text-[9px] text-white/45 mt-1 text-center">Crea uno en calendario o revisa retos privados donde te hayan invitado.</span>
+                    <button class="open-more-btn mt-3" onclick="window.location.href='calendario.html'">IR AL CALENDARIO</button>
                 </div>
             `;
             return;
@@ -2064,3 +2275,16 @@ window.clearAppCache = () => {
     localStorage.removeItem('app_version');
     window.location.reload();
 };
+
+
+
+
+
+
+
+
+
+
+
+
+

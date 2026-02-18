@@ -197,3 +197,4 @@ export async function updatePresence(uid) {
     console.warn("Presence update failed:", err?.code || err?.message || err);
   });
 }
+

@@ -1,4 +1,4 @@
-import { getDocument, db, auth } from './firebase-service.js';
+﻿import { getDocument, db, auth } from './firebase-service.js';
 import { serverTimestamp, doc, runTransaction } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { getDynamicKFactor } from './modules/stats-evolution.js';
 
@@ -242,7 +242,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                 else if (g2 > g1) t2Sets++;
             });
             
-            if (t1Sets === 0 && t2Sets === 0) throw "Formato de resultado inválido (Ej: 6-4 6-3)";
+            if (t1Sets === 0 && t2Sets === 0) throw "Formato de resultado invÃ¡lido (Ej: 6-4 6-3)";
             
             const t1Wins = t1Sets > t2Sets;
             const isComp = col === 'partidosReto' || match.tipo === 'reto';
@@ -397,23 +397,59 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                     delta: delta,
                     pointsBefore: currentPoints,
                     pointsAfter: newPts,
-                    levelBefore: levelBefore,
+                    levelBefore: p.nivel || 2.5,
                     levelAfter: parseFloat(newLevel.toFixed(2)),
                     myLevel: p.nivel || 2.5,
                     partnerLevel: partner ? (partner.nivel || 2.5) : (p.nivel || 2.5),
+                    partnerPoints: Number(partner?.puntosRanking || currentPoints),
                     rivalLevels: opponentPlayers.map(op => (op.nivel || 2.5)),
+                    rivalPoints: opponentPlayers.map(op => (op.puntosRanking || currentPoints)),
                     opponentAvg: oppAvg,
                     sets: resultStr,
                     breakdown: elo.breakdown,
                     math: elo.math,
+                    // ADDITIVE BREAKDOWN for User Transparency
+                    puntosDetalle: {
+                        base: parseFloat((elo.math.K * (didIWin ? (1 - elo.math.expected) : (0 - elo.math.expected))).toFixed(2)),
+                        get difPuntos() {
+                            return parseFloat((this.base * (elo.math.underdog - 1)).toFixed(2));
+                        },
+                        get rachaPuntos() {
+                            return parseFloat(((this.base + this.difPuntos) * (elo.math.streak - 1)).toFixed(2));
+                        },
+                        get setsPuntos() {
+                            return parseFloat(((this.base + this.difPuntos + this.rachaPuntos) * (elo.math.performance * elo.math.dominance - 1)).toFixed(2));
+                        },
+                        get total() {
+                            return delta;
+                        }
+                    },
+                    puntosCalculados: {
+                        base: parseFloat((elo.math.K * (didIWin ? (1 - elo.math.expected) : (0 - elo.math.expected))).toFixed(2)),
+                        dificultad: 0,
+                        racha: 0,
+                        sets: 0,
+                        total: delta
+                    },
                     isComp: isComp,
                     closeMatch: isCloseMatch,
                     gameDiff: gameDiff,
                     prediction: elo.expectedWinrate,
                     pointImpact: pointImpact,
-                    mvpBonus: 0, // Will be filled if diary is processed simultaneously or updated later
+                    mvpBonus: 0,
                     timestamp: new Date().toISOString()
                 };
+                
+                // Finalize additive components
+                analysis.puntosCalculados.dificultad = parseFloat((analysis.puntosCalculados.base * (elo.math.underdog - 1)).toFixed(2));
+                analysis.puntosCalculados.racha = parseFloat(((analysis.puntosCalculados.base + analysis.puntosCalculados.dificultad) * (elo.math.streak - 1)).toFixed(2));
+                analysis.puntosCalculados.sets = parseFloat(((analysis.puntosCalculados.base + analysis.puntosCalculados.dificultad + analysis.puntosCalculados.racha) * (elo.math.performance * elo.math.dominance * elo.math.clutch * elo.math.partnerSync - 1)).toFixed(2));
+                
+                // Safety: Ensure total is the sum of parts in the log for visual audit
+                const checkTotal = analysis.puntosCalculados.base + analysis.puntosCalculados.dificultad + analysis.puntosCalculados.racha + analysis.puntosCalculados.sets;
+                if (Math.abs(checkTotal - delta) > 0.1) {
+                    analysis.puntosCalculados.sets += (delta - checkTotal); // Adjust rounding to match total
+                }
 
                 // Transactional Writes
                 transaction.update(doc(db, 'usuarios', p.id), {
@@ -573,4 +609,5 @@ function buildPointImpact({ delta, teamPointCount, amIteam1, team1Avg, team2Avg,
         multiplier: Number((diffMult * partnerMult).toFixed(3))
     };
 }
+
 

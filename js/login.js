@@ -357,3 +357,4 @@ function getFriendlyErrorMessage(code) {
             return { title: 'ERROR DESCONOCIDO', msg: 'No se pudo iniciar sesión. Revisa los datos.' };
     }
 }
+

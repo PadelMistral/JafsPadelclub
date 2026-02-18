@@ -1,4 +1,4 @@
-const PLACEMENT_MATCHES = 5;
+﻿const PLACEMENT_MATCHES = 5;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -89,4 +89,5 @@ export function buildPlacementRanking(users = []) {
     suggestedRank: idx + 1,
   }));
 }
+
 

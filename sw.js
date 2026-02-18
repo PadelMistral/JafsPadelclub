@@ -1,4 +1,4 @@
-const CACHE_NAME = "padeluminatis-v7.0";
+﻿const CACHE_NAME = "padeluminatis-v7.1";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -25,6 +25,48 @@ const CORE_ASSETS = [
   "./manifest.json",
 ];
 
+// Firebase Messaging (background) - compat works in service workers
+importScripts("https://www.gstatic.com/firebasejs/11.7.3/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/11.7.3/firebase-messaging-compat.js");
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA7Q90torM2Hvjidd5A3K2R90btsgt-d94",
+  authDomain: "padeluminatis.firebaseapp.com",
+  projectId: "padeluminatis",
+  storageBucket: "padeluminatis.appspot.com",
+  messagingSenderId: "40241508403",
+  appId: "1:40241508403:web:c4d3bbd19370dcf3173346",
+  measurementId: "G-079Q6DEQCG",
+};
+
+try {
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const messaging = firebase.messaging();
+  messaging.onBackgroundMessage((payload) => {
+    const title = payload?.notification?.title || payload?.data?.title || "Padeluminatis Pro";
+    const body = payload?.notification?.body || payload?.data?.body || "Nueva actualización en la Matrix.";
+    const url = payload?.data?.url || "./home.html";
+
+    const options = {
+      body,
+      icon: payload?.notification?.icon || "./imagenes/Logojafs.png",
+      badge: "./imagenes/Logojafs.png",
+      vibrate: [200, 100, 200],
+      tag: payload?.data?.tag || `fcm_${Date.now()}`,
+      renotify: true,
+      data: { url },
+      actions: [
+        { action: "open", title: "Ver ahora" },
+        { action: "close", title: "Cerrar" },
+      ],
+    };
+
+    self.registration.showNotification(title, options);
+  });
+} catch (e) {
+  console.warn("FCM background init failed:", e);
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
@@ -41,7 +83,6 @@ self.addEventListener("activate", (event) => {
       await Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log("Deleting old cache:", cacheName);
             return caches.delete(cacheName);
           }
           return Promise.resolve();
@@ -101,29 +142,24 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // HTML (Navigation): Network first for instant updates in browser + PWA.
   if (event.request.mode === "navigate") {
     event.respondWith(networkFirst(event.request, "./index.html"));
     return;
   }
 
-  // JS/CSS: Network first to avoid "manual cache clear" updates.
   if (url.pathname.match(/\.(js|css)$/)) {
     event.respondWith(networkFirst(event.request));
     return;
   }
 
-  // Images: Cache first.
   if (url.pathname.match(/\.(png|jpg|jpeg|svg|webp|gif)$/)) {
     event.respondWith(cacheFirst(event.request));
     return;
   }
 
-  // Default static assets.
   event.respondWith(staleWhileRevalidate(event.request));
 });
 
-// --- PUSH NOTIFICATIONS HANDLING ---
 self.addEventListener("push", (event) => {
   let data = {
     title: "Padeluminatis Pro",
@@ -170,7 +206,6 @@ self.addEventListener("notificationclick", (event) => {
     clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((windowClients) => {
-        // Prefer reusing an existing window to avoid duplicates.
         for (const client of windowClients) {
           if (!("focus" in client)) continue;
           if (client.url === urlToOpen) return client.focus();
@@ -183,3 +218,4 @@ self.addEventListener("notificationclick", (event) => {
       }),
   );
 });
+
