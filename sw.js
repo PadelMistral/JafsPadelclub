@@ -1,4 +1,5 @@
-﻿const CACHE_NAME = "padeluminatis-v7.1";
+const CACHE_NAME = "padeluminatis-v7.2";
+
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -21,163 +22,45 @@ const CORE_ASSETS = [
   "./js/firebase-service.js",
   "./js/modules/theme-manager.js",
   "./js/login.js",
-  "./OneSignalSDKWorker.js",
-  "./OneSignalSDKUpdaterWorker.js",
   "./imagenes/Logojafs.png",
-  "./manifest.json",
+  "./manifest.json"
 ];
 
-// Push channel moved to OneSignal worker (OneSignalSDKWorker.js).
+// ⚠️ IMPORTANTE:
+// NO incluyas archivos de OneSignal en la caché
+// NO gestiones eventos "push"
+// NO gestiones "notificationclick"
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
+    caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(CORE_ASSETS))
-      .then(() => self.skipWaiting()),
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    (async () => {
-      const cacheNames = await caches.keys();
-      await Promise.all(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
             return caches.delete(cacheName);
           }
-          return Promise.resolve();
-        }),
+        })
       );
-      await self.clients.claim();
-    })(),
+    }).then(() => self.clients.claim())
   );
 });
-
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
-});
-
-async function cachePut(request, response) {
-  if (!response || (!response.ok && response.type !== "opaque")) return response;
-  const cache = await caches.open(CACHE_NAME);
-  await cache.put(request, response.clone());
-  return response;
-}
-
-async function networkFirst(request, fallbackUrl = null) {
-  try {
-    const response = await fetch(request, { cache: "no-store" });
-    return await cachePut(request, response);
-  } catch (error) {
-    const cached = await caches.match(request);
-    if (cached) return cached;
-    if (fallbackUrl) {
-      const fallback = await caches.match(fallbackUrl);
-      if (fallback) return fallback;
-    }
-    throw error;
-  }
-}
-
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-  const response = await fetch(request);
-  return cachePut(request, response);
-}
-
-async function staleWhileRevalidate(request) {
-  const cached = await caches.match(request);
-  const networkFetch = fetch(request)
-    .then((response) => cachePut(request, response))
-    .catch(() => null);
-  return cached || networkFetch || fetch(request);
-}
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-
-  if (event.request.mode === "navigate") {
-    event.respondWith(networkFirst(event.request, "./index.html"));
-    return;
-  }
-
-  if (url.pathname.match(/\.(js|css)$/)) {
-    event.respondWith(networkFirst(event.request));
-    return;
-  }
-
-  if (url.pathname.match(/\.(png|jpg|jpeg|svg|webp|gif)$/)) {
-    event.respondWith(cacheFirst(event.request));
-    return;
-  }
-
-  event.respondWith(staleWhileRevalidate(event.request));
-});
-
-self.addEventListener("push", (event) => {
-  let data = {
-    title: "Padeluminatis Pro",
-    body: "Nueva actualización en la Matrix.",
-    icon: "./imagenes/Logojafs.png",
-  };
-
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch (e) {
-      data.body = event.data.text();
-    }
-  }
-
-  const options = {
-    body: data.body,
-    icon: data.icon || "./imagenes/Logojafs.png",
-    badge: "./imagenes/Logojafs.png",
-    vibrate: [200, 100, 200],
-    tag: data.tag || `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    renotify: true,
-    data: {
-      url: data.url || "./home.html",
-    },
-    actions: [
-      { action: "open", title: "Ver ahora" },
-      { action: "close", title: "Cerrar" },
-    ],
-  };
-
-  event.waitUntil(self.registration.showNotification(data.title, options));
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-
-  if (event.action === "close") return;
-
-  const rawUrl = event.notification.data?.url || "./home.html";
-  const urlToOpen = new URL(rawUrl, self.location.origin).href;
-
-  event.waitUntil(
-    clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((windowClients) => {
-        for (const client of windowClients) {
-          if (!("focus" in client)) continue;
-          if (client.url === urlToOpen) return client.focus();
-          if (client.url.startsWith(self.location.origin)) return client.focus();
-        }
-
-        if (clients.openWindow) {
-          return clients.openWindow(urlToOpen);
-        }
-      }),
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      return cached || fetch(event.request);
+    })
   );
 });
+
 
