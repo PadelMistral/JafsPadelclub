@@ -84,8 +84,9 @@ async function ensureOneSignalInitialized() {
     await oneSignalExec(async (OneSignal) => {
       await OneSignal.init({
         appId,
-        serviceWorkerPath: "./OneSignalSDKWorker.js",
-        serviceWorkerUpdaterPath: "./OneSignalSDKUpdaterWorker.js",
+        serviceWorkerPath: "./onesignal/OneSignalSDKWorker.js",
+        serviceWorkerUpdaterPath: "./onesignal/OneSignalSDKUpdaterWorker.js",
+        serviceWorkerParam: { scope: "/onesignal/" },
         notifyButton: { enable: true },
       });
     });
@@ -132,10 +133,9 @@ export async function initPushNotifications(uid = null) {
   if (!("Notification" in window)) return false;
 
   const userId = uid || auth.currentUser?.uid;
-  if (!userId) return false;
-
   const ok = await ensureOneSignalInitialized();
   if (!ok) return false;
+  if (!userId) return true;
 
   try {
     await oneSignalExec(async (OneSignal) => {

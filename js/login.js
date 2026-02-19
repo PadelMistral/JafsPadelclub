@@ -1,5 +1,6 @@
 ﻿import { login, loginWithGoogle, getDocument, observerAuth, auth } from './firebase-service.js';
 import { showToast } from './ui-core.js';
+import { initPushNotifications } from './modules/push-notifications.js';
 
 const LOGIN_BOOT_FLAG = '__padelLoginBooted';
 const LOGIN_SW_RELOAD_FLAG = '__padelLoginSwReloaded';
@@ -118,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window[LOGIN_BOOT_FLAG]) return;
     window[LOGIN_BOOT_FLAG] = true;
     initAuthPageServiceWorker();
+    initPushNotifications().catch(() => {});
 
     let authTransitionInProgress = false;
     let redirected = false;
@@ -357,4 +359,5 @@ function getFriendlyErrorMessage(code) {
             return { title: 'ERROR DESCONOCIDO', msg: 'No se pudo iniciar sesión. Revisa los datos.' };
     }
 }
+
 
