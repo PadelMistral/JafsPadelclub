@@ -84,9 +84,10 @@ async function ensureOneSignalInitialized() {
     await oneSignalExec(async (OneSignal) => {
       await OneSignal.init({
         appId,
-        serviceWorkerPath: "./onesignal/OneSignalSDKWorker.js",
-        serviceWorkerUpdaterPath: "./onesignal/OneSignalSDKUpdaterWorker.js",
-        serviceWorkerParam: { scope: "/onesignal/" },
+serviceWorkerPath: "OneSignalSDKWorker.js",
+serviceWorkerUpdaterPath: "OneSignalSDKUpdaterWorker.js",
+serviceWorkerParam: { scope: "/jafspadelclub/" },
+
         notifyButton: { enable: true },
       });
     });
@@ -323,4 +324,5 @@ export function setOneSignalAppId(appId) {
   localStorage.setItem(ONESIGNAL_APP_ID_STORAGE_KEY, clean);
   window.__ONESIGNAL_APP_ID = clean;
 }
+
 
