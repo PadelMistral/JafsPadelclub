@@ -155,6 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Gear/Palas
     renderGear(data.palas || []);
+    renderUltimateFutCard(data);
   }
 
   function updateLevelProgress(nivel, puntos) {
@@ -185,6 +186,113 @@ document.addEventListener("DOMContentLoaded", () => {
     if (lowerLabel) lowerLabel.textContent = prevStep.toFixed(2);
     if (upperLabel) upperLabel.textContent = nextStep.toFixed(2);
     if (upperBottomLabel) upperBottomLabel.textContent = nextStep.toFixed(2);
+  }
+
+  function renderUltimateFutCard(data) {
+    const container = document.getElementById("fut-card-container");
+    if (!container || !data) return;
+
+    const attrs = data.atributosTecnicos || {};
+    const diario = Array.isArray(data.diario) ? data.diario : [];
+    const stats = data.stats || {};
+
+    const clamp = (v, min = 0, max = 99) => Math.max(min, Math.min(max, Number(v) || 0));
+    const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+    const avgShot = (key) => {
+      const vals = diario
+        .map((e) => Number(e?.shots?.[key]))
+        .filter((v) => Number.isFinite(v) && v > 0);
+      return vals.length ? clamp(avg(vals) * 10, 1, 99) : null;
+    };
+
+    const volea = avgShot("volley") ?? clamp(attrs.volea ?? 50, 1, 99);
+    const bandeja = avgShot("bandeja") ?? clamp(((attrs.tecnica ?? 50) + (attrs.fondo ?? 50)) / 2, 1, 99);
+    const smash = avgShot("smash") ?? clamp(attrs.remate ?? 50, 1, 99);
+    const vibora = avgShot("vibora") ?? clamp(((attrs.volea ?? 50) + (attrs.tecnica ?? 50)) / 2, 1, 99);
+    const globo = avgShot("lob") ?? clamp(attrs.fondo ?? 50, 1, 99);
+    const saque = avgShot("serve") ?? clamp(((attrs.tecnica ?? 50) + (attrs.mentalidad ?? 50)) / 2, 1, 99);
+
+    const consistencyDerived = diario.length
+      ? clamp(
+          avg(
+            diario.map((e) => {
+              const w = Number(e?.stats?.winners ?? 0);
+              const ue = Number(e?.stats?.ue ?? 0);
+              return ((w + 1) / (ue + 1)) * 40;
+            }),
+          ),
+          1,
+          99,
+        )
+      : clamp(stats.consistency ?? 55, 1, 99);
+    const mental = clamp(attrs.mentalidad ?? 50, 1, 99);
+    const fisico = clamp(attrs.fisico ?? 50, 1, 99);
+    const tactica = clamp(attrs.tactica ?? attrs.lecturaJuego ?? 50, 1, 99);
+
+    const overallRaw = (
+      volea * 0.16 +
+      bandeja * 0.14 +
+      smash * 0.16 +
+      vibora * 0.1 +
+      globo * 0.1 +
+      saque * 0.09 +
+      consistencyDerived * 0.1 +
+      mental * 0.08 +
+      fisico * 0.07
+    );
+    const overall = Math.round(clamp(overallRaw, 1, 99));
+
+    let tier = "Bronce";
+    if (overall >= 90) tier = "Elite";
+    else if (overall >= 82) tier = "Pro";
+    else if (overall >= 74) tier = "Avanzado";
+    else if (overall >= 66) tier = "Competitivo";
+
+    const level = Number(data.nivel || 2.5).toFixed(2);
+    const name = (data.nombreUsuario || data.nombre || "Jugador").toUpperCase();
+    const dominant = (data.posicionPreferida || data.posicion || "Reves").toUpperCase();
+
+    const barRow = (label, value) => `
+      <div class="fut-bar-row">
+        <span class="l">${label}</span>
+        <div class="fut-bar"><span style="width:${clamp(value, 1, 99)}%"></span></div>
+        <span class="n">${Math.round(clamp(value, 1, 99))}</span>
+      </div>
+    `;
+
+    container.innerHTML = `
+      <div class="fut-card-main">
+        <div class="fut-overall">
+          <span class="ovr">${overall}</span>
+          <span class="tier">${tier}</span>
+        </div>
+        <div>
+          <div class="fut-headline">
+            <div>
+              <h3 class="fut-name">${name}</h3>
+              <div class="fut-meta">Nivel ${level} · ${dominant}</div>
+            </div>
+            <div class="fut-meta">${data.partidosJugados || 0} PJ · ${data.victorias || 0} W</div>
+          </div>
+
+          <div class="fut-shots-grid">
+            <div class="fut-shot"><div class="k">Volea</div><div class="v">${Math.round(volea)}</div></div>
+            <div class="fut-shot"><div class="k">Bandeja</div><div class="v">${Math.round(bandeja)}</div></div>
+            <div class="fut-shot"><div class="k">Smash</div><div class="v">${Math.round(smash)}</div></div>
+            <div class="fut-shot"><div class="k">Vibora</div><div class="v">${Math.round(vibora)}</div></div>
+            <div class="fut-shot"><div class="k">Globo</div><div class="v">${Math.round(globo)}</div></div>
+            <div class="fut-shot"><div class="k">Saque</div><div class="v">${Math.round(saque)}</div></div>
+          </div>
+
+          <div class="fut-bars">
+            ${barRow("Consistencia", consistencyDerived)}
+            ${barRow("Mental", mental)}
+            ${barRow("Fisico", fisico)}
+            ${barRow("Tactica", tactica)}
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   async function loadEloHistory(uid) {
@@ -220,9 +328,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const winnerTeam = resolveWinnerTeam(m);
             if (winnerTeam !== 1 && winnerTeam !== 2) return;
 
-            const isT1 = m.equipoA?.includes(uid);
-            const userTeam = isT1 ? m.equipoA : m.equipoB;
-            const rivalTeam = isT1 ? m.equipoB : m.equipoA;
+            const players = Array.isArray(m.jugadores) ? m.jugadores : [];
+            const myIdx = players.indexOf(uid);
+            if (myIdx < 0) return;
+            const isT1 = myIdx < 2;
+            const userTeam = isT1 ? players.slice(0, 2) : players.slice(2, 4);
+            const rivalTeam = isT1 ? players.slice(2, 4) : players.slice(0, 2);
             const userWon = isT1 ? winnerTeam === 1 : winnerTeam === 2;
 
             userTeam?.forEach(p => {

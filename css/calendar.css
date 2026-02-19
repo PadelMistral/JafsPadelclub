@@ -24,10 +24,11 @@
 
 .cal-clock-box #current-time-v5 {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.8rem;
   font-weight: 800;
   color: var(--primary);
   text-shadow: 0 0 10px var(--primary-glow);
+  letter-spacing: 1px;
 }
 
 .cal-clock-box #current-date-v5 {
@@ -198,10 +199,21 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
   border-right: 1px solid var(--border);
   padding-right: var(--space-xs);
+}
+
+.time-col-v5 .t-start {
+  font-size: 0.86rem;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.time-col-v5 .t-end {
+  font-size: 0.64rem;
+  opacity: 0.72;
 }
 
 /* Slot V5 */
@@ -550,6 +562,7 @@
   .calendar-main-v5 .container { padding-left: 2px; padding-right: 2px; }
   .slot-v5 { min-height: 56px; }
   .time-col-v5 { width: 56px; }
+  .cal-clock-box #current-time-v5 { font-size: 1.5rem; }
 }
 
 /* Advanced polish */

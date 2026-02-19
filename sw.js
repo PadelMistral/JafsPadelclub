@@ -21,51 +21,13 @@ const CORE_ASSETS = [
   "./js/firebase-service.js",
   "./js/modules/theme-manager.js",
   "./js/login.js",
+  "./OneSignalSDKWorker.js",
+  "./OneSignalSDKUpdaterWorker.js",
   "./imagenes/Logojafs.png",
   "./manifest.json",
 ];
 
-// Firebase Messaging (background) - compat works in service workers
-importScripts("https://www.gstatic.com/firebasejs/11.7.3/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/11.7.3/firebase-messaging-compat.js");
-
-const firebaseConfig = {
-  apiKey: "AIzaSyA7Q90torM2Hvjidd5A3K2R90btsgt-d94",
-  authDomain: "padeluminatis.firebaseapp.com",
-  projectId: "padeluminatis",
-  storageBucket: "padeluminatis.appspot.com",
-  messagingSenderId: "40241508403",
-  appId: "1:40241508403:web:c4d3bbd19370dcf3173346",
-  measurementId: "G-079Q6DEQCG",
-};
-
-try {
-  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-  const messaging = firebase.messaging();
-  messaging.onBackgroundMessage((payload) => {
-    const title = payload?.notification?.title || payload?.data?.title || "Padeluminatis Pro";
-    const body = payload?.notification?.body || payload?.data?.body || "Nueva actualización en la Matrix.";
-    const url = payload?.data?.url || "./home.html";
-
-    const options = {
-      body,
-      icon: payload?.notification?.icon || "./imagenes/Logojafs.png",
-      badge: "./imagenes/Logojafs.png",
-      vibrate: [200, 100, 200],
-      tag: payload?.data?.tag || `fcm_${Date.now()}`,
-      renotify: true,
-      data: { url },
-      actions: [
-        { action: "open", title: "Ver ahora" },
-        { action: "close", title: "Cerrar" },
-      ],
-    };
-
-    self.registration.showNotification(title, options);
-  });
-} catch (e) {
-  console.warn("FCM background init failed:", e);
-}
+// Push channel moved to OneSignal worker (OneSignalSDKWorker.js).
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

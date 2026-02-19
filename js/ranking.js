@@ -501,6 +501,26 @@ window.showMatchBreakdownV3 = async (logId) => {
       '<i class="fas fa-angles-up text-sport-green ml-1"></i>' : 
       (levelDiff < 0 ? '<i class="fas fa-angles-down text-sport-red ml-1"></i>' : '');
 
+    const pc = puntosDetalle || {};
+    const vBase = Number(pc.base ?? 0);
+    const vDif = Number(pc.dificultad ?? pc.rival ?? 0);
+    const vComp = Number(pc.companero ?? 0);
+    const vRacha = Number(pc.racha ?? 0);
+    const vSets = Number(pc.sets ?? 0);
+    const vJusticia = Number(pc.ajusteJusticia ?? 0);
+    const vMult = Number(pc.multiplicador ?? 1);
+    const sumComputed = vBase + vDif + vComp + vRacha + vSets + vJusticia;
+    const operationRows = [
+      { k: "Base", v: vBase, why: "Puntos iniciales por resultado esperado (ELO)." },
+      { k: "Dificultad rival", v: vDif, why: "Ajuste por nivel/fuerza media del equipo rival." },
+      { k: "Sinergia compañero", v: vComp, why: "Sincronización con tu pareja en pista." },
+      { k: "Racha", v: vRacha, why: "Multiplicador por dinámica reciente de resultados." },
+      { k: "Sets y dominio", v: vSets, why: "Premio/castigo por control real del marcador." },
+      { k: "Ajuste justicia", v: vJusticia, why: "Balance anti-farm y premio a upset reales." },
+    ];
+    const math = log.details?.math || {};
+    const fair = log.details?.fairPlay || {};
+
     // Construir HTML del modal
     content.innerHTML = `
       <div class="flex-col gap-4">
@@ -600,6 +620,44 @@ window.showMatchBreakdownV3 = async (logId) => {
                   <span class="text-primary font-mono font-bold">x${puntosDetalle.multiplicador.toFixed(2)}</span>
                 </div>
               ` : ''}
+
+              <div class="mt-3 p-3 rounded-2xl bg-white/5 border border-white/10">
+                <span class="text-[9px] font-black text-white/70 uppercase tracking-widest block mb-2">Operacion exacta</span>
+                ${operationRows.map(r => `
+                  <div class="flex-row between text-[10px] mb-1">
+                    <span class="text-white/45">${r.k}</span>
+                    <span class="font-mono font-bold ${r.v >= 0 ? 'text-sport-green' : 'text-sport-red'}">${r.v >= 0 ? '+' : ''}${r.v.toFixed(2)}</span>
+                  </div>
+                  <div class="text-[9px] text-white/35 mb-2">${r.why}</div>
+                `).join('')}
+                <div class="pt-2 border-t border-white/10 flex-row between text-[11px]">
+                  <span class="text-white/70 font-black">SUMA COMPONENTES</span>
+                  <span class="font-mono font-black text-white">${sumComputed >= 0 ? '+' : ''}${sumComputed.toFixed(2)}</span>
+                </div>
+                <div class="flex-row between text-[11px] mt-1">
+                  <span class="text-primary font-black">TOTAL LOG</span>
+                  <span class="font-mono font-black text-primary">${diff >= 0 ? '+' : ''}${Number(diff || 0).toFixed(2)}</span>
+                </div>
+                ${pc.multiplicador !== undefined ? `
+                  <div class="mt-2 pt-2 border-t border-white/10 text-[10px] text-white/55">
+                    <div class="mb-1">Formula con multiplicador IA:</div>
+                    <div class="font-mono text-white/80">(${vBase.toFixed(2)} + ${vDif.toFixed(2)} + ${vComp.toFixed(2)} + ${vSets.toFixed(2)}) x ${vMult.toFixed(2)} + ${vRacha.toFixed(2)} + ${vJusticia.toFixed(2)}</div>
+                  </div>
+                ` : ``}
+              </div>
+
+              <div class="mt-2 p-3 rounded-2xl bg-white/5 border border-white/10">
+                <span class="text-[9px] font-black text-white/70 uppercase tracking-widest block mb-2">Factores IA aplicados</span>
+                <div class="grid grid-cols-2 gap-2 text-[10px]">
+                  <div class="flex-row between"><span class="text-white/45">K</span><b class="text-white">${Number(math.K || 0).toFixed(2)}</b></div>
+                  <div class="flex-row between"><span class="text-white/45">Esperado</span><b class="text-white">${Math.round(Number(math.expected || 0) * 100)}%</b></div>
+                  <div class="flex-row between"><span class="text-white/45">Streak</span><b class="text-white">x${Number(math.streak || 1).toFixed(2)}</b></div>
+                  <div class="flex-row between"><span class="text-white/45">Underdog</span><b class="text-white">x${Number(math.underdog || 1).toFixed(2)}</b></div>
+                  <div class="flex-row between"><span class="text-white/45">Dominio</span><b class="text-white">x${Number(math.dominance || 1).toFixed(2)}</b></div>
+                  <div class="flex-row between"><span class="text-white/45">Clutch</span><b class="text-white">x${Number(math.clutch || 1).toFixed(2)}</b></div>
+                </div>
+                ${fair?.rule ? `<div class="text-[9px] text-cyan-300 mt-2">Regla de justicia aplicada: <b>${fair.rule}</b></div>` : ''}
+              </div>
             </div>
           ` : `
             <div class="text-[10px] text-muted italic text-center py-4">
@@ -892,6 +950,12 @@ async function renderUserDetailedHistory(uid) {
                             <span class="font-bold tracking-widest text-sport-gold">RACHA / PERF</span>
                             <span class="font-mono text-white">${((pc.racha || 0) + (pc.sets || 0) >= 0 ? '+' : '')}${((pc.racha || 0) + (pc.sets || 0)).toFixed(1)}</span>
                         </div>
+                        ${pc.ajusteJusticia !== undefined ? `
+                        <div class="flex-row between opacity-70">
+                            <span class="font-bold tracking-widest text-cyan">AJUSTE JUSTICIA</span>
+                            <span class="font-mono text-white">${(pc.ajusteJusticia >= 0 ? '+' : '')}${(pc.ajusteJusticia || 0).toFixed(1)}</span>
+                        </div>
+                        ` : ""}
                         <div class="flex-row between pt-1 border-t border-white/5">
                             <span class="font-black text-primary uppercase">SUMA TOTAL PARTIDO</span>
                             <span class="font-mono text-primary font-black">${(log.diff >= 0 ? '+' : '')}${log.diff.toFixed(1)}</span>

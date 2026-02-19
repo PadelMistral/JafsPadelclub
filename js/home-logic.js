@@ -48,6 +48,8 @@ let homeRefreshInterval = null;
 let homeUserDocUnsub = null;
 let homeBootUid = null;
 let lastOnlineRefreshAt = 0;
+let welcomeLiveClockInterval = null;
+let welcomeLiveWeatherAt = 0;
 const PROVISIONAL_MATCHES = 5;
 const userProfileCache = new Map();
 const shownNotifToastIds = new Set();
@@ -301,6 +303,10 @@ document.addEventListener("DOMContentLoaded", () => {
         try { homeUserDocUnsub(); } catch (_) {}
         homeUserDocUnsub = null;
       }
+      if (welcomeLiveClockInterval) {
+        clearInterval(welcomeLiveClockInterval);
+        welcomeLiveClockInterval = null;
+      }
       homeBootUid = null;
       safeAuthRedirect("index.html");
       return;
@@ -384,6 +390,7 @@ document.addEventListener("DOMContentLoaded", () => {
             setupStatInteractions();
             syncRivalIntelligence(user.uid);
             renderOpenMatches(); // New function
+            startWelcomeLiveWidgets();
             
             // Personalized welcome toast
             const welcomeName = localStorage.getItem("first_login_welcome");
@@ -416,7 +423,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         renderOpenMatches();
         const myMatches = allMatches.filter((m) => m.jugadores?.includes(currentUser?.uid));
-        renderPendingResultReminder(myMatches);
+        renderPendingResultReminderWithFallback(myMatches);
         renderCircuitMatches(allMatches);
     }, 60000);
   });
@@ -626,14 +633,7 @@ async function updateDashboard(data) {
       insightMetaEl.textContent = `${rankTxt} · ELO ${Math.round(currentPts)} · ${myUpcoming} partido(s) en agenda`;
     }
 
-    aiBox.onclick = async () => {
-      const fab = document.getElementById("vecina-chat-fab");
-      if (fab) fab.click();
-      else {
-          const { toggleChat } = await import("./modules/vecina-chat.js?v=6.5");
-          toggleChat();
-      }
-    };
+    aiBox.onclick = () => window.openAIHub();
   }
 
   // Rival Intelligence Sync
@@ -663,6 +663,8 @@ async function updateDashboard(data) {
       tipBox.onclick = () => (window.location.href = "eventos.html");
     }
   }
+
+  await loadLastResult();
 }
 
 async function loadLastResult() {
@@ -677,46 +679,38 @@ async function loadLastResult() {
     );
 
     const box = document.getElementById("last-match-box");
-    if (!box) return;
+    const content = document.getElementById("last-match-content");
+    if (!box || !content) return;
 
-    if (!logs.empty) {
-      const log = logs.docs[0].data();
-      const badge = document.getElementById("last-result-badge");
-      const score = document.getElementById("last-score");
-      const pts = document.getElementById("last-pts-diff");
-      const dateEl = document.getElementById("last-date");
-
-      const won = log.diff >= 0;
-      box.style.display = "block";
-      if (badge) {
-        badge.textContent = won ? "Victoria" : "Derrota";
-        badge.className = `status-badge ${won ? "badge-green" : "badge-orange"}`;
-      }
-      if (pts) {
-        pts.textContent = `${won ? "+" : ""}${log.diff}`;
-        pts.className = won
-          ? "text-sport-green font-bold"
-          : "text-danger font-bold";
-      }
-
-      if (log.matchId) {
-        const match =
-          (await getDocument("partidosReto", log.matchId)) ||
-          (await getDocument("partidosAmistosos", log.matchId));
-        if (score && match?.resultado?.sets)
-          score.textContent = match.resultado.sets;
-        if (dateEl && match?.fecha) {
-          const d = match.fecha.toDate();
-          dateEl.textContent = d.toLocaleDateString("es-ES", {
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-          });
-        }
-      }
-    } else {
-      box.style.display = "none";
+    if (logs.empty) {
+      content.classList.add("opacity-50");
+      content.innerHTML = '<span class="text-[10px]">Sin partidos terminados aún.</span>';
+      return;
     }
+
+    const log = logs.docs[0].data();
+    const won = Number(log.diff || 0) >= 0;
+    const match =
+      (log.matchId ? await getDocument("partidosReto", log.matchId) : null) ||
+      (log.matchId ? await getDocument("partidosAmistosos", log.matchId) : null);
+    const score = match?.resultado?.sets || log?.details?.sets || "Resultado registrado";
+    const dateObj = match?.fecha?.toDate ? match.fecha.toDate() : new Date();
+    const when = dateObj.toLocaleDateString("es-ES", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
+    const diff = Number(log.diff || 0);
+
+    content.classList.remove("opacity-50");
+    content.innerHTML = `
+      <div class="flex-row between items-center">
+        <span class="status-badge ${won ? "badge-green" : "badge-orange"}">${won ? "VICTORIA" : "DERROTA"}</span>
+        <span class="text-[10px] font-black ${won ? "text-sport-green" : "text-sport-red"}">${won ? "+" : ""}${diff} pts</span>
+      </div>
+      <span class="text-[13px] font-black text-white italic">${score}</span>
+      <span class="text-[9px] text-muted uppercase font-bold">${when}</span>
+    `;
   } catch (e) {
     console.error("Error loading last result:", e);
   }
@@ -772,7 +766,7 @@ async function loadMatches() {
   renderNextMatch(myNext);
   renderUpcomingMatches(myMatches.slice(1));
   renderCircuitMatches(list);
-  renderPendingResultReminder(myMatches);
+  await renderPendingResultReminderWithFallback(myMatches);
   renderMatchFeed("all");
 }
 
@@ -1312,10 +1306,11 @@ async function renderCircuitMatches(matches) {
 
 function renderPendingResultReminder(myMatches) {
   const container = document.getElementById("next-match-container");
-  if (!container || !Array.isArray(myMatches) || !myMatches.length) return;
+  if (!container) return;
 
   const now = Date.now();
-  const pending = myMatches.filter((m) => {
+  const baseList = Array.isArray(myMatches) ? myMatches : [];
+  const pending = baseList.filter((m) => {
     if (isFinishedMatch(m) || isCancelledMatch(m)) return false;
     const filled = (m.jugadores || []).filter((id) => id).length;
     if (filled < 4) return false;
@@ -1323,10 +1318,13 @@ function renderPendingResultReminder(myMatches) {
     return Number.isFinite(start) && now >= start + 90 * 60 * 1000;
   });
 
-  if (!pending.length) return;
+  const exists = container.querySelector(".result-reminder-v1");
+  if (!pending.length) {
+    if (exists) exists.remove();
+    return;
+  }
 
   const p = pending[0];
-  const exists = container.querySelector(".result-reminder-v1");
   if (exists) return;
 
   const banner = document.createElement("div");
@@ -1341,6 +1339,48 @@ function renderPendingResultReminder(myMatches) {
     </div>
   `;
   container.appendChild(banner);
+}
+
+async function fetchPendingResultMatches(uid) {
+  if (!uid) return [];
+  const now = Date.now();
+  const collections = ["partidosAmistosos", "partidosReto"];
+  const all = [];
+
+  for (const colName of collections) {
+    try {
+      const snap = await window.getDocsSafe(query(
+        collection(db, colName),
+        where("jugadores", "array-contains", uid),
+      ));
+      snap.forEach((d) => {
+        const m = { id: d.id, col: colName, ...d.data() };
+        if (isFinishedMatch(m) || isCancelledMatch(m)) return;
+        const filled = (m.jugadores || []).filter(Boolean).length;
+        if (filled < 4) return;
+        const start = (m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha)).getTime();
+        if (!Number.isFinite(start) || now < start + 90 * 60 * 1000) return;
+        all.push(m);
+      });
+    } catch (_) {}
+  }
+
+  all.sort((a, b) => {
+    const ad = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha);
+    const bd = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha);
+    return ad - bd;
+  });
+  return all;
+}
+
+async function renderPendingResultReminderWithFallback(myMatches) {
+  const localList = Array.isArray(myMatches) ? myMatches : [];
+  if (localList.length) {
+    renderPendingResultReminder(localList);
+    return;
+  }
+  const pendingRemote = await fetchPendingResultMatches(currentUser?.uid);
+  renderPendingResultReminder(pendingRemote);
 }
 async function renderMatchFeed(param) {
   const container = document.getElementById("match-feed");
@@ -1841,9 +1881,12 @@ async function syncRivalIntelligence(uid) {
             const winnerTeam = resolveWinnerTeam(m);
             if (winnerTeam !== 1 && winnerTeam !== 2) return;
 
-            const isT1 = m.equipoA?.includes(uid);
-            const userTeam = isT1 ? m.equipoA : m.equipoB;
-            const rivalTeam = isT1 ? m.equipoB : m.equipoA;
+            const players = Array.isArray(m.jugadores) ? m.jugadores : [];
+            const myIdx = players.indexOf(uid);
+            if (myIdx < 0) return;
+            const isT1 = myIdx < 2;
+            const userTeam = isT1 ? players.slice(0, 2) : players.slice(2, 4);
+            const rivalTeam = isT1 ? players.slice(2, 4) : players.slice(0, 2);
             const userWon = isT1 ? winnerTeam === 1 : winnerTeam === 2;
 
             userTeam?.forEach(p => { if (p && p !== uid && !String(p).startsWith("GUEST_")) partners[p] = (partners[p] || 0) + 1; });
@@ -1880,13 +1923,13 @@ async function syncRivalIntelligence(uid) {
                 el.onclick = async () => {
                     const { toggleChat, sendMessage } = await import("./modules/vecina-chat.js?v=6.5");
                     toggleChat(true); // Ensure open
-                    sendMessage(`Analiza a mi ${label.toLowerCase()} ${name}`);
+                    sendMessage(`Analiza jugador #${u.id}`);
                 };
             }
         };
 
-        await renderIntel(topNem, 'intel-nemesis', 'NÃ‰MESIS', 'fa-skull text-magenta');
-        await renderIntel(topVic, 'intel-victim', 'VÃCTIMA', 'fa-crown text-sport-green');
+        await renderIntel(topNem, 'intel-nemesis', 'NEMESIS', 'fa-skull text-magenta');
+        await renderIntel(topVic, 'intel-victim', 'VICTIMA', 'fa-crown text-sport-green');
         await renderIntel(topPar, 'intel-partner', 'SOCIO', 'fa-user-group text-cyan');
 
     } catch(e) { console.warn("Rival Intel sync error:", e); }
@@ -1908,8 +1951,44 @@ function setupStatInteractions() {
     if(rivalPanel) {
         const header = rivalPanel.querySelector('span'); // First span is the header
         if(header) {
-            header.innerHTML += ' <i class="fas fa-question-circle text-[8px] opacity-30 cursor-help" onclick="event.stopPropagation(); window.showVisualBreakdown(\'Rival Intelligence\', \'Este panel identifica a tus contactos clave basÃ¡ndose en tu historial de partidos. Pulsa en NÃ©mesis para ver cÃ³mo derrotarle, o en Socio para ver vuestra compatibilidad.\')"></i>';
+            header.innerHTML += ' <i class="fas fa-question-circle text-[8px] opacity-30 cursor-help" onclick="event.stopPropagation(); window.showVisualBreakdown(\'Rival Intelligence\', \'Este panel identifica contactos clave por historial real. Pulsa en NEMESIS para ver por que te cuesta y como ganarle, o en SOCIO para medir compatibilidad.\')"></i>';
         }
+    }
+}
+
+async function startWelcomeLiveWidgets() {
+    const timeEl = document.getElementById("welcome-live-time");
+    const weatherEl = document.getElementById("welcome-live-weather");
+    if (!timeEl && !weatherEl) return;
+
+    const renderClock = () => {
+        if (!timeEl) return;
+        const now = new Date();
+        const hh = now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const dd = now.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+        timeEl.innerHTML = `<i class="fas fa-clock"></i> ${hh} · ${dd}`;
+    };
+
+    renderClock();
+    if (welcomeLiveClockInterval) clearInterval(welcomeLiveClockInterval);
+    welcomeLiveClockInterval = setInterval(renderClock, 1000);
+
+    if (!weatherEl) return;
+    const nowMs = Date.now();
+    if (nowMs - welcomeLiveWeatherAt < 5 * 60 * 1000) return;
+    welcomeLiveWeatherAt = nowMs;
+
+    try {
+        const w = await getDetailedWeather();
+        const temp = Math.round(Number(w?.current?.temperature_2m || 0));
+        const cond = calculateCourtCondition(
+            Number(w?.current?.temperature_2m || 0),
+            Number(w?.current?.rain || 0),
+            Number(w?.current?.wind_speed_10m || 0),
+        );
+        weatherEl.innerHTML = `<i class="fas ${cond.icon}"></i> Benicalap: ${cond.condition} · ${temp}°C`;
+    } catch (_) {
+        weatherEl.innerHTML = `<i class="fas fa-cloud"></i> Benicalap: clima no disponible`;
     }
 }
 
@@ -1939,7 +2018,21 @@ window.openAIHub = async () => {
     const modal = document.getElementById('modal-ai-hub');
     if (!modal) return;
     modal.classList.add('active');
+    if (typeof window.switchAIHubTab === "function") window.switchAIHubTab("actions");
     updateEcosystemHealth();
+};
+
+window.switchAIHubTab = (tab = "actions") => {
+  const actionsPanel = document.getElementById("aihub-tab-actions");
+  const chatPanel = document.getElementById("aihub-tab-chat");
+  const actionsBtn = document.getElementById("aihub-tab-btn-actions");
+  const chatBtn = document.getElementById("aihub-tab-btn-chat");
+  const showChat = tab === "chat";
+
+  if (actionsPanel) actionsPanel.classList.toggle("hidden", showChat);
+  if (chatPanel) chatPanel.classList.toggle("hidden", !showChat);
+  if (actionsBtn) actionsBtn.classList.toggle("active", !showChat);
+  if (chatBtn) chatBtn.classList.toggle("active", showChat);
 };
 
 window.runAIQuickCommand = async (command) => {
@@ -1977,9 +2070,8 @@ window.openSuggestionModal = () => {
         <button class="close-btn" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
       </div>
       <div class="modal-body p-4 flex-col gap-3">
-        <p class="text-[10px] text-white/60">Tu propuesta llegará solo al admin para mejorar la app.</p>
-        <input id="sugg-title" class="input-v9" placeholder="Título corto (ej: mejorar calendario)">
-        <textarea id="sugg-body" class="area-v9" rows="5" placeholder="Describe tu idea con detalle..."></textarea>
+        <p class="text-[10px] text-white/60">Escribe libremente tu propuesta. Solo la verá el admin.</p>
+        <textarea id="sugg-body" class="area-v9" rows="6" placeholder="Ej: Me gustaría que el calendario avise con más antelación cuando falta 1 hora..."></textarea>
         <button class="btn-premium-v7 w-full py-4 uppercase text-[10px] font-black tracking-[3px]" onclick="window.submitSuggestion(this)">ENVIAR SUGERENCIA</button>
       </div>
     </div>
@@ -1988,12 +2080,12 @@ window.openSuggestionModal = () => {
 };
 
 window.submitSuggestion = async (btnEl) => {
-  const title = document.getElementById("sugg-title")?.value?.trim();
   const body = document.getElementById("sugg-body")?.value?.trim();
-  if (!title || !body) {
-    showToast("Campos requeridos", "Escribe título y detalle de la sugerencia.", "warning");
+  if (!body) {
+    showToast("Campo requerido", "Escribe tu propuesta de mejora.", "warning");
     return;
   }
+  const title = body.slice(0, 54).replace(/\s+/g, " ").trim() || "Sugerencia de mejora";
   if (!currentUser?.uid) return;
 
   if (btnEl) btnEl.disabled = true;

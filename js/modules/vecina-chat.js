@@ -32,6 +32,7 @@ const DATA_CACHE = {
   matches: [],
   globalUsers: [],
   openMatches: [],
+  systemStats: null,
   lastUpdate: 0,
 };
 
@@ -148,6 +149,15 @@ async function _syncData() {
       const filled = (m.jugadores || []).filter((id) => id).length;
       return filled < 4 && !isFinishedMatch(m) && !isCancelledMatch(m) && !isExpiredOpenMatch(m);
     });
+    const finishedMatches = DATA_CACHE.matches.filter((m) => isFinishedMatch(m) && !isCancelledMatch(m)).length;
+    DATA_CACHE.systemStats = {
+      totalUsers: DATA_CACHE.globalUsers.length,
+      myMatches: DATA_CACHE.matches.length,
+      myFinishedMatches: finishedMatches,
+      openCircuitMatches: DATA_CACHE.openMatches.length,
+      sections: ["home", "calendario", "ranking", "perfil", "diario", "palas", "admin"],
+      refreshedAt: new Date().toISOString(),
+    };
 
     DATA_CACHE.lastUpdate = now;
     userData = uData;
@@ -277,14 +287,52 @@ function _calcWinrate(uid) {
   };
 }
 
+function _normalizeText(text) {
+  return String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\w\s#@-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function _findUserByName(name) {
   if (!name) return null;
-  const q = name.toLowerCase().trim();
+  const raw = String(name || "").trim();
+  const byId = raw.match(/#([\w-]+)/);
+  if (byId?.[1]) {
+    const targetId = byId[1];
+    const foundById = DATA_CACHE.globalUsers.find((u) => u.id === targetId);
+    if (foundById) return foundById;
+  }
+
+  const q = _normalizeText(raw.replace(/^@/, ""));
   if (!q) return null;
-  return DATA_CACHE.globalUsers.find((u) => {
-    const n = (u.nombreUsuario || u.nombre || "").toLowerCase();
+
+  const exact = DATA_CACHE.globalUsers.find((u) => {
+    const n = _normalizeText(u.nombreUsuario || u.nombre || "");
+    return n === q;
+  });
+  if (exact) return exact;
+
+  const starts = DATA_CACHE.globalUsers.find((u) => {
+    const n = _normalizeText(u.nombreUsuario || u.nombre || "");
+    return n.startsWith(q);
+  });
+  if (starts) return starts;
+
+  const includes = DATA_CACHE.globalUsers.find((u) => {
+    const n = _normalizeText(u.nombreUsuario || u.nombre || "");
     return n.includes(q);
   });
+  if (includes) return includes;
+
+  const qTokens = q.split(" ").filter(Boolean);
+  return DATA_CACHE.globalUsers.find((u) => {
+    const n = _normalizeText(u.nombreUsuario || u.nombre || "");
+    return qTokens.every((t) => n.includes(t));
+  }) || null;
 }
 
 // --- DIALOGUE LAYER ---
@@ -302,14 +350,23 @@ function _detectIntent(query) {
     return "CMD_GREETING";
   if (q.includes("analiza mi partido") || q.includes("análisis del partido") || q.includes("qué tal jugamos"))
     return "CMD_ANALYZE_MATCH";
+  if (q.includes("rival intelligence") || q.includes("rival intel") || q.includes("nemesis socio victima"))
+    return "CMD_RIVAL_INTEL";
+  if (q.includes("resumen total") || q.includes("estado total") || q.includes("todo mi estado"))
+    return "CMD_FULL_SUMMARY";
+  if (q.includes("estado app") || q.includes("estado proyecto") || q.includes("que sabes de la app"))
+    return "CMD_APP_CONTEXT";
   if (
     q.includes("analiza a") ||
     q.includes("análisis de") ||
-    q.includes("analiza mi")
+    q.includes("analiza mi") ||
+    q.includes("analiza jugador")
   )
     return "CMD_ANALYZE_RIVAL";
   if (q.includes("socio") || q.includes("compañero")) return "CMD_PARTNER_SYNC";
   if (q.includes("chiste") || q.includes("risa")) return "CMD_JOKE";
+  if (q.includes("sugerencia") || q.includes("mejora app") || q.includes("buzon"))
+    return "CMD_SUGGEST_FEATURE";
   if (
     q.includes("diferencia con") ||
     q.includes("comparar con") ||
@@ -457,29 +514,61 @@ export function initVecinaChat() {
             <div class="ai-chat-footer p-5 bg-black/40 backdrop-blur-3xl border-t border-white-05">
                 <div id="ai-command-wrap" class="ai-command-container-v7 mb-4">
                     <div class="ai-quick-grid-v7">
-                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_TUTORIAL','Guía de Uso')">
+                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_TUTORIAL','Guia')">
                             <i class="fas fa-book-sparkles"></i>
-                            <span>Ayuda</span>
+                            <span>Guia</span>
                         </button>
                         <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_REPORT','Informe')">
                             <i class="fas fa-chart-line-up"></i>
                             <span>Informe</span>
                         </button>
+                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_RIVAL_INTEL','Rival Intel')">
+                            <i class="fas fa-crosshairs"></i>
+                            <span>Rivales</span>
+                        </button>
+                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_NEMESIS','Nemesis')">
+                            <i class="fas fa-skull"></i>
+                            <span>Nemesis</span>
+                        </button>
+                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_PARTNER_SYNC','Socio')">
+                            <i class="fas fa-user-group"></i>
+                            <span>Socio</span>
+                        </button>
+                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_FULL_SUMMARY','Resumen total')">
+                            <i class="fas fa-rectangle-list"></i>
+                            <span>Resumen</span>
+                        </button>
+                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_LEVEL_PROGRESS','Nivel')">
+                            <i class="fas fa-gauge-high"></i>
+                            <span>Nivel</span>
+                        </button>
                         <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_GLOBAL_RANKING','Ranking')">
                             <i class="fas fa-crown"></i>
-                            <span>Top 5</span>
+                            <span>Ranking</span>
                         </button>
-                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_LAST_MATCH','Último')">
+                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_LAST_MATCH','Ultimo')">
                             <i class="fas fa-history"></i>
-                            <span>Último</span>
+                            <span>Ultimo</span>
+                        </button>
+                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_WEEKLY','Semana')">
+                            <i class="fas fa-calendar-week"></i>
+                            <span>Semana</span>
+                        </button>
+                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_APP_CONTEXT','Sistema')">
+                            <i class="fas fa-database"></i>
+                            <span>Sistema</span>
                         </button>
                         <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_OPEN_MATCHES','Abiertos')">
                             <i class="fas fa-door-open"></i>
                             <span>Abiertos</span>
                         </button>
-                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_PREDICT','Predicción')">
-                            <i class="fas fa-crystal-ball"></i>
-                            <span>Evo</span>
+                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_MOMENTUM','Momentum')">
+                            <i class="fas fa-wave-square"></i>
+                            <span>Momentum</span>
+                        </button>
+                        <button class="ai-quick-btn-v7" onclick="window.openSuggestionModal?.()">
+                            <i class="fas fa-lightbulb"></i>
+                            <span>Sugerir</span>
                         </button>
                     </div>
                 </div>
@@ -505,9 +594,9 @@ export function initVecinaChat() {
                 position: fixed;
                 right: 20px;
                 bottom: 90px;
-                width: calc(100% - 40px);
-                height: 70vh;
-                max-height: 750px;
+                width: calc(100% - 24px);
+                height: 78vh;
+                max-height: 860px;
                 z-index: 10000;
                 transform: translateY(120%) scale(0.9);
                 opacity: 0;
@@ -521,8 +610,8 @@ export function initVecinaChat() {
             }
             @media (min-width: 600px) {
                 .ai-chat-panel.v14 {
-                    width: 480px;
-                    height: 700px;
+                    width: 620px;
+                    height: 780px;
                 }
             }
             .ai-chat-header { 
@@ -563,31 +652,43 @@ export function initVecinaChat() {
             }
             .ai-quick-grid-v7 { 
                 display: grid; 
-                grid-template-columns: repeat(3, 1fr); 
-                gap: 8px; 
+                grid-template-columns: repeat(4, minmax(0, 1fr)); 
+                gap: 6px; 
             }
             .ai-quick-btn-v7 { 
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                gap: 6px;
-                padding: 12px 8px; 
-                border-radius: 16px; 
+                gap: 4px;
+                padding: 8px 6px; 
+                border-radius: 12px; 
                 border: 1px solid rgba(255,255,255,0.05); 
                 background: rgba(255,255,255,0.04); 
                 color: #fff; 
                 cursor: pointer; 
                 transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             }
-            .ai-quick-btn-v7 i { font-size: 1.1rem; opacity: 0.7; color: var(--primary); }
-            .ai-quick-btn-v7 span { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; }
+            .ai-quick-btn-v7 i { font-size: 0.92rem; opacity: 0.75; color: var(--primary); }
+            .ai-quick-btn-v7 span { font-size: 0.54rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.7px; opacity: 0.72; line-height: 1.1; text-align: center; }
             .ai-quick-btn-v7:hover { 
                 background: rgba(198, 255, 0, 0.08); 
                 border-color: rgba(198, 255, 0, 0.2); 
-                transform: translateY(-3px);
+                transform: translateY(-2px);
             }
             .ai-quick-btn-v7:hover i { opacity: 1; transform: scale(1.1); }
             .ai-quick-btn-v7:hover span { opacity: 1; }
+
+            @media (max-width: 560px) {
+                .ai-chat-panel.v14 {
+                    right: 10px;
+                    bottom: 84px;
+                    width: calc(100% - 20px);
+                    height: 80vh;
+                }
+                .ai-quick-grid-v7 {
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                }
+            }
             
             .ai-input-container-v7 {
                 display: flex;
@@ -813,6 +914,101 @@ export async function generateResponse(query) {
                 </div>`,
         "Cariñito, estás que te sales. Sigue así y te veo en el World Padel Tour (o no...).",
       );
+
+    case "CMD_RIVAL_INTEL": {
+      const nemesis = Analyzer.findNemesis(uid);
+      const partnerCounts = {};
+      const victimCounts = {};
+
+      DATA_CACHE.matches.forEach((m) => {
+        if (!m?.jugadores || !isFinishedMatch(m) || isCancelledMatch(m)) return;
+        const myIdx = m.jugadores.indexOf(uid);
+        if (myIdx === -1) return;
+        const partnerIdx = myIdx < 2 ? (myIdx === 0 ? 1 : 0) : (myIdx === 2 ? 3 : 2);
+        const partnerId = m.jugadores[partnerIdx];
+        if (partnerId && !String(partnerId).startsWith("GUEST_")) {
+          partnerCounts[partnerId] = (partnerCounts[partnerId] || 0) + 1;
+        }
+        const rivals = myIdx < 2 ? [m.jugadores[2], m.jugadores[3]] : [m.jugadores[0], m.jugadores[1]];
+        const won = _didUserWinMatch(m, uid);
+        if (won) {
+          rivals.forEach((rid) => {
+            if (!rid || String(rid).startsWith("GUEST_")) return;
+            victimCounts[rid] = (victimCounts[rid] || 0) + 1;
+          });
+        }
+      });
+
+      const topByCount = (obj) => {
+        const keys = Object.keys(obj);
+        if (!keys.length) return null;
+        return keys.reduce((a, b) => (obj[a] > obj[b] ? a : b));
+      };
+      const partnerId = topByCount(partnerCounts);
+      const victimId = topByCount(victimCounts);
+      const partnerName = DATA_CACHE.globalUsers.find((u) => u.id === partnerId)?.nombreUsuario || DATA_CACHE.globalUsers.find((u) => u.id === partnerId)?.nombre || "Sin datos";
+      const victimName = DATA_CACHE.globalUsers.find((u) => u.id === victimId)?.nombreUsuario || DATA_CACHE.globalUsers.find((u) => u.id === victimId)?.nombre || "Sin datos";
+      const nemesisName = nemesis?.nombreUsuario || nemesis?.nombre || "Sin nemesis claro";
+      const nemesisTotal = Number(nemesis?.stats?.wins || 0) + Number(nemesis?.stats?.losses || 0);
+      const nemesisLossPct = nemesisTotal > 0
+        ? Math.round((Number(nemesis?.stats?.losses || 0) / nemesisTotal) * 100)
+        : 0;
+      const nemesisReason = nemesis
+        ? `Es tu nemesis porque te gana ${nemesisLossPct}% de las veces (${nemesis?.stats?.wins || 0}V/${nemesis?.stats?.losses || 0}D en duelos directos).`
+        : "Aun no hay suficiente historial para marcar una nemesis real.";
+
+      return `<div class="ai-result-card">
+                <span class="res-title">Rival Intelligence</span>
+                <div class="flex-col gap-2 mt-2">
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">NEMESIS</span><b class="text-secondary">${nemesisName}</b></div>
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Socio top</span><b class="text-cyan-300">${partnerName}</b></div>
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Victima top</span><b class="text-sport-green">${victimName}</b></div>
+                </div>
+                <div class="res-sub mt-2">${nemesisReason}</div>
+            </div>`;
+    }
+
+    case "CMD_FULL_SUMMARY": {
+      const played = DATA_CACHE.matches.filter((m) => isFinishedMatch(m) && !isCancelledMatch(m));
+      const wrS = _calcWinrate(uid);
+      const lvl = Number(DATA_CACHE.user?.nivel || 2.5).toFixed(2);
+      const pts = Math.round(Number(DATA_CACHE.user?.puntosRanking || 1000));
+      const open = DATA_CACHE.openMatches.length;
+      return `<div class="ai-result-card">
+                <span class="res-title">Resumen Total</span>
+                <div class="flex-col gap-2 mt-2">
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Nivel</span><b class="text-white">${lvl}</b></div>
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Puntos</span><b class="text-primary">${pts}</b></div>
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Historial</span><b class="text-white">${played.length} partidos</b></div>
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Winrate</span><b class="text-sport-green">${wrS.winrate}%</b></div>
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Abiertos en circuito</span><b class="text-white">${open}</b></div>
+                </div>
+            </div>`;
+    }
+
+    case "CMD_APP_CONTEXT": {
+      const s = DATA_CACHE.systemStats || {};
+      return `<div class="ai-result-card">
+                <span class="res-title">Contexto Global IA</span>
+                <div class="flex-col gap-2 mt-2">
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Usuarios en base</span><b class="text-white">${Number(s.totalUsers || 0)}</b></div>
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Tus partidos</span><b class="text-white">${Number(s.myMatches || 0)}</b></div>
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Tus partidos cerrados</span><b class="text-white">${Number(s.myFinishedMatches || 0)}</b></div>
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Abiertos en circuito</span><b class="text-white">${Number(s.openCircuitMatches || 0)}</b></div>
+                  <div class="flex-row between text-[10px]"><span class="text-white/40">Secciones conocidas</span><b class="text-primary">${(s.sections || []).join(", ")}</b></div>
+                </div>
+                <div class="res-sub mt-2">Uso datos de ranking, historial, diario, calendario y palas para responderte con contexto real y actualizado.</div>
+            </div>`;
+    }
+
+    case "CMD_SUGGEST_FEATURE":
+      return `<div class="ai-result-card">
+                <span class="res-title">Buzón de Mejoras</span>
+                <div class="res-sub mb-3">Tu propuesta irá directa al admin para revisión.</div>
+                <button class="text-[10px] font-black uppercase tracking-[2px] px-3 py-2 rounded-xl border border-primary/40 bg-primary/10 text-primary" onclick="window.openSuggestionModal?.()">
+                  Enviar sugerencia
+                </button>
+            </div>`;
 
     case "CMD_LEVEL_PROGRESS":
       const lvl = Number(DATA_CACHE.user?.nivel || 2.5);
@@ -1439,7 +1635,11 @@ export async function generateResponse(query) {
         .split(/analiza (a |mi )/i)
         .pop()
         .trim();
-      const rUser = _findUserByName(rName);
+      let rUser = _findUserByName(rName);
+      const qNorm = _normalizeText(query);
+      if (!rUser && qNorm.includes("nemesis")) {
+        rUser = Analyzer.findNemesis(uid) || null;
+      }
       if (!rUser)
         return noData(`No encuentro a ese jugador en la base de datos.`);
 
@@ -1473,7 +1673,8 @@ export async function generateResponse(query) {
     // --- NEW V15 COMMANDS ---
     case "CMD_H2H": {
       let rName = query.split(/con |versus |vs /i).pop().trim();
-      const rival = _findUserByName(rName);
+      let rival = _findUserByName(rName);
+      if (!rival && _normalizeText(query).includes("nemesis")) rival = Analyzer.findNemesis(uid) || null;
       if (!rival) return noData(`No encuentro a '${rName}' para comparar.`);
       const record = { wins: 0, losses: 0 };
       DATA_CACHE.matches.forEach(m => {
@@ -1593,6 +1794,9 @@ export async function generateResponse(query) {
                         <div class="flex-row between text-[10px]"><span class="text-white/40">📊</span><span class="text-white">"informe", "mi ranking"</span></div>
                         <div class="flex-row between text-[10px]"><span class="text-white/40">🔍</span><span class="text-white">"busca a Juan"</span></div>
                         <div class="flex-row between text-[10px]"><span class="text-white/40">⚔️</span><span class="text-white">"h2h con Pedro"</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">🎯</span><span class="text-white">"rival intelligence"</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">🧾</span><span class="text-white">"resumen total"</span></div>
+                        <div class="flex-row between text-[10px]"><span class="text-white/40">💡</span><span class="text-white">"sugerencia"</span></div>
                         <div class="flex-row between text-[10px]"><span class="text-white/40">📈</span><span class="text-white">"evolución", "momentum"</span></div>
                         <div class="flex-row between text-[10px]"><span class="text-white/40">🏆</span><span class="text-white">"record", "mejor racha"</span></div>
                         <div class="flex-row between text-[10px]"><span class="text-white/40">📅</span><span class="text-white">"resumen semanal"</span></div>

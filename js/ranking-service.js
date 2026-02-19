@@ -206,6 +206,53 @@ export function getBaseEloByLevel(level) {
     return Math.round(1000 + (l - 2.5) * 400); 
 }
 
+function applyFairCompetitionGuard({ delta, didIWin, myLevel, oppAvg, isComp, expectedWinrate }) {
+    let adjusted = Number(delta || 0);
+    const levelGap = Number((myLevel - oppAvg).toFixed(2));
+    const expected = Number(expectedWinrate || 50);
+    let rule = "none";
+
+    if (didIWin) {
+        // If you were a heavy favorite, wins should not over-reward farming.
+        if (levelGap >= 0.8) {
+            adjusted = Math.min(adjusted, isComp ? 8 : 6);
+            rule = "favorite_cap";
+        } else if (expected >= 75) {
+            adjusted = Math.min(adjusted, isComp ? 10 : 8);
+            rule = "high_expected_cap";
+        }
+
+        // If you beat a clearly stronger team, ensure meaningful upside.
+        if (levelGap <= -0.6) {
+            adjusted = Math.max(adjusted, isComp ? 14 : 10);
+            rule = "upset_floor";
+        }
+
+        adjusted = Math.min(adjusted, isComp ? 32 : 24);
+    } else {
+        // Underdog protection on expected losses.
+        if (levelGap <= -0.8) {
+            adjusted = Math.max(adjusted, isComp ? -6 : -5);
+            rule = "underdog_shield";
+        }
+
+        // Penalize big favorites more if they lose.
+        if (levelGap >= 0.8 || expected >= 75) {
+            adjusted = Math.min(adjusted, isComp ? -16 : -14);
+            rule = "favorite_loss_penalty";
+        }
+
+        adjusted = Math.max(adjusted, isComp ? -24 : -20);
+    }
+
+    return {
+        delta: Math.round(adjusted),
+        rule,
+        levelGap,
+        expectedWinrate: expected,
+    };
+}
+
 /**
  * Processes match results and updates all players with Advanced ELO Logic
  */
@@ -361,6 +408,15 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
 
                 let delta = didIWin ? elo.win : elo.loss;
                 if (!isComp) delta = Math.round(delta * 0.7); 
+                const fairGuard = applyFairCompetitionGuard({
+                    delta,
+                    didIWin,
+                    myLevel: p.nivel || 2.5,
+                    oppAvg,
+                    isComp,
+                    expectedWinrate: elo.expectedWinrate
+                });
+                delta = fairGuard.delta;
 
                 const newPts = Math.max(0, currentPoints + delta);
                 const levelChange = calculateLevelChange(p.nivel || 2.5, oppAvg, didIWin);
@@ -428,6 +484,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                         base: parseFloat((elo.math.K * (didIWin ? (1 - elo.math.expected) : (0 - elo.math.expected))).toFixed(2)),
                         dificultad: 0,
                         racha: 0,
+                        ajusteJusticia: 0,
                         sets: 0,
                         total: delta
                     },
@@ -436,6 +493,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                     gameDiff: gameDiff,
                     prediction: elo.expectedWinrate,
                     pointImpact: pointImpact,
+                    fairPlay: fairGuard,
                     mvpBonus: 0,
                     timestamp: new Date().toISOString()
                 };
@@ -446,9 +504,11 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                 analysis.puntosCalculados.sets = parseFloat(((analysis.puntosCalculados.base + analysis.puntosCalculados.dificultad + analysis.puntosCalculados.racha) * (elo.math.performance * elo.math.dominance * elo.math.clutch * elo.math.partnerSync - 1)).toFixed(2));
                 
                 // Safety: Ensure total is the sum of parts in the log for visual audit
-                const checkTotal = analysis.puntosCalculados.base + analysis.puntosCalculados.dificultad + analysis.puntosCalculados.racha + analysis.puntosCalculados.sets;
+                const rawParts = analysis.puntosCalculados.base + analysis.puntosCalculados.dificultad + analysis.puntosCalculados.racha + analysis.puntosCalculados.sets;
+                analysis.puntosCalculados.ajusteJusticia = parseFloat((delta - rawParts).toFixed(2));
+                const checkTotal = rawParts + analysis.puntosCalculados.ajusteJusticia;
                 if (Math.abs(checkTotal - delta) > 0.1) {
-                    analysis.puntosCalculados.sets += (delta - checkTotal); // Adjust rounding to match total
+                    analysis.puntosCalculados.ajusteJusticia += (delta - checkTotal); // Adjust rounding to match total
                 }
 
                 // Transactional Writes

@@ -414,11 +414,18 @@ function renderSuggestions(list) {
     container.innerHTML = list.map((s) => {
         const date = s.createdAt?.toDate ? s.createdAt.toDate() : new Date();
         const when = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) + ' ' + date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        const sender = allUsers.find((u) => u.id === s.uid);
+        const senderName = sender?.nombreUsuario || sender?.nombre || s.uid || "Usuario";
+        const senderMeta = sender?.email || s.uid || "sin id";
         return `
             <div class="sport-card p-4 flex-col gap-3">
                 <div class="flex-row between items-center">
                     <span class="text-xs font-black text-primary uppercase">${(s.title || 'Sin título')}</span>
                     <span class="text-[9px] text-muted">${when}</span>
+                </div>
+                <div class="flex-row between items-center text-[9px]">
+                    <span class="text-white/70 font-bold">Usuario: ${senderName}</span>
+                    <span class="text-white/45">${senderMeta}</span>
                 </div>
                 <p class="text-xs text-white/80 leading-relaxed">${(s.body || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
                 <div class="flex-row between items-center">

@@ -19,13 +19,12 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// FCM Web Push (VAPID public key)
-// Public key is safe to ship in client code.
-const FCM_VAPID_PUBLIC_KEY = "BNtt-g94tWGb6LPZjBWS0fO9MixrnclGyMHcDClTx0isC3uA-Bg-mCoO-yCeNzRoNFwdjXJGqLHdeOpD6w7eGRo";
-if (typeof window !== "undefined") {
-  window.__FCM_VAPID_PUBLIC_KEY = FCM_VAPID_PUBLIC_KEY;
+// OneSignal Web Push (set your OneSignal App ID here once created)
+const ONESIGNAL_APP_ID = "";
+if (typeof window !== "undefined" && ONESIGNAL_APP_ID) {
+  window.__ONESIGNAL_APP_ID = ONESIGNAL_APP_ID;
   try {
-    localStorage.setItem("fcm_vapid_public_key", FCM_VAPID_PUBLIC_KEY);
+    localStorage.setItem("onesignal_app_id", ONESIGNAL_APP_ID);
   } catch (_) {}
 }
 

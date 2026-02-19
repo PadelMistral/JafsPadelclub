@@ -14,7 +14,49 @@ import {
 import { triggerFeedback, handleOperationError, FEEDBACK } from './modules/feedback-system.js';
 import { showToast } from './ui-core.js'; // Keep for legacy/direct use if needed
 import { processMatchResults } from './ranking-service.js';
-import { createNotification } from './services/notification-service.js';
+import { createNotification, suggestDiaryEntry } from './services/notification-service.js';
+
+let apoingStyleInjected = false;
+function ensureApoingStyles() {
+    if (apoingStyleInjected || document.getElementById('apoing-link-style')) return;
+    const style = document.createElement('style');
+    style.id = 'apoing-link-style';
+    style.textContent = `
+      .apoing-link-pro{
+        display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:14px;
+        border:1px solid rgba(0,212,255,.38);background:linear-gradient(120deg,rgba(0,212,255,.14),rgba(198,255,0,.1));
+        color:#dff8ff;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:1.2px;
+        box-shadow:0 0 0 rgba(0,212,255,0);animation:apoingPulse 1.8s ease-in-out infinite;
+      }
+      .apoing-link-pro i{color:#67e8f9}
+      .apoing-link-wrap{display:flex;justify-content:center}
+      .modal-overlay .modal-card{border-radius:18px}
+      .modal-overlay .modal-header{padding:12px 14px}
+      .modal-overlay .modal-body{padding:12px}
+      .md-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 16px}
+      .md-tab-btn{padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#cbd5e1;font-size:10px;font-weight:900;letter-spacing:1px;text-transform:uppercase}
+      .md-tab-btn.active{border-color:rgba(34,211,238,.6);background:rgba(34,211,238,.12);color:#e0fbff}
+      .md-tab-panel{display:flex;flex-direction:column;gap:14px}
+      .md-tab-panel.hidden{display:none}
+      @keyframes apoingPulse{
+        0%{box-shadow:0 0 0 0 rgba(0,212,255,.28)}
+        70%{box-shadow:0 0 0 12px rgba(0,212,255,0)}
+        100%{box-shadow:0 0 0 0 rgba(0,212,255,0)}
+      }
+    `;
+    document.head.appendChild(style);
+    apoingStyleInjected = true;
+}
+
+function renderApoingLink(cta = "Comprobar reserva en Apoing") {
+    return `
+        <div class="apoing-link-wrap mt-3">
+            <a href="https://www.apoing.com" target="_blank" rel="noopener noreferrer" class="apoing-link-pro">
+                <i class="fas fa-arrow-up-right-from-square"></i> ${cta}
+            </a>
+        </div>
+    `;
+}
 
 async function safeOnSnapshot(q, onNext) {
     if (window.getDocsSafe) {
@@ -134,6 +176,7 @@ window.executeCreateMatch = async (dateStr, hour) => {
  */
 export async function renderMatchDetail(container, matchId, type, currentUser, userData) {
     if (!container) return;
+    ensureApoingStyles();
     const isReto = type ? type.toLowerCase().includes('reto') : false;
     const col = isReto ? 'partidosReto' : 'partidosAmistosos';
     
@@ -246,83 +289,88 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     <div class="mt-4 opacity-80 scale-90">${weatherHtml}</div>
                 </div>
 
-                <!-- Probability Simulation Board -->
-                <div class="prediction-card-v7 mb-6">
-                    <div class="flex-row between items-end mb-2">
-                         <div class="team-prob-box">
-                             <span class="team-label text-left">EQUIPO A</span>
-                             <span class="prob-val" style="color:var(--primary)">${Math.round(p1)}%</span>
-                         </div>
-                         <div class="ia-node">
-                             <i class="fas fa-brain"></i>
-                             <span>IA PREDICTION</span>
-                         </div>
-                         <div class="team-prob-box text-right">
-                             <span class="team-label text-right">EQUIPO B</span>
-                             <span class="prob-val" style="color:var(--secondary)">${Math.round(p2)}%</span>
-                         </div>
-                    </div>
-                    <div class="prob-track-v7">
-                        <div class="prob-fill t1" style="width: ${p1}%"></div>
-                        <div class="prob-fill t2" style="width: ${p2}%"></div>
-                    </div>
+                <div class="md-tabs">
+                    <button id="md-tab-btn-lineup" class="md-tab-btn active" onclick="window.switchMatchDetailTab('lineup')">Alineacion</button>
+                    <button id="md-tab-btn-chat" class="md-tab-btn" onclick="window.switchMatchDetailTab('chat')">Chat partido</button>
                 </div>
 
-                ${eloBreakdownHtml}
-
-                <div class="court-container-v7 mb-6">
-                    <div class="court-schema-v7">
-                        <div class="court-net"></div>
-                        
-                        <div class="players-row-v7 top mb-8">
-                            ${renderPlayerSlot(players[0], 0, isOrganizer, matchId, col)}
-                            ${renderPlayerSlot(players[1], 1, isOrganizer, matchId, col)}
+                <div id="md-tab-lineup" class="md-tab-panel">
+                    <!-- Probability Simulation Board -->
+                    <div class="prediction-card-v7 mb-1">
+                        <div class="flex-row between items-end mb-2">
+                             <div class="team-prob-box">
+                                 <span class="team-label text-left">EQUIPO A</span>
+                                 <span class="prob-val" style="color:var(--primary)">${Math.round(p1)}%</span>
+                             </div>
+                             <div class="ia-node">
+                                 <i class="fas fa-brain"></i>
+                                 <span>IA PREDICTION</span>
+                             </div>
+                             <div class="team-prob-box text-right">
+                                 <span class="team-label text-right">EQUIPO B</span>
+                                 <span class="prob-val" style="color:var(--secondary)">${Math.round(p2)}%</span>
+                             </div>
                         </div>
-                        
-                        <div class="vs-divider-v7">
-                           <div class="vs-line"></div>
-                           <div class="vs-circle">VS</div>
-                           <div class="vs-line"></div>
-                        </div>
-                        
-                        <div class="players-row-v7 bottom mt-8">
-                            ${renderPlayerSlot(players[2], 2, isOrganizer, matchId, col)}
-                            ${renderPlayerSlot(players[3], 3, isOrganizer, matchId, col)}
+                        <div class="prob-track-v7">
+                            <div class="prob-fill t1" style="width: ${p1}%"></div>
+                            <div class="prob-fill t2" style="width: ${p2}%"></div>
                         </div>
                     </div>
-                </div>
 
-                <div class="flex-row center gap-2 mb-8 opacity-60">
-                    <i class="fas fa-crown text-yellow-500 text-[10px]"></i>
-                    <span class="text-[9px] font-black uppercase tracking-widest">HOST: ${cName}</span>
-                </div>
+                    ${renderApoingLink("Comprobar reserva en Apoing")}
+                    ${eloBreakdownHtml}
 
-                <div class="comms-panel-v7 mb-8">
-                    <div class="comms-header">
-                         <div class="flex-row items-center gap-2">
-                             <div class="live-dot"></div>
-                             <span class="text-[10px] font-black uppercase tracking-widest text-white">Radio Táctica</span>
-                         </div>
-                         <i class="fas fa-signal text-xs text-muted"></i>
-                    </div>
-                    <div class="comms-body custom-scroll" id="match-chat-msgs">
-                        ${!isParticipant ? '<div class="lock-overlay"><i class="fas fa-lock mb-1"></i><span>CANAL CIFRADO</span><small>Únete para descifrar</small></div>' : ''}
-                    </div>
-                    ${isParticipant ? `
-                        <div class="comms-footer">
-                            <input type="text" id="match-chat-in" class="comms-input" placeholder="Transmitir datos...">
-                            <button class="comms-send" onclick="sendMatchChat('${matchId}', '${col}')"><i class="fas fa-paper-plane"></i></button>
+                    <div class="court-container-v7 mb-3">
+                        <div class="court-schema-v7">
+                            <div class="court-net"></div>
+                            
+                            <div class="players-row-v7 top mb-8">
+                                ${renderPlayerSlot(players[0], 0, isOrganizer, matchId, col)}
+                                ${renderPlayerSlot(players[1], 1, isOrganizer, matchId, col)}
+                            </div>
+                            
+                            <div class="vs-divider-v7">
+                               <div class="vs-line"></div>
+                               <div class="vs-circle">VS</div>
+                               <div class="vs-line"></div>
+                            </div>
+                            
+                            <div class="players-row-v7 bottom mt-8">
+                                ${renderPlayerSlot(players[2], 2, isOrganizer, matchId, col)}
+                                ${renderPlayerSlot(players[3], 3, isOrganizer, matchId, col)}
+                            </div>
                         </div>
-                    ` : ''}
+                    </div>
+
+                    <div class="flex-row center gap-2 mb-2 opacity-60">
+                        <i class="fas fa-crown text-yellow-500 text-[10px]"></i>
+                        <span class="text-[9px] font-black uppercase tracking-widest">HOST: ${cName}</span>
+                    </div>
+
+                    <div class="actions-grid-v7 flex-col gap-3">
+                        ${renderMatchActions(m, isParticipant, isOrganizer, currentUser.uid, matchId, col)}
+                    </div>
                 </div>
 
-                <div class="actions-grid-v7 flex-col gap-3">
-                    ${renderMatchActions(m, isParticipant, isOrganizer, currentUser.uid, matchId, col)}
-                </div>
-                <div class="mt-4 p-3 rounded-2xl bg-white/5 border border-white/10 text-center">
-                    <a href="https://www.apoing.com" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black uppercase tracking-[2px] text-primary">
-                        <i class="fas fa-arrow-up-right-from-square mr-1"></i> Comprobar reserva en Apoing
-                    </a>
+                <div id="md-tab-chat" class="md-tab-panel hidden">
+                    <div class="comms-panel-v7 mb-1">
+                        <div class="comms-header">
+                             <div class="flex-row items-center gap-2">
+                                 <div class="live-dot"></div>
+                                 <span class="text-[10px] font-black uppercase tracking-widest text-white">Radio Tactica</span>
+                             </div>
+                             <i class="fas fa-signal text-xs text-muted"></i>
+                        </div>
+                        <div class="comms-body custom-scroll" id="match-chat-msgs">
+                            ${!isParticipant ? '<div class="lock-overlay"><i class="fas fa-lock mb-1"></i><span>CANAL CIFRADO</span><small>Unete para descifrar</small></div>' : ''}
+                        </div>
+                        ${isParticipant ? `
+                            <div class="comms-footer">
+                                <input type="text" id="match-chat-in" class="comms-input" placeholder="Transmitir datos...">
+                                <button class="comms-send" onclick="sendMatchChat('${matchId}', '${col}')"><i class="fas fa-paper-plane"></i></button>
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
             </div>
         `;
@@ -334,12 +382,25 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
     subscribeDoc(col, matchId, render);
 }
 
+window.switchMatchDetailTab = (tab = 'lineup') => {
+    const lineup = document.getElementById('md-tab-lineup');
+    const chat = document.getElementById('md-tab-chat');
+    const bLine = document.getElementById('md-tab-btn-lineup');
+    const bChat = document.getElementById('md-tab-btn-chat');
+    const isChat = tab === 'chat';
+    if (lineup) lineup.classList.toggle('hidden', isChat);
+    if (chat) chat.classList.toggle('hidden', !isChat);
+    if (bLine) bLine.classList.toggle('active', !isChat);
+    if (bChat) bChat.classList.toggle('active', isChat);
+};
+
 /**
  * Renders the match creation form for a specific date and time.
  * V7 Styled.
  */
 export async function renderCreationForm(container, dateStr, hour, currentUser, userData) {
     if (!container) return;
+    ensureApoingStyles();
     
     container.innerHTML = `
         <div class="booking-hub-v7 animate-up p-2">
@@ -378,6 +439,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                         </div>
                     </div>
                 </div>
+                ${renderApoingLink("Confirmar reserva en Apoing antes de alinear")}
 
                 <!-- Alineación Táctica (Disposición de Pista) -->
                 <span class="cfg-label-v7">ALINEACIÓN TÁCTICA</span>
@@ -485,11 +547,6 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                     </div>
                     <i class="fas fa-fingerprint"></i>
                 </button>
-                <div class="mt-3 text-center">
-                    <a href="https://www.apoing.com" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black uppercase tracking-[2px] text-primary">
-                        <i class="fas fa-arrow-up-right-from-square mr-1"></i> Verificar reserva en Apoing
-                    </a>
-                </div>
             </div>
         </div>
     `;
@@ -948,6 +1005,7 @@ window.closeMatchModal = () => document.getElementById('modal-match')?.classList
 window.openResultForm = async (id, col) => {
     const area = document.getElementById('match-detail-area');
     if (!area) return;
+    ensureApoingStyles();
 
     // Use V7 Booking Hub style for result form
     area.innerHTML = `
@@ -969,11 +1027,7 @@ window.openResultForm = async (id, col) => {
                 <span class="t-main">REGISTRAR DATOS</span>
                 <i class="fas fa-save"></i>
             </button>
-            <div class="mt-3 text-center">
-                <a href="https://www.apoing.com" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black uppercase tracking-[2px] text-primary">
-                    <i class="fas fa-arrow-up-right-from-square mr-1"></i> Comprobar reserva en Apoing
-                </a>
-            </div>
+            ${renderApoingLink("Comprobar reserva en Apoing")}
         </div>
     `;
 
@@ -1041,6 +1095,10 @@ window.openResultForm = async (id, col) => {
                     { type: "result_uploaded", matchId: id, dedupId: `result_uploaded_${id}` },
                 );
             }
+            const diaryTargets = (rankingSync?.changes || [])
+                .filter((c) => c?.uid && !String(c.uid).startsWith('GUEST_'))
+                .map((c) => ({ uid: c.uid, won: Boolean(c.analysis?.won) }));
+            await Promise.all(diaryTargets.map((t) => suggestDiaryEntry(t.uid, id, t.won).catch(() => null)));
             showToast(
                 "DATOS GUARDADOS",
                 rankingSync?.skipped ? "Resultado guardado (ranking ya procesado)." : "Ranking actualizado",

@@ -16,6 +16,19 @@
     <link rel="stylesheet" href="./css/themes.css">
     <link rel="stylesheet" href="./css/components-premium.css">
     <link rel="stylesheet" href="./css/auth.css">
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "0f270864-c893-4c44-95cc-393321937fb2",
+      notifyButton: {
+        enable: true,
+      },
+    });
+  });
+</script>
+
 </head>
 
 <body class="body-auth">

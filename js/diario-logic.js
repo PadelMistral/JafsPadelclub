@@ -737,6 +737,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             const mData = mSnap.data();
             entry.resultSnapshot = mData.resultado || null;
             if (mData.preMatchPrediction) entry.predictionSnapshot = mData.preMatchPrediction;
+            if (Array.isArray(mData.jugadores)) {
+              const players = mData.jugadores.filter((id) => id && !String(id).startsWith("GUEST_"));
+              const myIdx = players.indexOf(currentUser.uid);
+              if (myIdx >= 0) {
+                const mine = myIdx < 2 ? players.slice(0, 2) : players.slice(2, 4);
+                const rivals = myIdx < 2 ? players.slice(2, 4) : players.slice(0, 2);
+                entry.matchContext = {
+                  allPlayerIds: players,
+                  teammateIds: mine.filter((id) => id !== currentUser.uid),
+                  rivalIds: rivals,
+                };
+              }
+            }
 
             // CRITICAL: If the match has a result but ranking was NOT processed, trigger it now!
             if (mData.resultado?.sets && !mData.rankingProcessedAt) {

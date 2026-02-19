@@ -1348,3 +1348,139 @@
 .setting-item.flex-col .font-bold { font-weight: 700; }
 .setting-item.flex-col .text-white { color: #fff; }
 
+/* ===== FUT CARD ===== */
+.fut-card-wrap {
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: radial-gradient(130% 120% at 80% -20%, rgba(34, 211, 238, 0.22), transparent 48%),
+    radial-gradient(120% 120% at 0% 100%, rgba(198, 255, 0, 0.16), transparent 50%),
+    linear-gradient(160deg, rgba(7, 12, 24, 0.95), rgba(3, 8, 18, 0.94));
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.36);
+  padding: 14px;
+}
+
+.fut-card-main {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 14px;
+}
+
+.fut-overall {
+  border-radius: 16px;
+  border: 1px solid rgba(198, 255, 0, 0.35);
+  background: rgba(198, 255, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+}
+
+.fut-overall .ovr {
+  font-size: 34px;
+  font-weight: 900;
+  color: #c6ff00;
+  line-height: 0.95;
+}
+
+.fut-overall .tier {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.fut-headline {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.fut-name {
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.fut-meta {
+  font-size: 9px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.62);
+  text-transform: uppercase;
+}
+
+.fut-shots-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.fut-shot {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 7px;
+}
+
+.fut-shot .k {
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.fut-shot .v {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.fut-bars {
+  margin-top: 10px;
+  display: grid;
+  gap: 5px;
+}
+
+.fut-bar-row {
+  display: grid;
+  grid-template-columns: 62px 1fr 34px;
+  gap: 6px;
+  align-items: center;
+}
+
+.fut-bar-row .l {
+  font-size: 8px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.fut-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.fut-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee, #c6ff00);
+}
+
+.fut-bar-row .n {
+  font-size: 9px;
+  font-weight: 900;
+  color: #dff8ff;
+  text-align: right;
+}
+

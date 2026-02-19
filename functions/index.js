@@ -13,6 +13,49 @@ function toStringMap(data = {}) {
   return out;
 }
 
+function buildAbsoluteUrl(pathOrUrl) {
+  const raw = String(pathOrUrl || "home.html").trim();
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const base = String(process.env.APP_BASE_URL || "").trim();
+  if (!base) return raw;
+
+  const cleanBase = base.endsWith("/") ? base.slice(0, -1) : base;
+  const cleanPath = raw.startsWith("/") ? raw.slice(1) : raw;
+  return `${cleanBase}/${cleanPath}`;
+}
+
+async function sendOneSignalPush({ appId, apiKey, subscriptionIds, title, body, data, url }) {
+  if (!subscriptionIds.length) return { ok: true, skipped: true };
+
+  const payload = {
+    app_id: appId,
+    include_subscription_ids: subscriptionIds,
+    target_channel: "push",
+    headings: { en: title },
+    contents: { en: body },
+    data: toStringMap(data),
+  };
+
+  if (url) payload.url = url;
+
+  const response = await fetch("https://api.onesignal.com/notifications", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Key ${apiKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`onesignal_http_${response.status}: ${JSON.stringify(json)}`);
+  }
+
+  return { ok: true, result: json };
+}
+
 exports.sendFirestoreNotificationPush = onDocumentCreated(
   {
     document: "notificaciones/{notifId}",
@@ -32,114 +75,109 @@ exports.sendFirestoreNotificationPush = onDocumentCreated(
       return;
     }
 
+    const appId = String(process.env.ONESIGNAL_APP_ID || "").trim();
+    const apiKey = String(process.env.ONESIGNAL_REST_API_KEY || "").trim();
+    if (!appId || !apiKey) {
+      logger.warn("Push skipped: missing OneSignal env vars", { notifId, hasAppId: !!appId, hasApiKey: !!apiKey });
+      await snap.ref.set(
+        {
+          deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
+          pushStatus: "onesignal_not_configured",
+        },
+        { merge: true },
+      );
+      return;
+    }
+
     const title = String(n.titulo || n.title || "Padeluminatis");
     const body = String(n.mensaje || n.message || "Nueva notificación");
-    const url = String(n.enlace || n.data?.url || "home.html");
+    const url = buildAbsoluteUrl(n.enlace || n.data?.url || "home.html");
     const type = String(n.tipo || n.type || "info");
 
-    const devicesRef = admin
+    const devicesSnap = await admin
       .firestore()
       .collection("usuarios")
       .doc(uid)
       .collection("devices")
-      .where("enabled", "==", true);
+      .where("enabled", "==", true)
+      .where("provider", "==", "onesignal")
+      .get();
 
-    const devicesSnap = await devicesRef.get();
     if (devicesSnap.empty) {
-      logger.info("No push devices for user", { uid, notifId });
+      logger.info("No OneSignal devices for user", { uid, notifId });
       await snap.ref.set(
-        { deliveredAt: admin.firestore.FieldValue.serverTimestamp(), pushStatus: "no_devices" },
+        {
+          deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
+          pushStatus: "no_devices",
+        },
         { merge: true },
       );
       return;
     }
 
-    const tokenDocs = devicesSnap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .filter((d) => typeof d.token === "string" && d.token.length > 20);
+    const subscriptionIds = [...new Set(
+      devicesSnap.docs
+        .map((d) => d.data()?.oneSignalPlayerId)
+        .filter((v) => typeof v === "string" && v.length > 10),
+    )];
 
-    const tokens = [...new Set(tokenDocs.map((d) => d.token))];
-    if (!tokens.length) {
+    if (!subscriptionIds.length) {
       await snap.ref.set(
-        { deliveredAt: admin.firestore.FieldValue.serverTimestamp(), pushStatus: "empty_tokens" },
+        {
+          deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
+          pushStatus: "empty_subscription_ids",
+        },
         { merge: true },
       );
       return;
     }
 
-    const message = {
-      tokens,
-      notification: {
+    try {
+      const pushResponse = await sendOneSignalPush({
+        appId,
+        apiKey,
+        subscriptionIds,
         title,
         body,
-      },
-      data: toStringMap({
+        url,
+        data: {
+          notifId,
+          uid,
+          type,
+          title,
+          body,
+          url,
+        },
+      });
+
+      await snap.ref.set(
+        {
+          deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
+          pushStatus: "ok",
+          pushProvider: "onesignal",
+          pushAttemptedTokens: subscriptionIds.length,
+          pushResult: pushResponse.result || null,
+        },
+        { merge: true },
+      );
+
+      logger.info("OneSignal push dispatched", {
         notifId,
         uid,
-        type,
-        url,
-        title,
-        body,
-      }),
-      webpush: {
-        fcmOptions: {
-          link: url,
-        },
-        notification: {
-          icon: "./imagenes/Logojafs.png",
-          badge: "./imagenes/Logojafs.png",
-          tag: `notif_${notifId}`,
-        },
-      },
-    };
-
-    const response = await admin.messaging().sendEachForMulticast(message);
-
-    const invalidCodes = new Set([
-      "messaging/invalid-registration-token",
-      "messaging/registration-token-not-registered",
-    ]);
-
-    const cleanupTasks = [];
-    response.responses.forEach((r, idx) => {
-      if (r.success) return;
-      const code = r.error?.code;
-      if (!invalidCodes.has(code)) return;
-      const badToken = tokens[idx];
-      const docs = tokenDocs.filter((d) => d.token === badToken);
-      docs.forEach((d) => {
-        cleanupTasks.push(
-          admin
-            .firestore()
-            .collection("usuarios")
-            .doc(uid)
-            .collection("devices")
-            .doc(d.id)
-            .set({ enabled: false, disabledAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }),
-        );
+        subscriptions: subscriptionIds.length,
       });
-    });
-
-    if (cleanupTasks.length) await Promise.allSettled(cleanupTasks);
-
-    await snap.ref.set(
-      {
-        deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
-        pushStatus: response.failureCount > 0 ? "partial" : "ok",
-        pushAttemptedTokens: tokens.length,
-        pushSuccessCount: response.successCount,
-        pushFailureCount: response.failureCount,
-      },
-      { merge: true },
-    );
-
-    logger.info("Push dispatched", {
-      notifId,
-      uid,
-      tokens: tokens.length,
-      success: response.successCount,
-      failure: response.failureCount,
-    });
+    } catch (err) {
+      logger.error("OneSignal push failed", { notifId, uid, error: err?.message || err });
+      await snap.ref.set(
+        {
+          deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
+          pushStatus: "error",
+          pushProvider: "onesignal",
+          pushError: String(err?.message || err).slice(0, 900),
+        },
+        { merge: true },
+      );
+      throw err;
+    }
   },
 );
-

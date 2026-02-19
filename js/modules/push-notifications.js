@@ -1,25 +1,20 @@
-﻿/* js/modules/push-notifications.js - Firebase Cloud Messaging Push System */
+﻿/* js/modules/push-notifications.js - OneSignal Push Channel */
 import { showToast } from "../ui-core.js";
-import { app, auth, db } from "../firebase-service.js";
+import { auth, db } from "../firebase-service.js";
 import {
   doc,
   setDoc,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
-import {
-  getMessaging,
-  getToken,
-  isSupported,
-  onMessage,
-} from "https://www.gstatic.com/firebasejs/11.7.3/firebase-messaging.js";
 
 const DEFAULT_ICON = "./imagenes/Logojafs.png";
-const VAPID_STORAGE_KEY = "fcm_vapid_public_key";
-const DEVICE_ID_STORAGE_KEY = "fcm_device_id";
+const ONESIGNAL_SDK_SRC = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+const ONESIGNAL_APP_ID_STORAGE_KEY = "onesignal_app_id";
+const DEVICE_ID_STORAGE_KEY = "onesignal_device_id";
 
 let notifPermission = typeof Notification !== "undefined" ? Notification.permission : "default";
-let messagingInstance = null;
-let foregroundListenerBound = false;
+let oneSignalReady = false;
+let oneSignalInitPromise = null;
 
 function getDeviceId() {
   let id = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
@@ -30,36 +25,99 @@ function getDeviceId() {
   return id;
 }
 
-function getConfiguredVapidKey() {
-  const fromWindow = typeof window !== "undefined" ? window.__FCM_VAPID_PUBLIC_KEY : null;
-  const fromStorage = localStorage.getItem(VAPID_STORAGE_KEY);
+function getConfiguredOneSignalAppId() {
+  const fromWindow = typeof window !== "undefined" ? window.__ONESIGNAL_APP_ID : null;
+  const fromStorage = localStorage.getItem(ONESIGNAL_APP_ID_STORAGE_KEY);
   return (fromWindow || fromStorage || "").trim();
 }
 
-async function ensureMessagingInstance() {
-  if (messagingInstance) return messagingInstance;
-  const supported = await isSupported().catch(() => false);
-  if (!supported) return null;
-  messagingInstance = getMessaging(app);
-  return messagingInstance;
+async function ensureOneSignalScript() {
+  if (window.OneSignal && window.OneSignalDeferred) return true;
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src=\"${ONESIGNAL_SDK_SRC}\"]`);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(true), { once: true });
+      existing.addEventListener("error", () => reject(new Error("onesignal-sdk-load-failed")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = ONESIGNAL_SDK_SRC;
+    script.defer = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error("onesignal-sdk-load-failed"));
+    document.head.appendChild(script);
+  });
 }
 
-async function ensureServiceWorkerRegistration() {
-  if (!("serviceWorker" in navigator)) return null;
-  const existing = await navigator.serviceWorker.getRegistration();
-  if (existing) return existing;
-  return navigator.serviceWorker.register("./sw.js", { scope: "./" });
+function oneSignalExec(fn) {
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  return new Promise((resolve, reject) => {
+    window.OneSignalDeferred.push(async (OneSignal) => {
+      try {
+        const out = await fn(OneSignal);
+        resolve(out);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
 }
 
-async function persistDeviceToken(uid, token) {
-  if (!uid || !token) return;
+async function ensureOneSignalInitialized() {
+  if (oneSignalReady) return true;
+  if (oneSignalInitPromise) return oneSignalInitPromise;
+
+  oneSignalInitPromise = (async () => {
+    const appId = getConfiguredOneSignalAppId();
+    if (!appId) {
+      if (!window.__oneSignalAppIdWarned) {
+        window.__oneSignalAppIdWarned = true;
+        showToast("Push pendiente", "Falta configurar el OneSignal App ID para activar push en segundo plano.", "warning");
+      }
+      return false;
+    }
+
+    await ensureOneSignalScript();
+
+    await oneSignalExec(async (OneSignal) => {
+      await OneSignal.init({
+        appId,
+        serviceWorkerPath: "./OneSignalSDKWorker.js",
+        serviceWorkerUpdaterPath: "./OneSignalSDKUpdaterWorker.js",
+        notifyButton: { enable: false },
+      });
+    });
+
+    oneSignalReady = true;
+    return true;
+  })();
+
+  try {
+    return await oneSignalInitPromise;
+  } finally {
+    oneSignalInitPromise = null;
+  }
+}
+
+async function persistDeviceSubscription(uid) {
+  if (!uid) return;
+
+  const subscription = await oneSignalExec(async (OneSignal) => ({
+    id: OneSignal.User?.PushSubscription?.id || null,
+    token: OneSignal.User?.PushSubscription?.token || null,
+    optedIn: Boolean(OneSignal.User?.PushSubscription?.optedIn),
+  }));
+
   const deviceId = getDeviceId();
   const ref = doc(db, "usuarios", uid, "devices", deviceId);
   await setDoc(
     ref,
     {
-      token,
-      enabled: true,
+      provider: "onesignal",
+      oneSignalPlayerId: subscription.id,
+      token: subscription.token || null,
+      enabled: !!subscription.id && subscription.optedIn,
       platform: "web",
       userAgent: navigator.userAgent || "unknown",
       updatedAt: serverTimestamp(),
@@ -69,73 +127,28 @@ async function persistDeviceToken(uid, token) {
   );
 }
 
-function bindForegroundListener() {
-  if (foregroundListenerBound || !messagingInstance) return;
-  foregroundListenerBound = true;
-
-  onMessage(messagingInstance, async (payload) => {
-    const title = payload?.notification?.title || payload?.data?.title || "Padeluminatis";
-    const body = payload?.notification?.body || payload?.data?.body || "Nueva notificación";
-    const url = payload?.data?.url || "./home.html";
-
-    // Evita duplicar toast local: la app ya renderiza feed/badge al estar visible.
-    if (document.visibilityState === "visible") return;
-
-    if (document.visibilityState === "hidden" && notifPermission === "granted") {
-      try {
-        const reg = await ensureServiceWorkerRegistration();
-        if (reg) {
-          await reg.showNotification(title, {
-            body,
-            icon: DEFAULT_ICON,
-            badge: DEFAULT_ICON,
-            tag: `fcm_fg_${Date.now()}`,
-            data: { url },
-          });
-        }
-      } catch (e) {
-        console.warn("Foreground SW notification fallback failed:", e);
-      }
-    }
-  });
-}
-
 export async function initPushNotifications(uid = null) {
   if (!("Notification" in window)) return false;
 
   const userId = uid || auth.currentUser?.uid;
   if (!userId) return false;
 
-  const granted = await requestNotificationPermission(false);
-  if (!granted) return false;
+  const ok = await ensureOneSignalInitialized();
+  if (!ok) return false;
 
   try {
-    const messaging = await ensureMessagingInstance();
-    if (!messaging) return false;
-
-    const vapidKey = getConfiguredVapidKey();
-    if (!vapidKey) {
-      console.warn("FCM disabled: missing VAPID public key.");
-      if (!window.__vapidWarned) {
-        window.__vapidWarned = true;
-        showToast("Push pendiente", "Falta configurar la VAPID key de Firebase para activar notificaciones en segundo plano.", "warning");
-      }
-      return false;
-    }
-
-    const swReg = await ensureServiceWorkerRegistration();
-    const token = await getToken(messaging, {
-      vapidKey,
-      serviceWorkerRegistration: swReg || undefined,
+    await oneSignalExec(async (OneSignal) => {
+      await OneSignal.login(userId);
+      await OneSignal.Notifications.requestPermission();
     });
 
-    if (!token) return false;
+    notifPermission = Notification.permission;
+    if (notifPermission !== "granted") return false;
 
-    await persistDeviceToken(userId, token);
-    bindForegroundListener();
+    await persistDeviceSubscription(userId);
     return true;
   } catch (e) {
-    console.error("FCM init error:", e);
+    console.error("OneSignal init error:", e);
     return false;
   }
 }
@@ -155,10 +168,16 @@ export async function requestNotificationPermission(autoInit = true) {
   }
 
   try {
-    const result = await Notification.requestPermission();
-    notifPermission = result;
+    const ok = await ensureOneSignalInitialized();
+    if (!ok) return false;
 
-    if (result === "granted") {
+    await oneSignalExec(async (OneSignal) => {
+      await OneSignal.Notifications.requestPermission();
+    });
+
+    notifPermission = Notification.permission;
+
+    if (notifPermission === "granted") {
       showToast(
         "Notificaciones activadas",
         "Recibirás avisos incluso sin tener la app abierta.",
@@ -201,7 +220,7 @@ export async function sendPushNotification(
 
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await ensureServiceWorkerRegistration();
+      const registration = await navigator.serviceWorker.getRegistration();
       if (registration) {
         await registration.showNotification(title, options);
         return;
@@ -297,11 +316,10 @@ export async function checkDailyReminders(userId, matches) {
   }
 }
 
-// Helper for setup without redeploy (dev/prod hotfix)
-export function setPushVapidKey(vapidKey) {
-  if (!vapidKey) return;
-  localStorage.setItem(VAPID_STORAGE_KEY, String(vapidKey).trim());
+export function setOneSignalAppId(appId) {
+  if (!appId) return;
+  const clean = String(appId).trim();
+  localStorage.setItem(ONESIGNAL_APP_ID_STORAGE_KEY, clean);
+  window.__ONESIGNAL_APP_ID = clean;
 }
-
-
 
