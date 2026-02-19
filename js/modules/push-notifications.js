@@ -11,6 +11,7 @@ const DEFAULT_ICON = "./imagenes/Logojafs.png";
 const ONESIGNAL_SDK_SRC = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
 const ONESIGNAL_APP_ID_STORAGE_KEY = "onesignal_app_id";
 const DEVICE_ID_STORAGE_KEY = "onesignal_device_id";
+const DEFAULT_ONESIGNAL_APP_ID = "0f270864-c893-4c44-95cc-393321937fb2";
 
 let notifPermission = typeof Notification !== "undefined" ? Notification.permission : "default";
 let oneSignalReady = false;
@@ -28,7 +29,7 @@ function getDeviceId() {
 function getConfiguredOneSignalAppId() {
   const fromWindow = typeof window !== "undefined" ? window.__ONESIGNAL_APP_ID : null;
   const fromStorage = localStorage.getItem(ONESIGNAL_APP_ID_STORAGE_KEY);
-  return (fromWindow || fromStorage || "").trim();
+  return (fromWindow || fromStorage || DEFAULT_ONESIGNAL_APP_ID).trim();
 }
 
 async function ensureOneSignalScript() {
@@ -85,7 +86,7 @@ async function ensureOneSignalInitialized() {
         appId,
         serviceWorkerPath: "./OneSignalSDKWorker.js",
         serviceWorkerUpdaterPath: "./OneSignalSDKUpdaterWorker.js",
-        notifyButton: { enable: false },
+        notifyButton: { enable: true },
       });
     });
 

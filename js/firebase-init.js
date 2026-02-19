@@ -1,4 +1,4 @@
-// firebase-init.js - Single initialization point
+﻿// firebase-init.js - Single initialization point
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
@@ -19,22 +19,4 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// OneSignal Web Push
-const ONESIGNAL_APP_ID = "0f270864-c893-4c44-95cc-393321937fb2";
-if (typeof window !== "undefined" && ONESIGNAL_APP_ID) {
-  window.__ONESIGNAL_APP_ID = ONESIGNAL_APP_ID;
-  try { localStorage.setItem("onesignal_app_id", ONESIGNAL_APP_ID); } catch (_) {}
-
-  // Inicialización real de OneSignal para que aparezca la campana
-  window.OneSignalDeferred = window.OneSignalDeferred || [];
-  OneSignalDeferred.push(async function(OneSignal) {
-    await OneSignal.init({
-      appId: ONESIGNAL_APP_ID,
-      notifyButton: { enable: true },
-    });
-  });
-}
-
 export { app, auth, db, storage };
-
-
