@@ -43,7 +43,7 @@ async function sendOneSignalPush({ appId, apiKey, subscriptionIds, title, body, 
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Key ${apiKey}`,
+      Authorization: `Basic ${apiKey}`,
     },
     body: JSON.stringify(payload),
   });

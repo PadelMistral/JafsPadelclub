@@ -19,8 +19,8 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// OneSignal Web Push (set your OneSignal App ID here once created)
-const ONESIGNAL_APP_ID = "";
+// OneSignal Web Push
+const ONESIGNAL_APP_ID = "0f270864-c893-4c44-95cc-393321937fb2";
 if (typeof window !== "undefined" && ONESIGNAL_APP_ID) {
   window.__ONESIGNAL_APP_ID = ONESIGNAL_APP_ID;
   try {

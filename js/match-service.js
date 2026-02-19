@@ -58,6 +58,44 @@ function renderApoingLink(cta = "Comprobar reserva en Apoing") {
     `;
 }
 
+async function sendMatchCreatedPushViaVercel({ title, message, matchId, col, targetUids, dateIso }) {
+    try {
+        const provider = (localStorage.getItem("push_provider") || "").toLowerCase();
+        if (provider !== "vercel" && window.__USE_VERCEL_PUSH !== true) return;
+
+        const configured =
+            window.__PUSH_API_URL ||
+            localStorage.getItem("push_api_url") ||
+            "";
+        const endpoint = configured || "/api/send-push";
+
+        // Avoid noisy errors in local files or offline contexts
+        if (window.location.protocol === "file:") return;
+
+        const payload = {
+            titulo: title,
+            mensaje: message,
+            externalIds: Array.isArray(targetUids) ? targetUids.filter(Boolean) : [],
+            data: {
+                type: "match_opened",
+                matchId,
+                matchCollection: col,
+                dateIso: dateIso || null,
+                url: "calendario.html",
+            },
+            url: "calendario.html",
+        };
+
+        await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+    } catch (e) {
+        console.warn("Vercel push fallback skipped:", e?.message || e);
+    }
+}
+
 async function safeOnSnapshot(q, onNext) {
     if (window.getDocsSafe) {
         const warm = await window.getDocsSafe(q, "match-service");
@@ -141,8 +179,25 @@ window.executeCreateMatch = async (dateStr, hour) => {
         const matchRef = await addDoc(collection(db, col), matchData);
         const createdMatchId = matchRef.id;
 
-        const others = jugs.filter(id => id && id !== auth.currentUser.uid && !id.startsWith('GUEST_'));
-        if (others.length > 0) {
+        let targets = jugs.filter(id => id && id !== auth.currentUser.uid && !id.startsWith('GUEST_'));
+
+        // Public match broadcast: notify approved users (except creator) if there are no explicit invitees
+        if (visibility !== 'private' && targets.length === 0) {
+            try {
+                const usersSnap = await window.getDocsSafe(
+                    query(collection(db, "usuarios"), where("status", "==", "approved"), limit(150))
+                );
+                if (!usersSnap?._errorCode) {
+                    targets = usersSnap.docs
+                        .map((d) => d.id)
+                        .filter((uid) => uid && uid !== auth.currentUser.uid);
+                }
+            } catch (e) {
+                console.warn("Public broadcast target resolution failed:", e);
+            }
+        }
+
+        if (targets.length > 0) {
             const notifType = visibility === 'private' ? 'private_invite' : 'match_opened';
             const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
             const time = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -150,13 +205,21 @@ window.executeCreateMatch = async (dateStr, hour) => {
                 ? `${creatorName} te invitó a una partida privada el ${day} a las ${time}.`
                 : `${creatorName} creó una partida para el ${day} a las ${time}.`;
             await createNotification(
-                others,
+                targets,
                 "¡Padeluminatis!",
                 notifMsg,
                 notifType,
                 'calendario.html',
                 { type: notifType, matchId: createdMatchId, matchCollection: col, dedupId: `${notifType}_${createdMatchId}` }
             );
+            sendMatchCreatedPushViaVercel({
+                title: "¡Padeluminatis!",
+                message: notifMsg,
+                matchId: createdMatchId,
+                col,
+                targetUids: targets,
+                dateIso: matchDate.toISOString(),
+            });
         }
 
         hideLoading();
