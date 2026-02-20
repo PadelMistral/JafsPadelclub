@@ -296,6 +296,14 @@ export function initAppUI(activePageName) {
         window.__appUIInitPath = currentPath;
     }
 
+    // Inject master-polish.css as LAST stylesheet (if not already present)
+    if (!document.querySelector('link[href*="master-polish"]')) {
+        const polishLink = document.createElement('link');
+        polishLink.rel = 'stylesheet';
+        polishLink.href = './css/master-polish.css';
+        document.head.appendChild(polishLink);
+    }
+
     // Register Service Worker for PWA + automatic updates
     if ('serviceWorker' in navigator && !window.__swRegisterBound) {
         window.__swRegisterBound = true;
@@ -308,7 +316,17 @@ export function initAppUI(activePageName) {
         }
 
         const registerSW = () => {
-            navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+            const swPath = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                ? './OneSignalSDKWorker.js' 
+                : '/JafsPadelclub/OneSignalSDKWorker.js';
+            const swScope = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                ? './' 
+                : '/JafsPadelclub/';
+
+            navigator.serviceWorker.register(swPath, { 
+                scope: swScope,
+                updateViaCache: 'none' 
+            })
                 .then(reg => {
                     window.__swRegisteredByCore = true;
                     window.__swRegRef = reg;

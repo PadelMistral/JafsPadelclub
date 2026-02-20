@@ -8,12 +8,14 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 
 const DEFAULT_ICON = "./imagenes/Logojafs.png";
-const ONESIGNAL_SDK_SRC = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+const ONESIGNAL_SDK_SRC =
+  "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
 const ONESIGNAL_APP_ID_STORAGE_KEY = "onesignal_app_id";
 const DEVICE_ID_STORAGE_KEY = "onesignal_device_id";
 const DEFAULT_ONESIGNAL_APP_ID = "0f270864-c893-4c44-95cc-393321937fb2";
 
-let notifPermission = typeof Notification !== "undefined" ? Notification.permission : "default";
+let notifPermission =
+  typeof Notification !== "undefined" ? Notification.permission : "default";
 let oneSignalReady = false;
 let oneSignalInitPromise = null;
 
@@ -27,7 +29,8 @@ function getDeviceId() {
 }
 
 function getConfiguredOneSignalAppId() {
-  const fromWindow = typeof window !== "undefined" ? window.__ONESIGNAL_APP_ID : null;
+  const fromWindow =
+    typeof window !== "undefined" ? window.__ONESIGNAL_APP_ID : null;
   const fromStorage = localStorage.getItem(ONESIGNAL_APP_ID_STORAGE_KEY);
   return (fromWindow || fromStorage || DEFAULT_ONESIGNAL_APP_ID).trim();
 }
@@ -35,10 +38,16 @@ function getConfiguredOneSignalAppId() {
 async function ensureOneSignalScript() {
   if (window.OneSignal && window.OneSignalDeferred) return true;
   return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[src=\"${ONESIGNAL_SDK_SRC}\"]`);
+    const existing = document.querySelector(
+      `script[src=\"${ONESIGNAL_SDK_SRC}\"]`,
+    );
     if (existing) {
       existing.addEventListener("load", () => resolve(true), { once: true });
-      existing.addEventListener("error", () => reject(new Error("onesignal-sdk-load-failed")), { once: true });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error("onesignal-sdk-load-failed")),
+        { once: true },
+      );
       return;
     }
 
@@ -74,7 +83,11 @@ async function ensureOneSignalInitialized() {
     if (!appId) {
       if (!window.__oneSignalAppIdWarned) {
         window.__oneSignalAppIdWarned = true;
-        showToast("Push pendiente", "Falta configurar el OneSignal App ID para activar push en segundo plano.", "warning");
+        showToast(
+          "Push pendiente",
+          "Falta configurar el OneSignal App ID para activar push en segundo plano.",
+          "warning",
+        );
       }
       return false;
     }
@@ -84,11 +97,9 @@ async function ensureOneSignalInitialized() {
     await oneSignalExec(async (OneSignal) => {
       await OneSignal.init({
         appId,
-serviceWorkerPath: "/JafsPadelclub/OneSignalSDKWorker.js",
-serviceWorkerUpdaterPath: "/JafsPadelclub/OneSignalSDKUpdaterWorker.js",
-
-serviceWorkerParam: { scope: "/JafsPadelclub/" },
-
+        serviceWorkerPath: "/JafsPadelclub/OneSignalSDKWorker.js",
+        serviceWorkerUpdaterPath: "/JafsPadelclub/OneSignalSDKUpdaterWorker.js",
+        serviceWorkerParam: { scope: "/JafsPadelclub/" },
         notifyButton: { enable: true },
       });
     });
@@ -166,7 +177,8 @@ export async function requestNotificationPermission(autoInit = true) {
   }
 
   if (notifPermission === "granted") {
-    if (autoInit && auth.currentUser?.uid) initPushNotifications(auth.currentUser.uid).catch(() => {});
+    if (autoInit && auth.currentUser?.uid)
+      initPushNotifications(auth.currentUser.uid).catch(() => {});
     return true;
   }
 
@@ -186,7 +198,8 @@ export async function requestNotificationPermission(autoInit = true) {
         "Recibirás avisos incluso sin tener la app abierta.",
         "success",
       );
-      if (autoInit && auth.currentUser?.uid) initPushNotifications(auth.currentUser.uid).catch(() => {});
+      if (autoInit && auth.currentUser?.uid)
+        initPushNotifications(auth.currentUser.uid).catch(() => {});
       return true;
     }
   } catch (e) {
@@ -235,8 +248,12 @@ export async function sendPushNotification(
 
   try {
     const notification = new Notification(title, options);
-    notification.onclick = () => {
+    notification.onclick = (e) => {
+      e.preventDefault(); // Prevent default focus if needed
       window.focus();
+      if (targetUrl) {
+          window.location.href = targetUrl;
+      }
       notification.close();
     };
   } catch (e) {
@@ -326,6 +343,33 @@ export function setOneSignalAppId(appId) {
   window.__ONESIGNAL_APP_ID = clean;
 }
 
+/**
+ * Sends a real background push notification via the server-side bridge (OneSignal).
+ * REACHES CLOSED BROWSERS/PWA.
+ */
+export async function sendExternalPush({ title, message, uids = [], url = "home.html", data = {} }) {
+  try {
+    const endpoint = window.__PUSH_API_URL || "/api/send-push";
+    if (window.location.protocol === "file:") return;
 
+    const payload = {
+      titulo: title,
+      mensaje: message,
+      externalIds: Array.isArray(uids) ? uids.filter(Boolean) : [],
+      url: url || "home.html",
+      data: data || {},
+    };
 
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    
+    return res.ok;
+  } catch (e) {
+    console.warn("External push trigger failed:", e);
+    return false;
+  }
+}
 

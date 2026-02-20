@@ -72,7 +72,7 @@ document.addEventListener("DOMContentLoaded", () => {
         loadCompetitiveData(user.uid);
         renderTacticalRadar(data);
         renderAchievements(data);
-        renderDiarioStats(data.diario || []);
+        renderDiarioStats(data.diario || [], data);
       } else if (!userData) {
         const fallback = {
           nombreUsuario: "Jugador",
@@ -600,7 +600,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setText('elo-outdoor', elo.outdoor);
   }
 
-  function renderDiarioStats(diario) {
+  function renderDiarioStats(diario, data) {
      // Advanced Stats from Diary
      if(!diario || diario.length < 3) return; // Need some data
 
@@ -638,6 +638,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
      setBar('val-consistency', 'bar-consistency', consPct);
      setBar('val-pressure', 'bar-pressure', pressPct);
+
+     // New Biometric indicators from core AI state
+     const adv = data?.advancedStats || {};
+     setBar('val-fatigue-profile', 'bar-fatigue-profile', adv.fatigueIndex || 0);
+     setBar('val-stress-profile', 'bar-stress-profile', adv.pressure || 0);
   }
 
   async function renderAIInsights(user) {

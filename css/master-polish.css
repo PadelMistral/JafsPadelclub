@@ -1,0 +1,1272 @@
+/* =====================================================
+   PADELUMINATIS MASTER POLISH V1.0
+   ==> Responsive + Aesthetic Enhancement Layer
+   ==> Loaded LAST to override and enhance ALL pages
+   ===================================================== */
+
+/* ===== 0. GLOBAL FOUNDATION ===== */
+*,
+*::before,
+*::after {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overscroll-behavior-y: contain;
+  overflow-x: hidden;
+}
+
+/* ===== 1. RESPONSIVE TYPOGRAPHY SCALE ===== */
+@media (max-width: 359px) {
+  html {
+    font-size: 13px;
+  }
+}
+@media (min-width: 360px) and (max-width: 389px) {
+  html {
+    font-size: 13.5px;
+  }
+}
+@media (min-width: 390px) and (max-width: 413px) {
+  html {
+    font-size: 14px;
+  }
+}
+@media (min-width: 414px) and (max-width: 479px) {
+  html {
+    font-size: 14.5px;
+  }
+}
+@media (min-width: 480px) and (max-width: 599px) {
+  html {
+    font-size: 15px;
+  }
+}
+@media (min-width: 600px) and (max-width: 767px) {
+  html {
+    font-size: 15.5px;
+  }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  html {
+    font-size: 16px;
+  }
+}
+@media (min-width: 1024px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+/* ===== 2. ENHANCED CONTAINERS & PAGES ===== */
+.page-content,
+.calendar-page,
+.diary-page,
+.ranking-page,
+.profile-page,
+.notif-page,
+.admin-page {
+  padding-left: max(14px, env(safe-area-inset-left, 14px));
+  padding-right: max(14px, env(safe-area-inset-right, 14px));
+  padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .page-content,
+  .calendar-page,
+  .diary-page,
+  .ranking-page,
+  .profile-page,
+  .notif-page,
+  .admin-page {
+    max-width: 800px;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+/* ===== 3. CARD SYSTEM POLISH ===== */
+
+/* Universal card enhancement */
+.welcome-section-v4,
+.home-hero,
+.next-match-card,
+.quick-stat-card,
+.entry-card-v7,
+.my-rank-card,
+.level-progress-card,
+.elo-chart-card,
+.stat-card-profile,
+.profile-hero,
+.settings-card,
+.address-card,
+.gear-card,
+.permission-card,
+.prediction-card-v7,
+.court-container-v7,
+.ai-result-card,
+.quick-nav-card,
+.type-card-v7,
+.ai-compact-v4 {
+  transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
+}
+
+.welcome-section-v4:active,
+.next-match-card:active,
+.quick-stat-card:active,
+.quick-nav-card:active,
+.entry-card-v7:active {
+  transform: scale(0.98);
+}
+
+/* Card inner shadows for depth */
+.welcome-section-v4,
+.my-rank-card,
+.profile-hero {
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ===== 4. NAVBAR RESPONSIVENESS ===== */
+.bottom-nav {
+  bottom: max(16px, env(safe-area-inset-bottom, 16px));
+  width: calc(100% - 32px);
+  max-width: 500px;
+  height: auto;
+  min-height: 68px;
+  padding: 8px 4px;
+  border-radius: 24px;
+  background: rgba(8, 12, 28, 0.85);
+  backdrop-filter: blur(30px) saturate(200%);
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 359px) {
+  .bottom-nav {
+    width: calc(100% - 20px);
+    min-height: 60px;
+    padding: 6px 2px;
+    border-radius: 20px;
+  }
+  .nav-item {
+    min-width: 48px;
+  }
+  .nav-icon-box {
+    width: 34px;
+    height: 34px;
+    font-size: 1.1rem;
+  }
+  .nav-item span {
+    font-size: 0.55rem;
+  }
+  .nav-icon-wrap {
+    width: 52px;
+    height: 52px;
+    font-size: 1.4rem;
+  }
+  .nav-item.center-item {
+    transform: translateY(-18px);
+  }
+}
+
+@media (min-width: 360px) and (max-width: 413px) {
+  .bottom-nav {
+    width: calc(100% - 28px);
+    min-height: 64px;
+  }
+  .nav-icon-box {
+    width: 36px;
+    height: 36px;
+  }
+  .nav-item span {
+    font-size: 0.58rem;
+  }
+  .nav-icon-wrap {
+    width: 56px;
+    height: 56px;
+    font-size: 1.6rem;
+  }
+  .nav-item.center-item {
+    transform: translateY(-20px);
+  }
+}
+
+@media (min-width: 414px) and (max-width: 479px) {
+  .bottom-nav {
+    width: calc(100% - 34px);
+  }
+  .nav-icon-wrap {
+    width: 60px;
+    height: 60px;
+  }
+  .nav-item.center-item {
+    transform: translateY(-22px);
+  }
+}
+
+/* ===== 5. HERO SECTION (HOME) ===== */
+.welcome-section-v4,
+.home-hero {
+  padding: clamp(16px, 4vw, 28px);
+  border-radius: clamp(18px, 4vw, 28px);
+  margin-bottom: clamp(16px, 4vw, 28px);
+}
+
+.username-v4,
+.hero-name {
+  font-size: clamp(1.3rem, 5vw, 2rem);
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+.greeting-compact,
+.hero-greeting {
+  font-size: clamp(0.55rem, 2vw, 0.7rem);
+  letter-spacing: clamp(1px, 0.5vw, 3px);
+}
+
+.rank-badge-v4 {
+  padding: clamp(6px, 1.5vw, 10px) clamp(10px, 2vw, 16px);
+  font-size: clamp(0.7rem, 2vw, 0.9rem);
+  border-radius: 999px;
+}
+
+/* Stats Bar responsive */
+.stats-bar-v4 {
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  gap: clamp(6px, 1.5vw, 12px);
+  padding: clamp(10px, 2.5vw, 16px);
+  border-radius: clamp(12px, 3vw, 18px);
+}
+
+.v4-val {
+  font-size: clamp(0.9rem, 3vw, 1.2rem);
+}
+
+.v4-lab {
+  font-size: clamp(0.48rem, 1.5vw, 0.6rem);
+}
+
+/* ===== 6. MATCH CARDS ===== */
+.next-match-card,
+.match-item {
+  padding: clamp(14px, 3vw, 22px);
+  border-radius: clamp(16px, 3.5vw, 24px);
+}
+
+.next-match-hour {
+  font-size: clamp(1.3rem, 5vw, 1.8rem);
+}
+
+.next-match-day {
+  font-size: clamp(1.5rem, 6vw, 2.2rem);
+}
+
+.match-item-player {
+  font-size: clamp(0.78rem, 2.5vw, 0.9rem);
+}
+
+.filter-chip {
+  padding: clamp(6px, 1.5vw, 10px) clamp(12px, 3vw, 18px);
+  font-size: clamp(0.65rem, 2vw, 0.8rem);
+  border-radius: 999px;
+}
+
+/* ===== 7. CALENDAR IMPROVEMENTS ===== */
+.cal-controls-v5 {
+  padding: clamp(10px, 2.5vw, 16px);
+  border-radius: clamp(14px, 3vw, 20px);
+  gap: clamp(8px, 2vw, 14px);
+}
+
+.cal-clock-box #current-time-v5 {
+  font-size: clamp(1.2rem, 4vw, 1.8rem);
+}
+
+.btn-cal-nav {
+  width: clamp(36px, 8vw, 44px);
+  height: clamp(36px, 8vw, 44px);
+  min-width: 36px;
+  min-height: 36px;
+}
+
+.slot-v5 {
+  min-height: clamp(52px, 12vw, 68px);
+  border-radius: clamp(10px, 2.5vw, 16px);
+  padding: clamp(6px, 1.5vw, 10px);
+}
+
+.slot-chip-v5 {
+  font-size: clamp(0.48rem, 1.4vw, 0.6rem);
+}
+
+.slot-owner-v5 {
+  font-size: clamp(0.45rem, 1.2vw, 0.58rem);
+}
+
+.day-header-v5 {
+  padding: clamp(8px, 2vw, 14px) clamp(4px, 1vw, 8px);
+}
+
+.day-header-v5 .d-num {
+  font-size: clamp(0.85rem, 2.5vw, 1.1rem);
+}
+
+.day-header-v5 .d-name {
+  font-size: clamp(0.45rem, 1.3vw, 0.6rem);
+}
+
+.cal-legend-v5 {
+  padding: clamp(8px, 2vw, 14px);
+  gap: clamp(8px, 2vw, 16px);
+  flex-wrap: wrap;
+  border-radius: clamp(10px, 2.5vw, 16px);
+}
+
+.legend-item-v5 .label {
+  font-size: clamp(0.55rem, 1.5vw, 0.7rem);
+}
+
+/* ===== 8. RANKING PAGE ===== */
+.my-rank-card {
+  padding: clamp(16px, 4vw, 28px);
+  border-radius: clamp(18px, 4vw, 28px);
+  margin-bottom: clamp(16px, 4vw, 32px);
+}
+
+.rank-number {
+  font-size: clamp(2rem, 8vw, 3.2rem);
+}
+
+.rank-points {
+  font-size: clamp(1.4rem, 5vw, 2.2rem);
+}
+
+.rank-trend {
+  padding: clamp(4px, 1vw, 8px) clamp(8px, 2vw, 14px);
+  font-size: clamp(0.65rem, 2vw, 0.8rem);
+}
+
+.level-bar {
+  height: clamp(8px, 2vw, 12px);
+}
+
+/* Ranking Cards */
+.ranking-card {
+  padding: clamp(10px, 2.5vw, 16px);
+  gap: clamp(8px, 2vw, 14px);
+  border-radius: clamp(12px, 3vw, 18px);
+  margin-bottom: clamp(6px, 1.5vw, 10px);
+}
+
+.ranking-card .lb-avatar {
+  width: clamp(28px, 7vw, 36px);
+  height: clamp(28px, 7vw, 36px);
+  border-radius: clamp(8px, 2vw, 12px);
+}
+
+.lb-name {
+  font-size: clamp(0.75rem, 2.5vw, 0.95rem);
+}
+
+.lb-rank {
+  font-size: clamp(0.85rem, 2.5vw, 1.1rem);
+}
+
+.lb-pts {
+  font-size: clamp(0.85rem, 2.5vw, 1.15rem);
+}
+
+/* Podium */
+.ranking-podium-v7 {
+  padding: clamp(14px, 3vw, 24px) clamp(6px, 1.5vw, 12px);
+  gap: clamp(8px, 2vw, 14px);
+}
+
+.podium-avatar-wrapper {
+  width: clamp(48px, 12vw, 68px);
+  height: clamp(48px, 12vw, 68px);
+}
+
+.podium-avatar-wrapper.lg {
+  width: clamp(64px, 16vw, 88px);
+  height: clamp(64px, 16vw, 88px);
+}
+
+.p-name {
+  font-size: clamp(0.55rem, 1.8vw, 0.72rem);
+}
+
+.p-pts {
+  font-size: clamp(0.7rem, 2.2vw, 0.9rem);
+}
+
+/* ===== 9. DIARY / DIARIO ===== */
+.diary-stats {
+  gap: clamp(6px, 1.5vw, 12px);
+}
+
+.stat-pill {
+  min-width: clamp(72px, 20vw, 100px);
+  padding: clamp(10px, 2.5vw, 16px) clamp(4px, 1vw, 8px);
+  border-radius: clamp(12px, 3vw, 18px);
+}
+
+.stat-pill span {
+  font-size: clamp(1rem, 3.5vw, 1.5rem);
+}
+
+.stat-pill label {
+  font-size: clamp(0.5rem, 1.5vw, 0.65rem);
+}
+
+.stat-pill i {
+  font-size: clamp(0.9rem, 3vw, 1.3rem);
+}
+
+.entry-card-v7 {
+  padding: clamp(14px, 3.5vw, 22px);
+  border-radius: clamp(14px, 3.5vw, 22px);
+  margin-bottom: clamp(10px, 2.5vw, 18px);
+}
+
+.mood-matrix-v9 {
+  gap: clamp(6px, 1.5vw, 12px);
+}
+
+.mood-face {
+  min-width: clamp(56px, 14vw, 72px);
+  padding: clamp(8px, 2vw, 12px) clamp(4px, 1vw, 8px);
+  border-radius: clamp(12px, 3vw, 18px);
+}
+
+.mood-face i {
+  font-size: clamp(0.9rem, 3vw, 1.2rem);
+}
+
+.mood-face span {
+  font-size: clamp(0.55rem, 1.6vw, 0.72rem);
+}
+
+.shot-ratings-v9 {
+  gap: clamp(8px, 2vw, 14px);
+}
+
+.shot-rate {
+  padding: clamp(8px, 2vw, 12px);
+  border-radius: clamp(10px, 2.5vw, 16px);
+}
+
+.sr-label {
+  font-size: clamp(0.5rem, 1.5vw, 0.65rem);
+}
+
+/* ===== 10. PROFILE PAGE ===== */
+.profile-hero {
+  padding: clamp(18px, 4vw, 30px);
+  border-radius: clamp(18px, 4vw, 28px);
+}
+
+.profile-avatar {
+  width: clamp(80px, 20vw, 110px);
+  height: clamp(80px, 20vw, 110px);
+  border-width: clamp(3px, 0.8vw, 5px);
+}
+
+.profile-name {
+  font-size: clamp(1.2rem, 4vw, 1.7rem);
+}
+
+.profile-stats {
+  gap: clamp(12px, 3vw, 20px);
+  padding: clamp(12px, 3vw, 18px);
+  border-radius: clamp(14px, 3vw, 20px);
+}
+
+.profile-stat-value {
+  font-size: clamp(0.9rem, 3vw, 1.4rem);
+}
+
+.profile-stat-label {
+  font-size: clamp(0.5rem, 1.5vw, 0.65rem);
+}
+
+.profile-stats-grid,
+.profile-stats-grid-v9 {
+  gap: clamp(8px, 2vw, 14px);
+}
+
+.stat-card-profile,
+.stat-card-v9 {
+  padding: clamp(10px, 2.5vw, 16px);
+  border-radius: clamp(12px, 3vw, 18px);
+}
+
+.setting-item {
+  padding: clamp(12px, 3vw, 18px);
+}
+
+.setting-left {
+  font-size: clamp(0.8rem, 2.5vw, 0.95rem);
+  gap: clamp(8px, 2vw, 14px);
+}
+
+.address-grid {
+  gap: clamp(8px, 2vw, 14px);
+}
+
+.address-field input {
+  padding: clamp(8px, 2vw, 14px);
+  font-size: clamp(0.8rem, 2.5vw, 0.95rem);
+  border-radius: clamp(8px, 2vw, 12px);
+}
+
+/* ===== 11. NOTIFICATIONS ===== */
+.notif-item-v7 {
+  padding: clamp(12px, 3vw, 18px);
+  gap: clamp(10px, 2.5vw, 16px);
+  border-radius: clamp(14px, 3.5vw, 22px);
+  margin-bottom: clamp(8px, 2vw, 14px);
+}
+
+.notif-icon-v7 {
+  width: clamp(40px, 10vw, 52px);
+  height: clamp(40px, 10vw, 52px);
+  border-radius: clamp(11px, 3vw, 16px);
+  font-size: clamp(1rem, 3vw, 1.3rem);
+}
+
+.notif-title {
+  font-size: clamp(0.8rem, 2.5vw, 0.95rem);
+}
+
+.notif-msg {
+  font-size: clamp(0.72rem, 2.2vw, 0.85rem);
+}
+
+.n-filter-tab {
+  padding: clamp(6px, 1.5vw, 10px) clamp(12px, 3vw, 18px);
+  border-radius: clamp(10px, 2.5vw, 14px);
+  font-size: clamp(0.65rem, 2vw, 0.8rem);
+}
+
+.notif-btn-s {
+  padding: clamp(5px, 1.3vw, 8px) clamp(12px, 3vw, 18px);
+  font-size: clamp(0.6rem, 1.8vw, 0.75rem);
+  border-radius: 999px;
+}
+
+/* ===== 12. MODALS RESPONSIVE ===== */
+.modal-sheet {
+  border-radius: clamp(20px, 5vw, 28px) clamp(20px, 5vw, 28px) 0 0;
+  padding: clamp(18px, 4vw, 28px);
+  padding-bottom: calc(
+    clamp(18px, 4vw, 28px) + env(safe-area-inset-bottom, 16px)
+  );
+  max-height: 92dvh;
+}
+
+.modal-title {
+  font-size: clamp(1rem, 3.5vw, 1.3rem);
+}
+
+.modal-close {
+  width: clamp(32px, 8vw, 40px);
+  height: clamp(32px, 8vw, 40px);
+}
+
+.modal-center .modal-sheet {
+  border-radius: clamp(18px, 4.5vw, 28px);
+  margin: 16px;
+  max-height: 88dvh;
+}
+
+/* ===== 13. AUTH PAGES ===== */
+.auth-card,
+.auth-container {
+  padding: clamp(24px, 6vw, 44px);
+  border-radius: clamp(22px, 5vw, 36px);
+  max-width: min(420px, calc(100vw - 32px));
+}
+
+.auth-title {
+  font-size: clamp(1.5rem, 6vw, 2.8rem);
+  letter-spacing: clamp(3px, 1.5vw, 8px);
+}
+
+.auth-logo-box {
+  width: clamp(80px, 20vw, 120px);
+  height: clamp(80px, 20vw, 120px);
+}
+
+.auth-form .form-input,
+.auth-form input[type="email"],
+.auth-form input[type="password"],
+.auth-form input[type="text"] {
+  padding: clamp(12px, 3vw, 18px) clamp(14px, 3.5vw, 22px);
+  border-radius: clamp(12px, 3vw, 18px);
+  font-size: clamp(0.9rem, 2.5vw, 1rem);
+}
+
+.btn-auth-premium,
+.auth-btn {
+  padding: clamp(14px, 3.5vw, 22px);
+  border-radius: clamp(14px, 3.5vw, 22px);
+  font-size: clamp(0.85rem, 2.5vw, 1rem);
+  letter-spacing: clamp(1px, 0.5vw, 3px);
+}
+
+/* ===== 14. MICRO-ANIMATIONS ===== */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmerPremium {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes glowPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 20px var(--primary-glow);
+  }
+}
+
+@keyframes borderGlow {
+  0%,
+  100% {
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  50% {
+    border-color: rgba(198, 255, 0, 0.25);
+  }
+}
+
+/* Page entry animations */
+.page-content,
+.diary-page,
+.ranking-page,
+.profile-page,
+.notif-page,
+.calendar-page {
+  animation: fadeSlideUp 0.5s ease-out;
+}
+
+/* Cards stagger animation */
+.welcome-section-v4 {
+  animation: scaleIn 0.4s ease-out 0.1s both;
+}
+.next-match-card {
+  animation: fadeSlideUp 0.4s ease-out 0.2s both;
+}
+.ai-compact-v4 {
+  animation: fadeSlideUp 0.4s ease-out 0.25s both;
+}
+.match-library {
+  animation: fadeSlideUp 0.4s ease-out 0.3s both;
+}
+
+/* Ranking entry animations */
+.ranking-card {
+  animation: fadeSlideIn 0.35s ease-out both;
+}
+.my-rank-card {
+  animation: scaleIn 0.5s ease-out both;
+}
+
+/* Profile entry */
+.profile-hero {
+  animation: scaleIn 0.4s ease-out 0.1s both;
+}
+.profile-section {
+  animation: fadeSlideUp 0.35s ease-out 0.2s both;
+}
+
+/* Notification entry */
+.notif-item-v7 {
+  animation: fadeSlideIn 0.3s ease-out both;
+}
+
+/* ===== 15. ENHANCED HOVER & INTERACTIVE EFFECTS ===== */
+@media (hover: hover) {
+  .ranking-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateX(6px);
+    border-color: rgba(198, 255, 0, 0.2);
+    transition: all 0.25s ease-out;
+  }
+
+  .notif-item-v7:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateX(4px);
+    border-color: rgba(0, 212, 255, 0.25);
+  }
+
+  .quick-stat-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(198, 255, 0, 0.2);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+
+  .match-item:hover {
+    transform: translateY(-2px) scale(1.01);
+    border-color: rgba(0, 212, 255, 0.25);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+
+  .stat-pill:hover {
+    transform: translateY(-2px);
+    border-color: rgba(198, 255, 0, 0.2);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .setting-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .entry-card-v7:hover {
+    border-color: rgba(0, 212, 255, 0.2);
+    transform: translateY(-2px);
+  }
+
+  .n-filter-tab:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+
+  .filter-chip:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+  }
+}
+
+/* ===== 16. PREMIUM SCROLLBAR ===== */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Custom Scroll for chat & modals */
+.custom-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(198, 255, 0, 0.15);
+  border-radius: 999px;
+}
+
+/* ===== 17. SECTION HEADERS POLISH ===== */
+.section-title,
+.section-header h2,
+.library-title {
+  font-size: clamp(0.85rem, 3vw, 1.1rem);
+  letter-spacing: clamp(0.5px, 0.3vw, 2px);
+}
+
+.section-subtitle,
+.section-header p {
+  font-size: clamp(0.6rem, 2vw, 0.75rem);
+  color: var(--text-dim);
+}
+
+/* ===== 18. BUTTON SYSTEM POLISH ===== */
+.btn-elite-primary,
+.btn-booking-elite-v7,
+.btn-confirm-v7,
+button[class*="btn-primary"],
+.auth-btn-primary {
+  border-radius: clamp(14px, 3.5vw, 22px);
+  padding: clamp(12px, 3vw, 18px) clamp(18px, 4vw, 28px);
+  font-size: clamp(0.8rem, 2.5vw, 0.95rem);
+  font-weight: 800;
+  letter-spacing: clamp(0.5px, 0.3vw, 2px);
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.btn-elite-primary:active,
+.btn-booking-elite-v7:active,
+.btn-confirm-v7:active,
+.auth-btn-primary:active {
+  transform: scale(0.97);
+}
+
+.btn-close-neon {
+  width: clamp(32px, 8vw, 40px);
+  height: clamp(32px, 8vw, 40px);
+  border-radius: clamp(10px, 2.5vw, 14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-close-neon:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.btn-close-neon.sm {
+  width: 32px;
+  height: 32px;
+}
+
+/* ===== 19. FORM INPUTS POLISH ===== */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+textarea,
+select {
+  border-radius: clamp(10px, 2.5vw, 16px);
+  padding: clamp(10px, 2.5vw, 14px) clamp(12px, 3vw, 18px);
+  font-size: clamp(0.85rem, 2.5vw, 1rem);
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    background 0.25s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(198, 255, 0, 0.1) !important;
+  outline: none;
+}
+
+/* ===== 20. GLASS BADGES & PILLS ===== */
+.e-type-pill,
+.slot-chip-v5,
+.match-item-type,
+.type-badge-v7,
+.p-badge,
+.status-badge,
+.lvl-tag-v7,
+.shot-badge {
+  border-radius: clamp(6px, 1.5vw, 10px);
+  font-size: clamp(0.55rem, 1.6vw, 0.7rem);
+  letter-spacing: clamp(0.3px, 0.2vw, 1px);
+}
+
+/* ===== 21. AI CHAT PANEL RESPONSIVE ===== */
+.ai-chat-panel.v14 {
+  border-radius: clamp(18px, 4.5vw, 28px) clamp(18px, 4.5vw, 28px) 0 0;
+  bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+  height: 85dvh;
+  max-height: 850px;
+}
+
+@media (max-width: 359px) {
+  .ai-chat-panel.v14 {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    height: 88dvh;
+  }
+  .ai-quick-grid-v7 {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
+  }
+  .ai-quick-btn-v7 {
+    padding: 7px 3px;
+  }
+  .ai-quick-btn-v7 i {
+    font-size: 13px;
+  }
+  .ai-quick-btn-v7 span {
+    font-size: 7px;
+  }
+  .ai-msg p {
+    font-size: 0.85rem;
+    padding: 10px 12px;
+  }
+  .ai-input-v7 {
+    font-size: 0.9rem;
+  }
+}
+
+@media (min-width: 360px) and (max-width: 413px) {
+  .ai-chat-panel.v14 {
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    height: 87dvh;
+  }
+  .ai-quick-grid-v7 {
+    gap: 6px;
+  }
+  .ai-quick-btn-v7 span {
+    font-size: 8px;
+  }
+}
+
+@media (min-width: 768px) {
+  .ai-chat-panel.v14 {
+    left: auto;
+    right: 24px;
+    bottom: 24px;
+    width: 440px;
+    height: 720px;
+    border-radius: 28px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* AI FAB responsive */
+.ai-fab {
+  bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+  right: clamp(14px, 4vw, 24px);
+  width: clamp(48px, 12vw, 58px);
+  height: clamp(48px, 12vw, 58px);
+  border-radius: clamp(14px, 3.5vw, 20px);
+  font-size: clamp(1.1rem, 3.5vw, 1.5rem);
+}
+
+@media (max-width: 359px) {
+  .ai-fab {
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    width: 44px;
+    height: 44px;
+    right: 12px;
+    border-radius: 14px;
+    font-size: 1rem;
+  }
+}
+
+/* ===== 22. MATCH DETAIL V7 RESPONSIVE ===== */
+.hero-time-v7 {
+  font-size: clamp(2.2rem, 10vw, 4rem);
+}
+
+.hero-date-v7 {
+  font-size: clamp(9px, 2.5vw, 13px);
+  letter-spacing: clamp(2px, 0.8vw, 4px);
+}
+
+.court-schema-v7 {
+  padding: clamp(14px, 3.5vw, 24px) clamp(12px, 3vw, 20px);
+  border-radius: clamp(18px, 4.5vw, 28px);
+}
+
+.info-grid-v7 {
+  gap: clamp(8px, 2vw, 14px);
+}
+
+.info-item-v7 {
+  padding: clamp(10px, 2.5vw, 16px);
+  border-radius: clamp(12px, 3vw, 18px);
+  gap: clamp(8px, 2vw, 14px);
+}
+
+.info-item-v7 .lbl {
+  font-size: clamp(7px, 2vw, 9px);
+}
+
+.info-item-v7 .val {
+  font-size: clamp(10px, 2.5vw, 12px);
+}
+
+/* ===== 23. ELO BREAKDOWN RESPONSIVE ===== */
+.elo-breakdown-v7 {
+  padding: clamp(10px, 2.5vw, 16px);
+  border-radius: clamp(12px, 3vw, 18px);
+}
+
+.bd-grid-v7 {
+  gap: clamp(4px, 1vw, 8px);
+}
+
+.bd-item-v7 {
+  padding: clamp(4px, 1vw, 8px) clamp(6px, 1.5vw, 10px);
+  border-radius: clamp(4px, 1vw, 8px);
+}
+
+.bd-label {
+  font-size: clamp(7px, 1.8vw, 9px);
+}
+
+.bd-val {
+  font-size: clamp(10px, 2.5vw, 12px);
+}
+
+/* ===== 24. ADMIN PAGE ===== */
+.admin-page {
+  max-width: 900px;
+}
+
+/* ===== 25. SELECTION HIGHLIGHT ===== */
+::selection {
+  background: rgba(198, 255, 0, 0.25);
+  color: #fff;
+}
+
+::-moz-selection {
+  background: rgba(198, 255, 0, 0.25);
+  color: #fff;
+}
+
+/* ===== 26. UTILITY: PULSE DOT ===== */
+.pulse-dot-green {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sport-green);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+  animation: pulseDot 2s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.3);
+  }
+}
+
+/* ===== 27. UTILITY: TEXT GRADIENT ===== */
+.text-gradient-neon {
+  background: var(--gradient-neon);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-aurora {
+  background: var(--gradient-aurora);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ===== 28. ENHANCED AI RESULT CARD ===== */
+.ai-result-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: clamp(14px, 3vw, 20px);
+  padding: clamp(14px, 3.5vw, 20px);
+  margin-top: 8px;
+}
+
+.ai-result-card .res-title {
+  display: block;
+  font-size: clamp(0.6rem, 2vw, 0.75rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: clamp(1px, 0.3vw, 2px);
+  color: var(--primary);
+  margin-bottom: clamp(6px, 1.5vw, 10px);
+}
+
+.ai-result-card .res-val {
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 4vw, 1.6rem);
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.2;
+  margin-bottom: clamp(4px, 1vw, 8px);
+}
+
+.ai-result-card .res-sub {
+  font-size: clamp(0.65rem, 2vw, 0.78rem);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ===== 29. SKELETON LOADING ===== */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmerPremium 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* ===== 30. LANDSCAPE MODE FIX ===== */
+@media (orientation: landscape) and (max-height: 500px) {
+  .bottom-nav {
+    height: 56px;
+    min-height: 56px;
+    padding: 4px;
+    border-radius: 20px;
+  }
+  .nav-icon-box {
+    width: 32px;
+    height: 32px;
+  }
+  .nav-item span {
+    display: none;
+  }
+  .nav-item.center-item {
+    transform: translateY(-14px);
+  }
+  .nav-icon-wrap {
+    width: 48px;
+    height: 48px;
+  }
+
+  .page-content,
+  .diary-page,
+  .ranking-page,
+  .profile-page,
+  .notif-page,
+  .calendar-page {
+    padding-bottom: 80px;
+  }
+
+  .ai-chat-panel.v14 {
+    height: 95dvh;
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ===== 31. VERY LARGE SCREENS ===== */
+@media (min-width: 1200px) {
+  .page-content,
+  .diary-page,
+  .ranking-page,
+  .profile-page,
+  .notif-page {
+    max-width: 900px;
+  }
+
+  .calendar-page {
+    max-width: 1100px;
+  }
+}
+
+/* ===== 32. REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== 33. FOCUS VISIBLE ===== */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ===== 34. TOUCH OPTIMIZATION ===== */
+@media (pointer: coarse) {
+  .btn-cal-nav,
+  .modal-close,
+  .nav-item,
+  .filter-chip,
+  .n-filter-tab,
+  .notif-btn-s,
+  .seg-btn,
+  .mood-face,
+  .user-option,
+  .setting-item {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* ===== 35. PRINT STYLES ===== */
+@media print {
+  .bottom-nav,
+  .ai-fab,
+  .ai-chat-panel {
+    display: none !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+}
