@@ -17,7 +17,6 @@
     <link rel="stylesheet" href="./css/home.css">
     <link rel="stylesheet" href="./css/premium-v7.css">
     <link rel="stylesheet" href="./css/final-premium.css">
-    <link rel="stylesheet" href="./css/master-polish.css">
 </head>
 
 <body>
@@ -68,10 +67,8 @@
                             <!-- Dynamic online count -->
                         </div>
                         <div class="welcome-live-strip mt-2">
-                            <span id="welcome-live-time" class="welcome-live-chip"><i class="fas fa-clock"></i>
-                                --:--:--</span>
-                            <span id="welcome-live-weather" class="welcome-live-chip"><i class="fas fa-cloud"></i>
-                                Benicalap: cargando clima...</span>
+                            <span id="welcome-live-time" class="welcome-live-chip"><i class="fas fa-clock"></i> --:--:--</span>
+                            <span id="welcome-live-weather" class="welcome-live-chip"><i class="fas fa-cloud"></i> Benicalap: cargando clima...</span>
                         </div>
                     </div>
 
@@ -141,8 +138,7 @@
                 <div class="flex-row between items-center mb-4">
                     <div class="flex-col">
                         <span class="text-[10px] font-black text-muted uppercase tracking-[3px]">Circuito Próximo</span>
-                        <span class="text-[8px] text-muted uppercase font-bold">Partidas del club aunque no
-                            juegues</span>
+                        <span class="text-[8px] text-muted uppercase font-bold">Partidas del club aunque no juegues</span>
                     </div>
                     <i class="fas fa-tower-broadcast text-muted text-xs"></i>
                 </div>
@@ -268,10 +264,8 @@
                     <span class="text-[9px] font-black text-muted uppercase">Análisis Estratégico</span>
                 </div>
                 <div class="card-premium-v7 p-4 animate-up flex-col" style="animation-delay: 0.45s; min-height: 100px;">
-                    <span class="text-[10px] font-black text-muted uppercase tracking-[3px] mb-2">Buzón de
-                        mejoras</span>
-                    <span class="text-[9px] text-white/70 mb-3">¿Qué mejorarías de la app? Tu propuesta llega directa al
-                        admin.</span>
+                    <span class="text-[10px] font-black text-muted uppercase tracking-[3px] mb-2">Buzón de mejoras</span>
+                    <span class="text-[9px] text-white/70 mb-3">¿Qué mejorarías de la app? Tu propuesta llega directa al admin.</span>
                     <button class="btn-premium-v7 w-full py-2 uppercase text-[9px] font-black tracking-[2px]"
                         onclick="window.openSuggestionModal()">Enviar sugerencia</button>
                 </div>
@@ -320,110 +314,104 @@
                 <div class="ai-hub-tabs">
                     <button id="aihub-tab-btn-actions" class="ai-hub-tab-btn active"
                         onclick="window.switchAIHubTab('actions')">Acciones</button>
-                    <button id="aihub-tab-btn-chat" class="ai-hub-tab-btn" onclick="window.switchAIHubTab('chat')">Chat
-                        IA</button>
+                    <button id="aihub-tab-btn-chat" class="ai-hub-tab-btn"
+                        onclick="window.switchAIHubTab('chat')">Chat IA</button>
                 </div>
 
                 <div id="aihub-tab-actions" class="ai-hub-tab-panel active flex-col gap-4">
-                    <!-- Ecosystem Health Index -->
-                    <div class="ai-section animate-up">
-                        <div class="flex-row between items-center mb-2">
-                            <span class="text-[10px] font-black text-muted uppercase tracking-widest">Salud del
-                                Ecosistema</span>
-                            <div class="flex-row items-center gap-2" id="eco-health-badge">
-                                <span class="w-1.5 h-1.5 rounded-full bg-sport-green animate-pulse"></span>
-                                <span class="text-[10px] font-bold text-sport-green"
-                                    id="eco-health-val">Calculando...</span>
-                            </div>
-                        </div>
-                        <div class="progress-bar-v7">
-                            <div id="eco-health-bar" class="fill-bar" style="width: 0%;"></div>
+                <!-- Ecosystem Health Index -->
+                <div class="ai-section animate-up">
+                    <div class="flex-row between items-center mb-2">
+                        <span class="text-[10px] font-black text-muted uppercase tracking-widest">Salud del
+                            Ecosistema</span>
+                        <div class="flex-row items-center gap-2" id="eco-health-badge">
+                            <span class="w-1.5 h-1.5 rounded-full bg-sport-green animate-pulse"></span>
+                            <span class="text-[10px] font-bold text-sport-green"
+                                id="eco-health-val">Calculando...</span>
                         </div>
                     </div>
+                    <div class="progress-bar-v7">
+                        <div id="eco-health-bar" class="fill-bar" style="width: 0%;"></div>
+                    </div>
+                </div>
 
-                    <!-- Live Level Progress -->
-                    <div class="ai-section animate-up" style="animation-delay: 0.1s;">
-                        <div class="flex-row between items-end mb-2">
-                            <span class="text-[10px] font-black text-muted uppercase tracking-widest">Nivel de
-                                Combate</span>
-                            <span id="ai-level-decimal"
-                                class="text-2xl font-black text-white italic tracking-tighter">--.--</span>
-                        </div>
-                        <div class="progress-bar-v7 large">
-                            <div id="ai-level-bar" class="fill-bar gradient-cyan" style="width: 0%;"></div>
-                        </div>
-                        <div class="flex-row between mt-1">
-                            <span class="text-[9px] text-muted font-bold" id="ai-level-min">--</span>
-                            <span class="text-[9px] text-muted font-bold" id="ai-level-max">--</span>
-                        </div>
-                        <div class="mt-2 p-2 rounded-xl bg-white/5 border border-white/5 text-[10px] text-muted italic"
-                            id="ai-level-insight">
-                            <i class="fas fa-circle-notch fa-spin mr-1 text-cyan"></i> Sincronizando datos...
-                        </div>
+                <!-- Live Level Progress -->
+                <div class="ai-section animate-up" style="animation-delay: 0.1s;">
+                    <div class="flex-row between items-end mb-2">
+                        <span class="text-[10px] font-black text-muted uppercase tracking-widest">Nivel de
+                            Combate</span>
+                        <span id="ai-level-decimal"
+                            class="text-2xl font-black text-white italic tracking-tighter">--.--</span>
                     </div>
+                    <div class="progress-bar-v7 large">
+                        <div id="ai-level-bar" class="fill-bar gradient-cyan" style="width: 0%;"></div>
+                    </div>
+                    <div class="flex-row between mt-1">
+                        <span class="text-[9px] text-muted font-bold" id="ai-level-min">--</span>
+                        <span class="text-[9px] text-muted font-bold" id="ai-level-max">--</span>
+                    </div>
+                    <div class="mt-2 p-2 rounded-xl bg-white/5 border border-white/5 text-[10px] text-muted italic"
+                        id="ai-level-insight">
+                        <i class="fas fa-circle-notch fa-spin mr-1 text-cyan"></i> Sincronizando datos...
+                    </div>
+                </div>
 
-                    <!-- Quick Actions Grid -->
-                    <div class="grid gap-2 animate-up ai-hub-action-grid" style="animation-delay: 0.2s;">
-                        <div class="ai-action-card cyan" onclick="window.aiAction('profile')">
-                            <i class="fas fa-user-astronaut"></i>
-                            <span>Perfil</span>
-                        </div>
-                        <div class="ai-action-card magenta" onclick="window.aiAction('matches')">
-                            <i class="fas fa-trophy"></i>
-                            <span>Partidos</span>
-                        </div>
-                        <div class="ai-action-card lime" onclick="window.aiAction('ranking')">
-                            <i class="fas fa-chart-line"></i>
-                            <span>Rankings</span>
-                        </div>
-                        <div class="ai-action-card gold" onclick="window.aiAction('rivals')">
-                            <i class="fas fa-crosshairs"></i>
-                            <span>Rivales</span>
-                        </div>
-                        <div class="ai-action-card purple" onclick="window.aiAction('diary')">
-                            <i class="fas fa-book-journal-whills"></i>
-                            <span>Diario</span>
-                        </div>
-                        <div class="ai-action-card orange" onclick="window.aiAction('admin')">
-                            <i class="fas fa-shield-halved"></i>
-                            <span>Admin</span>
-                        </div>
-                        <div class="ai-action-card cyan" onclick="window.aiAction('open')">
-                            <i class="fas fa-table-list"></i>
-                            <span>Abiertos</span>
-                        </div>
-                        <div class="ai-action-card magenta" onclick="window.aiAction('chat')">
-                            <i class="fas fa-comments"></i>
-                            <span>Asistente</span>
-                        </div>
-                        <div class="ai-action-card lime" onclick="window.aiAction('suggest')">
-                            <i class="fas fa-lightbulb"></i>
-                            <span>Sugerir Mejora</span>
-                        </div>
+                <!-- Quick Actions Grid -->
+                <div class="grid gap-2 animate-up ai-hub-action-grid" style="animation-delay: 0.2s;">
+                    <div class="ai-action-card cyan" onclick="window.aiAction('profile')">
+                        <i class="fas fa-user-astronaut"></i>
+                        <span>Perfil</span>
                     </div>
+                    <div class="ai-action-card magenta" onclick="window.aiAction('matches')">
+                        <i class="fas fa-trophy"></i>
+                        <span>Partidos</span>
+                    </div>
+                    <div class="ai-action-card lime" onclick="window.aiAction('ranking')">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Rankings</span>
+                    </div>
+                    <div class="ai-action-card gold" onclick="window.aiAction('rivals')">
+                        <i class="fas fa-crosshairs"></i>
+                        <span>Rivales</span>
+                    </div>
+                    <div class="ai-action-card purple" onclick="window.aiAction('diary')">
+                        <i class="fas fa-book-journal-whills"></i>
+                        <span>Diario</span>
+                    </div>
+                    <div class="ai-action-card orange" onclick="window.aiAction('admin')">
+                        <i class="fas fa-shield-halved"></i>
+                        <span>Admin</span>
+                    </div>
+                    <div class="ai-action-card cyan" onclick="window.aiAction('open')">
+                        <i class="fas fa-table-list"></i>
+                        <span>Abiertos</span>
+                    </div>
+                    <div class="ai-action-card magenta" onclick="window.aiAction('chat')">
+                        <i class="fas fa-comments"></i>
+                        <span>Asistente</span>
+                    </div>
+                    <div class="ai-action-card lime" onclick="window.aiAction('suggest')">
+                        <i class="fas fa-lightbulb"></i>
+                        <span>Sugerir Mejora</span>
+                    </div>
+                </div>
                 </div>
                 <div id="aihub-tab-chat" class="ai-hub-tab-panel hidden flex-col gap-3">
                     <div class="chat-quick-head">
-                        <span class="text-[10px] font-black text-primary uppercase tracking-[3px]">Comandos rápidos
-                            IA</span>
-                        <span class="text-[9px] text-muted">Abre vecina AP con contexto real de ranking, historial y
-                            rivales.</span>
+                        <span class="text-[10px] font-black text-primary uppercase tracking-[3px]">Comandos rápidos IA</span>
+                        <span class="text-[9px] text-muted">Abre vecina AP con contexto real de ranking, historial y rivales.</span>
                     </div>
                     <div class="chat-quick-grid">
                         <button class="ai-home-quick-btn"
-                            onclick="window.runAIQuickCommand('Mi rival intelligence completo: nemesis, socio y victima')">Rival
-                            Intel</button>
+                            onclick="window.runAIQuickCommand('Mi rival intelligence completo: nemesis, socio y victima')">Rival Intel</button>
                         <button class="ai-home-quick-btn"
-                            onclick="window.runAIQuickCommand('Resumen total de historial, ranking, puntos y nivel')">Resumen
-                            total</button>
+                            onclick="window.runAIQuickCommand('Resumen total de historial, ranking, puntos y nivel')">Resumen total</button>
                         <button class="ai-home-quick-btn"
                             onclick="window.runAIQuickCommand('Progreso de nivel y cuanto falta para subir')">Nivel</button>
                         <button class="ai-home-quick-btn"
-                            onclick="window.runAIQuickCommand('Ultimo partido, puntos ganados y recomendaciones')">Último
-                            partido</button>
+                            onclick="window.runAIQuickCommand('Ultimo partido, puntos ganados y recomendaciones')">Último partido</button>
                         <button class="ai-home-quick-btn"
-                            onclick="window.runAIQuickCommand('Partidos abiertos que mejor me convienen hoy')">Me
-                            convienen</button>
+                            onclick="window.runAIQuickCommand('Partidos abiertos que mejor me convienen hoy')">Me convienen</button>
                         <button class="ai-home-quick-btn" onclick="window.openSuggestionModal()">Buzón mejoras</button>
                     </div>
                     <button class="btn-premium-v7 w-full py-3 uppercase text-[10px] font-black tracking-[2px]"
@@ -439,18 +427,15 @@
         .ai-section {
             margin-bottom: 0px;
         }
-
         .ai-hub-body-compact {
             max-height: 74vh;
             overflow: hidden;
         }
-
         .ai-hub-tabs {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 8px;
         }
-
         .ai-hub-tab-btn {
             border: 1px solid rgba(255, 255, 255, 0.12);
             background: rgba(255, 255, 255, 0.04);
@@ -462,26 +447,22 @@
             border-radius: 12px;
             padding: 10px;
         }
-
         .ai-hub-tab-btn.active {
             border-color: rgba(0, 212, 255, 0.45);
             background: rgba(0, 212, 255, 0.12);
             color: #fff;
         }
-
         .chat-quick-head {
             padding: 10px;
             border-radius: 12px;
             border: 1px solid rgba(255, 255, 255, 0.08);
             background: rgba(255, 255, 255, 0.03);
         }
-
         .chat-quick-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 8px;
         }
-
         .ai-hub-action-grid {
             grid-template-columns: repeat(3, minmax(0, 1fr));
         }
@@ -621,12 +602,10 @@
         #welcome-level-trend.down {
             color: var(--sport-red);
         }
-
         @media (max-width: 420px) {
             .chat-quick-grid {
                 grid-template-columns: 1fr;
             }
-
             .ai-hub-action-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
@@ -635,3 +614,4 @@
 </body>
 
 </html>
+

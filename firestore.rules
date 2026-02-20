@@ -41,10 +41,7 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if isApproved();
       allow create: if isAdmin() || (signedIn() && request.auth.uid == uid);
-      allow update: if isAdmin() || (signedIn() && (
-        request.auth.uid == uid ||
-        (isApproved() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['puntosRanking', 'lastDiaryImpact']))
-      ));
+      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow delete: if isAdmin();
 
       match /devices/{deviceId} {
@@ -63,12 +60,13 @@ service cloud.firestore {
          request.resource.data.diff(resource.data).affectedKeys().hasAny(['resultado', 'estado', 'diaryImpactBy'])) ||
         // 3. Unirse al partido (Si hay hueco y no estaba)
         (!resource.data.jugadores.hasAny([currentUid()]) &&
+         request.resource.data.jugadores.size() == resource.data.jugadores.size() + 1 &&
          request.resource.data.jugadores.hasAny([currentUid()]) &&
-         request.resource.data.jugadores.size() == 4) ||
+         resource.data.jugadores.size() < 4) ||
         // 4. Salirse del partido
         (resource.data.jugadores.hasAny([currentUid()]) &&
-         !request.resource.data.jugadores.hasAny([currentUid()]) &&
-         request.resource.data.jugadores.size() == 4)
+         request.resource.data.jugadores.size() == resource.data.jugadores.size() - 1 &&
+         !request.resource.data.jugadores.hasAny([currentUid()]))
       ));
       allow delete: if isAdmin() || (isApproved() && resource.data.creador == currentUid());
       
@@ -87,12 +85,13 @@ service cloud.firestore {
          request.resource.data.diff(resource.data).affectedKeys().hasAny(['resultado', 'estado', 'diaryImpactBy'])) ||
         // 3. Unirse al partido
         (!resource.data.jugadores.hasAny([currentUid()]) &&
+         request.resource.data.jugadores.size() == resource.data.jugadores.size() + 1 &&
          request.resource.data.jugadores.hasAny([currentUid()]) &&
-         request.resource.data.jugadores.size() == 4) ||
+         resource.data.jugadores.size() < 4) ||
         // 4. Salirse del partido
         (resource.data.jugadores.hasAny([currentUid()]) &&
-         !request.resource.data.jugadores.hasAny([currentUid()]) &&
-         request.resource.data.jugadores.size() == 4)
+         request.resource.data.jugadores.size() == resource.data.jugadores.size() - 1 &&
+         !request.resource.data.jugadores.hasAny([currentUid()]))
       ));
       allow delete: if isAdmin() || (isApproved() && resource.data.creador == currentUid());
 
@@ -103,7 +102,7 @@ service cloud.firestore {
 
     match /rankingLogs/{logId} {
       allow read, list: if isApproved();
-      allow create: if isAdmin() || isApproved();
+      allow create: if isAdmin() || (isApproved() && request.resource.data.uid == currentUid());
       allow update, delete: if isAdmin();
     }
 

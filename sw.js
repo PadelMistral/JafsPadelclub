@@ -1,3 +1,5 @@
+importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+
 const CACHE_NAME = "padeluminatis-v7.2";
 const CORE_ASSETS = [
   "./",
