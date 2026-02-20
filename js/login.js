@@ -26,18 +26,7 @@ function initAuthPageServiceWorker() {
         });
     };
 
-    // Use the combined OneSignal Worker to avoid registration conflicts
-    const swPath = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-        ? './OneSignalSDKWorker.js' 
-        : '/JafsPadelclub/OneSignalSDKWorker.js';
-    const swScope = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-        ? './' 
-        : '/JafsPadelclub/';
-
-    navigator.serviceWorker.register(swPath, { 
-        scope: swScope,
-        updateViaCache: 'none' 
-    }).then((reg) => {
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
         activateWaiting(reg);
         reg.addEventListener('updatefound', () => bindInstall(reg));
         bindInstall(reg);

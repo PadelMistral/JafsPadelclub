@@ -214,16 +214,6 @@ export async function createNotification(
       return docRef;
     });
     await Promise.all(promises);
-
-    // TRIGGER EXTERNAL BACKGROUND PUSH (REACHES CLOSED BROWSERS/PWA)
-    sendExternalPush({
-      title: safeTitle,
-      message: safeMessage,
-      uids: targets,
-      url: link || "home.html",
-      data: { ...extraData, type: notifType }
-    }).catch(e => console.warn("Background push skip:", e));
-
     return true;
   } catch (e) {
     console.error("Error sending notifications:", e);
@@ -338,7 +328,7 @@ export function listenToNotifications(callback, options = {}) {
 
 // â”€â”€â”€ AUTOMATION LOGIC â”€â”€â”€
 
-import { sendPushNotification, sendExternalPush } from "../modules/push-notifications.js";
+import { sendPushNotification } from "../modules/push-notifications.js";
 
 /**
  * Initialize auto notifications for a user

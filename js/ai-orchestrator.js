@@ -24,13 +24,11 @@ const STRONG_PHRASES = [
     "Has dominado el tiempo y el espacio en la pista."
 ];
 
-function determineArchetype(current, goodChips, shots = {}, techLvl) {
-    // If we have high power shots (smash), it's a Smasher
-    if ((shots.smash || 0) > 7) return 'Rematador Explosivo';
-    if ((shots.vibora || 0) > 7 || (shots.bandeja || 0) > 7) return 'Estratega Aéreo';
-    if (techLvl > 8) return 'Maestro Técnico';
-    if (goodChips.includes('Defensa') || (shots.lob || 0) > 7) return 'Muro Defensivo';
-    if (current === 'Calculando...') return 'Equilibrado';
+function determineArchetype(current, goodChips, smashCount, techLvl) {
+    if (smashCount > 5) return 'Agresivo';
+    if (techLvl > 8) return 'Maestro TÃ©cnico';
+    if (goodChips.includes('Defensa')) return 'Defensivo';
+    if (goodChips.includes('Vibora') || goodChips.includes('Bandeja')) return 'TÃ©cnico';
     return current || 'Equilibrado';
 }
 
@@ -90,57 +88,59 @@ export const AIOrchestrator = {
                             const bio = entry.biometria || {};
                             
                             // 1. Update Biometrics
-                            // 1. Update Biometrics (Using new direct inputs)
-                            const newFatigue = bio.fatiga ?? Math.max(0, 100 - (bio.fisico || 50));
-                            const newPressure = bio.estres ?? Math.max(0, 100 - (bio.mental || 50));
+                            const newFatigue = Math.max(0, 100 - (bio.fisico || 50));
+                            const newPressure = Math.max(0, 100 - (bio.mental || 50));
 
-                            // 2. Advanced Learning Analysis
+                            // 2. Advanced Learning Analysis (Merged from ai-learning.js)
                             const uDoc = await getDocument('usuarios', targetUid);
                             
+                            const badChips = [];
                             const goodChips = [];
-                            const shots = entry.shots || {};
-                            if (shots.smash > 7) goodChips.push('Ataque');
-                            if (shots.lob > 7) goodChips.push('Defensa');
-                            if (shots.volley > 7) goodChips.push('Volea');
+                            if (entry.tacticalBalance) {
+                                Object.entries(entry.tacticalBalance).forEach(([k, v]) => {
+                                    if (v === 'good') goodChips.push(k);
+                                    else if (v === 'bad') badChips.push(k);
+                                });
+                            }
                             
-                            const learning = (entry.tactica?.leccion || "").toLowerCase();
+                            const stats = entry.stats || {};
+                            const val = entry.valoracion || {};
+                            const learning = (entry.aprendizaje || "").toLowerCase();
                             
-                            let insight = "Analizando tu desempeño... ";
-                            let funPhrase = "¡Dale caña, padelero!";
+                            let insight = "Analizando tu desempeÃ±o... ";
+                            let funPhrase = "Â¡Dale caÃ±a, padelero!";
 
-                            // Logic: Shot-based insights
-                            const avgShot = Object.values(shots).reduce((a,b)=>a+b, 0) / (Object.values(shots).length || 1);
-
-                            if (avgShot > 7.5) {
-                                insight = "Tu precisión técnica hoy ha sido quirúrgica. Control total.";
+                            // Logic: Sentiment & Keyword extraction
+                            if (learning.includes("paralelo") || learning.includes("remate") || (stats.x3 || 0) + (stats.x4 || 0) > 3) {
+                                insight = "Has identificado patrones ofensivos clave. Tu agresividad estÃ¡ dando frutos.";
                                 funPhrase = STRONG_PHRASES[Math.floor(Math.random() * STRONG_PHRASES.length)];
-                            } else if (newFatigue > 7) {
-                                insight = "Detecto niveles críticos de fatiga. Tu rendimiento se verá afectado si no descansas.";
-                                funPhrase = "A veces el mejor entrenamiento es el descanso, Gladiador.";
-                            } else if (newPressure > 7) {
-                                insight = "La presión psicológica está bloqueando tu fluidez. Respira.";
-                                funPhrase = "Juega con el corazón, pero decide con la cabeza fría.";
-                            } else if (learning.length > 10) {
-                                insight = `Análisis de aprendizaje: "${learning.slice(0, 60)}..." es una gran conclusión táctica.`;
-                                funPhrase = "Sigue alimentando la Matrix con tus descubrimientos.";
+                            } else if (learning.includes("cristal") || learning.includes("defensa") || goodChips.includes('Defensa')) {
+                                insight = "Tu comprensiÃ³n de los Ã¡ngulos del cristal estÃ¡ mejorando significativamente.";
+                                funPhrase = "Te estÃ¡s volviendo infranqueable. Â¡Padeluminatis necesita mÃ¡s muros como tÃº!";
+                            } else if (badChips.length > 2 || val.tecnica < 4) {
+                                insight = "Detectadas Ã¡reas de colapso tÃ©cnico. Sugiero sesiÃ³n de entrenamiento enfocada.";
+                                funPhrase = WEAK_PHRASES[Math.floor(Math.random() * WEAK_PHRASES.length)];
+                            } else if (val.mental > 7 && val.fisico > 7) {
+                                insight = "SincronÃ­a total entre cuerpo y mente hoy. EstÃ¡s en la 'Zona'.";
+                                funPhrase = "Hoy has jugado como si pudieras ver el cÃ³digo de la pelota. Impresionante.";
                             }
 
                             // 3. Construct AI Profile Update
                             const aiProfile = uDoc.aiProfile || {};
                             aiProfile.lastInsight = insight;
                             aiProfile.funPhrase = funPhrase;
-                            aiProfile.archetype = determineArchetype(aiProfile.archetype, goodChips, shots, avgShot);
+                            aiProfile.archetype = determineArchetype(aiProfile.archetype, goodChips, (stats.x3 || 0) + (stats.x4 || 0), val.tecnica || 5);
                             
-                            if (entry.tactica?.leccion) {
+                            if (entry.aprendizaje) {
                                 const lessons = aiProfile.lessonsLearned || [];
-                                lessons.push({ date: new Date().toISOString(), text: entry.tactica.leccion });
-                                aiProfile.lessonsLearned = lessons.slice(-10);
+                                lessons.push({ date: new Date().toISOString(), text: entry.aprendizaje });
+                                aiProfile.lessonsLearned = lessons.slice(-5);
                             }
 
                             // 4. Persist
                             await updateDocument('usuarios', targetUid, {
-                                'advancedStats.fatigueIndex': newFatigue * 10, // Scale to 100 for internal consistency if needed
-                                'advancedStats.pressure': newPressure * 10,
+                                'advancedStats.fatigueIndex': newFatigue,
+                                'advancedStats.pressure': newPressure,
                                 aiProfile: aiProfile,
                                 lastAnalysisDate: new Date().toISOString()
                             });

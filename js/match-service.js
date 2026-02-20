@@ -58,7 +58,43 @@ function renderApoingLink(cta = "Comprobar reserva en Apoing") {
     `;
 }
 
+async function sendMatchCreatedPushViaVercel({ title, message, matchId, col, targetUids, dateIso }) {
+    try {
+        const provider = (localStorage.getItem("push_provider") || "").toLowerCase();
+        if (provider !== "vercel" && window.__USE_VERCEL_PUSH !== true) return;
 
+        const configured =
+            window.__PUSH_API_URL ||
+            localStorage.getItem("push_api_url") ||
+            "";
+        const endpoint = configured || "/api/send-push";
+
+        // Avoid noisy errors in local files or offline contexts
+        if (window.location.protocol === "file:") return;
+
+        const payload = {
+            titulo: title,
+            mensaje: message,
+            externalIds: Array.isArray(targetUids) ? targetUids.filter(Boolean) : [],
+            data: {
+                type: "match_opened",
+                matchId,
+                matchCollection: col,
+                dateIso: dateIso || null,
+                url: "calendario.html",
+            },
+            url: "calendario.html",
+        };
+
+        await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+    } catch (e) {
+        console.warn("Vercel push fallback skipped:", e?.message || e);
+    }
+}
 
 async function safeOnSnapshot(q, onNext) {
     if (window.getDocsSafe) {
@@ -176,6 +212,14 @@ window.executeCreateMatch = async (dateStr, hour) => {
                 'calendario.html',
                 { type: notifType, matchId: createdMatchId, matchCollection: col, dedupId: `${notifType}_${createdMatchId}` }
             );
+            sendMatchCreatedPushViaVercel({
+                title: "¡Padeluminatis!",
+                message: notifMsg,
+                matchId: createdMatchId,
+                col,
+                targetUids: targets,
+                dateIso: matchDate.toISOString(),
+            });
         }
 
         hideLoading();

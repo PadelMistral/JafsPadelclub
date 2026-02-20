@@ -687,8 +687,6 @@ document.addEventListener("DOMContentLoaded", async () => {
           fisico: parseInt(document.getElementById("inp-fisico").value),
           mental: parseInt(document.getElementById("inp-mental").value),
           confianza: parseInt(document.getElementById("inp-confianza").value),
-          fatiga: parseInt(document.getElementById("inp-fatiga")?.value || 3),
-          estres: parseInt(document.getElementById("inp-estres")?.value || 2),
           mood:
             document.querySelector("#mood-box .active")?.dataset.mood ||
             "Normal",
@@ -699,8 +697,6 @@ document.addEventListener("DOMContentLoaded", async () => {
           clave: document.getElementById("inp-key-moment").value,
           dañoRecibido: document.getElementById("inp-damage-received").value,
           dañoInfligido: document.getElementById("inp-damage-inflicted").value,
-          leccion: document.getElementById("entry-lesson")?.value || "",
-          nextGoal: document.getElementById("inp-next-goal")?.value || "",
           notas: document.getElementById("entry-notes").value,
         },
 
@@ -935,28 +931,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("inp-damage-received").value = "";
     document.getElementById("inp-damage-inflicted").value = "";
     document.getElementById("entry-notes").value = "";
-    document.getElementById("entry-lesson").value = "";
-    document.getElementById("inp-next-goal").value = "";
     const memoryEl = document.getElementById("entry-memory");
     if (memoryEl) memoryEl.value = "";
     document.getElementById("inp-match-id").value = "";
     document.getElementById("inp-match-selector").value = "";
 
-    ["serve", "volley", "bandeja", "vibora", "smash", "lob", "fisico", "mental", "confianza", "fatiga", "estres"].forEach((k) => {
-      const input = document.getElementById(`inp-${k.includes('-') ? k : (['serve','volley','bandeja','vibora','smash','lob'].includes(k) ? 'shot-'+k : k)}`);
-      // Wait, let's just be explicit to avoid bugs
+    ["serve", "volley", "bandeja", "vibora", "smash", "lob"].forEach((k) => {
+      const input = document.getElementById(`inp-shot-${k}`);
+      const val = document.getElementById(`val-shot-${k}`);
+      if (input) input.value = "5";
+      if (val) val.innerText = "5";
     });
-
-    const resetF = (id, val) => {
-        const inp = document.getElementById(id);
-        const lbl = document.getElementById(id.replace('inp-', 'val-'));
-        if(inp) inp.value = val;
-        if(lbl) lbl.innerText = val;
-    };
-
-    ["shot-serve", "shot-volley", "shot-bandeja", "shot-vibora", "shot-smash", "shot-lob", "fisico", "mental", "confianza", "fatiga", "estres"].forEach(k => resetF('inp-'+k, 5));
-    resetF('inp-fatiga', 3);
-    resetF('inp-estres', 2);
   }
 
   // --- RENDER JOURNAL LIST ---
@@ -1034,28 +1019,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function generateSmartSummary(e) {
-    // Advanced contextual AI summary
+    // Simple rule-based generation
     const feels = e.biometria?.mood || "Normal";
-    const fatiga = e.biometria?.fatiga || 0;
-    const estres = e.biometria?.estres || 0;
-    const shots = e.shots || {};
-    const avgShot = Object.values(shots).reduce((a,b)=>a+b, 0) / (Object.values(shots).length || 1);
+    const ratio = (e.stats?.winners || 0) / (e.stats?.ue || 1);
 
     let txt = "";
-    
-    if (avgShot >= 8) txt += "Rendimiento técnico sobresaliente. ";
-    else if (avgShot <= 4) txt += "Día de imprecisión técnica. ";
+    if (ratio > 1.5) txt += "Gran eficiencia ofensiva. ";
+    else if (ratio < 0.5) txt += "Exceso de errores no forzados. ";
 
-    if (fatiga >= 7) txt += "Alta fatiga física detectada. ";
-    if (estres >= 7) txt += "Nivel de estrés elevado afectó la toma de decisiones. ";
+    if (feels === "Frustrado")
+      txt += "La gestión emocional limitó el rendimiento. ";
+    if (feels === "Fluido") txt += "Estado de flow alcanzado. ";
 
-    if (feels === "Frustrado") txt += "Bloqueo emocional durante el juego. ";
-    if (feels === "Fluido") txt += "Sintonía perfecta con la Matrix. ";
+    if (e.tactica?.clave) txt += `Clave: ${e.tactica.clave}.`;
 
-    if (e.tactica?.leccion) txt += `Has aprendido: ${e.tactica.leccion.slice(0, 50)}... `;
-    if (e.tactica?.nextGoal) txt += `Objetivo: ${e.tactica.nextGoal}.`;
-
-    return txt || "Sesión registrada. La IA está procesando tus datos tácticos.";
+    return txt || "Sesión registrada sin incidencias mayores.";
   }
 
   // Export global functions
