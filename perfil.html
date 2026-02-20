@@ -71,7 +71,8 @@
 
         <section class="profile-section animate-fade-in" style="animation-delay: 0.08s;">
             <div id="fut-card-container" class="fut-card-wrap">
-                <div class="text-center py-6 opacity-40 text-[10px] font-black uppercase">Cargando carta de jugador...</div>
+                <div class="text-center py-6 opacity-40 text-[10px] font-black uppercase">Cargando carta de jugador...
+                </div>
             </div>
         </section>
 
@@ -189,6 +190,28 @@
                     <div class="h-full bg-sport-gold" id="bar-pressure" style="width: 50%"></div>
                 </div>
             </div>
+
+            <!-- NEW BIOMETRIC METERS -->
+            <div class="flex flex-row gap-4 mb-4 bg-white/05 p-3 rounded-2xl border border-white/05">
+                <div class="cfg-group-v9 flex-1">
+                    <div class="flex-between mb-1">
+                        <span class="text-[9px] font-black tracking-widest text-red-500">FATIGA</span>
+                        <span class="text-[9px] font-black text-white" id="val-fatigue-profile">0/100</span>
+                    </div>
+                    <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                        <div class="h-full bg-red-500" id="bar-fatigue-profile" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="cfg-group-v9 flex-1">
+                    <div class="flex-between mb-1">
+                        <span class="text-[9px] font-black tracking-widest text-purple-500">ESTRÉS</span>
+                        <span class="text-[9px] font-black text-white" id="val-stress-profile">0/100</span>
+                    </div>
+                    <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                        <div class="h-full bg-purple-500" id="bar-stress-profile" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- RIVAL INTELLIGENCE DASHBOARD (PHASE 3) -->
@@ -196,7 +219,6 @@
             <div class="section-header">
                 <h2 class="section-title"><i class="fas fa-crosshairs text-red-500 mr-2"></i>RIVAL INTELLIGENCE</h2>
             </div>
-            <!-- Mock Content Container - Will be populated by JS -->
             <div id="rival-intel-dashboard" class="journal-card-v10">
                 <div class="text-center opacity-50 text-[10px] font-black uppercase">
                     Selecciona un rival para ver análisis
@@ -508,4 +530,3 @@
 </body>
 
 </html>
-

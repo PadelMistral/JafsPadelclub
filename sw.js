@@ -120,3 +120,24 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(staleWhileRevalidate(event.request));
 });
+
+// Handle Notification Clicks (Fallback for custom local pushes)
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  const url = event.notification.data?.url || './home.html';
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then(windowClients => {
+      // Check if there is already a window/tab open with the target URL
+      for (var i = 0; i < windowClients.length; i++) {
+        var client = windowClients[i];
+        if (client.url === url && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // If not, open a new window
+      if (clients.openWindow) {
+        return clients.openWindow(url);
+      }
+    })
+  );
+});
