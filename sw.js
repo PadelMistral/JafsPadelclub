@@ -1,5 +1,3 @@
-importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
-
 const CACHE_NAME = "padeluminatis-v7.2";
 const CORE_ASSETS = [
   "./",
@@ -51,7 +49,8 @@ self.addEventListener("activate", (event) => {
           return Promise.resolve();
         })
       );
-      await self.clients.claim();
+      // await self.clients.claim(); // ⚠️ Comentado para evitar bucle de recarga infinito
+      console.log("Service Worker Active - Clients claim disabled for stability");
     })()
   );
 });
