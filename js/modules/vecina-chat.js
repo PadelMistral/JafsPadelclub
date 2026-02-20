@@ -54,7 +54,9 @@ const PERSONALITIES = {
       "A ver, corazón, céntrate. ¿Me preguntas por pádel o por la vida?",
       "¡Madre mía! Si yo te contara... pero de eso no tengo registros hoy.",
       "Oye, que yo lo sé todo, pero eso se me escapa. ¡Pregúntame otra cosa!",
-      "Jajaja, ¡qué gracia! Pero vamos a lo importante: ¿quién ganó ayer?"
+      "Jajaja, ¡qué gracia! Pero vamos a lo importante: ¿quién ganó ayer?",
+      "¡Cielo! Mis antenas no pillan esa frecuencia. ¿Probamos con algo de cotilleo del ranking?",
+      "Ni idea, pichón. Pero si quieres te cuento quién es tu némesis para que te eches a temblar."
     ]
   }
 };
@@ -166,6 +168,18 @@ async function _syncData() {
 
     DATA_CACHE.lastUpdate = now;
     userData = uData;
+
+    // Populate Comparison Selector
+    const sel = document.getElementById("ai-compare-select");
+    if(sel && DATA_CACHE.globalUsers.length > 0) {
+        const current = sel.value;
+        sel.innerHTML = '<option value="">Comparar con...</option>' + 
+            DATA_CACHE.globalUsers
+                .filter(u => u.id !== uid)
+                .sort((a,b) => (a.nombreUsuario || a.nombre || "").localeCompare(b.nombreUsuario || b.nombre || ""))
+                .map(u => `<option value="${u.id}" ${u.id === current ? 'selected' : ''}>${u.nombreUsuario || u.nombre || 'Jugador'}</option>`)
+                .join("");
+    }
   } catch (e) {
     console.error("AI Data Layer Error:", e);
   }
@@ -214,42 +228,107 @@ const Analyzer = {
         }
       : null;
   },
-    
+
+  findVictim: (uid) => {
+    const record = {};
+    DATA_CACHE.matches.forEach((m) => {
+      if (!m.jugadores || !isFinishedMatch(m) || isCancelledMatch(m)) return;
+      const myIdx = m.jugadores.indexOf(uid);
+      if (myIdx === -1) return;
+      const rivs = myIdx < 2 ? [m.jugadores[2], m.jugadores[3]] : [m.jugadores[0], m.jugadores[1]];
+      const winnerTeam = resolveWinnerTeam(m);
+      const won = myIdx < 2 ? winnerTeam === 1 : winnerTeam === 2;
+
+      rivs.forEach((rid) => {
+        if (!rid || rid === uid || String(rid).startsWith("GUEST_")) return;
+        if (!record[rid]) record[rid] = { wins: 0, losses: 0 };
+        won ? record[rid].wins++ : record[rid].losses++;
+      });
+    });
+
+    let victimId = null, bestRatio = -1;
+    Object.keys(record).forEach((rid) => {
+      const total = record[rid].wins + record[rid].losses;
+      const ratio = record[rid].wins / total;
+      if (total >= 2 && ratio > bestRatio) {
+        bestRatio = ratio;
+        victimId = rid;
+      }
+    });
+    return victimId ? { ...DATA_CACHE.globalUsers.find(u => u.id === victimId), stats: record[victimId] } : null;
+  },
+
   findPartner: (uid) => {
     const record = {};
     DATA_CACHE.matches.forEach((m) => {
       if (!m.jugadores || !isFinishedMatch(m) || isCancelledMatch(m)) return;
       const myIdx = m.jugadores.indexOf(uid);
       if (myIdx === -1) return;
-      const isTeam1 = myIdx < 2;
-      // Partner is the other person in my team
-      const partnerIdx = isTeam1 ? (myIdx === 0 ? 1 : 0) : (myIdx === 2 ? 3 : 2);
-      const partnerId = m.jugadores[partnerIdx];
-        
-      if (!partnerId || partnerId === uid || String(partnerId).startsWith("GUEST_")) return;
+      
+      const partnerIdx = myIdx === 0 ? 1 : (myIdx === 1 ? 0 : (myIdx === 2 ? 3 : 2));
+      const pid = m.jugadores[partnerIdx];
+      if (!pid || pid === uid || String(pid).startsWith("GUEST_")) return;
 
       const winnerTeam = resolveWinnerTeam(m);
-      if (winnerTeam !== 1 && winnerTeam !== 2) return;
-      const won = isTeam1 ? winnerTeam === 1 : winnerTeam === 2;
-        
-      if (!record[partnerId]) record[partnerId] = { wins: 0, losses: 0 };
-      won ? record[partnerId].wins++ : record[partnerId].losses++;
+      const won = myIdx < 2 ? winnerTeam === 1 : winnerTeam === 2;
+
+      if (!record[pid]) record[pid] = { wins: 0, losses: 0 };
+      won ? record[pid].wins++ : record[pid].losses++;
     });
 
-    let bestId = null, bestWinRate = -1;
-     Object.keys(record).forEach((pid) => {
+    let bestId = null, bestRate = -1;
+    Object.keys(record).forEach((pid) => {
       const total = record[pid].wins + record[pid].losses;
       const rate = record[pid].wins / total;
-      if (total >= 2 && rate > bestWinRate) {
-        bestWinRate = rate;
+      if (total >= 2 && rate > bestRate) {
+        bestRate = rate;
         bestId = pid;
       }
     });
-      
-    return bestId ? {
-        ...DATA_CACHE.globalUsers.find(u => u.id === bestId),
-        stats: record[bestId]
-    } : null;
+
+    return bestId ? { ...DATA_CACHE.globalUsers.find(u => u.id === bestId), stats: record[bestId] } : null;
+  },
+
+  getDiaryInsights: (u) => {
+    if (!u.diario || u.diario.length === 0) return null;
+    const latest = u.diario[u.diario.length - 1];
+    const recent = u.diario.slice(-5);
+    
+    const avgFatigue = recent.reduce((acc, e) => acc + (e.biometria?.fatiga || 0), 0) / recent.length;
+    const avgStress = recent.reduce((acc, e) => acc + (e.biometria?.estres || 0), 0) / recent.length;
+    
+    const shotTrend = {};
+    const shotsToTrack = ["serve", "volley", "bandeja", "vibora", "smash", "lob"];
+    
+    recent.forEach(e => {
+        if(e.shots) {
+            shotsToTrack.forEach(s => {
+                const val = e.shots[s] || 5;
+                shotTrend[s] = (shotTrend[s] || 0) + val;
+            });
+        }
+    });
+    
+    let worstShot = null, minVal = 11;
+    let bestShot = null, maxVal = -1;
+
+    shotsToTrack.forEach(s => {
+        const avg = shotTrend[s] / recent.length;
+        if(avg < minVal) { minVal = avg; worstShot = s; }
+        if(avg > maxVal) { maxVal = avg; bestShot = s; }
+    });
+
+    return { 
+        latest, 
+        avgFatigue, 
+        avgStress, 
+        worstShot, 
+        bestShot,
+        trendSize: recent.length,
+        hasFatigue: avgFatigue > 6,
+        hasStress: avgStress > 6,
+        lastLesson: latest.tactica?.leccion || null
+    };
   }
 };
 
@@ -276,7 +355,8 @@ function _buildUserContext(u, stats, matches) {
     mood,
     matches: stats.myMatches,
     winRate: `${winRate}%`,
-    lastPoints: Math.round(u.puntosRanking || 1000)
+    lastPoints: Math.round(u.puntosRanking || 1000),
+    playerState: u.playerState || {}
   };
 }
 
@@ -366,6 +446,91 @@ function _generateResponse(intent, query) {
     }
     return `Análisis de Rivalidad: Tu Némesis táctico es **${nName}**. Historial H2H: ${nStats.wins}V - ${nStats.losses}D. Se recomienda analizar sus patrones de juego para revertir la tendencia.`;
   }
+
+  if (intent === "CMD_VICTIM") {
+    const victim = Analyzer.findVictim(u.id);
+    if (!victim) return currentPersonality === 'vecina' ? "A ver, pichón... todavía no has 'matado' a nadie en la pista. ¡A ver si nos ponemos las pilas!" : "No se ha detectado un rival que domines claramente en tu historial.";
+    
+    const vName = victim.nombreUsuario || victim.nombre;
+    const vStats = victim.stats;
+    
+    if (currentPersonality === 'vecina') {
+       return `¡Ay! Tu víctima favorita es **${vName}**. Le has ganado ${vStats.wins} veces y solo te ha pillado en ${vStats.losses}. ¡Pobrecillo, si te ve ya se echa a temblar!`;
+    }
+    return `Análisis de Dominio: Tu rival más vulnerable es **${vName}**. Historial H2H: ${vStats.wins}V - ${vStats.losses}D. Mantén la presión psicológica en futuros enfrentamientos.`;
+  }
+
+  if (intent === "CMD_COMPARE") {
+      const targetUser = _findUserByName(query.replace("compara con", "").replace("vs", "").trim());
+      if (!targetUser) return currentPersonality === 'vecina' ? "Huy, ¿con quién? No conozco a ese tal... ¡Asegúrate de escribir bien el nombre!" : "No he podido localizar al usuario solicitado para realizar la comparativa.";
+      
+      const p1 = ctx;
+      const p2 = {
+          name: targetUser.nombreUsuario || targetUser.nombre,
+          level: (targetUser.nivel || 2.5).toFixed(2),
+          elo: Math.round(targetUser.puntosRanking || 1000)
+      };
+
+      const diffElo = p1.lastPoints - p2.elo;
+      const eloAdv = diffElo > 0 ? p1.name : p2.name;
+
+      if (currentPersonality === 'vecina') {
+          return `A ver, **${p1.name}** vs **${p2.name}**. Tú tienes ${p1.lastPoints} ELO y él/ella ${p2.elo}. ${diffElo > 0 ? '¡Le llevas ventaja, no me seas flojo!' : '¡Uff, te saca ventaja! Vas a tener que sudar la gota gorda.'} En nivel estáis parecidos: ${p1.level} vs ${p2.level}.`;
+      }
+      return `Comparativa Técnica: [${p1.name} ELO:${p1.lastPoints} LVL:${p1.level}] VS [${p2.name} ELO:${p2.elo} LVL:${p2.level}]. Diferencial de ELO: ${Math.abs(diffElo)} a favor de ${eloAdv}. Probabilidades tácticas equilibradas.`;
+  }
+
+  if (intent === "CMD_HISTORY") {
+      const recent = DATA_CACHE.matches.slice(0, 5);
+      if (recent.length === 0) return currentPersonality === 'vecina' ? "¡Pero si no tienes historial! Juega algo primero, impaciente." : "No se registran partidos recientes en tu historial de competición.";
+      
+      let summary = currentPersonality === 'vecina' ? `Tus últimos ${recent.length} partidos han sido un show: ` : `Resumen de actividad (${recent.length} partidos): `;
+      
+      recent.forEach((m, i) => {
+          const winnerTeam = resolveWinnerTeam(m);
+          const myIdx = m.jugadores.indexOf(u.id);
+          const won = myIdx < 2 ? winnerTeam === 1 : winnerTeam === 2;
+          summary += (won ? "✅" : "❌");
+      });
+
+      if (currentPersonality === 'vecina') {
+          const wins = recent.filter(m => {
+              const winnerTeam = resolveWinnerTeam(m);
+              const myIdx = m.jugadores.indexOf(u.id);
+              return myIdx < 2 ? winnerTeam === 1 : winnerTeam === 2;
+          }).length;
+          summary += wins > 3 ? " ¡Madre mía, vas como un cohete!" : " Bueno, se hace lo que se puede, ¿no?";
+          return summary;
+      }
+      return summary + " Estado de forma analizado a partir de resultados recientes.";
+  }
+
+  if (intent === "CMD_ADVICE") {
+      const insights = Analyzer.getDiaryInsights(u);
+      const state = ctx.playerState || {};
+      const partner = Analyzer.findPartner(u.id);
+      
+      let advice = currentPersonality === 'vecina' 
+        ? `Escúchame bien, {NAME}. Basado en tu ADN de nivel {LEVEL}: `
+        : `Análisis Táctico Personalizado para {NAME} (Nivel {LEVEL}): `;
+
+      if (state.mode === 'Burnout' || insights?.hasFatigue) {
+          advice += currentPersonality === 'vecina' ? "¡Para el carro! Estás cansado y vas a lesionarte. ¡Hoy toca sofá!" : "Advertencia: Niveles de fatiga críticos. Riesgo de lesión elevado. Prioridad: Recuperación.";
+      } else if (insights?.worstShot) {
+          const shotLabels = { serve: 'Saque', volley: 'Volea', bandeja: 'Bandeja', vibora: 'Víbora', smash: 'Remate', lob: 'Globo' };
+          advice += currentPersonality === 'vecina' 
+            ? `Tu **${shotLabels[insights.worstShot]}** me tiene preocupada. ¡Vete al muro a practicar!` 
+            : `Foco técnico: Tu rendimiento en **${shotLabels[insights.worstShot]}** es inferior a tu media. Se recomienda sesión específica de refuerzo.`;
+      } else {
+          advice += currentPersonality === 'vecina' ? "¡Estás hecho un pincel! Sigue así y entrarás en el top pronto." : "Rendimiento estable. Mantén el volumen de entrenamiento actual.";
+      }
+
+      if (partner) {
+          advice += currentPersonality === 'vecina' ? ` Ah, y llama a **${partner.nombreUsuario || partner.nombre}**, que hacéis buena pareja.` : ` Nota: Alta sinergia detectada con **${partner.nombreUsuario || partner.nombre}**.`;
+      }
+
+      return R(advice);
+  }
     
   if (intent === "CMD_PARTNER_SYNC") {
       const partner = Analyzer.findPartner(u.id);
@@ -405,9 +570,40 @@ function _generateResponse(intent, query) {
   }
 
   if (intent === "CMD_PREDICT") {
-     const prob = Math.floor(Math.random() * 40) + 40; 
-     if (currentPersonality === 'vecina') return "Uff, la bola de cristal dice que... ¡depende de lo que hayas desayunado! Pero te veo con ganas. Yo digo que un 80% sí.";
-     return `Probabilidad estimada de victoria basada en biorritmos actuales: ${prob}%. Variable sujeta a factores externos como clima y estado físico.`;
+      const prob = 50 + (ctx.streak * 5);
+      return currentPersonality === 'vecina'
+        ? `Pues mira, corazón, con esa racha de ${ctx.streakText} te doy un ${prob}% de que ganes hoy. ¡Pero no te fíes, que la pelota es redonda!`
+        : `Análisis Predictivo: Probabilidad estimada de victoria del ${prob}% basada en métricas de momentum y estado de forma. Sujeto a variaciones por emparejamiento.`;
+  }
+
+  if (intent === "CMD_DIARY_ANALYSIS") {
+      const insights = Analyzer.getDiaryInsights(u);
+      const state = ctx.playerState || {};
+      
+      if (!insights) return currentPersonality === 'vecina' ? "¡Cariño, tienes el diario más vacío que mi nevera un lunes! Registra algo y te cuento." : "No hay suficientes datos en tu Diario Táctico para generar un informe de rendimiento.";
+
+      const { latest, avgFatigue, avgStress, worstShot, bestShot, hasFatigue, hasStress, lastLesson } = insights;
+      const shotLabels = { serve: 'Saque', volley: 'Volea', bandeja: 'Bandeja', vibora: 'Víbora', smash: 'Remate', lob: 'Globo' };
+      
+      const goodS = shotLabels[bestShot] || bestShot;
+      const badS = shotLabels[worstShot] || worstShot;
+
+      if (currentPersonality === 'vecina') {
+          let msg = `Oye, he estado ojeando tu diario... `;
+          if (lastLesson) msg += `Lo último que aprendiste fue a **${lastLesson}**. `;
+          
+          if (hasFatigue) msg += "¡Te veo cansadísimo! Descansa un poco, que no estamos para trotes. ";
+          if (hasStress) msg += "Y relájate, que los nervios en la red son traicioneros. ";
+
+          msg += `Tu **${goodS}** está de dulce, pero ese **${badS}**... ¡ay! Hay que darle una vuelta. `;
+          
+          if (state.mode === 'Burnout') msg += "¡Ojo! La Matrix dice que estás al límite. ¡Para antes de romperte!";
+          else if (state.mode === 'On_Fire') msg += "¡Estás en racha! Es el momento de retar a los grandes.";
+          
+          return msg;
+      }
+      
+      return `Auditoría Tactica: Basado en ${insights.trendSize} sesiones. Fortaleza: **${goodS.toUpperCase()}**. Debilidad: **${badS.toUpperCase()}**. Estado de Forma: ${state.modeLabel || 'Normal'}. ${hasFatigue ? '[AVISO: FATIGA ALTA]' : ''} ${hasStress ? '[AVISO: ESTRÉS DETECTADO]' : ''} Conclusión: ${lastLesson ? 'Integrando lección: ' + lastLesson : 'Sin lecciones pendientes'}.`;
   }
     
   if (intent === "CMD_ELO_FORMULA") {
@@ -435,12 +631,17 @@ function _detectIntent(query) {
   if (q.includes("contexto") || q.includes("que es esto") || q.includes("app")) return "CMD_APP_CONTEXT";
   if (q.includes("global") || q.includes("comunidad") || q.includes("gente")) return "CMD_GLOBAL_STATS";
   if (q.includes("nivel") || q.includes("progeso") || q.includes("subir")) return "CMD_LEVEL_PROGRESS";
+  if (q.includes("historial") || q.includes("visto") || q.includes("partidos")) return "CMD_HISTORY";
+  if (q.includes("consejo") || q.includes("ayudame") || q.includes("que hago")) return "CMD_ADVICE";
   if (q.includes("nemesis") || q.includes("rival") || q.includes("odio")) return "CMD_NEMESIS";
+  if (q.includes("victima") || q.includes("gano siempre") || q.includes("facil")) return "CMD_VICTIM";
+  if (q.includes("compara") || q.includes(" vs ") || q.includes("contra")) return "CMD_COMPARE";
   if (q.includes("socio") || q.includes("pareja") || q.includes("compañero")) return "CMD_PARTNER_SYNC";
   if (q.includes("recomienda") || q.includes("quien jugar") || q.includes("retar")) return "CMD_RIVAL_INTEL";
   if (q.includes("estadistica") || q.includes("datos") || q.includes("numeros")) return "CMD_STATS_READ";
   if (q.includes("pala") || q.includes("raqueta") || q.includes("material")) return "CMD_GEAR_ADVICE";
   if (q.includes("ganar") || q.includes("pronostico") || q.includes("suerte")) return "CMD_PREDICT";
+  if (q.includes("diario") || q.includes("aprender") || q.includes("analiza mis") || q.includes("objetivo")) return "CMD_DIARY_ANALYSIS";
   if (q.includes("elo") || q.includes("puntos") || q.includes("calculo")) return "CMD_ELO_FORMULA";
   if (q.includes("ayuda") || q.includes("como funciona") || q.includes("guia")) return "CMD_TUTORIAL";
   return "GENERAL";
@@ -561,16 +762,27 @@ export function initVecinaChat() {
             </div>
 
             <div class="ai-chat-footer p-5 bg-black/40 backdrop-blur-3xl border-t border-white-05">
-                <div id="ai-command-wrap" class="ai-command-container-v7 mb-4">
-                    <div class="ai-quick-grid-v7">
-                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_TUTORIAL','Guia')"><i class="fas fa-book-sparkles"></i><span>Guia</span></button>
-                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_STATS_READ','Mis Datos')"><i class="fas fa-chart-line-up"></i><span>Datos</span></button>
-                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_RIVAL_INTEL','Rivales')"><i class="fas fa-crosshairs"></i><span>Rivales</span></button>
-                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_NEMESIS','Nemesis')"><i class="fas fa-skull"></i><span>Nemesis</span></button>
-                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_PARTNER_SYNC','Socio')"><i class="fas fa-user-group"></i><span>Socio</span></button>
-                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_LEVEL_PROGRESS','Nivel')"><i class="fas fa-gauge-high"></i><span>Nivel</span></button>
-                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_GLOBAL_RANKING','Ranking')"><i class="fas fa-crown"></i><span>Ranking</span></button>
-                        <button class="ai-quick-btn-v7" onclick="window.aiQuickCmd('CMD_ELO_FORMULA','Formula')"><i class="fas fa-calculator"></i><span>ELO</span></button>
+                <!-- USER SELECTOR FOR COMPARISON -->
+                <div class="flex flex-row items-center gap-2 mb-3 bg-white/05 p-2 rounded-xl border border-white/05">
+                    <i class="fas fa-users text-[10px] text-primary ml-1"></i>
+                    <select id="ai-compare-select" class="bg-transparent border-none text-[10px] text-white/50 font-black uppercase outline-none flex-1">
+                        <option value="">Selecciona un usuario...</option>
+                    </select>
+                    <button onclick="window.compareWithSelected()" class="text-[9px] font-black text-primary uppercase bg-primary/10 px-2 py-1 rounded-lg border border-primary/20">VS</button>
+                </div>
+
+                <div id="ai-command-wrap" class="ai-command-container-v7 mb-4 overflow-x-auto custom-scroll-hidden">
+                    <div class="flex flex-row gap-2 pb-1" style="width: max-content;">
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_TUTORIAL','Guia')"><i class="fas fa-book-sparkles"></i><span>Guia</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_STATS_READ','Datos')"><i class="fas fa-chart-line-up"></i><span>Datos</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_HISTORY','Historial')"><i class="fas fa-history"></i><span>Historial</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_ADVICE','Consejo')"><i class="fas fa-lightbulb"></i><span>Consejo</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_RIVAL_INTEL','Rivales')"><i class="fas fa-crosshairs"></i><span>Rivales</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_DIARY_ANALYSIS','Diario')"><i class="fas fa-book-journal-whills"></i><span>Diario</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_NEMESIS','Nemesis')"><i class="fas fa-skull"></i><span>Nemesis</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_VICTIM','Victima')"><i class="fas fa-ghost"></i><span>Victima</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_PARTNER_SYNC','Socio')"><i class="fas fa-user-group"></i><span>Socio</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_LEVEL_PROGRESS','Nivel')"><i class="fas fa-gauge-high"></i><span>Nivel</span></button>
                     </div>
                 </div>
                 <div class="ai-input-container-v7">
@@ -584,6 +796,7 @@ export function initVecinaChat() {
 
         <style>
              /* RESPONSIVE CHAT V3.0 */
+            .custom-scroll-hidden::-webkit-scrollbar { display: none; }
             .ai-fab {
                 position: fixed; bottom: calc(90px + env(safe-area-inset-bottom)); right: 20px;
                 width: 56px; height: 56px; border-radius: 50%;
@@ -596,11 +809,11 @@ export function initVecinaChat() {
             .ai-fab:active { transform: scale(0.9); }
 
             .ai-chat-panel.v14 { 
-                border-radius: 24px 24px 0 0; 
-                border: 1px solid rgba(255,255,255,0.12); 
-                background: linear-gradient(180deg, rgba(8, 12, 28, 0.98) 0%, rgba(2, 4, 12, 1) 100%);
-                backdrop-filter: blur(20px);
-                box-shadow: 0 -10px 40px rgba(0,0,0,0.8);
+                border-radius: 32px 32px 0 0; 
+                border: 1px solid rgba(255,255,255,0.1); 
+                background: linear-gradient(180deg, rgba(10, 15, 30, 0.95) 0%, rgba(2, 4, 12, 1) 100%);
+                backdrop-filter: blur(30px);
+                box-shadow: 0 -15px 50px rgba(0,0,0,0.9);
                 overflow: hidden;
                 display: flex;
                 flex-direction: column;
@@ -609,11 +822,11 @@ export function initVecinaChat() {
                 bottom: calc(86px + env(safe-area-inset-bottom));
                 width: 100%;
                 height: 85dvh; 
-                max-height: 800px;
+                max-height: 850px;
                 z-index: 10000;
                 transform: translateY(120%);
                 opacity: 0;
-                transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.3s;
+                transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
                 pointer-events: none;
             }
             .ai-chat-panel.v14.open { 
@@ -638,23 +851,76 @@ export function initVecinaChat() {
             .ai-avatar-box.coach { background: rgba(0, 212, 255, 0.1); color: #00d4ff; border: 1px solid rgba(0, 212, 255, 0.2); }
             .ai-avatar-box.vecina { background: rgba(198, 255, 0, 0.1); color: #c6ff00; border: 1px solid rgba(198, 255, 0, 0.2); }
             
-            .ai-chat-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-bottom: 20px; }
+            .ai-chat-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-bottom: 20px; scroll-behavior: smooth; }
             .ai-msg { max-width: 85%; animation: fadeIn 0.3s; }
             .ai-msg.user { align-self: flex-end; }
             .ai-msg.bot { align-self: flex-start; }
-            .ai-msg p { padding: 12px 16px; border-radius: 18px; font-size: 0.95rem; line-height: 1.5; margin: 0; }
-            .ai-msg.user p { background: var(--primary); color: #000; border-bottom-right-radius: 4px; font-weight: 600; }
-            .ai-msg.bot p { background: rgba(255,255,255,0.1); color: #fff; border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
+            .ai-msg p { padding: 12px 16px; border-radius: 20px; font-size: 0.9rem; line-height: 1.45; margin: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+            .ai-msg.user p { background: var(--primary); color: #000; border-bottom-right-radius: 4px; font-weight: 700; }
+            .ai-msg.bot p { background: rgba(255,255,255,0.08); color: #fff; border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.05); }
             
-            .ai-quick-grid-v7 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 15px; }
-            .ai-quick-btn-v7 { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px; background: rgba(255,255,255,0.05); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); color: #fff; cursor: pointer; transition: 0.2s; }
-            .ai-quick-btn-v7:active { transform: scale(0.95); background: rgba(255,255,255,0.1); }
-            .ai-quick-btn-v7 i { font-size: 16px; color: var(--primary); opacity: 0.8; }
-            .ai-quick-btn-v7 span { font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; opacity: 0.7; }
+            .ai-command-container-v7 { 
+                background: rgba(255,255,255,0.03); 
+                padding: 10px; 
+                border-radius: 20px; 
+                border: 1px solid rgba(255,255,255,0.05);
+            }
+            .ai-quick-btn-v7 { 
+                display: flex; 
+                flex-direction: column; 
+                align-items: center; 
+                justify-content: center;
+                gap: 5px; 
+                padding: 10px; 
+                background: rgba(255,255,255,0.05); 
+                border-radius: 16px; 
+                border: 1px solid rgba(255,255,255,0.05); 
+                color: #fff; 
+                cursor: pointer; 
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
+                min-width: 75px;
+                height: 60px;
+            }
+            .ai-quick-btn-v7:hover { background: rgba(255,255,255,0.1); border-color: var(--primary); transform: translateY(-2px); }
+            .ai-quick-btn-v7 i { font-size: 16px; color: var(--primary); }
+            .ai-quick-btn-v7 span { font-size: 8px; text-transform: uppercase; font-weight: 900; letter-spacing: 0.5px; opacity: 0.8; }
             
-            .ai-input-container-v7 { display: flex; gap: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); }
-            .ai-input-v7 { flex: 1; background: transparent; border: none; color: #fff; padding: 8px; font-size: 1rem; outline: none; }
-            .ai-send-btn-v7 { width: 44px; height: 44px; border-radius: 12px; background: var(--primary); color: #000; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; border: none; }
+            .ai-input-container-v7 { 
+                display: flex; 
+                gap: 8px; 
+                background: rgba(0,0,0,0.5); 
+                padding: 6px; 
+                border-radius: 24px; 
+                border: 1px solid rgba(255,255,255,0.1);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            }
+            .ai-input-v7 { flex: 1; background: transparent; border: none; color: #fff; padding: 10px 15px; font-size: 0.95rem; outline: none; }
+            .ai-send-btn-v7 { 
+                width: 48px; 
+                height: 48px; 
+                border-radius: 50%; 
+                background: var(--primary); 
+                color: #000; 
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+                cursor: pointer; 
+                font-size: 16px; 
+                border: none; 
+                transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            }
+            .ai-send-btn-v7:hover { transform: scale(1.1) rotate(-10deg); box-shadow: 0 0 20px var(--primary); }
+            
+            #ai-compare-select {
+                -webkit-appearance: none;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(255,255,255,0.5)'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 8px center;
+                background-size: 12px;
+                padding-right: 28px;
+            }
+
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         </style>
     `;
   document.body.insertAdjacentHTML("beforeend", chatHTML);
@@ -667,4 +933,13 @@ export function initVecinaChat() {
   window.toggleAiChat = toggleChat;
   window.switchAiPersonality = switchAiPersonality;
   window.aiQuickCmd = window.aiQuickCmd;
+
+  window.compareWithSelected = () => {
+      const sel = document.getElementById("ai-compare-select");
+      if(!sel.value) return;
+      const name = sel.options[sel.selectedIndex].text;
+      const input = document.getElementById("ai-input-field");
+      input.value = `Compara con ${name}`;
+      sendMessage();
+  };
 }

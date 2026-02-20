@@ -26,7 +26,18 @@ function initAuthPageServiceWorker() {
         });
     };
 
-    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+    // Use the combined OneSignal Worker to avoid registration conflicts
+    const swPath = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+        ? './OneSignalSDKWorker.js' 
+        : '/JafsPadelclub/OneSignalSDKWorker.js';
+    const swScope = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+        ? './' 
+        : '/JafsPadelclub/';
+
+    navigator.serviceWorker.register(swPath, { 
+        scope: swScope,
+        updateViaCache: 'none' 
+    }).then((reg) => {
         activateWaiting(reg);
         reg.addEventListener('updatefound', () => bindInstall(reg));
         bindInstall(reg);
@@ -36,8 +47,15 @@ function initAuthPageServiceWorker() {
     if (!window.__swControllerChangeBoundAuth) {
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (window[LOGIN_SW_RELOAD_FLAG]) return;
+            
+            const lastRel = sessionStorage.getItem('sw_last_loop_reload');
+            const now = Date.now();
+            if (lastRel && (now - parseInt(lastRel)) < 8000) return;
+            
             window[LOGIN_SW_RELOAD_FLAG] = true;
-            setTimeout(() => window.location.reload(), 120);
+            sessionStorage.setItem('sw_last_loop_reload', now.toString());
+            console.log("🚀 Auth Page: SW Controller Changed. Reloading safely...");
+            setTimeout(() => window.location.reload(), 150);
         });
         window.__swControllerChangeBoundAuth = true;
     }

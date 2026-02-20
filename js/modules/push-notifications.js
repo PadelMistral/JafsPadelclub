@@ -97,11 +97,9 @@ async function ensureOneSignalInitialized() {
     await oneSignalExec(async (OneSignal) => {
       await OneSignal.init({
         appId,
-        serviceWorkerPath: "./sw.js",
-        serviceWorkerUpdaterPath: "./sw.js",
-
-        serviceWorkerParam: { scope: "./" },
-
+        serviceWorkerPath: "/JafsPadelclub/OneSignalSDKWorker.js",
+        serviceWorkerUpdaterPath: "/JafsPadelclub/OneSignalSDKUpdaterWorker.js",
+        serviceWorkerParam: { scope: "/JafsPadelclub/" },
         notifyButton: { enable: true },
       });
     });
@@ -344,3 +342,34 @@ export function setOneSignalAppId(appId) {
   localStorage.setItem(ONESIGNAL_APP_ID_STORAGE_KEY, clean);
   window.__ONESIGNAL_APP_ID = clean;
 }
+
+/**
+ * Sends a real background push notification via the server-side bridge (OneSignal).
+ * REACHES CLOSED BROWSERS/PWA.
+ */
+export async function sendExternalPush({ title, message, uids = [], url = "home.html", data = {} }) {
+  try {
+    const endpoint = window.__PUSH_API_URL || "/api/send-push";
+    if (window.location.protocol === "file:") return;
+
+    const payload = {
+      titulo: title,
+      mensaje: message,
+      externalIds: Array.isArray(uids) ? uids.filter(Boolean) : [],
+      url: url || "home.html",
+      data: data || {},
+    };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    
+    return res.ok;
+  } catch (e) {
+    console.warn("External push trigger failed:", e);
+    return false;
+  }
+}
+
