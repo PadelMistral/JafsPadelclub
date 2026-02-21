@@ -1,0 +1,467 @@
+/* =====================================================
+   UX ENHANCE V9.0 - Precise High-End Balancing
+   => Final Visual Polish & Geometric Accuracy
+   ===================================================== */
+
+/* ===== 1. GLOBAL VISIBILITY ===== */
+html,
+body {
+  background: transparent !important;
+}
+.sport-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  background: #020617;
+}
+main,
+.page-content,
+.home-main,
+.profile-page,
+.ranking-page {
+  background: transparent !important;
+}
+
+/* ===== 2. NAVBAR - DETERMINISTIC CENTERING ===== */
+.bottom-nav {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 100% !important;
+  max-width: 100vw !important;
+  height: clamp(80px, 12vh, 90px) !important;
+  background: rgba(2, 6, 23, 0.98) !important;
+  backdrop-filter: blur(40px) saturate(220%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(220%) !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+  display: flex !important;
+  justify-content: space-evenly !important;
+  align-items: center !important;
+  padding: 0 4px 8px !important;
+  box-sizing: border-box !important;
+  z-index: 10000 !important;
+}
+
+.nav-item {
+  color: rgba(255, 255, 255, 0.5) !important;
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  text-decoration: none !important;
+}
+.nav-icon-box {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 50% !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1) !important;
+}
+
+.nav-icon-box img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  transform: scale(2) !important;
+  filter: brightness(1.2) contrast(1.1) !important;
+}
+.nav-item.active .nav-icon-box {
+  background: rgba(0, 212, 255, 0.15) !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 25px rgba(0, 212, 255, 0.4) !important;
+  transform: translateY(-5px) scale(1.05) !important;
+}
+
+/* ===== 3. ULTIMATE FUT CARD V9 - Geometric Precision ===== */
+.fut-card-v2 {
+  width: 290px !important;
+  height: 430px !important;
+  margin: 25px auto !important;
+  position: relative !important;
+  background: #0f172a !important;
+  clip-path: polygon(
+    50% 0%,
+    100% 15%,
+    100% 88%,
+    50% 100%,
+    0% 88%,
+    0% 15%
+  ) !important;
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.9) !important;
+  z-index: 5;
+}
+
+.fut-card-v2::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 4px;
+  background: linear-gradient(135deg, #ffd700 0%, #ff8c00 50%, #ffd700 100%);
+  clip-path: polygon(50% 0%, 100% 15%, 100% 88%, 50% 100%, 0% 88%, 0% 15%);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: destination-out;
+  mask-composite: exclude;
+  z-index: 10;
+}
+
+.tier-bronce::before {
+  background: linear-gradient(
+    135deg,
+    #cd7f32 0%,
+    #8b4513 50%,
+    #cd7f32 100%
+  ) !important;
+}
+.tier-pro::before {
+  background: linear-gradient(
+    135deg,
+    #00d4ff 0%,
+    #0055ff 50%,
+    #00d4ff 100%
+  ) !important;
+}
+.tier-elite::before {
+  background: linear-gradient(
+    135deg,
+    #ffd700 0%,
+    #ff8c00 50%,
+    #ffd700 100%
+  ) !important;
+}
+
+.fut-card-top {
+  position: relative;
+  height: 130px !important;
+  padding-top: 55px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}
+.fut-card-ovr-box {
+  position: absolute !important;
+  left: 25px !important;
+  top: 60px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}
+.fut-card-ovr-box .ovr {
+  font-size: 3.2rem !important;
+  font-weight: 950 !important;
+  color: #ffd700 !important;
+  line-height: 0.9 !important;
+  text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.8) !important;
+}
+.fut-card-ovr-box .tier {
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  color: #fff !important;
+  text-transform: uppercase !important;
+  margin-top: 2px !important;
+  letter-spacing: 1px !important;
+}
+
+.fut-card-img-box {
+  width: 120px !important;
+  height: 120px !important;
+  border-radius: 20px !important;
+  overflow: hidden !important;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  background: rgba(0, 0, 0, 0.3) !important;
+}
+.fut-card-img-box img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+.fut-card-info {
+  margin-top: 5px !important;
+  text-align: center !important;
+}
+.fut-name {
+  font-size: 1.3rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 1.2px !important;
+  color: #fff !important;
+  text-transform: uppercase !important;
+}
+
+/* REPOSITIONED STATS TO AVOID BOTTOM CUTOFF */
+.fut-card-grid {
+  padding: 0 48px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  margin-top: 2px !important;
+}
+.fut-row {
+  display: flex !important;
+  justify-content: space-evenly !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+  padding: 4px 0 !important;
+}
+.fut-row .stat {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  min-width: 42px !important;
+}
+.fut-row .stat span {
+  font-size: 8px !important;
+  color: #ffd700 !important;
+  font-weight: 900 !important;
+  opacity: 0.8 !important;
+}
+.fut-row .stat strong {
+  font-size: 1rem !important;
+  color: #fff !important;
+}
+
+.fut-card-bars {
+  padding: 0 75px !important; /* Extremely narrow to fit in the very tip of the rombo */
+  display: flex !important;
+  flex-direction: column !important; /* Stacked vertically to ensure visibility of all 4 */
+  gap: 4px !important;
+  margin-top: 2px !important;
+}
+
+.fut-bar-row {
+  width: 100% !important;
+}
+
+.fut-bar-row .l {
+  font-size: 6.5px !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  font-weight: 800 !important;
+  text-align: center !important;
+  display: block !important;
+  margin-bottom: 1px !important;
+}
+
+.fut-bar-row .fut-bar {
+  height: 3px !important;
+  border-radius: 2px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ===== 4. RANKING PAGE - Color Hierarchy & Layout Fix ===== */
+.ranking-page {
+  padding-top: 155px !important;
+}
+.ranking-card {
+  display: grid !important;
+  grid-template-columns: 42px 52px 1fr auto !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 8px 16px !important;
+  border-radius: 14px !important;
+  min-height: 64px !important;
+  margin-bottom: 10px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  position: relative !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  transition:
+    transform 0.3s ease,
+    background 0.3s ease !important;
+}
+
+.ranking-card:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  transform: translateY(-2px) scale(1.01) !important;
+}
+
+.lb-rank {
+  font-family: "Rajdhani", sans-serif !important;
+  font-size: 1.4rem !important;
+  font-weight: 900 !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+  text-align: center !important;
+}
+
+.lb-avatar {
+  width: 50px !important;
+  height: 50px !important;
+  border-radius: 50% !important;
+  border: 2px solid rgba(255, 255, 255, 0.12) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #000 !important;
+}
+.lb-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+.lb-initials {
+  font-weight: 950 !important;
+  font-size: 1.15rem !important;
+  color: var(--primary) !important;
+  text-align: center !important;
+  width: 100% !important;
+}
+
+.lb-name {
+  font-size: 1.05rem !important;
+  font-weight: 950 !important;
+  color: #fff !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+}
+
+.lb-meta-row {
+  display: flex !important;
+  gap: 8px !important;
+  margin-top: 2px !important;
+}
+
+.lb-meta-chip {
+  font-size: 9px !important;
+  font-weight: 900 !important;
+  padding: 3px 12px !important;
+  border-radius: 99px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.lb-pts {
+  font-family: "Rajdhani", sans-serif !important;
+  font-size: 1.45rem !important;
+  font-weight: 950 !important;
+  color: #fff !important;
+  text-align: right !important;
+  line-height: 1 !important;
+}
+
+/* Sequence: Lime -> Purple -> Red -> Blue (Crystal Tiers) */
+.ranking-card.tier-10 {
+  background: linear-gradient(
+    135deg,
+    rgba(198, 255, 0, 0.15),
+    rgba(2, 6, 23, 0.4)
+  ) !important;
+  border: 1px solid rgba(198, 255, 0, 0.25) !important;
+  box-shadow: 0 10px 30px rgba(198, 255, 0, 0.1) !important;
+}
+.ranking-card.tier-10 .lb-rank {
+  color: #c6ff00 !important;
+  text-shadow: 0 0 10px rgba(198, 255, 0, 0.4);
+}
+.ranking-card.tier-10 .lb-pts {
+  color: #c6ff00 !important;
+}
+.ranking-card.tier-10 .lb-meta-chip {
+  border-color: rgba(198, 255, 0, 0.2);
+  color: #c6ff00;
+}
+
+.ranking-card.tier-20 {
+  background: linear-gradient(
+    135deg,
+    rgba(168, 85, 247, 0.12),
+    rgba(2, 6, 23, 0.4)
+  ) !important;
+  border: 1px solid rgba(168, 85, 247, 0.2) !important;
+}
+.ranking-card.tier-20 .lb-rank {
+  color: #a855f7 !important;
+}
+.ranking-card.tier-20 .lb-pts {
+  color: #a855f7 !important;
+}
+.ranking-card.tier-20 .lb-meta-chip {
+  border-color: rgba(168, 85, 247, 0.2);
+  color: #a855f7;
+}
+
+.ranking-card.tier-30 {
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.1),
+    rgba(2, 6, 23, 0.4)
+  ) !important;
+  border: 1px solid rgba(239, 68, 68, 0.15) !important;
+}
+.ranking-card.tier-30 .lb-rank {
+  color: #ef4444 !important;
+}
+.ranking-card.tier-30 .lb-pts {
+  color: #ef4444 !important;
+}
+.ranking-card.tier-30 .lb-meta-chip {
+  border-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.ranking-card.tier-50 {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 212, 255, 0.1),
+    rgba(2, 6, 23, 0.4)
+  ) !important;
+  border: 1px solid rgba(0, 212, 255, 0.15) !important;
+}
+.ranking-card.tier-50 .lb-rank {
+  color: #00d4ff !important;
+}
+.ranking-card.tier-50 .lb-pts {
+  color: #00d4ff !important;
+}
+.ranking-card.tier-50 .lb-meta-chip {
+  border-color: rgba(0, 212, 255, 0.15);
+  color: #00d4ff;
+}
+
+.ranking-card.tier-low {
+  background: rgba(255, 255, 255, 0.015) !important;
+  opacity: 0.6 !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+/* ===== 5. PROFILE HERO & GLOBAL ===== */
+.profile-hero .grid {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  width: 95% !important;
+  max-width: 440px !important;
+  margin: 20px auto !important;
+}
+.stat-card-v7 {
+  flex: 1 !important;
+  height: 65px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.page-content {
+  padding-bottom: 120px !important;
+}
+/* ===== 6. AI BUTTON FIX ===== */
+#ai-chat-btn {
+  bottom: 105px !important; /* Elevated to clear the navbar space */
+}
