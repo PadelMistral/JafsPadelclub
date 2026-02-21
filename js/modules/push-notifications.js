@@ -95,13 +95,13 @@ async function ensureOneSignalInitialized() {
     await ensureOneSignalScript();
 
     await oneSignalExec(async (OneSignal) => {
-      await OneSignal.init({
-        appId,
-        serviceWorkerPath: "/JafsPadelclub/OneSignalSDKWorker.js",
-        serviceWorkerUpdaterPath: "/JafsPadelclub/OneSignalSDKUpdaterWorker.js",
-        serviceWorkerParam: { scope: "/JafsPadelclub/" },
-        notifyButton: { enable: true },
-      });
+        await OneSignal.init({
+          appId,
+          serviceWorkerPath: "/JafsPadelclub/OneSignalSDKWorker.js",
+          serviceWorkerUpdaterPath: "/JafsPadelclub/OneSignalSDKUpdaterWorker.js",
+          serviceWorkerParam: { scope: "/JafsPadelclub/" },
+          allowLocalhostAsSecureOrigin: true,
+        });
     });
 
     oneSignalReady = true;
@@ -153,13 +153,19 @@ export async function initPushNotifications(uid = null) {
   try {
     await oneSignalExec(async (OneSignal) => {
       await OneSignal.login(userId);
-      await OneSignal.Notifications.requestPermission();
+      // We no longer auto-request permission here to avoid being aggressive
     });
 
     notifPermission = Notification.permission;
-    if (notifPermission !== "granted") return false;
-
-    await persistDeviceSubscription(userId);
+    
+    // If it's already granted, persist sub
+    if (notifPermission === "granted") {
+      await persistDeviceSubscription(userId);
+    } else if (notifPermission === "default") {
+      // Trigger soft prompt with delay
+      scheduleSoftPrompt();
+    }
+    
     return true;
   } catch (e) {
     console.error("OneSignal init error:", e);
@@ -167,14 +173,84 @@ export async function initPushNotifications(uid = null) {
   }
 }
 
+function scheduleSoftPrompt() {
+    if (sessionStorage.getItem('notif_soft_prompt_dismissed')) return;
+    
+    setTimeout(() => {
+        showSoftPrompt();
+    }, 6000); // 6 seconds delay
+}
+
+async function showSoftPrompt() {
+    if (notifPermission !== 'default' || document.getElementById('notif-soft-prompt')) return;
+    
+    const div = document.createElement('div');
+    div.id = 'notif-soft-prompt';
+    div.className = 'soft-prompt-card animate-up';
+    div.innerHTML = `
+        <div class="soft-prompt-content">
+            <div class="soft-prompt-icon">
+                <i class="fas fa-bell"></i>
+            </div>
+            <div class="soft-prompt-text">
+                <h3>Mantente al día</h3>
+                <p>Activa las notificaciones para avisos de retos y partidos.</p>
+            </div>
+        </div>
+        <div class="soft-prompt-actions">
+            <button class="btn-soft later" id="btn-notif-later">Más tarde</button>
+            <button class="btn-soft active" id="btn-notif-activate">Activar</button>
+        </div>
+    `;
+    
+    document.body.appendChild(div);
+    
+    document.getElementById('btn-notif-later').onclick = () => {
+        div.classList.add('fade-out-down');
+        sessionStorage.setItem('notif_soft_prompt_dismissed', 'true');
+        setTimeout(() => div.remove(), 400);
+    };
+    
+    document.getElementById('btn-notif-activate').onclick = async () => {
+        div.remove();
+        await requestNotificationPermission(true);
+    };
+}
+
+async function showDeniedGuide() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong p-6 animate-up text-center" style="max-width:320px;">
+            <i class="fas fa-lock text-3xl text-warning mb-4"></i>
+            <h3 class="text-xl font-bold mb-2">NOTIFICACIONES BLOQUEADAS</h3>
+            <p class="text-sm text-muted mb-6">Parece que has denegado el permiso. Para activarlas:</p>
+            <div class="text-left bg-white/5 p-4 rounded-xl mb-6 text-xs gap-3 flex-col flex">
+                <div class="flex-row items-center">
+                    <span class="bg-primary/20 text-primary w-5 h-5 flex items-center justify-center rounded-full">1</span>
+                    <span>Pulsa el icono <i class="fas fa-lock-open mx-1 opacity-60"></i> o <i class="fas fa-sliders mx-1 opacity-60"></i> en la barra de URL.</span>
+                </div>
+                <div class="flex-row items-center">
+                    <span class="bg-primary/20 text-primary w-5 h-5 flex items-center justify-center rounded-full">2</span>
+                    <span>Cambia <b>Notificaciones</b> a <b>Permitir</b>.</span>
+                </div>
+                <div class="flex-row items-center">
+                    <span class="bg-primary/20 text-primary w-5 h-5 flex items-center justify-center rounded-full">3</span>
+                    <span>Recarga la página.</span>
+                </div>
+            </div>
+            <button class="btn btn-primary w-full" id="btn-guide-close">Entendido</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    document.getElementById('btn-guide-close').onclick = () => overlay.remove();
+}
+
 /**
  * Requests notification permission
  */
 export async function requestNotificationPermission(autoInit = true) {
-  if (!("Notification" in window)) {
-    console.log("Notifications not supported");
-    return false;
-  }
+  notifPermission = Notification.permission;
 
   if (notifPermission === "granted") {
     if (autoInit && auth.currentUser?.uid)
@@ -182,11 +258,17 @@ export async function requestNotificationPermission(autoInit = true) {
     return true;
   }
 
+  if (notifPermission === "denied") {
+      showDeniedGuide();
+      return false;
+  }
+
   try {
     const ok = await ensureOneSignalInitialized();
     if (!ok) return false;
 
     await oneSignalExec(async (OneSignal) => {
+      // In OneSignal v16, optIn handles everything if permission isn't denied
       await OneSignal.Notifications.requestPermission();
     });
 
@@ -194,8 +276,8 @@ export async function requestNotificationPermission(autoInit = true) {
 
     if (notifPermission === "granted") {
       showToast(
-        "Notificaciones activadas",
-        "Recibirás avisos incluso sin tener la app abierta.",
+        "¡Conexión establecida!",
+        "Notificaciones activadas correctamente.",
         "success",
       );
       if (autoInit && auth.currentUser?.uid)

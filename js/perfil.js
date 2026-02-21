@@ -25,7 +25,6 @@ import {
 import { AI } from './ai-engine.js';
 import { PredictiveEngine } from './predictive-engine.js';
 import { RivalIntelligence } from './rival-intelligence.js';
-import { DashboardEvolution } from './dashboard-evolution.js';
 import { SmartNotifier } from './modules/smart-notifications.js';
 import {
   isFinishedMatch,
@@ -34,6 +33,7 @@ import {
 } from "./utils/match-utils.js";
 
 document.addEventListener("DOMContentLoaded", () => {
+  initAppUI('profile');
   initBackground();
   setupModals();
 
@@ -260,36 +260,49 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     `;
 
+    const photo = data.fotoPerfil || data.fotoURL || "./imagenes/default-avatar.png";
+
     container.innerHTML = `
-      <div class="fut-card-main">
-        <div class="fut-overall">
-          <span class="ovr">${overall}</span>
-          <span class="tier">${tier}</span>
+      <div class="fut-card-v2 tier-${tier.toLowerCase()} animate-up">
+        <div class="fut-card-glow"></div>
+        
+        <div class="fut-card-top">
+          <div class="fut-card-ovr-box">
+            <span class="ovr">${overall}</span>
+            <span class="tier">${tier}</span>
+          </div>
+          <div class="fut-card-img-box">
+            <img src="${photo}" alt="${name}">
+          </div>
         </div>
-        <div>
-          <div class="fut-headline">
-            <div>
-              <h3 class="fut-name">${name}</h3>
-              <div class="fut-meta">Nivel ${level} · ${dominant}</div>
-            </div>
-            <div class="fut-meta">${data.partidosJugados || 0} PJ · ${data.victorias || 0} W</div>
-          </div>
 
-          <div class="fut-shots-grid">
-            <div class="fut-shot"><div class="k">Volea</div><div class="v">${Math.round(volea)}</div></div>
-            <div class="fut-shot"><div class="k">Bandeja</div><div class="v">${Math.round(bandeja)}</div></div>
-            <div class="fut-shot"><div class="k">Smash</div><div class="v">${Math.round(smash)}</div></div>
-            <div class="fut-shot"><div class="k">Vibora</div><div class="v">${Math.round(vibora)}</div></div>
-            <div class="fut-shot"><div class="k">Globo</div><div class="v">${Math.round(globo)}</div></div>
-            <div class="fut-shot"><div class="k">Saque</div><div class="v">${Math.round(saque)}</div></div>
+        <div class="fut-card-info">
+          <h3 class="fut-name">${name}</h3>
+          <div class="fut-meta">${dominant} · NIVEL ${level}</div>
+          <div class="flex-row center gap-3 mt-1 opacity-60 text-[8px] font-black uppercase">
+            <span>${data.partidosJugados || 0} PJ</span>
+            <span>${data.victorias || 0} W</span>
           </div>
+        </div>
 
-          <div class="fut-bars">
-            ${barRow("Consistencia", consistencyDerived)}
-            ${barRow("Mental", mental)}
-            ${barRow("Fisico", fisico)}
-            ${barRow("Tactica", tactica)}
+        <div class="fut-card-grid">
+          <div class="fut-row">
+            <div class="stat"><span>VOL</span><strong>${Math.round(volea)}</strong></div>
+            <div class="stat"><span>BAN</span><strong>${Math.round(bandeja)}</strong></div>
+            <div class="stat"><span>SMA</span><strong>${Math.round(smash)}</strong></div>
           </div>
+          <div class="fut-row">
+            <div class="stat"><span>VIB</span><strong>${Math.round(vibora)}</strong></div>
+            <div class="stat"><span>LOB</span><strong>${Math.round(globo)}</strong></div>
+            <div class="stat"><span>SER</span><strong>${Math.round(saque)}</strong></div>
+          </div>
+        </div>
+
+        <div class="fut-card-bars">
+           ${barRow("CONSISTENCIA", consistencyDerived)}
+           ${barRow("MENTAL", mental)}
+           ${barRow("FISICO", fisico)}
+           ${barRow("TACTICA", tactica)}
         </div>
       </div>
     `;
@@ -601,8 +614,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderDiarioStats(diario, data) {
-     // Advanced Stats from Diary
-     if(!diario || diario.length < 3) return; // Need some data
+     try {
+      // Advanced Stats from Diary
+      if(!diario || diario.length === 0) return; // Need at least one entry
 
      // Averages
      let mentalSum = 0, consistencySum = 0, pressureSum = 0;
@@ -643,6 +657,7 @@ document.addEventListener("DOMContentLoaded", () => {
      const adv = data?.advancedStats || {};
      setBar('val-fatigue-profile', 'bar-fatigue-profile', adv.fatigueIndex || 0);
      setBar('val-stress-profile', 'bar-stress-profile', adv.pressure || 0);
+    } catch (e) { console.error("Diario render error:", e); }
   }
 
   async function renderAIInsights(user) {

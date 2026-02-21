@@ -75,16 +75,25 @@ export const SmartNotifier = {
      * Re-engagement loops (Called periodically or on login)
      */
     async checkInactivity(user) {
-        if (!user.lastMatchDate) return;
+        if (!user || !user.lastMatchDate) return;
         
-        const last = user.lastMatchDate.toDate();
-        const days = Math.floor((new Date() - last) / (1000 * 60 * 60 * 24));
-        
-        if (days === 14) {
-             await createNotification(user.id, "ZONA DE PELIGRO", "Llevas 2 semanas inactivo. Tu ELO empezarÃ¡ a oxidarse.", NOTIF_TYPES.INACTIVITY);
-        }
-        else if (days === 30) {
-             await createNotification(user.id, "CORROSIÃ“N DETECTADA", "30 dÃ­as sin competir. PenalizaciÃ³n de inactividad activa.", NOTIF_TYPES.INACTIVITY);
+        try {
+            const last = typeof user.lastMatchDate.toDate === 'function' 
+                ? user.lastMatchDate.toDate() 
+                : new Date(user.lastMatchDate);
+                
+            if (Number.isNaN(last.getTime())) return;
+
+            const days = Math.floor((new Date() - last) / (1000 * 60 * 60 * 24));
+            
+            if (days === 14) {
+                 await createNotification(user.id, "ZONA DE PELIGRO", "Llevas 2 semanas inactivo. Tu ELO empezará a oxidarse.", NOTIF_TYPES.INACTIVITY);
+            }
+            else if (days === 30) {
+                 await createNotification(user.id, "CORROSIÓN DETECTADA", "30 días sin competir. Penalización de inactividad activa.", NOTIF_TYPES.INACTIVITY);
+            }
+        } catch (err) {
+            console.warn("SmartNotifier Inactivity Check failed:", err);
         }
     }
 };

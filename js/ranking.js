@@ -213,7 +213,11 @@ function renderLeaderboard(
       if (u.rank === 1) rankClass = "rank-gold";
       else if (u.rank === 2) rankClass = "rank-silver";
       else if (u.rank === 3) rankClass = "rank-bronze";
-      else if (u.rank <= 10) rankClass = "rank-elite";
+      else if (u.rank <= 10) rankClass = "rank-elite tier-10";
+      else if (u.rank <= 20) rankClass = "tier-20";
+      else if (u.rank <= 30) rankClass = "tier-30";
+      else if (u.rank <= 50) rankClass = "tier-50";
+      else rankClass = "tier-low";
 
       const depth = totalPlayers > 1 ? (u.rank - 1) / (totalPlayers - 1) : 0;
       const hue = Math.max(6, Math.round(130 - depth * 124));
@@ -240,7 +244,10 @@ function renderLeaderboard(
                 <div class="lb-rank">#${u.rank}</div>
                 
                 <div class="lb-avatar">
-                    <img src="${photo}" alt="${name}" loading="lazy">
+                    ${u.fotoPerfil || u.fotoURL 
+                        ? `<img src="${u.fotoPerfil || u.fotoURL}" alt="${name}" loading="lazy">`
+                        : `<div class="lb-initials">${name.substring(0, 2).toUpperCase()}</div>`
+                    }
                 </div>
 
                 <div class="lb-info truncate">

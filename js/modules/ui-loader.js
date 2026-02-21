@@ -129,32 +129,23 @@ export async function injectNavbar(activePage) {
     nav.className = 'bottom-nav';
     
     const icons = {
-        home: `<i class="fas fa-house-chimney-window"></i>`,
-        ranking: `<i class="fas fa-ranking-star"></i>`,
-        calendar: `<i class="fas fa-calendar-days"></i>`,
-        events: `<i class="fas fa-book-open"></i>`,
-        history: `<i class="fas fa-clock-rotate-left"></i>`
+        home: `<img src="./icons/Gemini_Generated_Image_us6clzus6clzus6c.png" alt="Inicio">`,
+        ranking: `<img src="./icons/Gemini_Generated_Image_345lua345lua345l.png" alt="Élite">`,
+        calendar: `<img src="./icons/Gemini_Generated_Image_hxnpjdhxnpjdhxnp.png" alt="Jugar">`,
+        events: `<img src="./icons/Gemini_Generated_Image_5wpxhq5wpxhq5wpx.png" alt="Diario">`,
+        history: `<img src="./icons/Gemini_Generated_Image_ncwlq4ncwlq4ncwl.png" alt="Pasado">`
     };
 
     const items = [
         { id: 'home', icon: icons.home, label: 'Inicio', link: 'home.html', color: 'cyan' },
         { id: 'ranking', icon: icons.ranking, label: 'Ranking', link: 'puntosRanking.html', color: 'gold' },
-        { id: 'calendar', icon: icons.calendar, label: 'Pistas', link: 'calendario.html', center: true },
-        { id: 'events', icon: `<i class="fas fa-book-open"></i>`, label: 'Diario', link: 'diario.html', color: 'magenta' },
+        { id: 'calendar', icon: icons.calendar, label: 'Jugar', link: 'calendario.html', color: 'cyan' },
+        { id: 'events', icon: icons.events, label: 'Diario', link: 'diario.html', color: 'magenta' },
         { id: 'history', icon: icons.history, label: 'Historial', link: 'historial.html', color: 'lime' }
     ];
 
 
     nav.innerHTML = items.map(item => {
-        if (item.center) {
-            return `
-                <a href="${item.link}" class="nav-item center-item ${activePage === item.id ? 'active' : ''}">
-                    <div class="nav-icon-wrap shadow-glow-primary">
-                        ${item.icon}
-                    </div>
-                </a>
-            `;
-        }
         return `
             <a href="${item.link}" class="nav-item ${activePage === item.id ? 'active' : ''}" data-color="${item.color}">
                 <div class="nav-icon-box">
