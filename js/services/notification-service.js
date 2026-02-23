@@ -25,7 +25,7 @@ import {
 
 // Store active listeners to clean up
 const activeListeners = [];
-const NOTIF_DEDUP_TTL_MS = 1000 * 60 * 60 * 6; // Session-based filtering
+const NOTIF_DEDUP_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30-day "once-only" memory
 export const SESSION_START_TIME = Date.now();
 const notifiedDuringSession = new Set();
 const LISTENER_POLL_INTERVAL_MS = 25000;
@@ -122,7 +122,7 @@ function safeOnSnapshot(q, onNext) {
   };
 }
 
-// â”€â”€â”€ CORE NOTIFICATION FUNCTIONS â”€â”€â”€
+// ─── CORE NOTIFICATION FUNCTIONS ───
 
 /**
  * Send a notification to one or multiple users
@@ -142,8 +142,12 @@ export async function createNotification(
   }
   const targets = Array.isArray(targetUids) ? targetUids : [targetUids];
   const notifType = normalizeType(type);
-  const safeTitle = String(title || "Padeluminatis").trim().slice(0, 120);
-  const safeMessage = String(message || "").trim().slice(0, 600);
+  const safeTitle = String(title || "Padeluminatis").trim()
+    .normalize('NFC')
+    .slice(0, 120);
+  const safeMessage = String(message || "").trim()
+    .normalize('NFC')
+    .slice(0, 600);
 
   try {
     const promises = targets.map(async (uid) => {
@@ -163,30 +167,24 @@ export async function createNotification(
       const lastSentTs = readDedupStamp(registryKey);
       if (Date.now() - lastSentTs < NOTIF_DEDUP_TTL_MS) return;
 
-      // Database check as secondary safety
+      // Database check against PERMANENT sent log
+      // This ensures that even if the notification is deleted from the inbox, 
+      // we don't send it again.
       const q = query(
-        collection(db, "notificaciones"),
-        where("dedupKey", "==", dedupId),
+        collection(db, "notif_sent_log"),
+        where("key", "==", dedupId),
         limit(1),
       );
-      const existing = window.getDocsSafe
+      const logExisting = window.getDocsSafe
         ? await window.getDocsSafe(q)
         : await getDocs(q);
-      if (!existing.empty) {
-        const hasRecentTwin = existing.docs?.some((d) => {
-          const data = typeof d.data === "function" ? d.data() : d;
-          const ts =
-            data?.timestamp?.toMillis?.() ||
-            data?.createdAt?.toMillis?.() ||
-            0;
-          return ts > 0 && Date.now() - ts < NOTIF_DEDUP_TTL_MS;
-        });
-        if (hasRecentTwin) {
-          writeDedupStamp(registryKey);
-          return;
-        }
+        
+      if (!logExisting.empty) {
+        writeDedupStamp(registryKey);
+        return;
       }
 
+      // Create the notification
       const docRef = await addDoc(collection(db, "notificaciones"), {
         destinatario: uid,
         receptorId: uid,
@@ -201,7 +199,6 @@ export async function createNotification(
         seen: false,
         timestamp: serverTimestamp(),
         dedupKey: dedupId,
-        dedupTTLms: NOTIF_DEDUP_TTL_MS,
         // compatibility fields (legacy)
         uid: uid,
         title: safeTitle,
@@ -210,7 +207,15 @@ export async function createNotification(
         createdAt: serverTimestamp(),
       });
 
-      if (docRef.id) writeDedupStamp(registryKey);
+      // Register the send in the permanent log
+      if (docRef.id) {
+        await addDoc(collection(db, "notif_sent_log"), {
+          key: dedupId,
+          uid,
+          timestamp: serverTimestamp()
+        });
+        writeDedupStamp(registryKey);
+      }
       return docRef;
     });
     await Promise.all(promises);
@@ -336,7 +341,7 @@ export function listenToNotifications(callback, options = {}) {
   };
 }
 
-// â”€â”€â”€ AUTOMATION LOGIC â”€â”€â”€
+// ─── AUTOMATION LOGIC ───
 
 import { sendPushNotification, sendExternalPush } from "../modules/push-notifications.js";
 
@@ -350,7 +355,7 @@ export async function initAutoNotifications(uid) {
   cleanupAutoNotifications();
   window.__autoNotifUid = uid;
 
-  console.log("ðŸš€ Padeluminatis Notifications Active for:", uid);
+  console.log("?? Padeluminatis Notifications Active for:", uid);
 
   // 1. Existing Watchers
   watchMatchesFilling(uid);
@@ -386,7 +391,7 @@ export async function initAutoNotifications(uid) {
       sendPushNotification(
         newest.titulo || "Padeluminatis",
         newest.mensaje,
-        "./imagenes/Logojafs.png",
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(newest.titulo || 'P')}&background=00d4ff&color=fff`,
         { tag: `notif_${newest.id}`, url: newest.enlace || "./home.html" },
       );
       notifiedDuringSession.add(newest.id);
@@ -756,7 +761,7 @@ async function scheduleMatchReminders(uid) {
         if (!matchDate) return;
 
         // hora is already embedded in fecha (Timestamp includes time)
-        // No separate 'hora' field exists â€” fecha already has the correct time
+        // No separate 'hora' field exists — fecha already has the correct time
 
         const msUntil = matchDate.getTime() - now.getTime();
         if (msUntil >= minReminderMs && msUntil <= maxReminderMs) {
@@ -909,12 +914,12 @@ async function checkMorningMatchSummary(uid) {
     if (matchesToday > 0) {
       const { getDocument } = await import("../firebase-service.js");
       const user = await getDocument("usuarios", uid);
-      const name = user?.nombreUsuario?.split(" ")[0] || "CampeÃ³n";
+      const name = user?.nombreUsuario?.split(" ")[0] || "Campeón";
 
       await createNotification(
         uid,
-        `â˜€ï¸ Â¡Hoy juegas, ${name}!`,
-        `Tienes ${matchesToday} partido(s) programado(s) para hoy en la Matrix. Â¡A por todas!`,
+        `?? ¡Hoy juegas, ${name}!`,
+        `Tienes ${matchesToday} partido(s) programado(s) para hoy en la Matrix. ¡A por todas!`,
         "info",
         null,
         { type: "morning_matches" },
@@ -948,12 +953,12 @@ async function checkDailySummary(uid) {
       streak: userData.rachaActual || 0,
     };
 
-    let message = `ðŸ“Š Resumen: ${stats.points} ELO | ${stats.wins} victorias`;
-    if (stats.streak >= 3) message += ` | ðŸ”¥ Racha de ${stats.streak}!`;
+    let message = `?? Resumen: ${stats.points} ELO | ${stats.wins} victorias`;
+    if (stats.streak >= 3) message += ` | ?? Racha de ${stats.streak}!`;
 
     await createNotification(
       uid,
-      `â˜€ï¸ Buenos dÃ­as, ${userData.nombreUsuario?.split(" ")[0] || "CampeÃ³n"}`,
+      `?? Buenos días, ${userData.nombreUsuario?.split(" ")[0] || "Campeón"}`,
       message,
       "info",
       null,
@@ -977,7 +982,7 @@ export function cleanupAutoNotifications() {
   });
   activeListeners.length = 0;
   window.__autoNotifUid = null;
-  console.log("ðŸ›‘ Auto-notifications cleaned up");
+  console.log("?? Auto-notifications cleaned up");
 }
 
 /**
@@ -1037,12 +1042,12 @@ export async function calculatePointsPreview(matchId, colName, uid) {
  */
 export async function suggestDiaryEntry(uid, matchId, won) {
   const message = won
-    ? "ðŸŽ¾ Â¡Gran victoria! Â¿Quieres registrar los detalles en tu diario tÃ¡ctico?"
-    : "ðŸŽ¾ Buen partido. Â¿Registramos quÃ© funcionÃ³ y quÃ© mejorar?";
+    ? "🎾 ¡Gran victoria! ¿Quieres registrar los detalles en tu diario táctico?"
+    : "🎾 Buen partido. ¿Registramos qué funcionó y qué mejorar?";
 
   await createNotification(
     uid,
-    "ðŸ“ Registrar en Diario",
+    "📝 Registrar en Diario",
     message,
     "info",
     null,
@@ -1059,7 +1064,6 @@ export default {
   suggestDiaryEntry,
   cleanupAutoNotifications,
 };
-
 
 
 

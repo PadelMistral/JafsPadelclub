@@ -1,7 +1,7 @@
 ﻿// admin.js - Complete Admin Panel Logic V5.0 (AI Integrated)
 import { db, auth, observerAuth, getDocument, updateDocument, addDocument } from './firebase-service.js';
 import { collection, getDocs, deleteDoc, doc, query, orderBy, where, writeBatch } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
-import { injectHeader } from './modules/ui-loader.js?v=6.5';
+import { injectHeader, showLoading, hideLoading } from './modules/ui-loader.js?v=6.5';
 import { showToast } from './ui-core.js';
 import { AIOrchestrator } from './ai-orchestrator.js'; // Phase 7 Integration
 import { computePlacementProjection, getPlacementMatchesCount } from './provisional-ranking-logic.js';
@@ -12,28 +12,38 @@ let catalogPalas = [];
 let aiSuggestions = [];
 
 document.addEventListener('DOMContentLoaded', () => {
+    showLoading('Cargando panel administrativo...');
     // Check Auth
     observerAuth(async (user) => {
-        if (!user) {
-            window.location.href = 'index.html';
-            return;
+        try {
+            if (!user) {
+                hideLoading();
+                window.location.href = 'index.html';
+                return;
+            }
+            
+            const userData = await getDocument('usuarios', user.uid);
+            const isAdmin = userData?.rol === 'Admin' || user.email === 'Juanan221091@gmail.com';
+            
+            if (!isAdmin) {
+                showToast('Acceso Denegado', 'No tienes permisos de administrador', 'error');
+                hideLoading();
+                setTimeout(() => window.location.href = 'home.html', 1000);
+                return;
+            }
+            
+            await injectHeader(userData);
+            await loadData();
+            await loadPalasCatalog();
+            hideLoading();
+            
+            // Phase 7: Sync Orchestrator
+            AIOrchestrator.init(user.uid);
+        } catch (err) {
+            console.error('Admin bootstrap error:', err);
+            hideLoading();
+            showToast('Error', 'No se pudo inicializar el panel admin.', 'error');
         }
-        
-        const userData = await getDocument('usuarios', user.uid);
-        const isAdmin = userData?.rol === 'Admin' || user.email === 'Juanan221091@gmail.com';
-        
-        if (!isAdmin) {
-            showToast('Acceso Denegado', 'No tienes permisos de administrador', 'error');
-            setTimeout(() => window.location.href = 'home.html', 1000);
-            return;
-        }
-        
-        await injectHeader(userData);
-        await loadData();
-        await loadPalasCatalog();
-        
-        // Phase 7: Sync Orchestrator
-        AIOrchestrator.init(user.uid);
     });
     
     // Tab switching

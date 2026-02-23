@@ -345,7 +345,7 @@ function renderSlot(date, hour) {
     }
 
     return `
-        <div class="slot-v5 ${state} ${isPast ? 'past' : ''} relative" onclick="handleSlot('${dStr}', '${hour}', '${match?.id || ''}', '${match?.col || ''}')">
+        <div class="slot-v5 ${state} ${isPast ? 'past' : ''} relative" onclick="handleSlot('${dStr}', '${hour}', '${match?.id || ''}', '${match?.col || ''}', ${(!match && isPast) ? 'true' : 'false'})">
             ${extraIcon}
             ${weatherHtml}
             <span class="slot-chip-v5">${label}</span>
@@ -381,9 +381,15 @@ function getIconFromCode(code) {
 }
 
 // Global Handlers
-window.handleSlot = async (date, hour, id, col) => {
+window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
     if (slotInteractionBusy) return;
     slotInteractionBusy = true;
+
+    if (isPastFreeSlot && !id) {
+        slotInteractionBusy = false;
+        showToast('BLOQUEADO', 'No se puede reservar en franjas horarias ya pasadas.', 'warning');
+        return;
+    }
 
     const modal = document.getElementById('modal-match');
     const area = document.getElementById('match-detail-area');

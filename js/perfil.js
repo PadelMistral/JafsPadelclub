@@ -36,6 +36,8 @@ document.addEventListener("DOMContentLoaded", () => {
   initAppUI('profile');
   initBackground();
   setupModals();
+  const rivalIntelSection = document.getElementById("rival-intel-section");
+  if (rivalIntelSection) rivalIntelSection.style.display = "none";
 
   let currentUser = null;
   let userData = null;
@@ -101,13 +103,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const avatarEl = document.getElementById("p-avatar");
     const userInp = document.getElementById("p-username-inp");
 
-    const photo = data.fotoPerfil || data.fotoURL;
     const name = data.nombreUsuario || data.nombre || "JUGADOR";
+    const photo = data.fotoPerfil || data.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
     const phone = data.telefono || "";
 
     if (nameEl) nameEl.textContent = name.toUpperCase();
     if (roleEl) roleEl.textContent = (data.rol || 'Atleta Pro').toUpperCase();
-    if (avatarEl && photo) avatarEl.src = photo;
+    if (avatarEl) avatarEl.src = photo;
     if (userInp) userInp.value = name;
     
     // Form inputs
@@ -158,14 +160,30 @@ document.addEventListener("DOMContentLoaded", () => {
     renderUltimateFutCard(data);
   }
 
+  function getLevelProgressState(rawNivel, rawPuntos) {
+    const parsedLevel = parseFloat(rawNivel || 2.5) || 2.5;
+    const currentLevel = Math.max(1, Math.min(7, Number(parsedLevel.toFixed(2))));
+    const currentPoints = Number(rawPuntos || 1000);
+    const prevLevel = Math.max(1, Number((currentLevel - 0.01).toFixed(2)));
+    const nextLevel = Math.min(7, Number((currentLevel + 0.01).toFixed(2)));
+    const eloAtLevel = Math.round(1000 + (currentLevel - 2.5) * 400);
+    const downThreshold = Math.max(0, eloAtLevel - 15);
+    const upThreshold = eloAtLevel + 15;
+    const band = Math.max(1, upThreshold - downThreshold);
+    const progressPct = Math.max(0, Math.min(100, ((currentPoints - downThreshold) / band) * 100));
+
+    return {
+      currentLevel,
+      prevLevel,
+      nextLevel,
+      progressPct,
+      pointsToUp: Math.max(0, Math.ceil(upThreshold - currentPoints)),
+      pointsToDown: Math.max(0, Math.ceil(currentPoints - downThreshold)),
+    };
+  }
+
   function updateLevelProgress(nivel, puntos) {
-    const lvlNum = Number(nivel || 2.5);
-    const currentBracket = Math.floor(lvlNum * 2) / 2;
-    const progress = ((lvlNum - currentBracket) / 0.5) * 100;
-    const prevStep = Math.max(1, Number((lvlNum - 0.01).toFixed(2)));
-    const nextStep = Number((lvlNum + 0.01).toFixed(2));
-    const pointsToUp01 = Math.max(1, Math.ceil((nextStep - lvlNum) * 400));
-    const pointsToDown01 = Math.max(1, Math.ceil((lvlNum - prevStep) * 400));
+    const state = getLevelProgressState(nivel, puntos);
 
     const bar = document.getElementById("level-bar");
     const currentLabel = document.getElementById("p-level-current");
@@ -174,18 +192,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const upperLabel = document.getElementById("level-upper");
     const upperBottomLabel = document.getElementById("level-upper-bottom");
 
-    if (bar) bar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
-    if (currentLabel) currentLabel.textContent = `NIVEL ${lvlNum.toFixed(2)}`;
+    if (bar) bar.style.width = `${state.progressPct.toFixed(2)}%`;
+    if (currentLabel) currentLabel.textContent = `NIVEL ${state.currentLevel.toFixed(2)} · ${state.progressPct.toFixed(2)}%`;
     if (detailEl) {
       detailEl.innerHTML = `
-        <span class="lvl-shift-chip up">+${pointsToUp01} PTS · NV ${nextStep.toFixed(2)}</span>
-        <span class="lvl-shift-chip down">-${pointsToDown01} PTS · NV ${prevStep.toFixed(2)}</span>
+        <span class="lvl-shift-chip up">+${state.pointsToUp} PTS · NV ${state.nextLevel.toFixed(2)}</span>
+        <span class="lvl-shift-chip down">-${state.pointsToDown} PTS · NV ${state.prevLevel.toFixed(2)}</span>
       `;
     }
 
-    if (lowerLabel) lowerLabel.textContent = prevStep.toFixed(2);
-    if (upperLabel) upperLabel.textContent = nextStep.toFixed(2);
-    if (upperBottomLabel) upperBottomLabel.textContent = nextStep.toFixed(2);
+    if (lowerLabel) lowerLabel.textContent = state.prevLevel.toFixed(2);
+    if (upperLabel) upperLabel.textContent = state.nextLevel.toFixed(2);
+    if (upperBottomLabel) upperBottomLabel.textContent = state.nextLevel.toFixed(2);
   }
 
   function renderUltimateFutCard(data) {
@@ -260,7 +278,7 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     `;
 
-    const photo = data.fotoPerfil || data.fotoURL || "./imagenes/default-avatar.png";
+    const photo = data.fotoPerfil || data.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
 
     container.innerHTML = `
       <div class="fut-card-v2 tier-${tier.toLowerCase()} animate-up">
@@ -595,6 +613,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${isUnlocked ? '<div class="ach-check"><i class="fas fa-check"></i></div>' : ''}
             </div>
             <span class="ach-lbl-v9">${r.name}</span>
+            <span class="ach-sub-v9">${isUnlocked ? "DESBLOQUEADO" : "PENDIENTE"}</span>
         </div>
       `;
     }).join('');
@@ -667,6 +686,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const q = state.qualitative || {};
         const recs = state.activeInterventions || [];
         const metrics = state.metrics || {};
+        const lastSeen = user.ultimoAcceso?.toDate ? user.ultimoAcceso.toDate() : new Date();
+        const winrate = Number(user.partidosJugados || 0) > 0 ? Math.round((Number(user.victorias || 0) / Number(user.partidosJugados || 1)) * 100) : 0;
+        const confidence = Math.max(30, Math.min(99, Math.round(((Number(user.nivel || 2.5) - 2) * 22) + (winrate * 0.45))));
         
         let analysis = q;
         if (!q.style) {
@@ -687,12 +709,29 @@ document.addEventListener("DOMContentLoaded", () => {
                     <h3 class="text-lg font-black text-white uppercase italic mb-1">${analysis.progression || 'Estable'}</h3>
                     <span class="text-[10px] text-muted">${analysis.emotionalTrend || 'Sin cambios'}</span>
                 </div>
+                <div class="ai-insight-card animate-fade-in delay-150">
+                    <div class="ai-header"><i class="fas fa-shield-heart text-sport-green"></i><span class="text-[9px] font-black tracking-widest">CONFIANZA IA</span></div>
+                    <h3 class="text-xl font-black text-white uppercase italic mb-1">${confidence}%</h3>
+                    <span class="text-[10px] text-muted">Basado en nivel, winrate y volumen de juego</span>
+                </div>
+                <div class="ai-insight-card animate-fade-in delay-200">
+                    <div class="ai-header"><i class="fas fa-satellite-dish text-primary"></i><span class="text-[9px] font-black tracking-widest">SINCRONIZACIÓN</span></div>
+                    <h3 class="text-sm font-black text-white uppercase italic mb-1">DATOS EN TIEMPO REAL</h3>
+                    <span class="text-[10px] text-muted">Última actividad: ${lastSeen.toLocaleDateString('es-ES')} ${lastSeen.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
             `;
         }
         
         const auto = document.getElementById('ai-automations');
+        const fallbackRecs = [];
+        if ((user.rachaActual || 0) < 0) fallbackRecs.push({ icon: 'fa-arrow-trend-down', type: 'Racha', text: 'Baja carga competitiva 24h y prioriza consistencia en saque + volea.' });
+        if (winrate < 45) fallbackRecs.push({ icon: 'fa-crosshairs', type: 'Táctica', text: 'Agenda partidos de nivel similar para reconstruir confianza y ritmo.' });
+        if ((user.diario || []).length < 3) fallbackRecs.push({ icon: 'fa-book-open', type: 'Diario', text: 'Registra sensaciones post-partido para mejorar recomendaciones automáticas.' });
+        if (Number(user.partidosJugados || 0) < 8) fallbackRecs.push({ icon: 'fa-seedling', type: 'Progreso', text: 'Completa más partidos para que la IA estabilice tu perfil de juego.' });
+        const finalRecs = recs.length > 0 ? recs : fallbackRecs;
+
         if (auto) {
-            auto.innerHTML = recs.length > 0 ? recs.map(r => `
+            auto.innerHTML = finalRecs.length > 0 ? finalRecs.map(r => `
                 <div class="automation-card">
                     <div class="auto-icon"><i class="fas ${r.icon || 'fa-robot'}"></i></div>
                     <div class="flex-col">
@@ -814,7 +853,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         dashboard.innerHTML = `
             <div class="flex-row items-center gap-4 mb-4">
-                <img src="${rival.fotoURL || rival.fotoPerfil || './imagenes/default-avatar.png'}" class="w-10 h-10 rounded-full border border-primary/30">
+                <img src="${rival.fotoURL || rival.fotoPerfil || `https://ui-avatars.com/api/?name=${encodeURIComponent(rival.nombreUsuario || rival.nombre || 'R')}&background=random&color=fff`}" class="w-10 h-10 rounded-full border border-primary/30">
                 <div class="flex-col">
                     <span class="text-xs font-black text-white italic uppercase">${rival.nombreUsuario || rival.nombre}</span>
                     <span class="text-[8px] font-bold text-muted uppercase">Nivel ${rival.nivel || '---'}</span>

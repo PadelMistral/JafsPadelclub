@@ -36,14 +36,14 @@ export const SmartNotifier = {
             if (winner.puntosRanking < loser.puntosRanking - 100) {
                 await createNotification(
                     winnerUid, 
-                    "Â¡MATAGIGANTES!", 
+                    "¡MATAGIGANTES!", 
                     `Has derrotado a ${loser.nombreUsuario}, un rival superior. +Honor.`, 
                     NOTIF_TYPES.RIVALRY
                 );
                 await createNotification(
                     loserUid, 
                     "ALERTA DE RANGO", 
-                    `Has caÃ­do ante ${winner.nombreUsuario}. Tu estatus estÃ¡ en peligro.`, 
+                    `Has caído ante ${winner.nombreUsuario}. Tu estatus está en peligro.`, 
                     NOTIF_TYPES.RIVALRY
                 );
             }
@@ -64,7 +64,7 @@ export const SmartNotifier = {
         
         await createNotification(
             uid,
-            "EVOLUCIÃ“N TÃ‰CNICA",
+            "EVOLUCIÓN TÉCNICA",
             `Tu entrenamiento ha dado frutos. Mejoras: ${changes.join(', ')}`,
             NOTIF_TYPES.PROGRESSION,
             'perfil.html'

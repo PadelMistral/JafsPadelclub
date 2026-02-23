@@ -68,7 +68,7 @@ export const PredictiveEngine = {
         const totalMatches = (user.partidosJugados || 0) + (partner.partidosJugados || 0);
         const confidence = Math.min(100, Math.max(20, totalMatches / 2));
 
-        const volatility = (Math.abs(diffForm) > 30 || teamA_Mental < 40) ? 'Alta - Partido CaÃ³tico' : 'Baja - Resultado Predecible';
+        const volatility = (Math.abs(diffForm) > 30 || teamA_Mental < 40) ? 'Alta - Partido Caótico' : 'Baja - Resultado Predecible';
 
         return {
             winProbability: Math.round(probability * 100),
@@ -135,7 +135,7 @@ export const PredictiveEngine = {
         if ((rivalStyle.consistency || 50) > (userStyle.consistency || 50) + 15) {
             risks.push({
                 type: 'Riesgo de Paciencia',
-                desc: 'Rival mucho mÃ¡s consistente. No entres en guerra de volumen.',
+                desc: 'Rival mucho más consistente. No entres en guerra de volumen.',
                 severity: 'high'
             });
         }
@@ -143,7 +143,7 @@ export const PredictiveEngine = {
         // Compare Net Dominance
         if ((rivalStyle.netPoints || 0) > 60 && (userStyle.lobQuality || 50) < 40) {
              risks.push({
-                type: 'Zona AÃ©rea Comprometida',
+                type: 'Zona Aérea Comprometida',
                 desc: 'Rival domina la red y tus globos son cortos.',
                 severity: 'medium'
             });
@@ -153,15 +153,15 @@ export const PredictiveEngine = {
         if ((rivalStyle.pressure || 50) < 40) {
             opportunities.push({
                 type: 'Fragilidad Mental',
-                desc: 'El rival colapsa en puntos de oro (30-30, 40-40). Presiona ahÃ­.',
+                desc: 'El rival colapsa en puntos de oro (30-30, 40-40). Presiona ahí.',
                 impact: 'high'
             });
         }
         
         if ((rivalStyle.backhands || 50) < 30) {
              opportunities.push({
-                type: 'Nevera al RevÃ©s',
-                desc: 'Su revÃ©s es defensivo. Carga juego ahÃ­ para ganar red.',
+                type: 'Nevera al Revés',
+                desc: 'Su revés es defensivo. Carga juego ahí para ganar red.',
                 impact: 'medium'
             });
         }

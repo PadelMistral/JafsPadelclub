@@ -30,12 +30,12 @@ export const AI = {
         if (wRatio > 1.8) style = "Agresivo (Artillero)";
         else if (wRatio < 0.8) style = "Muro Defensivo";
         else if (stats.netPoints > stats.backPoints) style = "Voleador Nato";
-        else if (stats.consistency > 75) style = "TÃ¡ctico (MetrÃ³nomo)";
+        else if (stats.consistency > 75) style = "Táctico (Metrónomo)";
 
         // 2. DETECT STRENGTHS
         const strengths = [];
         if (stats.consistency > 70) strengths.push("Consistencia Alta");
-        if (stats.pressure > 70) strengths.push("Clutch Player (PresiÃ³n)");
+        if (stats.pressure > 70) strengths.push("Clutch Player (Presión)");
         if (winRate > 0.6) strengths.push("Ganador Recurrente");
         if (user.elo?.indoor > user.elo?.outdoor + 50) strengths.push("Especialista Indoor");
         
@@ -71,7 +71,7 @@ export const AI = {
         
         // Tactical
         if (analysis.style.includes("Agresivo")) {
-            recs.push({ type: 'tactica', text: "Paciencia: Espera la bola cÃ³moda antes de acelerar." });
+            recs.push({ type: 'tactica', text: "Paciencia: Espera la bola cómoda antes de acelerar." });
         } else if (analysis.style.includes("Defensivo")) {
             recs.push({ type: 'tactica', text: "Contragolpe: Sube a la red tras globos profundos." });
         }
@@ -80,12 +80,12 @@ export const AI = {
         if (analysis.weaknesses.includes("Errores No Forzados")) {
             recs.push({ type: 'pala', text: "Busca palas redondas con punto dulce amplio (Control)." });
         } else if (analysis.style.includes("Agresivo")) {
-            recs.push({ type: 'pala', text: "Palas diamante o lÃ¡grima con balance alto (Potencia)." });
+            recs.push({ type: 'pala', text: "Palas diamante o lágrima con balance alto (Potencia)." });
         }
 
         // Mental
         if (analysis.emotionalTrend === "Exceso de Confianza") {
-            recs.push({ type: 'mental', text: "MantÃ©n la tensiÃ³n competitiva hasta el Ãºltimo punto." });
+            recs.push({ type: 'mental', text: "Mantén la tensión competitiva hasta el último punto." });
         }
 
         return recs;
@@ -124,9 +124,9 @@ function calculateProgression(history) {
     const end = recent[0].newTotal;
     const diff = end - start;
     
-    if (diff > 50) return "Ascenso MeteÃ³rico (+50)";
+    if (diff > 50) return "Ascenso Meteórico (+50)";
     if (diff > 10) return "Crecimiento Sostenido";
-    if (diff < -50) return "CaÃ­da Libre (-50)";
+    if (diff < -50) return "Caída Libre (-50)";
     if (diff < -10) return "Bache de Rendimiento";
     return "Estancamiento";
 }

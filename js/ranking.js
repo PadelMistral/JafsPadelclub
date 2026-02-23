@@ -2,6 +2,8 @@
 import { db, auth, observerAuth, getDocument } from "./firebase-service.js";
 import {
   collection,
+  doc,
+  getDoc,
   getDocs,
   query,
   orderBy,
@@ -19,6 +21,25 @@ import {
 let currentUser = null;
 let userData = null;
 window.podiumData = [];
+const historyUserCache = new Map();
+const historyMatchCache = new Map();
+
+async function getCachedUserName(uid) {
+  if (!uid) return "Jugador";
+  if (historyUserCache.has(uid)) return historyUserCache.get(uid);
+  const u = await getDocument("usuarios", uid);
+  const name = u?.nombreUsuario || u?.nombre || "Jugador";
+  historyUserCache.set(uid, name);
+  return name;
+}
+
+async function getCachedMatch(matchId) {
+  if (!matchId) return null;
+  if (historyMatchCache.has(matchId)) return historyMatchCache.get(matchId);
+  const match = (await getDocument("partidosReto", matchId)) || (await getDocument("partidosAmistosos", matchId));
+  historyMatchCache.set(matchId, match || null);
+  return match || null;
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   initAppUI("ranking");
@@ -79,12 +100,27 @@ async function renderRanking(list) {
     if (playedEl) playedEl.textContent = `${played}`;
     if (levelCardEl) levelCardEl.textContent = (me.nivel || 2.5).toFixed(2);
 
-    const lvl = me.nivel || 2.5;
-    const progress = (lvl % 1) * 100;
-    const base = Math.floor(lvl);
-    document.getElementById("level-fill").style.width = `${progress}%`;
-    document.getElementById("level-prev").textContent = base.toFixed(1);
-    document.getElementById("level-next").textContent = (base + 1).toFixed(1);
+    const levelState = getLevelProgressState(me.nivel, myPts);
+    document.getElementById("level-fill").style.width = `${levelState.progressPct}%`;
+    document.getElementById("level-prev").textContent = levelState.prevLevel.toFixed(2);
+    document.getElementById("level-next").textContent = levelState.nextLevel.toFixed(2);
+    const levelPercentEl = document.getElementById("level-percent");
+    if (levelPercentEl) levelPercentEl.textContent = `${levelState.progressPct.toFixed(2)}%`;
+
+    const levelStatePillEl = document.getElementById("level-state-pill");
+    const levelStateTextEl = document.getElementById("level-state-text");
+    const levelPointsDownEl = document.getElementById("level-points-down");
+    const levelPointsUpEl = document.getElementById("level-points-up");
+    if (levelStatePillEl) {
+      levelStatePillEl.textContent = levelState.stateLabel;
+      levelStatePillEl.className = `level-state-pill ${levelState.stateClass}`;
+    }
+    if (levelStateTextEl) {
+      levelStateTextEl.innerHTML = `<b id="level-points-down">${levelState.pointsToDown}</b> pts (${levelState.downPct.toFixed(2)}%) para bajar · <b id="level-points-up">${levelState.pointsToUp}</b> pts (${levelState.upPct.toFixed(2)}%) para subir`;
+    } else {
+      if (levelPointsDownEl) levelPointsDownEl.textContent = `${levelState.pointsToDown}`;
+      if (levelPointsUpEl) levelPointsUpEl.textContent = `${levelState.pointsToUp}`;
+    }
 
     const trendEl = document.getElementById("rank-trend");
     if (trendEl) {
@@ -201,9 +237,10 @@ function renderLeaderboard(
 
   container.innerHTML = list
     .map((u, i) => {
-      const isMe = currentUser && u.id === currentUser.uid;
+      const profileUid = u.id || u.uid || "";
+      const isMe = currentUser && profileUid === currentUser.uid;
       const name = u.nombreUsuario || u.nombre || "Jugador";
-      const photo = u.fotoPerfil || u.fotoURL || "./imagenes/Logojafs.png";
+      const photo = u.fotoPerfil || u.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
       const ps = u.partidosJugados || 0;
       const level = Number(u.nivel || 2.5).toFixed(2);
       const points = Math.round(u.puntosRanking || 1000);
@@ -238,7 +275,7 @@ function renderLeaderboard(
 
       return `
             <div class="ranking-card ${isMe ? "me" : ""} ${rankClass} animate-up" 
-                 onclick="window.viewProfile('${u.id}')" 
+                 onclick="window.viewProfile('${profileUid}')" 
                  style="${rowStyle}">
                 
                 <div class="lb-rank">#${u.rank}</div>
@@ -246,7 +283,7 @@ function renderLeaderboard(
                 <div class="lb-avatar">
                     ${u.fotoPerfil || u.fotoURL 
                         ? `<img src="${u.fotoPerfil || u.fotoURL}" alt="${name}" loading="lazy">`
-                        : `<div class="lb-initials">${name.substring(0, 2).toUpperCase()}</div>`
+                        : `<img src="${photo}" alt="${name}" loading="lazy">`
                     }
                 </div>
 
@@ -301,73 +338,166 @@ window.loadPointsHistory = async (mode = 'mine') => {
       return;
     }
 
-    const entries = await Promise.all(
-      logs.docs.map(async (docSnap) => {
-        const log = docSnap.data();
+    const docs = logs.docs || [];
+    const uidSet = new Set();
+    const matchSet = new Set();
+    docs.forEach((docSnap) => {
+      const d = docSnap.data() || {};
+      if (mode === "global" && d.uid && d.uid !== currentUser.uid) uidSet.add(d.uid);
+      if (d.matchId) matchSet.add(d.matchId);
+    });
+
+    await Promise.all([
+      ...Array.from(uidSet).map((uid) => getCachedUserName(uid).catch(() => "Jugador")),
+      ...Array.from(matchSet).map((mid) => getCachedMatch(mid).catch(() => null)),
+    ]);
+
+    const enriched = await Promise.all(
+      docs.map(async (docSnap) => {
+        const log = docSnap.data() || {};
         window.logCache.set(docSnap.id, log);
-        const isWin = log.diff > 0;
+        const isDiary = String(log.type || "").startsWith("DIARY_");
+        const isPeerDiary = log.type === "DIARY_PEER_BONUS";
 
-        let levelIcon = "";
-        if (log.details?.levelAfter && log.details?.levelBefore) {
-            const lDiff = log.details.levelAfter - log.details.levelBefore;
-            if (lDiff > 0) levelIcon = `<span class="text-[8px] text-sport-green ml-1"><i class="fas fa-caret-up"></i></span>`;
-            else if (lDiff < 0) levelIcon = `<span class="text-[8px] text-sport-red ml-1"><i class="fas fa-caret-down"></i></span>`;
-        }
-
-        let matchInfo = "";
+        let matchInfo = log?.details?.sets || "";
         let date = "";
         if (log.matchId) {
-          const match =
-            (await getDocument("partidosReto", log.matchId)) ||
-            (await getDocument("partidosAmistosos", log.matchId));
+          const match = await getCachedMatch(log.matchId);
           if (match) {
-            matchInfo = match.resultado?.sets || "";
+            matchInfo = matchInfo || match.resultado?.sets || "";
             if (match.fecha) {
-              const d = match.fecha.toDate();
-              date = d.toLocaleDateString("es-ES", {
-                day: "numeric",
-                month: "short",
-              });
+              const d = match.fecha.toDate ? match.fecha.toDate() : new Date(match.fecha);
+              date = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
             }
           }
         }
-        if (!date && log.timestamp) {
+        if (!date && log.timestamp?.toDate) {
           const d = log.timestamp.toDate();
-          date = d.toLocaleDateString("es-ES", {
-            day: "numeric",
-            month: "short",
-          });
+          date = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
         }
+        const timeMs = log.timestamp?.toDate ? log.timestamp.toDate().getTime() : 0;
 
-        const isDiary = String(log.type || "").startsWith("DIARY_");
-        const isPeerDiary = log.type === "DIARY_PEER_BONUS";
-        const title = isDiary ? (isPeerDiary ? "Evaluacion Diario" : "Analisis Diario") : (isWin ? "Victoria" : "Derrota");
-        
         let userNameLabel = "";
-        if (mode === 'global' && log.uid !== currentUser.uid) {
-            const u = await getDocument('usuarios', log.uid);
-            userNameLabel = `<span class="text-[9px] font-black opacity-40 uppercase block">${u?.nombreUsuario || 'Jugador'}</span>`;
+        if (mode === "global" && log.uid !== currentUser.uid) {
+          const cachedName = await getCachedUserName(log.uid);
+          userNameLabel = `<span class="text-[9px] font-black opacity-40 uppercase block">${cachedName}</span>`;
         }
 
-        return `
-                <div class="history-entry ${isDiary ? "bonus" : (isWin ? "win" : "loss")}" onclick="window.showMatchBreakdownV3('${docSnap.id}')">
-                    <div class="history-icon">
-                        <i class="fas ${isDiary ? "fa-book" : (isWin ? "fa-arrow-up" : "fa-arrow-down")}"></i>
-                    </div>
-                    <div class="history-details">
-                        ${userNameLabel}
-                        <span class="history-title">${title} ${matchInfo ? `<span class="history-score">${matchInfo}</span>` : ""} ${levelIcon}</span>
-                        <span class="history-date">${date || "N/A"} ${isDiary ? `<span class="text-[9px] opacity-60 ml-1">(${log.reason || 'Bonus'})</span>` : ''}</span>
-                    </div>
-                    <span class="history-value">${isWin ? "+" : ""}${log.diff}</span>
-                </div>
-            `;
+        return {
+          id: docSnap.id,
+          log,
+          isDiary,
+          isPeerDiary,
+          matchInfo,
+          date,
+          timeMs,
+          userNameLabel,
+        };
       }),
     );
+
+    const groups = [];
+    const byMatch = new Map();
+    enriched.forEach((item) => {
+      const matchId = item.log.matchId;
+      if (!matchId) {
+        groups.push({ kind: "single", item });
+        return;
+      }
+      if (!byMatch.has(matchId)) byMatch.set(matchId, []);
+      byMatch.get(matchId).push(item);
+    });
+
+    byMatch.forEach((items, matchId) => {
+      items.sort((a, b) => b.timeMs - a.timeMs);
+      const primary = items.find((x) => !x.isDiary) || items[0];
+      const totalDiff = items.reduce((acc, x) => acc + Number(x.log.diff || 0), 0);
+      const hasDiary = items.some((x) => x.isDiary);
+      const diaryNotes = items
+        .filter((x) => x.isDiary)
+        .map((x) => x.log.reason || (x.isPeerDiary ? "Impacto por Evaluación" : "Análisis Diario"));
+
+      const aggregateId = `agg_${matchId}_${primary.id}`;
+      const aggregateLog = {
+        ...primary.log,
+        diff: totalDiff,
+        __aggregatedByMatch: true,
+        __groupLogs: items.map((x) => x.log),
+        __groupDocIds: items.map((x) => x.id),
+        __diaryCount: items.filter((x) => x.isDiary).length,
+        __diaryNotes: diaryNotes,
+        __baseDiff: Number(primary.log.diff || 0),
+      };
+      window.logCache.set(aggregateId, aggregateLog);
+
+      groups.push({
+        kind: "aggregate",
+        id: aggregateId,
+        matchId,
+        items,
+        primary,
+        totalDiff,
+        hasDiary,
+        diaryCount: aggregateLog.__diaryCount,
+        diaryNotes,
+      });
+    });
+
+    groups.sort((a, b) => {
+      const tA = a.kind === "aggregate" ? (a.primary?.timeMs || 0) : (a.item?.timeMs || 0);
+      const tB = b.kind === "aggregate" ? (b.primary?.timeMs || 0) : (b.item?.timeMs || 0);
+      return tB - tA;
+    });
+
+    const entries = groups.map((g) => {
+      if (g.kind === "single") {
+        const { item } = g;
+        const { log, isDiary, isPeerDiary, matchInfo, date, userNameLabel } = item;
+        const isWin = Number(log.diff || 0) > 0;
+        let levelIcon = "";
+        if (log.details?.levelAfter && log.details?.levelBefore) {
+          const lDiff = log.details.levelAfter - log.details.levelBefore;
+          if (lDiff > 0) levelIcon = `<span class="text-[8px] text-sport-green ml-1"><i class="fas fa-caret-up"></i></span>`;
+          else if (lDiff < 0) levelIcon = `<span class="text-[8px] text-sport-red ml-1"><i class="fas fa-caret-down"></i></span>`;
+        }
+        const title = isDiary ? (isPeerDiary ? "Evaluacion Diario" : "Analisis Diario") : (isWin ? "Victoria" : "Derrota");
+        return `
+          <div class="history-entry ${isDiary ? "bonus" : (isWin ? "win" : "loss")}" onclick="window.showMatchBreakdownV3('${item.id}')">
+            <div class="history-icon"><i class="fas ${isDiary ? "fa-book" : (isWin ? "fa-arrow-up" : "fa-arrow-down")}"></i></div>
+            <div class="history-details">
+              ${userNameLabel}
+              <span class="history-title">${title} ${matchInfo ? `<span class="history-score">${matchInfo}</span>` : ""} ${levelIcon}</span>
+              <span class="history-date">${date || "N/A"} ${isDiary ? `<span class="text-[9px] opacity-60 ml-1">(${log.reason || 'Bonus'})</span>` : ''}</span>
+            </div>
+            <span class="history-value">${isWin ? "+" : ""}${Number(log.diff || 0)}</span>
+          </div>
+        `;
+      }
+
+      const isWin = g.totalDiff > 0;
+      const levelIcon = g.hasDiary ? `<span class="text-[8px] text-primary ml-1"><i class="fas fa-link"></i></span>` : "";
+      const title = g.hasDiary ? "Partido + Diario" : (isWin ? "Victoria" : "Derrota");
+      const matchInfo = g.primary?.matchInfo || "";
+      const date = g.primary?.date || "N/A";
+      const userNameLabel = g.primary?.userNameLabel || "";
+      const diaryHint = g.hasDiary ? `<span class="text-[9px] opacity-70 ml-1">(Incluye ${g.diaryCount} ajuste(s) de diario)</span>` : "";
+      return `
+        <div class="history-entry ${isWin ? "win" : "loss"}" onclick="window.showMatchBreakdownV3('${g.id}')">
+          <div class="history-icon"><i class="fas fa-layer-group"></i></div>
+          <div class="history-details">
+            ${userNameLabel}
+            <span class="history-title">${title} ${matchInfo ? `<span class="history-score">${matchInfo}</span>` : ""} ${levelIcon}</span>
+            <span class="history-date">${date} ${diaryHint}</span>
+          </div>
+          <span class="history-value">${g.totalDiff >= 0 ? "+" : ""}${Number(g.totalDiff).toFixed(1)}</span>
+        </div>
+      `;
+    });
 
     container.innerHTML = entries.join("");
   } catch (e) {
     console.error("Error loading history:", e);
+    showToast("Historial", "No se pudo cargar el desglose de puntos.", "error");
     container.innerHTML =
       '<div class="error-state">Error cargando historial</div>';
   }
@@ -377,8 +507,18 @@ window.loadPointsHistory = async (mode = 'mine') => {
 // MODAL DE DESGLOSE TÁCTICO CORREGIDO
 // ============================================
 window.showMatchBreakdownV3 = async (logId) => {
-  const log = window.logCache?.get(logId);
-  if (!log) return showToast("Error", "No se encontró el registro en memoria", "error");
+  let log = window.logCache?.get(logId);
+  if (!log) {
+    try {
+      const docSnap = await getDoc(doc(db, "rankingLogs", logId));
+      if (docSnap.exists()) {
+        log = docSnap.data();
+        if (!window.logCache) window.logCache = new Map();
+        window.logCache.set(logId, log);
+      }
+    } catch (_) {}
+  }
+  if (!log) return showToast("Error", "No se pudo cargar el detalle del registro.", "error");
 
   // Crear overlay del modal
   const overlay = document.createElement("div");
@@ -387,13 +527,16 @@ window.showMatchBreakdownV3 = async (logId) => {
 
   const isDiary = String(log.type || "").startsWith("DIARY_");
   const isPeerDiary = log.type === "DIARY_PEER_BONUS";
-  const diff = log.diff;
+  const isGrouped = !!log.__aggregatedByMatch;
+  const groupLogs = Array.isArray(log.__groupLogs) ? log.__groupLogs : [];
+  const diaryLogsInGroup = groupLogs.filter((x) => String(x?.type || "").startsWith("DIARY_"));
+  const diff = Number(log.diff || 0);
   const total = log.newTotal;
   const matchId = log.matchId;
 
   overlay.innerHTML = `
     <div class="modal-card glass-strong animate-up p-0 overflow-hidden" style="max-width:380px">
-      <div class="modal-header">
+      <div class="modal-header ranking-breakdown-head">
         <span class="modal-title font-black italic tracking-widest">${isDiary ? 'RECOMPENSA DIARIO' : 'DESGLOSE TÁCTICO'}</span>
         <button class="close-btn" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
       </div>
@@ -407,8 +550,8 @@ window.showMatchBreakdownV3 = async (logId) => {
   const content = document.getElementById("breakdown-content");
 
   try {
-    // Caso especial: bonus diario
-    if (isDiary) {
+    // Caso especial: bonus diario (solo si no está agrupado por partido)
+    if (isDiary && !isGrouped) {
       content.innerHTML = `
         <div class="text-center py-6">
           <div class="text-5xl font-black mb-2 text-sport-green animate-bounce-soft">+${diff}</div>
@@ -445,7 +588,25 @@ window.showMatchBreakdownV3 = async (logId) => {
 
     // Obtener datos del partido
     const match = (await getDocument("partidosReto", matchId)) || (await getDocument("partidosAmistosos", matchId));
-    if (!match) throw new Error("Partido no encontrado");
+    if (!match) {
+      const d = log?.details || {};
+      const levelBefore = Number(d.levelBefore || 2.5);
+      const levelAfter = Number(d.levelAfter || levelBefore);
+      const isWinFallback = Number(diff || 0) > 0;
+      content.innerHTML = `
+        <div class="text-center py-2">
+          <div class="text-5xl font-black mb-2 ${isWinFallback ? "text-sport-green" : "text-sport-red"}">${isWinFallback ? "+" : ""}${Number(diff || 0).toFixed(1)}</div>
+          <span class="text-[10px] text-muted uppercase tracking-[4px] font-black">DESGLOSE RÁPIDO</span>
+        </div>
+        <div class="mt-4 p-4 bg-white/5 rounded-2xl border border-white/10">
+          <div class="flex-row between text-[11px] mb-2"><span class="text-white/55">Resultado</span><span class="font-black text-white">${d.sets || "No disponible"}</span></div>
+          <div class="flex-row between text-[11px] mb-2"><span class="text-white/55">Nivel</span><span class="font-black text-primary">${levelBefore.toFixed(2)} -> ${levelAfter.toFixed(2)}</span></div>
+          <div class="flex-row between text-[11px]"><span class="text-white/55">Puntos totales</span><span class="font-black text-white">${Math.round(Number(total || 0))}</span></div>
+        </div>
+        <div class="text-[10px] text-muted mt-4 text-center">Detalle avanzado no disponible en este momento.</div>
+      `;
+      return;
+    }
 
     // Obtener todos los usuarios involucrados para nombres y niveles
     const players = match.jugadores || [];
@@ -529,6 +690,18 @@ window.showMatchBreakdownV3 = async (logId) => {
     const fair = log.details?.fairPlay || {};
 
     // Construir HTML del modal
+    const diaryRowsInline = isGrouped && diaryLogsInGroup.length > 0 ? `
+      <div class="mt-3 p-3 rounded-2xl bg-primary/10 border border-primary/25">
+        <span class="text-[9px] font-black text-primary uppercase tracking-[3px] block mb-2">Ajustes Diario Integrados</span>
+        ${diaryLogsInGroup.map((d) => `
+          <div class="flex-row between text-[10px] mb-1">
+            <span class="text-white/60">${d.reason || (d.type === "DIARY_PEER_BONUS" ? "Impacto por Evaluación" : "Análisis Diario")}</span>
+            <span class="font-black ${Number(d.diff || 0) >= 0 ? "text-sport-green" : "text-sport-red"}">${Number(d.diff || 0) >= 0 ? "+" : ""}${Number(d.diff || 0).toFixed(1)}</span>
+          </div>
+        `).join("")}
+      </div>
+    ` : ``;
+
     content.innerHTML = `
       <div class="flex-col gap-4">
         <!-- Cabecera con resultado -->
@@ -665,6 +838,7 @@ window.showMatchBreakdownV3 = async (logId) => {
                 </div>
                 ${fair?.rule ? `<div class="text-[9px] text-cyan-300 mt-2">Regla de justicia aplicada: <b>${fair.rule}</b></div>` : ''}
               </div>
+              ${diaryRowsInline}
             </div>
           ` : `
             <div class="text-[10px] text-muted italic text-center py-4">
@@ -721,17 +895,19 @@ window.viewProfile = (uid) => {
 };
 
 window.openExpedient = async (uid) => {
-  let overlay = document.getElementById("expedient-overlay");
-  if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.id = "expedient-overlay";
-    overlay.className = "expedient-overlay";
-    document.body.appendChild(overlay);
+  const modal = document.getElementById("modal-user");
+  const area = document.getElementById("user-detail-area");
+  if (!modal || !area) {
+    showToast("Perfil", "No se encontró el modal de usuario.", "error");
+    return;
   }
 
-  overlay.innerHTML =
-    '<div class="center py-20"><div class="spinner-galaxy"></div></div>';
-  overlay.classList.add("active");
+  area.innerHTML = `
+    <div class="user-modal-sheet">
+      <div class="center py-20"><div class="spinner-galaxy"></div></div>
+    </div>
+  `;
+  modal.classList.add("active");
 
   try {
     const u = await getDocument("usuarios", uid);
@@ -741,8 +917,8 @@ window.openExpedient = async (uid) => {
     const vs = u.victorias || 0;
     const ds = u.derrotas || 0;
     const winrate = ps > 0 ? Math.round((vs / ps) * 100) : 0;
-    const photo = u.fotoPerfil || u.fotoURL || "./imagenes/Logojafs.png";
     const name = (u.nombreUsuario || u.nombre || "Jugador").toUpperCase();
+    const photo = u.fotoPerfil || u.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
     const level = (u.nivel || 2.5).toFixed(2);
     const pts = Math.round(u.puntosRanking || 1000);
     const pala = u.pala || "No disponible";
@@ -753,73 +929,70 @@ window.openExpedient = async (uid) => {
       : null;
 
     const puntosActuales = Math.round(u.puntosRanking || 1000);
-    const nivelActual = parseFloat(u.nivel || 2.5);
-    const floatLvl = Math.floor(nivelActual * 100) / 100;
-    const threshActual = calcularPuntosIniciales(floatLvl);
-    const threshNext = calcularPuntosIniciales(floatLvl + 0.01);
-    const progress = Math.max(2, Math.min(100, ((puntosActuales - threshActual) / (threshNext - threshActual)) * 100));
+    const levelState = getLevelProgressState(u.nivel, puntosActuales);
 
-    overlay.innerHTML = `
-            <div class="expedient-card animate-up">
-                <div class="exp-header" style="background-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.9)), url('${photo}')">
-                    <div class="exp-close" onclick="document.getElementById('expedient-overlay').classList.remove('active')">
-                        <i class="fas fa-times"></i>
-                    </div>
-                    <div class="flex-row items-center w-full">
-                        <div class="exp-avatar-ring">
-                            <img src="${photo}">
-                        </div>
-                        <div class="exp-info">
-                            <h2>${name}</h2>
-                            <div class="flex-row items-center gap-2">
-                                <div class="exp-badge">NIVEL ${level}</div>
-                                <span class="text-[9px] italic text-primary font-black">#${u.posicionRanking || '--'}</span>
-                            </div>
-                            <div class="exp-pala"><i class="fas fa-hammer"></i> ${pala}</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="px-5 py-4 bg-white/5">
-                    <div class="flex-row between mb-1 px-1">
-                        <span class="text-[8px] font-black text-muted uppercase">Progreso de Nivel</span>
-                        <span class="text-[8px] font-black text-primary">${progress.toFixed(0)}%</span>
-                    </div>
-                    <div class="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                        <div class="h-full bg-primary" style="width: ${progress}%"></div>
-                    </div>
-                </div>
-
-                <div class="exp-stats-grid">
-                    <div class="exp-stat-item">
-                        <span class="exp-stat-val">${pts}</span>
-                        <span class="exp-stat-label">PUNTOS</span>
-                    </div>
-                    <div class="exp-stat-item">
-                        <span class="exp-stat-val">${ps}</span>
-                        <span class="exp-stat-label">PARTIDOS</span>
-                    </div>
-                    <div class="exp-stat-item">
-                        <span class="exp-stat-val">${vs}</span>
-                        <span class="exp-stat-label">WINS</span>
-                    </div>
-                    <div class="exp-stat-item">
-                        <span class="exp-stat-val">${winrate}%</span>
-                        <span class="exp-stat-label">WR</span>
-                    </div>
-                </div>
-
-                ${u.telefono ? `<div class="px-5 pt-3 flex-row items-center gap-2"><i class="fas fa-phone text-[10px] text-muted"></i><span class="text-[10px] text-white/50 font-bold">${u.telefono}</span></div>` : ''}
-
-                <div class="px-5 pt-6 pb-2 border-b border-white/5">
-                    <span class="text-[9px] font-black text-primary uppercase tracking-[2px]">Hoja de Servicio</span>
-                </div>
-
-                <div class="exp-history-list custom-scroll" id="exp-history-list" style="max-height: 350px;">
-                    <div class="center py-10 opacity-30"><i class="fas fa-circle-notch fa-spin"></i></div>
-                </div>
+    area.innerHTML = `
+      <div class="user-modal-sheet animate-up">
+        <div class="user-modal-head">
+          <button class="close-btn" aria-label="Cerrar perfil" onclick="document.getElementById('modal-user').classList.remove('active')">
+            <i class="fas fa-times"></i>
+          </button>
+          <div class="user-top">
+            <div class="user-avatar">
+              <img src="${photo}" alt="${name}">
             </div>
-        `;
+            <div class="user-main">
+              <h3 class="user-name">${name}</h3>
+              <div class="user-tags">
+                <span class="u-tag">NIVEL ${level}</span>
+                <span class="u-tag rank">#${u.posicionRanking || "--"}</span>
+              </div>
+              <span class="user-pala"><i class="fas fa-hammer"></i> ${pala}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="user-body custom-scroll">
+          <div class="user-progress-box">
+            <div class="flex-row between items-center mb-2">
+              <span class="text-[10px] font-black text-muted uppercase tracking-widest">Progreso de Nivel</span>
+              <div class="flex-row items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-sport-green animate-pulse"></span>
+                <span class="text-[10px] font-bold text-sport-green">${levelState.progressPct.toFixed(2)}%</span>
+              </div>
+            </div>
+            <div class="progress-bar-v7 large">
+              <div class="fill-bar gradient-cyan" style="width:${levelState.progressPct}%"></div>
+            </div>
+            <div class="flex-row between mt-2 text-[9px] font-black uppercase">
+              <span class="opacity-60">ANT ${levelState.prevLevel.toFixed(2)}</span>
+              <span class="text-primary">ACT ${levelState.currentLevel.toFixed(2)}</span>
+              <span class="opacity-60">SIG ${levelState.nextLevel.toFixed(2)}</span>
+            </div>
+            <div class="flex-row between mt-2 text-[9px] font-black uppercase">
+              <span class="text-sport-red">- ${levelState.pointsToDown} pts</span>
+              <span class="text-white/75">${levelState.stateLabel}</span>
+              <span class="text-sport-green">+ ${levelState.pointsToUp} pts</span>
+            </div>
+          </div>
+
+          <div class="user-stats-grid">
+            <div class="u-stat"><b>${pts}</b><span>PUNTOS</span></div>
+            <div class="u-stat"><b>${ps}</b><span>PARTIDOS</span></div>
+            <div class="u-stat"><b>${vs}</b><span>VICTORIAS</span></div>
+            <div class="u-stat"><b>${winrate}%</b><span>WINRATE</span></div>
+          </div>
+
+          ${u.telefono ? `<div class="user-contact"><i class="fas fa-phone"></i><span>${u.telefono}</span></div>` : ""}
+          ${addressStr ? `<div class="user-contact"><i class="fas fa-location-dot"></i><span>${addressStr}</span></div>` : ""}
+
+          <div class="user-history-title">DESGLOSE DE PARTIDOS</div>
+          <div class="exp-history-list custom-scroll" id="exp-history-list">
+            <div class="center py-10 opacity-30"><i class="fas fa-circle-notch fa-spin"></i></div>
+          </div>
+        </div>
+      </div>
+    `;
 
     const historyContainer = document.getElementById("exp-history-list");
     const historyHtml = await renderUserDetailedHistory(uid);
@@ -827,7 +1000,7 @@ window.openExpedient = async (uid) => {
   } catch (e) {
     console.error(e);
     showToast("ERROR", "No se pudo cargar el expediente", "error");
-    overlay.classList.remove("active");
+    modal.classList.remove("active");
   }
 };
 
@@ -978,7 +1151,7 @@ async function renderUserDetailedHistory(uid) {
         const lArrow = lDiff > 0 ? '<i class="fas fa-angles-up text-sport-green ml-1"></i>' : (lDiff < 0 ? '<i class="fas fa-angles-down text-sport-red ml-1"></i>' : '');
 
         return `
-                <div class="sport-card p-4 mb-3 flex-col gap-3 border-l-4 ${isWin ? "border-l-sport-green shadow-[0_0_15px_rgba(0,255,100,0.1)]" : "border-l-sport-red shadow-[0_0_15px_rgba(255,50,50,0.1)]"} bg-white/5 rounded-3xl" 
+                <div class="sport-card ${isWin ? "match-positive" : "match-negative"} p-4 mb-3 flex-col gap-3 border-l-4 ${isWin ? "border-l-sport-green shadow-[0_0_15px_rgba(0,255,100,0.1)]" : "border-l-sport-red shadow-[0_0_15px_rgba(255,50,50,0.1)]"} bg-white/5 rounded-3xl" 
                      onclick="window.showMatchBreakdownV3('${doc.id}')" 
                      style="cursor:pointer">
                     
@@ -1048,6 +1221,47 @@ function calcularPuntosIniciales(nivel) {
     return puntos;
 }
 
+function getLevelProgressState(rawNivel, rawPuntos) {
+  const parsedLevel = parseFloat(rawNivel || 2.5) || 2.5;
+  const currentLevel = Math.max(1, Math.floor(parsedLevel * 100) / 100);
+  const puntos = Number(rawPuntos || 1000);
+  const prevLevel = Math.max(1, Number((currentLevel - 0.01).toFixed(2)));
+  const nextLevel = Number((currentLevel + 0.01).toFixed(2));
+
+  const downThreshold = calcularPuntosIniciales(currentLevel);
+  const upThreshold = calcularPuntosIniciales(nextLevel);
+  const band = Math.max(1, upThreshold - downThreshold);
+  const progressRaw = ((puntos - downThreshold) / band) * 100;
+  const progressPct = Math.max(0, Math.min(100, progressRaw));
+  const upPct = Math.max(0, 100 - progressPct);
+  const downPct = Math.max(0, progressPct);
+  const pointsToUp = Math.max(0, Math.ceil(upThreshold - puntos));
+  const pointsToDown = Math.max(0, Math.ceil(puntos - downThreshold));
+
+  let stateLabel = "ESTABLE";
+  let stateClass = "stable";
+  if (progressPct >= 75) {
+    stateLabel = "CERCA DE SUBIR";
+    stateClass = "up";
+  } else if (progressPct <= 25) {
+    stateLabel = "RIESGO DE BAJAR";
+    stateClass = "down";
+  }
+
+  return {
+    currentLevel,
+    prevLevel,
+    nextLevel,
+    progressPct,
+    upPct,
+    downPct,
+    pointsToUp,
+    pointsToDown,
+    stateLabel,
+    stateClass
+  };
+}
+
 // --- ELO EXPLAINER CHART ---
 function renderEloExplainerChart() {
   const canvas = document.getElementById('elo-explainer-chart');
@@ -1110,5 +1324,3 @@ function renderEloExplainerChart() {
     }
   });
 }
-
-

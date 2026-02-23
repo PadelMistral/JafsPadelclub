@@ -15,6 +15,8 @@ import {
   isExpiredOpenMatch,
   getResultSetsString,
 } from "../utils/match-utils.js";
+import { getDetailedWeather } from "../external-data.js";
+import { calculateCourtCondition } from "../utils/weather-utils.js";
 
 // --- ATOMIC STATE & CACHE ---
 let chatOpen = false;
@@ -27,6 +29,7 @@ const DATA_CACHE = {
   matches: [],
   globalUsers: [],
   openMatches: [],
+  weather: null,
   systemStats: null,
   lastUpdate: 0,
 };
@@ -66,6 +69,10 @@ const PERSONALITIES = {
 async function _syncData() {
   const uid = auth.currentUser?.uid;
   if (!uid) return;
+  const getDocsSafe =
+    typeof window.getDocsSafe === "function"
+      ? window.getDocsSafe
+      : async (qRef) => getDocs(qRef);
 
   const now = Date.now();
   if (now - DATA_CACHE.lastUpdate < 300000 && DATA_CACHE.user) return;
@@ -79,9 +86,10 @@ async function _syncData() {
       usersSnap,
       openAmis,
       openReto,
+      weatherData,
     ] = await Promise.all([
       getDocument("usuarios", uid),
-      window.getDocsSafe(
+      getDocsSafe(
         query(
           collection(db, "rankingLogs"),
           where("uid", "==", uid),
@@ -89,7 +97,7 @@ async function _syncData() {
           limit(25),
         ),
       ),
-      window.getDocsSafe(
+      getDocsSafe(
         query(
           collection(db, "partidosAmistosos"),
           where("jugadores", "array-contains", uid),
@@ -97,7 +105,7 @@ async function _syncData() {
           limit(25),
         ),
       ),
-      window.getDocsSafe(
+      getDocsSafe(
         query(
           collection(db, "partidosReto"),
           where("jugadores", "array-contains", uid),
@@ -105,21 +113,22 @@ async function _syncData() {
           limit(25),
         ),
       ),
-      window.getDocsSafe(query(collection(db, "usuarios"), limit(400))),
-      window.getDocsSafe(
+      getDocsSafe(query(collection(db, "usuarios"), limit(400))),
+      getDocsSafe(
         query(
           collection(db, "partidosAmistosos"),
           where("estado", "==", "abierto"),
           limit(10),
         ),
       ),
-      window.getDocsSafe(
+      getDocsSafe(
         query(
           collection(db, "partidosReto"),
           where("estado", "==", "abierto"),
           limit(10),
         ),
       ),
+      getDetailedWeather(),
     ]);
 
     if (uData) {
@@ -156,6 +165,7 @@ async function _syncData() {
       const filled = (m.jugadores || []).filter((id) => id).length;
       return filled < 4 && !isFinishedMatch(m) && !isCancelledMatch(m) && !isExpiredOpenMatch(m);
     });
+    DATA_CACHE.weather = weatherData || null;
     const finishedMatches = DATA_CACHE.matches.filter((m) => isFinishedMatch(m) && !isCancelledMatch(m)).length;
     DATA_CACHE.systemStats = {
       totalUsers: DATA_CACHE.globalUsers.length,
@@ -333,7 +343,9 @@ const Analyzer = {
 };
 
 function _buildUserContext(u, stats, matches) {
-  const winRate = stats.myMatches > 0 ? Math.round((stats.myFinishedMatches / stats.myMatches) * 100) : 0;
+  const played = Number(u.partidosJugados || 0);
+  const wins = Number(u.victorias || 0);
+  const winRate = played > 0 ? Math.round((wins / played) * 100) : 0;
   const streak = u.rachaActual || 0;
   const level = u.nivel || 2.5;
   
@@ -347,6 +359,7 @@ function _buildUserContext(u, stats, matches) {
   if (streak < -2) mood = "En Crisis ❄️";
 
   return {
+    uid: u.id || auth.currentUser?.uid || "",
     name: u.nombreUsuario || u.nombre || "Jugador",
     level: level.toFixed(2),
     status,
@@ -360,6 +373,30 @@ function _buildUserContext(u, stats, matches) {
   };
 }
 
+function _getLevelProgressState(rawNivel, rawPuntos) {
+  const parsedLevel = parseFloat(rawNivel || 2.5) || 2.5;
+  const currentLevel = Math.max(1, Math.min(7, Number(parsedLevel.toFixed(2))));
+  const puntos = Number(rawPuntos || 1000);
+  const prevLevel = Math.max(1, Number((currentLevel - 0.01).toFixed(2)));
+  const nextLevel = Math.min(7, Number((currentLevel + 0.01).toFixed(2)));
+  const eloAtLevel = Math.round(1000 + (currentLevel - 2.5) * 400);
+  const downThreshold = Math.max(0, eloAtLevel - 15);
+  const upThreshold = eloAtLevel + 15;
+  const band = Math.max(1, upThreshold - downThreshold);
+  const progressPct = Math.max(0, Math.min(100, ((puntos - downThreshold) / band) * 100));
+
+  return {
+    currentLevel,
+    prevLevel,
+    nextLevel,
+    progressPct,
+    upPct: Math.max(0, 100 - progressPct),
+    downPct: Math.max(0, progressPct),
+    pointsToUp: Math.max(0, Math.ceil(upThreshold - puntos)),
+    pointsToDown: Math.max(0, Math.ceil(puntos - downThreshold)),
+  };
+}
+
 function _findUserByName(name) {
   if (!name) return null;
   const q = name.toLowerCase().trim();
@@ -367,6 +404,95 @@ function _findUserByName(name) {
       const n = (u.nombreUsuario || u.nombre || "").toLowerCase();
       return n.includes(q);
   });
+}
+
+function _toDateSafe(value) {
+  if (!value) return null;
+  if (typeof value?.toDate === "function") {
+    const d = value.toDate();
+    return Number.isNaN(d?.getTime?.()) ? null : d;
+  }
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function _getMyUpcomingMatches(uid) {
+  const now = Date.now();
+  return (DATA_CACHE.matches || [])
+    .filter((m) => Array.isArray(m.jugadores) && m.jugadores.includes(uid))
+    .filter((m) => !isFinishedMatch(m) && !isCancelledMatch(m))
+    .map((m) => ({ ...m, __date: _toDateSafe(m.fecha) }))
+    .filter((m) => m.__date && m.__date.getTime() >= now - 10 * 60 * 1000)
+    .sort((a, b) => a.__date - b.__date);
+}
+
+function _formatMatchDate(d) {
+  if (!d) return "fecha no disponible";
+  return d.toLocaleString("es-ES", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function _weatherCodeToLabel(code = 0) {
+  const c = Number(code || 0);
+  if (c === 0) return "despejado";
+  if ([1, 2, 3].includes(c)) return "nuboso";
+  if ([45, 48].includes(c)) return "niebla";
+  if ([51, 53, 55, 56, 57].includes(c)) return "llovizna";
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(c)) return "lluvia";
+  if ([71, 73, 75, 77, 85, 86].includes(c)) return "nieve";
+  if ([95, 96, 99].includes(c)) return "tormenta";
+  return "variable";
+}
+
+function _buildWeatherSummary(dayOffset = 0) {
+  const w = DATA_CACHE.weather;
+  if (!w || !w.current || !w.hourly) return null;
+  const now = new Date();
+  const target = new Date(now);
+  target.setDate(now.getDate() + dayOffset);
+  const y = target.getFullYear();
+  const m = String(target.getMonth() + 1).padStart(2, "0");
+  const d = String(target.getDate()).padStart(2, "0");
+  const targetDay = `${y}-${m}-${d}`;
+
+  const hours = Array.isArray(w.hourly?.time) ? w.hourly.time : [];
+  const codes = Array.isArray(w.hourly?.weather_code) ? w.hourly.weather_code : [];
+  const temps = Array.isArray(w.hourly?.temperature_2m) ? w.hourly.temperature_2m : [];
+
+  const idx = hours.findIndex((t) => String(t || "").startsWith(targetDay));
+  if (idx < 0) return null;
+
+  const sample = [];
+  for (let i = idx; i < Math.min(hours.length, idx + 24); i += 1) {
+    if (!String(hours[i] || "").startsWith(targetDay)) break;
+    sample.push({ code: Number(codes[i] || 0), temp: Number(temps[i] || 0) });
+  }
+  if (!sample.length) return null;
+
+  const rainish = sample.filter((x) => [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(x.code)).length;
+  const windy = Number(w.current?.wind_speed_10m || 0);
+  const avgTemp = Math.round(sample.reduce((acc, x) => acc + x.temp, 0) / sample.length);
+  const dominantCode = sample
+    .map((x) => x.code)
+    .sort((a, b) => sample.filter((s) => s.code === b).length - sample.filter((s) => s.code === a).length)[0] || 0;
+
+  const rainProb = Math.round((rainish / sample.length) * 100);
+  const condition = _weatherCodeToLabel(dominantCode);
+  const court = calculateCourtCondition(avgTemp, rainProb > 25 ? 1 : 0, windy);
+
+  return {
+    dayLabel: dayOffset === 0 ? "hoy" : "mañana",
+    avgTemp,
+    rainProb,
+    condition,
+    wind: Math.round(windy),
+    advice: court?.advice || "",
+  };
 }
 
 // --- GENERATIVE RESPONSE INTELLIGENCE ---
@@ -422,16 +548,30 @@ function _generateResponse(intent, query) {
      return R(text);
   }
 
+  if (intent === "CMD_NEXT_MATCH") {
+    const up = _getMyUpcomingMatches(ctx.uid);
+    if (!up.length) {
+      return currentPersonality === "vecina"
+        ? "No tienes próximo partido cerrado todavía. Mira 'partidos abiertos' y te apuntas en un toque."
+        : "No tienes próximos partidos programados. Consulta partidos abiertos para reservar.";
+    }
+    const nx = up[0];
+    const when = _formatMatchDate(nx.__date);
+    const free = Math.max(0, 4 - (nx.jugadores || []).filter(Boolean).length);
+    const lvlMin = Number(nx?.restriccionNivel?.min ?? 1).toFixed(1);
+    const lvlMax = Number(nx?.restriccionNivel?.max ?? 7).toFixed(1);
+    return currentPersonality === "vecina"
+      ? `Tu próximo partido es ${when}. Plazas libres: ${free}/4. Rango de nivel ${lvlMin}-${lvlMax}.`
+      : `Próximo partido: ${when}. Disponibilidad: ${free}/4 plazas. Restricción de nivel: ${lvlMin}-${lvlMax}.`;
+  }
+
   if (intent === "CMD_LEVEL_PROGRESS") {
-    const nextLevel = Math.floor(Number(ctx.level)) + 1;
-    const pointsNeeded = ((nextLevel - 2.5) * 400) + 1000; 
-    const diff = Math.max(0, pointsNeeded - ctx.lastPoints);
+    const lvl = _getLevelProgressState(Number(ctx.level), Number(ctx.lastPoints));
     
     if (currentPersonality === 'vecina') {
-       if (diff <= 0) return R("¡Pero si ya eres una máquina! Estás tope de gama. ¡Sigue así, tigre!");
-       return R(`A ver, {NAME}, corazón. Tienes nivel {LEVEL}. Para subir al siguiente escalón te faltan unos puntitos... ¡Dale caña a esos partidos! Tienes racha de {STREAK}, ¡aprovéchala!`);
+       return `Vale, ${ctx.name}. Nivel **${lvl.currentLevel.toFixed(2)}** con **${ctx.lastPoints}** pts. Estás al **${lvl.progressPct.toFixed(2)}%** del tramo actual. Te faltan **${lvl.pointsToUp} pts** para subir a **${lvl.nextLevel.toFixed(2)}** y estás a **${lvl.pointsToDown} pts** de bajar a **${lvl.prevLevel.toFixed(2)}**.`;
     }
-    return R(`Análisis de Progresión: Nivel actual {LEVEL} ({ELO} pts). Estado: {STATUS}. Racha actual: {STREAK}. Mantén la consistencia y busca rivales de mayor ELO para acelerar el ascenso.`);
+    return `Análisis de Progresión: Nivel ${lvl.currentLevel.toFixed(2)} (${ctx.lastPoints} pts). Progreso de tramo: ${lvl.progressPct.toFixed(2)}%. Distancia a subida (${lvl.nextLevel.toFixed(2)}): ${lvl.pointsToUp} pts. Margen antes de bajar (${lvl.prevLevel.toFixed(2)}): ${lvl.pointsToDown} pts.`;
   }
 
   if (intent === "CMD_NEMESIS") {
@@ -481,7 +621,7 @@ function _generateResponse(intent, query) {
   }
 
   if (intent === "CMD_HISTORY") {
-      const recent = DATA_CACHE.matches.slice(0, 5);
+      const recent = DATA_CACHE.matches.filter((m) => isFinishedMatch(m) && !isCancelledMatch(m)).slice(0, 5);
       if (recent.length === 0) return currentPersonality === 'vecina' ? "¡Pero si no tienes historial! Juega algo primero, impaciente." : "No se registran partidos recientes en tu historial de competición.";
       
       let summary = currentPersonality === 'vecina' ? `Tus últimos ${recent.length} partidos han sido un show: ` : `Resumen de actividad (${recent.length} partidos): `;
@@ -503,6 +643,79 @@ function _generateResponse(intent, query) {
           return summary;
       }
       return summary + " Estado de forma analizado a partir de resultados recientes.";
+  }
+
+  if (intent === "CMD_LAST_MATCH") {
+      const lastFinished = DATA_CACHE.matches.find((m) => isFinishedMatch(m) && !isCancelledMatch(m) && Array.isArray(m.jugadores) && m.jugadores.includes(ctx.uid));
+      if (!lastFinished) {
+        return currentPersonality === "vecina"
+          ? "No tengo un último partido cerrado para mostrarte todavía."
+          : "No existe un partido finalizado reciente en tu historial.";
+      }
+      const winnerTeam = resolveWinnerTeam(lastFinished);
+      const myIdx = lastFinished.jugadores.indexOf(ctx.uid);
+      const won = myIdx >= 0 && (winnerTeam === 1 || winnerTeam === 2)
+        ? (myIdx < 2 ? winnerTeam === 1 : winnerTeam === 2)
+        : null;
+      const sets = getResultSetsString(lastFinished) || "Resultado registrado";
+      const when = (lastFinished.fecha?.toDate ? lastFinished.fecha.toDate() : new Date(lastFinished.fecha || Date.now()))
+        .toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
+      if (currentPersonality === "vecina") {
+        const rs = won === null ? "PARTIDO CERRADO" : (won ? "VICTORIA" : "DERROTA");
+        return `Último partido (${when}): **${rs}** con marcador **${sets}**. Si quieres, te saco ajustes tácticos para el próximo.`;
+      }
+      return `Último partido ${when}: ${won === null ? "resultado registrado" : (won ? "victoria" : "derrota")} · marcador ${sets}.`;
+  }
+
+  if (intent === "CMD_OPEN_MATCHES") {
+      const lvl = Number(ctx.level || 2.5);
+      const compatibles = (DATA_CACHE.openMatches || []).filter((m) => {
+        const min = Number(m?.restriccionNivel?.min ?? 1);
+        const max = Number(m?.restriccionNivel?.max ?? 7);
+        return lvl >= min && lvl <= max;
+      }).slice(0, 3);
+      if (compatibles.length === 0) {
+        return currentPersonality === "vecina"
+          ? "Ahora mismo no veo partidos abiertos compatibles con tu nivel. En cuanto salga uno, te aviso."
+          : "No hay partidos abiertos compatibles con tu nivel actual.";
+      }
+      const preview = compatibles.map((m) => {
+        const d = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha || Date.now());
+        const when = d.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+        const free = Math.max(0, 4 - (m.jugadores || []).filter(Boolean).length);
+        return `- ${when} · libres ${free}/4`;
+      }).join("\n");
+      return currentPersonality === "vecina"
+        ? `Te van bien estos abiertos ahora mismo:\n${preview}`
+        : `Partidos abiertos recomendados por compatibilidad de nivel:\n${preview}`;
+  }
+
+  if (intent === "CMD_WEATHER_TODAY" || intent === "CMD_WEATHER_TOMORROW") {
+      const summary = _buildWeatherSummary(intent === "CMD_WEATHER_TODAY" ? 0 : 1);
+      if (!summary) {
+        return currentPersonality === "vecina"
+          ? "Ahora mismo no tengo el clima sincronizado, pero en unos segundos debería estar."
+          : "No hay datos meteorológicos disponibles en este momento.";
+      }
+      if (currentPersonality === "vecina") {
+        return `Clima para ${summary.dayLabel}: ${summary.condition}, ${summary.avgTemp}°C, lluvia aprox ${summary.rainProb}% y viento ${summary.wind} km/h. Consejo pista: ${summary.advice}`;
+      }
+      return `Previsión ${summary.dayLabel}: condición ${summary.condition}, temperatura media ${summary.avgTemp}°C, probabilidad de lluvia ${summary.rainProb}% y viento ${summary.wind} km/h. Recomendación: ${summary.advice}`;
+  }
+
+  if (intent === "CMD_APP_HELP") {
+      const up = _getMyUpcomingMatches(ctx.uid).length;
+      const open = Number(sys.openCircuitMatches || 0);
+      const help = [
+        "Home: estado actual, nivel, IA y accesos rápidos.",
+        "Calendario: reserva pista, únete a abiertos y revisa horarios.",
+        "Ranking: clasificación, variaciones ELO y desglose de puntos.",
+        "Diario: registra partido/sensaciones para mejorar recomendaciones.",
+        "Perfil: métricas de juego, progreso y ajustes personales."
+      ].join("\n");
+      return currentPersonality === "vecina"
+        ? `Te guío rápido:\n${help}\nAhora mismo tienes ${up} próximos partidos y hay ${open} abiertos en el club.`
+        : `Guía de uso:\n${help}\nEstado actual: ${up} próximos partidos personales, ${open} partidos abiertos en la plataforma.`;
   }
 
   if (intent === "CMD_ADVICE") {
@@ -558,9 +771,16 @@ function _generateResponse(intent, query) {
   }
   
   if (intent === "CMD_STATS_READ") {
+      const played = Number(u.partidosJugados || 0);
+      const wins = Number(u.victorias || 0);
+      const losses = Number(u.derrotas || Math.max(0, played - wins));
+      const rankPos = DATA_CACHE.globalUsers
+        .slice()
+        .sort((a, b) => Number(b.puntosRanking || 0) - Number(a.puntosRanking || 0))
+        .findIndex((x) => x.id === ctx.uid) + 1;
       return currentPersonality === 'vecina'
-        ? R("¡Vamos a ver esos números! Tienes {ELO} puntazos. Has ganado el {WINRATE} de tus partidos. ¡Ni tan mal! ¿Y esa racha de {STREAK}? ¡Cuidado que quemas!")
-        : R("Métricas Personales: ELO {ELO} | WinRate {WINRATE} | Racha {STREAK}. Rendimiento: {STATUS}.");
+        ? `Números reales: ELO ${ctx.lastPoints}, nivel ${ctx.level}, récord ${wins}-${losses} en ${played} partidos, winrate ${ctx.winRate}, racha ${ctx.streakText}, ranking #${rankPos > 0 ? rankPos : "--"}.`
+        : `Métricas personales: ELO ${ctx.lastPoints} | Nivel ${ctx.level} | Récord ${wins}-${losses} (${played} partidos) | WinRate ${ctx.winRate} | Racha ${ctx.streakText} | Ranking #${rankPos > 0 ? rankPos : "--"}.`;
   }
 
   if (intent === "CMD_GEAR_ADVICE") {
@@ -618,9 +838,16 @@ function _generateResponse(intent, query) {
         : "Guía Rápida: Usa el Menú Inferior para navegar. 'Home' para tu dashboard, 'Calendario' para reservas, y 'Ranking' para la clasificación global. Registra resultados post-partido para actualizar tu ELO.";
   }
 
-  // Fallback
-  const fallbacks = p.fallback;
-  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+  // Fallback always useful with real data/context
+  const upcoming = _getMyUpcomingMatches(ctx.uid).length;
+  const open = Number(sys.openCircuitMatches || 0);
+  const wToday = _buildWeatherSummary(0);
+  const climateLine = wToday
+    ? `Clima hoy: ${wToday.condition}, ${wToday.avgTemp}°C, lluvia ${wToday.rainProb}%.`
+    : "Clima hoy no disponible todavía.";
+  return currentPersonality === "vecina"
+    ? `Te doy estado rápido: ELO ${ctx.lastPoints}, nivel ${ctx.level}, racha ${ctx.streakText}, próximos ${upcoming}, abiertos ${open}. ${climateLine} Prueba comandos: nivel, próximo partido, abiertos, clima hoy/mañana, compara con...`
+    : `Resumen instantáneo: ELO ${ctx.lastPoints}, nivel ${ctx.level}, racha ${ctx.streakText}, próximos ${upcoming}, abiertos ${open}. ${climateLine} Comandos útiles: nivel, próximo partido, abiertos, clima hoy/mañana, compara con...`;
 }
 
 
@@ -628,9 +855,16 @@ function _detectIntent(query) {
   const q = query.toLowerCase();
   if (query.startsWith("CMD_")) return query;
   if (q.includes("hola") || q.includes("buenas") || q.includes("hi")) return "CMD_GREETING";
+  if (q.includes("como usar") || q.includes("cómo usar") || q.includes("guia app") || q.includes("ayuda app")) return "CMD_APP_HELP";
+  if (q.includes("proximo partido") || q.includes("próximo partido") || q.includes("cuando juego") || q.includes("cuándo juego")) return "CMD_NEXT_MATCH";
+  if (q.includes("hoy llueve") || q.includes("clima hoy") || q.includes("tiempo hoy")) return "CMD_WEATHER_TODAY";
+  if (q.includes("mañana llueve") || q.includes("clima mañana") || q.includes("tiempo mañana")) return "CMD_WEATHER_TOMORROW";
+  if (q.includes("llueve") || q.includes("clima") || q.includes("tiempo")) return "CMD_WEATHER_TODAY";
   if (q.includes("contexto") || q.includes("que es esto") || q.includes("app")) return "CMD_APP_CONTEXT";
   if (q.includes("global") || q.includes("comunidad") || q.includes("gente")) return "CMD_GLOBAL_STATS";
-  if (q.includes("nivel") || q.includes("progeso") || q.includes("subir")) return "CMD_LEVEL_PROGRESS";
+  if (q.includes("ultimo partido") || q.includes("último partido")) return "CMD_LAST_MATCH";
+  if (q.includes("partidos abiertos") || q.includes("abiertos") || q.includes("reservar")) return "CMD_OPEN_MATCHES";
+  if (q.includes("nivel") || q.includes("progreso") || q.includes("progeso") || q.includes("subir")) return "CMD_LEVEL_PROGRESS";
   if (q.includes("historial") || q.includes("visto") || q.includes("partidos")) return "CMD_HISTORY";
   if (q.includes("consejo") || q.includes("ayudame") || q.includes("que hago")) return "CMD_ADVICE";
   if (q.includes("nemesis") || q.includes("rival") || q.includes("odio")) return "CMD_NEMESIS";
@@ -649,20 +883,26 @@ function _detectIntent(query) {
 
 // --- PUBLIC INTERFACE & UI ---
 
-async function sendMessage() {
+export async function sendMessage(prefillText = "") {
   const input = document.getElementById("ai-input-field");
-  const text = input.value.trim();
-  if (!text) return;
+  if (prefillText && input) {
+    input.value = String(prefillText);
+  }
+  const rawText = input.value.trim();
+  if (!rawText) return;
+  const visualText = input.dataset.displayLabel || rawText;
+  const text = rawText;
 
   const msgs = document.getElementById("ai-messages");
   
   // User Msg
   const userDiv = document.createElement("div");
   userDiv.className = "ai-msg user";
-  userDiv.innerHTML = `<p>${text}</p>`;
+  userDiv.innerHTML = `<p>${visualText}</p>`;
   msgs.appendChild(userDiv);
   
   input.value = "";
+  delete input.dataset.displayLabel;
   msgs.scrollTop = msgs.scrollHeight;
 
   // Bot Thinking
@@ -686,15 +926,25 @@ async function sendMessage() {
   }, 600 + Math.random() * 800);
 }
 
-function toggleChat() {
+export function toggleChat(forceOpen = null) {
   const panel = document.getElementById("vecina-chat-panel");
-  chatOpen = !chatOpen;
+  if (!panel) return;
+  if (typeof forceOpen === "boolean") chatOpen = forceOpen;
+  else chatOpen = !chatOpen;
   if(chatOpen) {
+      panel.style.setProperty("display", "flex", "important");
       panel.classList.add("open");
+      document.body.classList.add("ai-chat-open");
+      document.documentElement.classList.add("ai-chat-open");
       _syncData();
       document.getElementById("ai-input-field").focus();
   } else {
       panel.classList.remove("open");
+      document.body.classList.remove("ai-chat-open");
+      document.documentElement.classList.remove("ai-chat-open");
+      setTimeout(() => {
+        if (!chatOpen) panel.style.setProperty("display", "none", "important");
+      }, 260);
   }
 }
 
@@ -719,7 +969,8 @@ function switchAiPersonality() {
 
 window.aiQuickCmd = (cmd, label) => {
     const input = document.getElementById("ai-input-field");
-    input.value = label || cmd;
+    input.value = cmd;
+    input.dataset.displayLabel = label || cmd;
     sendMessage();
 };
 
@@ -783,8 +1034,38 @@ export function initVecinaChat() {
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_VICTIM','Victima')"><i class="fas fa-ghost"></i><span>Victima</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_PARTNER_SYNC','Socio')"><i class="fas fa-user-group"></i><span>Socio</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_LEVEL_PROGRESS','Nivel')"><i class="fas fa-gauge-high"></i><span>Nivel</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_NEXT_MATCH','Próximo')"><i class="fas fa-calendar-check"></i><span>Próximo</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_OPEN_MATCHES','Abiertos')"><i class="fas fa-door-open"></i><span>Abiertos</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_WEATHER_TODAY','Clima Hoy')"><i class="fas fa-cloud-sun"></i><span>Hoy</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_WEATHER_TOMORROW','Clima Mañana')"><i class="fas fa-cloud-rain"></i><span>Mañana</span></button>
                     </div>
                 </div>
+                <details class="ai-cmd-details mb-3" open>
+                    <summary><i class="fas fa-terminal"></i> VER TODOS LOS COMANDOS</summary>
+                    <div class="ai-cmd-grid">
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_GREETING','Hola')">Hola</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_APP_CONTEXT','App')">Contexto App</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_GLOBAL_STATS','Global')">Stats Global</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_TUTORIAL','Guía')">Guía</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_STATS_READ','Datos')">Datos</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_HISTORY','Historial')">Historial</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_ADVICE','Consejo')">Consejo</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_LEVEL_PROGRESS','Nivel')">Nivel</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_NEMESIS','Némesis')">Némesis</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_VICTIM','Víctima')">Víctima</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_PARTNER_SYNC','Socio')">Socio</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_RIVAL_INTEL','Rivales')">Rivales</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_DIARY_ANALYSIS','Diario')">Diario</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_PREDICT','Pronóstico')">Pronóstico</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_GEAR_ADVICE','Pala')">Pala</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_ELO_FORMULA','ELO')">ELO</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_NEXT_MATCH','Próximo')">Próximo partido</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_OPEN_MATCHES','Abiertos')">Partidos abiertos</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_WEATHER_TODAY','Clima hoy')">Clima hoy</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_WEATHER_TOMORROW','Clima mañana')">Clima mañana</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_APP_HELP','Ayuda App')">Ayuda app</button>
+                    </div>
+                </details>
                 <div class="ai-input-container-v7">
                     <input type="text" id="ai-input-field" class="ai-input-v7" placeholder="Escribe aquí..." autocomplete="off">
                     <button id="ai-send-btn" class="ai-send-btn-v7">
@@ -797,16 +1078,19 @@ export function initVecinaChat() {
         <style>
              /* RESPONSIVE CHAT V3.0 */
             .custom-scroll-hidden::-webkit-scrollbar { display: none; }
-            .ai-fab {
-                position: fixed; bottom: calc(90px + env(safe-area-inset-bottom)); right: 20px;
+            #vecina-chat-fab.ai-fab {
+                position: fixed;
+                bottom: calc(90px + env(safe-area-inset-bottom));
+                right: 20px;
                 width: 56px; height: 56px; border-radius: 50%;
                 background: var(--primary); color: #000;
                 font-size: 24px; display: flex; align-items: center; justify-content: center;
                 box-shadow: 0 10px 25px rgba(198, 255, 0, 0.3);
-                z-index: 999; border: none; cursor: pointer;
+                z-index: 12040; border: none; cursor: pointer;
                 transition: transform 0.2s;
+                z-index: 13050 !important;
             }
-            .ai-fab:active { transform: scale(0.9); }
+            #vecina-chat-fab.ai-fab:active { transform: scale(0.9); }
 
             .ai-chat-panel.v14 { 
                 border-radius: 32px 32px 0 0; 
@@ -822,17 +1106,19 @@ export function initVecinaChat() {
                 bottom: calc(86px + env(safe-area-inset-bottom));
                 width: 100%;
                 height: 85dvh; 
-                max-height: 850px;
-                z-index: 10000;
-                transform: translateY(120%);
+                max-height: 800px;
+                z-index: 12050;
+                transform: none;
                 opacity: 0;
-                transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+                transition: opacity 0.25s ease;
                 pointer-events: none;
+                visibility: hidden;
             }
             .ai-chat-panel.v14.open { 
-                transform: translateY(0);
+                transform: none;
                 opacity: 1;
                 pointer-events: all;
+                visibility: visible;
             }
 
             @media (min-width: 768px) {
@@ -842,7 +1128,16 @@ export function initVecinaChat() {
                     width: 420px; height: 700px;
                     border-radius: 24px;
                 }
-                .ai-fab { bottom: 30px; right: 30px; }
+                #vecina-chat-fab.ai-fab {
+                    bottom: 30px !important;
+                    right: 30px !important;
+                }
+            }
+            html.ai-chat-open,
+            body.ai-chat-open {
+                overflow: hidden !important;
+                overscroll-behavior: none !important;
+                height: 100dvh !important;
             }
             
             /* CONTENT STYLES */
@@ -894,6 +1189,52 @@ export function initVecinaChat() {
                 border: 1px solid rgba(255,255,255,0.1);
                 box-shadow: 0 8px 32px rgba(0,0,0,0.4);
             }
+            .ai-chat-footer {
+                max-height: 44dvh;
+                overflow-y: auto;
+            }
+            .ai-cmd-details summary {
+                list-style: none;
+                cursor: pointer;
+                font-size: 10px;
+                font-weight: 900;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                color: rgba(255,255,255,.82);
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 8px 10px;
+                border-radius: 10px;
+                background: rgba(255,255,255,.04);
+                border: 1px solid rgba(255,255,255,.08);
+            }
+            .ai-cmd-details[open] summary {
+                border-color: rgba(198,255,0,.4);
+                color: #d9ff7f;
+            }
+            .ai-cmd-grid {
+                margin-top: 8px;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+            }
+            .ai-cmd-chip {
+                padding: 8px 9px;
+                border-radius: 10px;
+                border: 1px solid rgba(255,255,255,.1);
+                background: rgba(255,255,255,.03);
+                color: rgba(255,255,255,.9);
+                font-size: 10px;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: .7px;
+            }
+            .ai-cmd-chip:hover {
+                border-color: rgba(198,255,0,.4);
+                background: rgba(198,255,0,.08);
+                color: #e5ffad;
+            }
             .ai-input-v7 { flex: 1; background: transparent; border: none; color: #fff; padding: 10px 15px; font-size: 0.95rem; outline: none; }
             .ai-send-btn-v7 { 
                 width: 48px; 
@@ -924,8 +1265,46 @@ export function initVecinaChat() {
         </style>
     `;
   document.body.insertAdjacentHTML("beforeend", chatHTML);
+  const panel = document.getElementById("vecina-chat-panel");
 
-  document.getElementById("ai-send-btn").onclick = sendMessage;
+  // Hard-lock geometry to avoid any stylesheet/caching conflict that can push body height.
+  const applyChatGeometry = () => {
+    const desktop = window.matchMedia("(min-width: 768px)").matches;
+    if (fab) {
+      fab.style.setProperty("bottom", desktop ? "30px" : "calc(90px + env(safe-area-inset-bottom))", "important");
+      fab.style.setProperty("right", desktop ? "30px" : "20px", "important");
+    }
+    if (panel) {
+      if (desktop) {
+        panel.style.setProperty("left", "auto", "important");
+        panel.style.setProperty("right", "20px", "important");
+        panel.style.setProperty("bottom", "20px", "important");
+        panel.style.setProperty("width", "420px", "important");
+        panel.style.setProperty("height", "700px", "important");
+      } else {
+        panel.style.setProperty("left", "0", "important");
+        panel.style.setProperty("right", "0", "important");
+        panel.style.setProperty("bottom", "calc(86px + env(safe-area-inset-bottom))", "important");
+        panel.style.setProperty("width", "100%", "important");
+        panel.style.setProperty("height", "85dvh", "important");
+      }
+    }
+  };
+
+  if (fab) {
+    fab.style.setProperty("position", "fixed", "important");
+    fab.style.setProperty("z-index", "13050", "important");
+  }
+  if (panel) {
+    panel.style.setProperty("position", "fixed", "important");
+    panel.style.setProperty("max-height", "800px", "important");
+    panel.style.setProperty("z-index", "12050", "important");
+    panel.style.setProperty("display", "none", "important");
+  }
+  applyChatGeometry();
+  window.addEventListener("resize", applyChatGeometry);
+
+  document.getElementById("ai-send-btn").onclick = () => sendMessage();
   document.getElementById("ai-input-field").onkeypress = (e) => {
     if (e.key === "Enter") sendMessage();
   };

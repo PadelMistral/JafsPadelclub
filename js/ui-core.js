@@ -1,10 +1,144 @@
 ﻿// ui-core.js - Unified Application Guard & Portal Management (v2.0)
 import { observerAuth, getDocument, subscribeCol, db, getDocsSafe } from './firebase-service.js';
 
-const PUBLIC_PAGES = ['index.html', 'registro.html', 'recuperar.html'];
+const PUBLIC_PAGES = ['index.html', 'registro.html'];
 let onlineNexusCurrentUid = null;
 let onlineNexusViewerIsAdmin = false;
 let onlineNexusRoleResolvedFor = null;
+
+function ensureGlobalBootStyles() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('app-boot-inline-style')) return;
+    const style = document.createElement('style');
+    style.id = 'app-boot-inline-style';
+    style.textContent = `
+      body.app-boot-pending {
+        overflow: hidden !important;
+      }
+      body.app-boot-pending > *:not(#app-boot-loader) {
+        visibility: hidden;
+      }
+      .app-boot-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 12000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at center, rgba(3, 7, 18, 0.98) 0%, rgba(2, 6, 23, 0.995) 70%, #020617 100%);
+        opacity: 1;
+        transition: opacity .35s ease, visibility .35s ease;
+      }
+      .app-boot-loader.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .app-boot-core {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+      }
+      .app-boot-ring {
+        width: 74px;
+        height: 74px;
+        border-radius: 999px;
+        border: 2px solid rgba(198, 255, 0, 0.2);
+        border-top-color: rgba(198, 255, 0, 0.9);
+        animation: appBootSpin 1.1s linear infinite;
+      }
+      .app-boot-logo {
+        position: absolute;
+        width: 42px;
+        height: 42px;
+        object-fit: contain;
+        filter: drop-shadow(0 0 12px rgba(198,255,0,.35));
+      }
+      .app-boot-status {
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: rgba(255,255,255,.85);
+      }
+      @keyframes appBootSpin {
+        to { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+}
+
+function ensureGlobalBackgroundLayer() {
+    if (typeof document === 'undefined') return;
+    if (!document.querySelector('.sport-bg')) {
+        const bg = document.createElement('div');
+        bg.className = 'sport-bg';
+        document.body.prepend(bg);
+    }
+}
+
+function ensureBootLoader() {
+    if (typeof document === 'undefined') return null;
+    ensureGlobalBootStyles();
+    let loader = document.getElementById('app-boot-loader');
+    document.body.classList.add('app-boot-pending');
+    if (!loader) {
+        loader = document.createElement('div');
+        loader.id = 'app-boot-loader';
+        loader.className = 'app-boot-loader';
+        loader.innerHTML = `
+          <div class="app-boot-core">
+            <div style="position:relative; display:flex; align-items:center; justify-content:center;">
+              <div class="app-boot-ring"></div>
+              <img class="app-boot-logo" src="./imagenes/Logojafs.png" alt="Padeluminatis">
+            </div>
+            <div class="app-boot-status">Sincronizando Datos</div>
+          </div>
+        `;
+        document.body.appendChild(loader);
+    } else {
+        loader.classList.remove('hidden');
+    }
+    return loader;
+}
+
+function hideBootLoader(delay = 120) {
+    if (typeof document === 'undefined') return;
+    const loader = document.getElementById('app-boot-loader');
+    if (!loader) return;
+    setTimeout(() => {
+        loader.classList.add('hidden');
+        document.body.classList.remove('app-boot-pending');
+        setTimeout(() => {
+            if (loader?.parentNode) loader.remove();
+        }, 420);
+    }, delay);
+}
+
+function initGlobalFeedbackHooks() {
+    if (typeof window === 'undefined') return;
+    if (window.__globalFeedbackHooksBound) return;
+    window.__globalFeedbackHooksBound = true;
+
+    window.addEventListener('unhandledrejection', (event) => {
+        const msg = String(event?.reason?.message || event?.reason || 'Error inesperado en la operación.');
+        showToast('Error de proceso', msg.slice(0, 140), 'error');
+    });
+
+    window.addEventListener('error', (event) => {
+        const msg = String(event?.message || 'Fallo inesperado de ejecución.');
+        showToast('Error de ejecución', msg.slice(0, 140), 'error');
+    });
+
+    window.addEventListener('offline', () => {
+        showToast('Sin conexión', 'Verifica internet para sincronizar datos.', 'warning');
+    });
+
+    window.addEventListener('online', () => {
+        showToast('Conexión restablecida', 'Sincronización reanudada.', 'success');
+    });
+}
 
 function requestWaitingServiceWorkerActivation(reg) {
     if (!reg?.waiting) return;
@@ -230,7 +364,8 @@ async function openOnlineNexusModal() {
 
       onlineListEl.innerHTML = onlineUsers.length
         ? onlineUsers.map((u) => {
-        const photo = u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png';
+        const displayName = u.nombreUsuario || u.nombre || 'Jugador';
+        const photo = u.fotoPerfil || u.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff`;
         const lvl = Number(u.nivel || 2.5).toFixed(2);
         const meCls = u.id === onlineNexusCurrentUid ? 'me' : '';
         return `
@@ -249,7 +384,8 @@ async function openOnlineNexusModal() {
       if (offlineListEl) {
         offlineListEl.innerHTML = offlineUsers.length
           ? offlineUsers.map((u) => {
-            const photo = u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png';
+            const displayName = u.nombreUsuario || u.nombre || 'Jugador';
+            const photo = u.fotoPerfil || u.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff`;
             const lvl = Number(u.nivel || 2.5).toFixed(2);
             const seen = formatLastSeen(u.ultimoAcceso);
             const meCls = u.id === onlineNexusCurrentUid ? 'me' : '';
@@ -307,6 +443,20 @@ export function initAppUI(activePageName) {
         const currentPath = (window.location.pathname || '').toLowerCase();
         if (window.__appUIInitPath === currentPath) return;
         window.__appUIInitPath = currentPath;
+    }
+
+    initGlobalFeedbackHooks();
+    ensureGlobalBackgroundLayer();
+    ensureBootLoader();
+    if (typeof window !== 'undefined' && !window.__globalGalaxyBooted) {
+        window.__globalGalaxyBooted = true;
+        import('./modules/galaxy-bg.js?v=6.5')
+            .then((m) => m?.initGalaxyBackground?.())
+            .catch(() => {});
+    }
+    if (typeof window !== 'undefined' && !window.__bootFallbackTimerSet) {
+        window.__bootFallbackTimerSet = true;
+        setTimeout(() => hideBootLoader(0), 8000);
     }
 
     // Inject master-polish.css as LAST stylesheet (if not already present)
@@ -392,6 +542,7 @@ export function initAppUI(activePageName) {
                 console.warn("Auth did not resolve in time. Showing UI shell.");
                 document.body.style.opacity = '1';
                 document.body.style.pointerEvents = 'auto';
+                hideBootLoader(0);
             }
         }, 2000);
     }
@@ -408,6 +559,7 @@ export function initAppUI(activePageName) {
             } catch (_) {}
             document.body.style.opacity = '1';
             document.body.style.pointerEvents = 'auto';
+            hideBootLoader();
             // Logged in user on index/login -> Redirect to Home
             if (isPublic && !path.includes('registro.html') && !path.includes('recuperar.html') && !path.includes('terms.html')) {
                 console.log("Redirecting to home (Logged in)");
@@ -432,6 +584,7 @@ export function initAppUI(activePageName) {
                 }
             } catch (e) {
                 console.error("Error loading user data:", e);
+                hideBootLoader();
             }
         } else {
             onlineNexusCurrentUid = null;
@@ -441,9 +594,17 @@ export function initAppUI(activePageName) {
             if (!isPublic) {
                 console.log("Redirecting to login (Not logged in)");
                 safeNavigate('index.html');
+            } else {
+                hideBootLoader();
             }
         }
     });
+
+    if (isPublic && typeof window !== 'undefined') {
+        const done = () => hideBootLoader(60);
+        if (document.readyState === 'complete') done();
+        else window.addEventListener('load', done, { once: true });
+    }
 }
 
 function listenToGlobalNotifs(uid) {

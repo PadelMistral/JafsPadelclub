@@ -1,11 +1,26 @@
-﻿/* js/modules/ui-loader.js - Dynamic Layout Injection v5.0 */
-import { getDocument, auth, db, subscribeCol, getDocsSafe } from '../firebase-service.js';
+﻿/* js/modules/ui-loader.js - Dynamic Layout Injection v5.5 */
+import { getDocument, auth, db, subscribeCol, getDocsSafe, observerAuth as guardAuth } from '../firebase-service.js';
 import { initThemeSystem } from './theme-manager.js';
 
 // Initialize theme system immediately  
 initThemeSystem();
 
-const PUBLIC_PAGES = ['index.html', 'registro.html', 'recuperar.html'];
+// --- GLOBAL SESSION GUARD ---
+// Redirect to login if unauthenticated on a private page
+if (typeof window !== 'undefined') {
+    guardAuth((user) => {
+        const path = window.location.pathname.toLowerCase();
+        const publicPages = ['index.html', 'registro.html', 'terms.html', 'privacy.html'];
+        const isPublic = publicPages.some(p => path.includes(p)) || path === '/' || path.endsWith('/') || path === '';
+        
+        if (!user && !isPublic) {
+            console.log("🔒 Access Denied: Redirecting to Login");
+            window.location.replace('index.html');
+        }
+    });
+}
+
+const PUBLIC_PAGES = ['index.html', 'registro.html'];
 
 function emitToast(title, body = '', type = 'info') {
     if (typeof window !== 'undefined' && typeof window.__appToast === 'function') {
@@ -22,7 +37,7 @@ function emitToast(title, body = '', type = 'info') {
  */
 function isPublicPage() {
     const path = window.location.pathname.toLowerCase();
-    const publicPages = ['index.html', 'registro.html', 'recuperar.html', 'terms.html', 'privacy.html'];
+    const publicPages = ['index.html', 'registro.html', 'terms.html', 'privacy.html'];
     
     // If it's explicitly public
     if (publicPages.some(p => path.includes(p))) return true;
@@ -34,6 +49,20 @@ function isPublicPage() {
     return false;
 }
 
+function getUserInitials(name = "") {
+    const clean = String(name || "").trim();
+    if (!clean) return "JP";
+    const parts = clean.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+}
+
+function buildHeaderAvatarMarkup(userData = null) {
+    const displayName = userData?.nombreUsuario || userData?.nombre || "Jugador";
+    const photo = (userData?.fotoPerfil || userData?.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0f172a&color=fff&size=96`).trim();
+    return `<img src="${photo}" alt="Perfil" id="header-avatar-img">`;
+}
+
 /**
  * Injects the App Header with logo, admin link (if admin), and profile
  */
@@ -43,9 +72,21 @@ export async function injectHeader(userData = null) {
     const header = document.createElement('header');
     header.className = 'app-header';
     
-    const photo = userData?.fotoPerfil || userData?.fotoURL || './imagenes/default-avatar.png';
-    const pageTitle = document.title.includes('-') ? document.title.split('-')[1].trim() : 
-                      document.title.includes('|') ? document.title.split('|')[0].trim() : 'Inicio';
+    const currentPage = (window.location.pathname.split('/').pop() || 'home.html').toLowerCase();
+    const sectionMap = {
+        'home.html': 'HOME',
+        'calendario.html': 'CALENDARIO',
+        'diario.html': 'DIARIO',
+        'puntosranking.html': 'RANKING',
+        'historial.html': 'HISTORIAL',
+        'perfil.html': 'PERFIL',
+        'palas.html': 'PALAS',
+        'eventos.html': 'EVENTOS',
+        'normas.html': 'NORMAS',
+        'notificaciones.html': 'NOTIFICACIONES',
+        'admin.html': 'ADMIN'
+    };
+    const pageTitle = sectionMap[currentPage] || 'SECCIÓN';
     
     // Check Admin rights locally
     const isAdmin = userData?.rol === 'Admin' || (auth.currentUser?.email === 'Juanan221091@gmail.com');
@@ -73,7 +114,7 @@ export async function injectHeader(userData = null) {
                 <span class="notification-badge" id="notif-badge" style="display:none">0</span>
             </div>
             <div class="header-avatar avatar-premium" onclick="window.location.href='perfil.html'" id="header-avatar-container" title="Mi Perfil">
-                <img src="${photo}" alt="Perfil" id="header-avatar-img">
+                ${buildHeaderAvatarMarkup(userData)}
             </div>
         </div>
     `;
@@ -105,11 +146,10 @@ export async function injectHeader(userData = null) {
  * Updates header with live user data
  */
 export function updateHeader(userData) {
-    const img = document.getElementById('header-avatar-img');
+    const container = document.getElementById('header-avatar-container');
     const roleLink = document.getElementById('admin-header-link');
-    if (img && userData) {
-        const photo = userData.fotoPerfil || userData.fotoURL || './imagenes/default-avatar.png';
-        img.src = photo;
+    if (container && userData) {
+        container.innerHTML = buildHeaderAvatarMarkup(userData);
         
         // Show/Hide admin link based on current data
         if (roleLink) {
@@ -129,23 +169,32 @@ export async function injectNavbar(activePage) {
     nav.className = 'bottom-nav';
     
     const icons = {
-        home: `<img src="./icons/Gemini_Generated_Image_us6clzus6clzus6c.png" alt="Inicio">`,
-        ranking: `<img src="./icons/Gemini_Generated_Image_345lua345lua345l.png" alt="Élite">`,
-        calendar: `<img src="./icons/Gemini_Generated_Image_hxnpjdhxnpjdhxnp.png" alt="Jugar">`,
-        events: `<img src="./icons/Gemini_Generated_Image_5wpxhq5wpxhq5wpx.png" alt="Diario">`,
-        history: `<img src="./icons/Gemini_Generated_Image_ncwlq4ncwlq4ncwl.png" alt="Pasado">`
+        home: `<i class="fas fa-house-chimney-window"></i>`,
+        ranking: `<i class="fas fa-ranking-star"></i>`,
+        calendar: `<i class="fas fa-calendar-days"></i>`,
+        events: `<i class="fas fa-book-open"></i>`,
+        history: `<i class="fas fa-clock-rotate-left"></i>`
     };
 
     const items = [
         { id: 'home', icon: icons.home, label: 'Inicio', link: 'home.html', color: 'cyan' },
         { id: 'ranking', icon: icons.ranking, label: 'Ranking', link: 'puntosRanking.html', color: 'gold' },
-        { id: 'calendar', icon: icons.calendar, label: 'Jugar', link: 'calendario.html', color: 'cyan' },
+        { id: 'calendar', icon: icons.calendar, label: 'Pistas', link: 'calendario.html', center: true },
         { id: 'events', icon: icons.events, label: 'Diario', link: 'diario.html', color: 'magenta' },
         { id: 'history', icon: icons.history, label: 'Historial', link: 'historial.html', color: 'lime' }
     ];
 
 
     nav.innerHTML = items.map(item => {
+        if (item.center) {
+            return `
+                <a href="${item.link}" class="nav-item center-item ${activePage === item.id ? 'active' : ''}">
+                    <div class="nav-icon-wrap shadow-glow-primary">
+                        ${item.icon}
+                    </div>
+                </a>
+            `;
+        }
         return `
             <a href="${item.link}" class="nav-item ${activePage === item.id ? 'active' : ''}" data-color="${item.color}">
                 <div class="nav-icon-box">
@@ -197,7 +246,7 @@ export function setupModals() {
  * Loading Manager with Session Storage to avoid repeat on Home
  */
 export function showLoading(message = 'Sincronizando Circuito...', force = false) {
-    if (!force && sessionStorage.getItem('initial_load_done')) return;
+    // Removed session storage check to prevent flickering on internal navigation
     
     let loader = document.getElementById('global-loader');
     if (!loader) {
@@ -239,10 +288,26 @@ export function showLoading(message = 'Sincronizando Circuito...', force = false
         loader.classList.add('active');
         loader.querySelector('.loader-text').textContent = message;
     }
+
+    if (window.__globalLoaderTimeoutId) {
+        clearTimeout(window.__globalLoaderTimeoutId);
+    }
+    window.__globalLoaderTimeoutId = setTimeout(() => {
+        const activeLoader = document.getElementById('global-loader');
+        if (!activeLoader || !activeLoader.classList.contains('active')) return;
+        activeLoader.classList.remove('active', 'fade-out');
+        if (typeof window.__appToast === 'function') {
+            window.__appToast('Carga extendida', 'Mostrando contenido para evitar bloqueo visual.', 'warning');
+        }
+    }, 9000);
 }
 
 export function hideLoading() {
     const loader = document.getElementById('global-loader');
+    if (window.__globalLoaderTimeoutId) {
+        clearTimeout(window.__globalLoaderTimeoutId);
+        window.__globalLoaderTimeoutId = null;
+    }
     if (loader) {
         loader.classList.add('fade-out');
         sessionStorage.setItem('initial_load_done', 'true');
@@ -268,4 +333,3 @@ window.clearGlobalNotifications = async () => {
     await batch.commit();
     emitToast('Limpieza Completa', 'Se han borrado todas las notificaciones.', 'success');
 };
-

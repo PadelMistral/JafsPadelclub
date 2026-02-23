@@ -50,6 +50,7 @@ let homeBootUid = null;
 let lastOnlineRefreshAt = 0;
 let welcomeLiveClockInterval = null;
 let welcomeLiveWeatherAt = 0;
+const finishedMatchModalShown = new Set();
 const PROVISIONAL_MATCHES = 5;
 const userProfileCache = new Map();
 const shownNotifToastIds = new Set();
@@ -68,6 +69,29 @@ function calculateBasePoints(level) {
   const pts = Math.round(1000 + (l - 2.5) * 400);
   console.log(`Calculando puntos base para nivel ${l}: ${pts}`);
   return pts;
+}
+
+function getLevelProgressState(rawNivel, rawPuntos) {
+  const parsedLevel = parseFloat(rawNivel || 2.5) || 2.5;
+  const currentLevel = Math.max(1, Math.min(7, Number(parsedLevel.toFixed(2))));
+  const puntos = Number(rawPuntos || 1000);
+  const prevLevel = Math.max(1, Number((currentLevel - 0.01).toFixed(2)));
+  const nextLevel = Math.min(7, Number((currentLevel + 0.01).toFixed(2)));
+
+  const eloAtLevel = Math.round(1000 + (currentLevel - 2.5) * 400);
+  const downThreshold = Math.max(0, eloAtLevel - 15);
+  const upThreshold = eloAtLevel + 15;
+  const band = Math.max(1, upThreshold - downThreshold);
+  const progressPct = Math.max(0, Math.min(100, ((puntos - downThreshold) / band) * 100));
+
+  return {
+    currentLevel,
+    prevLevel,
+    nextLevel,
+    progressPct,
+    pointsToUp: Math.max(0, Math.ceil(upThreshold - puntos)),
+    pointsToDown: Math.max(0, Math.ceil(puntos - downThreshold)),
+  };
 }
 
 function toDateSafe(value) {
@@ -122,6 +146,27 @@ function getWeatherAnimClass(code) {
   return "weather-anim-storm";
 }
 
+function applyWelcomeNameFit(displayNameRaw = "") {
+  const el = document.getElementById("user-name");
+  if (!el) return;
+  const displayName = String(displayNameRaw || "Jugador").trim();
+  el.textContent = displayName.toUpperCase();
+  const len = displayName.length;
+  let size = "clamp(1.55rem, 6.2vw, 2.2rem)";
+  if (len >= 22) size = "clamp(1.02rem, 4.5vw, 1.36rem)";
+  else if (len >= 18) size = "clamp(1.12rem, 4.9vw, 1.55rem)";
+  else if (len >= 14) size = "clamp(1.24rem, 5.5vw, 1.78rem)";
+  else if (len >= 10) size = "clamp(1.38rem, 5.9vw, 2rem)";
+  el.style.fontSize = size;
+}
+
+function getWelcomeWeatherClass(code = 0, rainMm = 0, windKmh = 0) {
+  if (Number(windKmh || 0) >= 25) return "weather-wind";
+  if (Number(rainMm || 0) > 0.1 || code >= 51) return "weather-rain";
+  if (code <= 1) return "weather-sun";
+  return "weather-cloud";
+}
+
 function buildWeatherPill(date, compact = false) {
   if (!weatherForecast?.hourly) return "";
   const hourIdx = weatherForecast.hourly.time.findIndex((t) => {
@@ -147,7 +192,7 @@ async function getCachedUserProfile(uid) {
     id: uid,
     name: raw?.nombreUsuario || raw?.nombre || "Jugador",
     level: Number(raw?.nivel || 2.5),
-    photo: raw?.fotoPerfil || raw?.fotoURL || "./imagenes/Logojafs.png",
+    photo: raw?.fotoPerfil || raw?.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(raw?.nombreUsuario || raw?.nombre || 'P')}&background=random&color=fff`,
     role: raw?.rol || "Jugador",
     points: Math.round(Number(raw?.puntosRanking || 1000)),
     streak: Number(raw?.rachaActual || 0),
@@ -173,7 +218,7 @@ async function getDetailedMatchSlots(match) {
           id: null,
           name: "Libre",
           level: null,
-          photo: "./imagenes/Logojafs.png",
+          photo: `https://ui-avatars.com/api/?name=L&background=1e293b&color=fff`,
           isEmpty: true,
           isGuest: false,
           isMe: false,
@@ -185,7 +230,7 @@ async function getDetailedMatchSlots(match) {
           id: uid,
           name: uid.split("_")[1] || "Invitado",
           level: null,
-          photo: "./imagenes/Logojafs.png",
+          photo: `https://ui-avatars.com/api/?name=I&background=334155&color=fff`,
           isEmpty: false,
           isGuest: true,
           isMe: false,
@@ -288,7 +333,7 @@ async function injectOnlineCount() {
 document.addEventListener("DOMContentLoaded", () => {
   // AUTO-CLEAN CACHE ON HARD RELOAD OR VERSION MISMATCH
   if (localStorage.getItem('app_version') !== '7.0') {
-      console.log("Actualizando versiÃ³n... Limpiando cachÃ©.");
+      console.log("Actualizando versión... Limpiando caché.");
       sessionStorage.clear();
       localStorage.setItem('app_version', '7.0');
   }
@@ -320,7 +365,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (!ud) {
-        console.warn("Perfil no encontrado o error de red. Manteniendo sesiÃ³n...");
+        console.warn("Perfil no encontrado o error de red. Manteniendo sesión...");
         showToast("Sincronizando...", "Verificando credenciales en la Matrix", "info");
         // Do NOT redirect here to avoid ghost redirects on network glitches
         // Just let it try again or fail gracefully on UI
@@ -332,7 +377,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const isApproved = ud.status === 'approved' || ud.rol === 'Admin';
     if (!isApproved) {
        console.warn("Usuario no aprobado. Acceso denegado.");
-       showToast("ACCESO DENEGADO", "Tu cuenta estÃ¡ pendiente de aprobaciÃ³n.", "warning");
+       showToast("ACCESO DENEGADO", "Tu cuenta está pendiente de aprobación.", "warning");
        setTimeout(async () => {
            await auth.signOut();
            safeAuthRedirect('index.html?msg=pending');
@@ -390,12 +435,11 @@ document.addEventListener("DOMContentLoaded", () => {
             setupStatInteractions();
             syncRivalIntelligence(user.uid);
             renderOpenMatches(); // New function
-            startWelcomeLiveWidgets();
             
             // Personalized welcome toast
             const welcomeName = localStorage.getItem("first_login_welcome");
             if (welcomeName) {
-                showToast(`Â¡BIENVENIDO, ${welcomeName.toUpperCase()}!`, "Tu panel de control estÃ¡ listo.", "success");
+                showToast(`¡BIENVENIDO, ${welcomeName.toUpperCase()}!`, "Tu panel de control está listo.", "success");
                 localStorage.removeItem("first_login_welcome");
             }
             
@@ -408,6 +452,8 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             updateHeader(data); // Lightweight update
         }
+
+        startWelcomeLiveWidgets();
       }
     });
 
@@ -425,7 +471,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const myMatches = allMatches.filter((m) => m.jugadores?.includes(currentUser?.uid));
         renderPendingResultReminderWithFallback(myMatches);
         renderCircuitMatches(allMatches);
+        checkAndPromptFinishedMatches(myMatches);
     }, 60000);
+
+    checkAndPromptFinishedMatches(allMatches.filter((m) => m.jugadores?.includes(currentUser?.uid)));
   });
 
   // Filter tabs logic...
@@ -455,11 +504,12 @@ async function updateDashboard(data) {
 
   const displayName =
     data.nombreUsuario || data.nombre || currentUser?.displayName || "Jugador";
-  if (userNameEl) userNameEl.textContent = displayName.toUpperCase();
+  if (userNameEl) applyWelcomeNameFit(displayName);
   if (greetingEl) greetingEl.textContent = greet;
+  const fallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff`;
+  const avatarSrc = data.fotoPerfil || data.fotoURL || currentUser?.photoURL || fallback;
   if (welcomeAvatarEl) {
-    welcomeAvatarEl.src =
-      data.fotoPerfil || data.fotoURL || currentUser?.photoURL || "./imagenes/Logojafs.png";
+    welcomeAvatarEl.src = avatarSrc;
     welcomeAvatarEl.alt = `Avatar de ${displayName}`;
   }
 
@@ -540,14 +590,9 @@ async function updateDashboard(data) {
   if (wrEl) wrEl.textContent = `${winrate}%`;
   if (lvlEl) lvlEl.textContent = level;
 
-  // Level Progress (Home) - Optimized V9.0
+  // Level Progress (Home) - exact points and percentage by current level band
   const lvlNum = levelNum || 2.5;
-  const currentBracket = Math.floor(lvlNum * 2) / 2;
-  const progress = ((lvlNum - currentBracket) / 0.5) * 100;
-  const prevStep = Math.max(1, Number((lvlNum - 0.01).toFixed(2)));
-  const nextStep = Number((lvlNum + 0.01).toFixed(2));
-  const pointsToUp01 = Math.max(1, Math.ceil((nextStep - lvlNum) * 400));
-  const pointsToDown01 = Math.max(1, Math.ceil((lvlNum - prevStep) * 400));
+  const levelState = getLevelProgressState(lvlNum, currentPts);
 
   const homeBar = document.getElementById("home-level-bar");
   const homePts = document.getElementById("home-level-points");
@@ -555,16 +600,16 @@ async function updateDashboard(data) {
   const homeCurrent = document.getElementById("home-level-current");
   const homeUpper = document.getElementById("home-level-upper");
 
-  if (homeBar) homeBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+  if (homeBar) homeBar.style.width = `${levelState.progressPct.toFixed(2)}%`;
   if (homePts) {
     homePts.innerHTML = `
-      <span class="lvl-shift-chip up">+${pointsToUp01} PTS · NV ${nextStep.toFixed(2)}</span>
-      <span class="lvl-shift-chip down">-${pointsToDown01} PTS · NV ${prevStep.toFixed(2)}</span>
+      <span class="lvl-shift-chip up">+${levelState.pointsToUp} PTS · ${levelState.progressPct.toFixed(2)}%</span>
+      <span class="lvl-shift-chip down">-${levelState.pointsToDown} PTS · ${(100 - levelState.progressPct).toFixed(2)}%</span>
     `;
   }
-  if (homeLower) homeLower.textContent = prevStep.toFixed(2);
-  if (homeCurrent) homeCurrent.textContent = `NIVEL ${lvlNum.toFixed(2)}`;
-  if (homeUpper) homeUpper.textContent = nextStep.toFixed(2);
+  if (homeLower) homeLower.textContent = levelState.prevLevel.toFixed(2);
+  if (homeCurrent) homeCurrent.textContent = `NIVEL ${levelState.currentLevel.toFixed(2)}`;
+  if (homeUpper) homeUpper.textContent = levelState.nextLevel.toFixed(2);
 
   // Get rank
   window.getDocsSafe(
@@ -650,15 +695,15 @@ async function updateDashboard(data) {
       tipBox.innerHTML = `
                 <i class="fas fa-brain text-xl text-accent mb-1"></i>
                 <span class="font-bold text-xs text-white uppercase">ESTRATEGIA</span>
-                <span class="text-xs text-muted">PrepÃ¡rate para el reto</span>
+                <span class="text-xs text-muted">Prepárate para el reto</span>
             `;
       tipBox.onclick = () =>
-        showToast("TÃ¡ctica", `EnfÃ³cate en tu juego hoy.`, "info");
+        showToast("Táctica", `Enfócate en tu juego hoy.`, "info");
     } else {
       tipBox.innerHTML = `
                 <i class="fas fa-calendar-star text-xl text-primary mb-1"></i>
                 <span class="font-bold text-xs text-white uppercase">EVENTOS</span>
-                <span class="text-xs text-muted">Ver prÃ³ximos eventos</span>
+                <span class="text-xs text-muted">Ver próximos eventos</span>
             `;
       tipBox.onclick = () => (window.location.href = "eventos.html");
     }
@@ -689,12 +734,21 @@ async function loadLastResult() {
     }
 
     const log = logs.docs[0].data();
-    const won = Number(log.diff || 0) >= 0;
     const match =
       (log.matchId ? await getDocument("partidosReto", log.matchId) : null) ||
       (log.matchId ? await getDocument("partidosAmistosos", log.matchId) : null);
+    let won = Number(log.diff || 0) > 0;
+    if (match && Array.isArray(match.jugadores)) {
+      const myIdx = match.jugadores.indexOf(currentUser.uid);
+      const winnerTeam = resolveWinnerTeam(match);
+      if (myIdx >= 0 && (winnerTeam === 1 || winnerTeam === 2)) {
+        won = myIdx < 2 ? winnerTeam === 1 : winnerTeam === 2;
+      }
+    }
     const score = match?.resultado?.sets || log?.details?.sets || "Resultado registrado";
-    const dateObj = match?.fecha?.toDate ? match.fecha.toDate() : new Date();
+    const dateObj = match?.fecha?.toDate
+      ? match.fecha.toDate()
+      : (log?.timestamp?.toDate ? log.timestamp.toDate() : new Date());
     const when = dateObj.toLocaleDateString("es-ES", {
       weekday: "short",
       day: "numeric",
@@ -1081,7 +1135,7 @@ function buildNextMatchAiPrediction(match, teamA, teamB) {
     return {
       probA: null,
       headline: "Me falta una pareja completa para mojarme",
-      summary: "Cuando el 2vs2 esté cerrado, te doy favorito y lectura táctica personalizada.",
+      summary: "Cuando el 2vs2 está cerrado, te doy favorito y lectura táctica personalizada.",
       editorial: "Sin alineación cerrada no hay pronóstico serio.",
       badge: "AÚN ABIERTO",
     };
@@ -1216,13 +1270,25 @@ async function renderNextMatch(match) {
 
   if (!match) {
     container.innerHTML = `
-            <div class="empty-state-card-v7 animate-up">
-                <div class="empty-icon-v7"><i class="fas fa-calendar-plus text-primary"></i></div>
-                <div class="flex-col center">
-                    <span class="empty-title-v7 italic">DIARIO LIBRE</span>
-                    <button class="btn-booking-v7 mt-6" onclick="window.location.href='calendario.html'">RESERVAR PISTA</button>
-                </div>
-            </div>
+      <section class="card-premium-v7 p-4 animate-up next-match-empty-block">
+        <div class="next-match-header-v11 next-match-header-v13">
+          <span class="next-match-title-v11">PROXIMO PARTIDO</span>
+          <span class="next-match-sub-v11">Tu agenda principal del club</span>
+        </div>
+        <div class="next-match-empty-inner">
+          <div class="next-match-empty-icon reserve-icon-shell">
+            <i class="fas fa-calendar-plus"></i>
+          </div>
+          <div class="next-match-empty-copy">
+            <span class="next-match-empty-title">NO TIENES PROXIMO PARTIDO</span>
+            <span class="next-match-empty-sub">Reserva una pista o únete a partidos abiertos para aparecer aquí.</span>
+          </div>
+          <button class="btn-booking-v7 reserve-track-btn" onclick="window.location.href='calendario.html'">
+            <span class="reserve-track-icon"><i class="fas fa-tennis-ball"></i></span>
+            <span>RESERVAR PISTA</span>
+          </button>
+        </div>
+      </section>
         `;
     return;
   }
@@ -1253,20 +1319,9 @@ async function renderCircuitMatches(matches) {
   const container = document.getElementById("circuit-matches-panel");
   if (!container) return;
 
-  const uid = currentUser?.uid;
   let list = Array.isArray(matches) ? [...matches] : [];
 
-  list = list.filter((m) => {
-    if (m.visibility === "private") {
-      return (
-        m.organizerId === uid ||
-        m.creador === uid ||
-        (m.invitedUsers || []).includes(uid) ||
-        (m.jugadores || []).includes(uid)
-      );
-    }
-    return true;
-  });
+  list = list.filter((m) => m.visibility !== "hidden");
 
   list = list
     .filter((m) => !isFinishedMatch(m) && !isCancelledMatch(m) && !isExpiredOpenMatch(m))
@@ -1442,7 +1497,7 @@ async function loadInsights() {
         w.current.wind_speed_10m,
       );
       if (quickWeather)
-        quickWeather.innerHTML = `<i class="fas ${cond.icon} mr-1 ${cond.color}"></i> ${cond.condition} - ${Math.round(w.current.temperature_2m)}Â°C`;
+        quickWeather.innerHTML = `<i class="fas ${cond.icon} mr-1 ${cond.color}"></i> ${cond.condition} - ${Math.round(w.current.temperature_2m)}°C`;
 
       if (weatherList) {
         const daily = w.daily || {
@@ -1456,11 +1511,11 @@ async function loadInsights() {
                             <div class="flex-col gap-1">
                                 <span class="text-xs font-bold text-muted uppercase tracking-widest">Estado de la Pista</span>
                                 <span class="text-xl font-black text-white">${cond.condition.toUpperCase()}</span>
-                                <span class="text-xs text-muted italic">${cond.advice || "Condiciones ideales para el pÃ¡del."}</span>
+                                <span class="text-xs text-muted italic">${cond.advice || "Condiciones ideales para el pádel."}</span>
                             </div>
                             <div class="flex-col items-end gap-0">
                                 <i class="fas ${cond.icon} text-3xl ${cond.color} mb-1"></i>
-                                <span class="text-xs font-bold text-white">${Math.round(w.current.temperature_2m)}Â°C</span>
+                                <span class="text-xs font-bold text-white">${Math.round(w.current.temperature_2m)}°C</span>
                                 <span class="text-xs text-muted uppercase font-black">${w.current.wind_speed_10m} km/h viento</span>
                             </div>
                         </div>
@@ -1476,7 +1531,7 @@ async function loadInsights() {
                                     <div class="flex-col center flex-1 ${isToday ? "opacity-100" : "opacity-40"}">
                                         <span class="text-xs font-bold uppercase">${isToday ? "Hoy" : d.toLocaleDateString("es-ES", { weekday: "short" })}</span>
                                         <i class="fas ${getIconFromCode(daily.weather_code[i])} text-sm my-1 text-primary"></i>
-                                        <span class="text-xs font-bold">${Math.round(daily.temperature_2m_max[i])}Â°</span>
+                                        <span class="text-xs font-bold">${Math.round(daily.temperature_2m_max[i])}°</span>
                                     </div>
                                 `;
                               })
@@ -1553,7 +1608,7 @@ async function initMatrixFeed() {
         <div class="feed-node opacity-40">
             <div class="node-pulse bg-white/20"></div>
             <i class="fas fa-satellite opacity-40 ml-1"></i>
-            <span class="font-black opacity-60 uppercase text-[9px]">SincronizaciÃ³n estable: Sin anomalÃ­as</span>
+            <span class="font-black opacity-60 uppercase text-[9px]">Sincronización estable: Sin anomalías</span>
         </div>
       `;
       return;
@@ -1758,7 +1813,7 @@ function renderActiveMode(user) {
                   <i class="fas ${iconClass} text-lg ${colorClass}"></i>
               </div>
               <div class="flex-col flex-1">
-                  <span class="text-[9px] font-bold text-muted uppercase tracking-widest">INTERVENCIÃ“N ACTIVA</span>
+                  <span class="text-[9px] font-bold text-muted uppercase tracking-widest">INTERVENCIÓN ACTIVA</span>
                   <span class="text-xs font-black text-white italic leading-tight">${intervention}</span>
               </div>
           </div>
@@ -1777,7 +1832,7 @@ function renderActiveMode(user) {
               <div class="ai-metric-chip">
                   <i class="fas fa-crosshairs text-purple-400"></i>
                   <span>${metrics.predictiveConfidence || 80}%</span>
-                  <span class="label">PRECISIÃ“N</span>
+                  <span class="label">PRECISIÓN</span>
               </div>
               <div class="ai-metric-chip">
                   <i class="fas fa-chart-line ${(metrics.eloTrend || 0) >= 0 ? 'text-sport-green' : 'text-red-400'}"></i>
@@ -1942,7 +1997,7 @@ function setupStatInteractions() {
         el.onclick = () => showVisualBreakdown(title, msg);
     };
 
-    bind('home-stat-level', 'FÃ³rmula de Nivel', 'Calculado basÃ¡ndose en ELO: (ELO-1000)/400 + 2.5. Se pondera por dificultad del rival.');
+    bind('home-stat-level', 'Fórmula de Nivel', 'Calculado basándose en ELO: (ELO-1000)/400 + 2.5. Se pondera por dificultad del rival.');
     bind('home-stat-points', 'Puntos Ranking', 'Puntos ELO acumulados. Suman por victorias, restan por derrotas considerando el ELO esperado.');
     bind('home-stat-streak', 'Efecto Racha', 'Ratio de victorias recientes. Activa multiplicadores x1.25 (3), x1.6 (6), x2.5 (10).');
     
@@ -1959,14 +2014,28 @@ function setupStatInteractions() {
 async function startWelcomeLiveWidgets() {
     const timeEl = document.getElementById("welcome-live-time");
     const weatherEl = document.getElementById("welcome-live-weather");
+    const welcomeCard = document.querySelector(".welcome-hero-card");
     if (!timeEl && !weatherEl) return;
 
     const renderClock = () => {
         if (!timeEl) return;
         const now = new Date();
-        const hh = now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        const dd = now.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
-        timeEl.innerHTML = `<i class="fas fa-clock"></i> ${hh} · ${dd}`;
+        const hh = now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+        const ss = now.toLocaleTimeString("es-ES", { second: "2-digit" });
+        const weekday = now.toLocaleDateString("es-ES", { weekday: "short" }).toUpperCase();
+        const dd = now.toLocaleDateString("es-ES", { day: "2-digit", month: "short" }).toUpperCase();
+        const mainEl = timeEl.querySelector(".time-main");
+        const secEl = timeEl.querySelector(".time-sec");
+        const subEl = timeEl.querySelector(".time-sub");
+        if (mainEl && subEl) {
+          const pureMain = mainEl.childNodes[0];
+          if (pureMain) pureMain.nodeValue = hh;
+          else mainEl.textContent = hh;
+          if (secEl) secEl.textContent = `:${ss}`;
+          subEl.textContent = `${weekday} ${dd}`;
+        } else {
+          timeEl.innerHTML = `<i class="fas fa-clock"></i> ${hh}:${ss} · ${weekday} ${dd}`;
+        }
     };
 
     renderClock();
@@ -1986,10 +2055,104 @@ async function startWelcomeLiveWidgets() {
             Number(w?.current?.rain || 0),
             Number(w?.current?.wind_speed_10m || 0),
         );
-        weatherEl.innerHTML = `<i class="fas ${cond.icon}"></i> Benicalap: ${cond.condition} · ${temp}°C`;
+        const wind = Number(w?.current?.wind_speed_10m || 0);
+        const wxClass = getWelcomeWeatherClass(Number(w?.current?.weather_code || 0), Number(w?.current?.rain || 0), wind);
+        weatherEl.classList.remove("weather-sun", "weather-cloud", "weather-rain", "weather-wind");
+        weatherEl.classList.add(wxClass);
+        if (welcomeCard) {
+          welcomeCard.classList.remove("weather-tone-sun", "weather-tone-cloud", "weather-tone-rain", "weather-tone-wind");
+          welcomeCard.classList.add(
+            wxClass === "weather-sun" ? "weather-tone-sun" :
+            wxClass === "weather-rain" ? "weather-tone-rain" :
+            wxClass === "weather-wind" ? "weather-tone-wind" :
+            "weather-tone-cloud"
+          );
+        }
+        const iconEl = weatherEl.querySelector(".weather-main-icon");
+        const tempEl = weatherEl.querySelector(".weather-temp");
+        const condEl = weatherEl.querySelector(".weather-cond");
+        if (iconEl && tempEl && condEl) {
+          iconEl.className = `fas ${cond.icon} weather-main-icon`;
+          tempEl.textContent = `${temp}°C`;
+          condEl.textContent = `${cond.condition}`;
+        } else {
+          weatherEl.innerHTML = `<i class="fas ${cond.icon}"></i> Benicalap: ${cond.condition} · ${temp}°C`;
+        }
     } catch (_) {
-        weatherEl.innerHTML = `<i class="fas fa-cloud"></i> Benicalap: clima no disponible`;
+        weatherEl.classList.remove("weather-sun", "weather-rain", "weather-wind");
+        weatherEl.classList.add("weather-cloud");
+        if (welcomeCard) {
+          welcomeCard.classList.remove("weather-tone-sun", "weather-tone-rain", "weather-tone-wind");
+          welcomeCard.classList.add("weather-tone-cloud");
+        }
+        const iconEl = weatherEl.querySelector(".weather-main-icon");
+        const tempEl = weatherEl.querySelector(".weather-temp");
+        const condEl = weatherEl.querySelector(".weather-cond");
+        if (iconEl && tempEl && condEl) {
+          iconEl.className = "fas fa-cloud weather-main-icon";
+          tempEl.textContent = "--°C";
+          condEl.textContent = "Clima no disponible";
+        } else {
+          weatherEl.innerHTML = `<i class="fas fa-cloud"></i> Benicalap: clima no disponible`;
+        }
     }
+}
+
+function checkAndPromptFinishedMatches(myMatches = []) {
+  const uid = currentUser?.uid;
+  if (!uid || !Array.isArray(myMatches) || !myMatches.length) return;
+
+  const now = Date.now();
+  const pending = myMatches
+    .filter((m) => {
+      const players = (m.jugadores || []).filter(Boolean);
+      if (!players.includes(uid)) return false;
+      if (players.length < 4) return false;
+      if (isCancelledMatch(m)) return false;
+      const start = (m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha)).getTime();
+      if (!Number.isFinite(start)) return false;
+      return now >= start + 90 * 60 * 1000;
+    })
+    .sort((a, b) => {
+      const ad = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha);
+      const bd = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha);
+      return ad - bd;
+    });
+
+  if (!pending.length) return;
+  const match = pending[0];
+  const key = `${match.col}:${match.id}`;
+  const localKey = `finished_prompt_${key}`;
+  if (finishedMatchModalShown.has(key) || sessionStorage.getItem(localKey) === "1") return;
+
+  finishedMatchModalShown.add(key);
+  sessionStorage.setItem(localKey, "1");
+
+  const hasResult = !!match.resultado?.sets;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay active";
+  overlay.style.zIndex = "11000";
+  overlay.innerHTML = `
+    <div class="modal-card glass-strong animate-up" style="max-width:390px">
+      <div class="modal-header">
+        <span class="modal-title font-black italic tracking-widest">PARTIDO FINALIZADO</span>
+        <button class="close-btn" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body p-4 flex-col gap-3">
+        <p class="text-[10px] text-white/75">Tu partido ya puede cerrarse. ${hasResult ? "Añade tu entrada del diario para sumar bonus." : "Anota el resultado y luego registra tu diario para sumar bonus."}</p>
+        <button class="btn-premium-v7 w-full py-3 uppercase text-[10px] font-black tracking-[2px]" onclick="openMatch('${match.id}', '${match.col}')">
+          ${hasResult ? "VER PARTIDO" : "ANOTAR RESULTADO"}
+        </button>
+        <button class="btn-premium-v7 w-full py-3 uppercase text-[10px] font-black tracking-[2px]" onclick="window.location.href='diario.html?matchId=${match.id}'">
+          AÑADIR DIARIO + BONUS
+        </button>
+      </div>
+    </div>
+  `;
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
 }
 
 function showVisualBreakdown(title, content) {
@@ -2037,11 +2200,34 @@ window.switchAIHubTab = (tab = "actions") => {
 
 window.runAIQuickCommand = async (command) => {
     if (!command) return;
+    const mapQuickToIntent = (raw = "") => {
+      const q = String(raw).toLowerCase();
+      if (q.includes("rival intelligence") || q.includes("nemesis") || q.includes("socio") || q.includes("victima")) {
+        return { intent: "CMD_RIVAL_INTEL", label: "Rivales" };
+      }
+      if (q.includes("progreso") || q.includes("subir") || q.includes("bajar")) {
+        return { intent: "CMD_LEVEL_PROGRESS", label: "Nivel" };
+      }
+      if (q.includes("resumen") || q.includes("ranking") || q.includes("puntos") || q.includes("nivel")) {
+        return { intent: "CMD_STATS_READ", label: "Resumen" };
+      }
+      if (q.includes("ultimo partido") || q.includes("último partido")) {
+        return { intent: "CMD_LAST_MATCH", label: "Último partido" };
+      }
+      if (q.includes("partidos abiertos") || q.includes("me convienen")) {
+        return { intent: "CMD_OPEN_MATCHES", label: "Partidos abiertos" };
+      }
+      return { intent: raw, label: raw };
+    };
+
+    const mapped = mapQuickToIntent(command);
     const { toggleChat, sendMessage } = await import("./modules/vecina-chat.js?v=6.5");
     const panel = document.getElementById("vecina-chat-panel");
     const isOpen = panel?.classList.contains("open");
     if (!isOpen) await toggleChat();
-    await sendMessage(command);
+    const input = document.getElementById("ai-input-field");
+    if (input) input.dataset.displayLabel = mapped.label;
+    await sendMessage(mapped.intent);
 };
 
 window.aiAction = (action) => {
@@ -2217,7 +2403,7 @@ window.analyzeRival = async (rivalId) => {
                 <div class="absolute inset-0 opacity-20" style="background: radial-gradient(circle at top right, var(--${themeColor}), transparent 70%);"></div>
                 
                 <div class="relative z-20">
-                    <span class="text-[9px] font-black uppercase text-white/60 tracking-[3px]">EXPEDIENTE TÃCTICO</span>
+                    <span class="text-[9px] font-black uppercase text-white/60 tracking-[3px]">EXPEDIENTE TÁCTICO</span>
                     <h2 class="text-2xl font-black italic text-white leading-none mt-1 tracking-tighter">${rivalName.toUpperCase()}</h2>
                     <div class="flex-row items-center gap-2 mt-3">
                          <div class="badge-premium sm" style="background: var(--${themeColor}); color: black; border:none">
@@ -2249,7 +2435,7 @@ window.analyzeRival = async (rivalId) => {
 
                 <div class="flex-row center">
                     <div class="px-4 py-1 rounded-full border border-white/10 bg-white/5">
-                        <span class="text-[9px] font-black text-muted uppercase tracking-widest">WINRATE HISTÃ“RICO: <span class="text-white">${h2h.winRate}%</span></span>
+                        <span class="text-[9px] font-black text-muted uppercase tracking-widest">WINRATE HISTÓRICO: <span class="text-white">${h2h.winRate}%</span></span>
                     </div>
                 </div>
             </div>
@@ -2264,7 +2450,7 @@ async function renderUpcomingMatchesLegacy(matches) {
     if (!matches || matches.length === 0) {
         container.innerHTML = `
             <div class="flex-col center py-6 opacity-30">
-                <span class="text-[9px] font-black uppercase tracking-widest">Sin mÃ¡s despliegues programados</span>
+                <span class="text-[9px] font-black uppercase tracking-widest">Sin más despliegues programados</span>
             </div>
         `;
         return;

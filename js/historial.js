@@ -174,8 +174,10 @@ async function renderMatchesFiltered(filtered) {
             if (!uid) return `<div class="p-avatar-mini empty"><i class="fas fa-plus"></i></div>`;
             if (uid.startsWith('GUEST_')) return `<div class="p-avatar-mini guest" title="${uid.split('_')[1]}"><i class="fas fa-user-secret"></i></div>`;
             const u = userMap[uid];
-            return `<div class="p-avatar-mini" title="${u?.name}">
-                        <img src="${u?.photo || './imagenes/default-avatar.png'}" onerror="this.src='./imagenes/default-avatar.png'">
+            const name = u?.name || 'Jugador';
+            const photo = u?.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+            return `<div class="p-avatar-mini" title="${name}">
+                        <img src="${photo}" onerror="this.src='https://ui-avatars.com/api/?name=P&background=random&color=fff'">
                     </div>`;
         }).join('');
 
@@ -248,7 +250,10 @@ async function showMatchDetail(m) {
                 <div class="mt-8 flex-col items-center border-t border-white/5 pt-6 w-full">
                      <span class="text-[9px] font-black text-white/20 uppercase tracking-[2px] mb-4">Jugadores Convocados</span>
                      <div class="flex-row gap-4">
-                        ${players.map(p => `<div class="w-8 h-8 rounded-full border border-white/10 overflow-hidden opacity-40"><img src="${p.photo || './imagenes/default-avatar.png'}" class="w-full h-full object-cover"></div>`).join('')}
+                         ${players.map(p => {
+                            const photo = p.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random&color=fff`;
+                            return `<div class="w-8 h-8 rounded-full border border-white/10 overflow-hidden opacity-40"><img src="${photo}" class="w-full h-full object-cover"></div>`;
+                         }).join('')}
                      </div>
                 </div>
                 <button class="btn-premium-v7 sm mt-8" onclick="document.getElementById('modal-match-detail').classList.remove('active')">ENTENDIDO</button>
@@ -383,7 +388,7 @@ function generateMatchNarrative(m, p, logs, diary) {
 }
 
 function renderPlayerCard(p, log, teamIdx) {
-    const photo = p.photo || './imagenes/default-avatar.png';
+    const photo = p.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || 'P')}&background=random&color=fff`;
     const ptsClass = log?.diff >= 0 ? 'text-sport-green' : 'text-danger';
     const ptsTxt = log ? `${log.diff >= 0 ? '+' : ''}${log.diff}` : '0';
     const teamColor = teamIdx === 0 ? 'border-primary/30' : 'border-secondary/30';

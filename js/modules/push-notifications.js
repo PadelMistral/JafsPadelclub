@@ -7,7 +7,7 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 
-const DEFAULT_ICON = "./imagenes/Logojafs.png";
+const DEFAULT_ICON = "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff";
 const ONESIGNAL_SDK_SRC =
   "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
 const ONESIGNAL_APP_ID_STORAGE_KEY = "onesignal_app_id";

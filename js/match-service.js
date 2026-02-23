@@ -48,13 +48,12 @@ function ensureApoingStyles() {
     apoingStyleInjected = true;
 }
 
-function renderApoingLink(cta = "Comprobar reserva en Apoing") {
+function renderApoingLink(cta = "Comprobar reserva en Apoing", extraClass = "") {
     return `
-        <div class="apoing-link-wrap mt-3">
-            <a href="https://www.apoing.com" target="_blank" rel="noopener noreferrer" class="apoing-link-pro">
-                <i class="fas fa-arrow-up-right-from-square"></i> ${cta}
-            </a>
-        </div>
+        <a href="https://www.apoing.com" target="_blank" rel="noopener noreferrer" class="apoing-link-v7 ${extraClass}">
+            <i class="fas fa-external-link-alt"></i>
+            <span>${cta}</span>
+        </a>
     `;
 }
 
@@ -199,7 +198,8 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
     const isReto = type ? type.toLowerCase().includes('reto') : false;
     const col = isReto ? 'partidosReto' : 'partidosAmistosos';
     
-    container.innerHTML = `<div class="center py-20"><div class="spinner-galaxy"></div></div>`;
+    window._currentMatchId = matchId;
+    window._currentMatchCol = col;
 
     const render = async (m) => {
         if (!m) { 
@@ -207,33 +207,9 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
             return; 
         }
 
-        // Privacy Check
-        if (m.visibility === 'private') {
-            const isInvited = (m.invitedUsers || []).includes(currentUser.uid);
-            const isOwner = m.organizerId === currentUser.uid || m.creador === currentUser.uid;
-            const isParticipant = (m.jugadores || []).includes(currentUser.uid);
-            
-            if (!isInvited && !isOwner && !isParticipant) {
-                container.innerHTML = `
-                    <div class="center py-20 flex-col items-center gap-4 animate-up">
-                        <div class="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex center mb-2">
-                            <i class="fas fa-lock text-2xl text-red-500"></i>
-                        </div>
-                        <h3 class="text-lg font-black text-white uppercase tracking-widest">Acceso Restringido</h3>
-                        <p class="text-xs text-center text-muted px-10 max-w-sm">
-                            Evento clasificado como PRIVADO. Solo personal autorizado o con invitación directa puede acceder a los datos tácticos.
-                        </p>
-                        <button class="btn-premium-v7 sm mt-6" onclick="document.getElementById('modal-match').classList.remove('active')">
-                            Cerrar Protocolo
-                        </button>
-                    </div>
-                `;
-                return;
-            }
-        }
-        
         const isParticipant = m.jugadores?.includes(currentUser.uid);
-        const isOrganizer = m.organizerId === currentUser.uid || m.creador === currentUser.uid || userData?.rol === 'Admin';
+        const isAdmin = userData?.rol === 'Admin' || auth.currentUser?.email === 'Juanan221091@gmail.com';
+        const isOrganizer = m.organizerId === currentUser.uid || m.creador === currentUser.uid || isAdmin;
         const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
         const players = await Promise.all([0, 1, 2, 3].map(i => getPlayerData(m.jugadores?.[i])));
 
@@ -306,6 +282,12 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         ${date.toLocaleDateString('es-ES', {month:'long'}).toUpperCase()}
                     </div>
                     <div class="mt-4 opacity-80 scale-90">${weatherHtml}</div>
+                    ${!isParticipant && !isOrganizer ? `
+                        <div class="spectator-badge-v7 mt-6 animate-pulse">
+                            <i class="fas fa-eye"></i>
+                            <span>MODO EXPECTADOR</span>
+                        </div>
+                    ` : ''}
                 </div>
 
                 <div class="md-tabs">
@@ -336,7 +318,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         </div>
                     </div>
 
-                    ${renderApoingLink("Comprobar reserva en Apoing")}
+                    ${renderApoingLink("Comprobar reserva en Apoing", "mb-6 opacity-60")}
                     ${eloBreakdownHtml}
 
                     <div class="court-container-v7 mb-3">
@@ -361,13 +343,19 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         </div>
                     </div>
 
-                    <div class="flex-row center gap-2 mb-2 opacity-60">
+                    <div class="flex-row center gap-2 mb-4 opacity-60">
                         <i class="fas fa-crown text-yellow-500 text-[10px]"></i>
                         <span class="text-[9px] font-black uppercase tracking-widest">HOST: ${cName}</span>
                     </div>
 
+                    ${isOrganizer ? `
+                        <div class="px-2 mb-2">
+                            <span class="text-[8px] font-black text-primary uppercase tracking-widest opacity-60">ACTION CENTER · ${userData?.rol === 'Admin' ? 'ADMIN ACCESS' : 'ORGANIZADOR'}</span>
+                        </div>
+                    ` : ''}
+
                     <div class="actions-grid-v7 flex-col gap-3">
-                        ${renderMatchActions(m, isParticipant, isOrganizer, currentUser.uid, matchId, col)}
+                        ${renderMatchActions(m, isParticipant, isOrganizer, isAdmin, currentUser.uid, matchId, col)}
                     </div>
                 </div>
 
@@ -422,150 +410,137 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
     ensureApoingStyles();
     
     container.innerHTML = `
-        <div class="booking-hub-v7 animate-up p-2">
-            <div class="hub-header mb-6">
-                <span class="hub-tag">SISTEMA DE RESERVAS</span>
-                <h2 class="hub-title-v7">${dateStr}</h2>
-                <div class="hub-meta-v7">
-                    <div class="meta-pill">
-                        <i class="fas fa-clock text-primary"></i>
-                        <span>${hour}</span>
-                    </div>
-                    <div class="meta-pill">
-                        <i class="fas fa-map-marker-alt text-secondary"></i>
-                        <span>Central</span>
-                    </div>
-                    <div id="creation-weather"></div>
+        <div class="booking-hub-v7 animate-up p-4">
+            <div class="flex-col center mb-6 text-center">
+                <div class="type-badge-v7 amistoso mb-2 mx-auto">
+                    <i class="fas fa-calendar-plus"></i>
+                    <span>ALTA DE MISIÓN</span>
                 </div>
+                <span class="hero-time-v7" style="font-size: 3.8rem; display: block; margin: 4px 0;">${hour}</span>
+                <div class="hero-date-v7" style="margin-bottom: 2px;">
+                    ${dateStr.toUpperCase()}
+                </div>
+                <div id="creation-weather" class="scale-90 opacity-80 mt-1"></div>
             </div>
 
-            <div class="booking-config mb-8">
+            <div class="booking-config">
                 <!-- Tipo de Partido -->
                 <span class="cfg-label-v7">PROTOCOLO DE JUEGO</span>
-                <div class="mode-selector-v7 mb-6">
+                <div class="mode-selector-v7 mb-5">
                     <div id="opt-am" class="mode-card-v7 active" onclick="setMatchType('amistoso')">
                         <div class="mode-icon"><i class="fas fa-handshake"></i></div>
                         <div>
                             <span class="m-name">Amistoso</span>
-                            <span class="m-desc text-[9px] opacity-60">Sin impacto ELO</span>
+                            <span class="m-desc text-[9px] opacity-60">Fogueo sin puntos</span>
                         </div>
                     </div>
                     <div id="opt-re" class="mode-card-v7" onclick="setMatchType('reto')">
                         <div class="mode-icon"><i class="fas fa-trophy"></i></div>
                         <div>
                             <span class="m-name">Reto Pro</span>
-                            <span class="m-desc text-[9px] opacity-60">Ranked (x1.0)</span>
+                            <span class="m-desc text-[9px] opacity-60">Ranked Match</span>
                         </div>
                     </div>
                 </div>
-                ${renderApoingLink("Confirmar reserva en Apoing antes de alinear")}
 
-                <!-- Alineación Táctica (Disposición de Pista) -->
+                <!-- Alineación Táctica -->
                 <span class="cfg-label-v7">ALINEACIÓN TÁCTICA</span>
-                <div class="court-container-v7 mb-6">
-                    <div class="court-schema-v7" style="padding: 20px 10px;">
+                <div class="court-container-v7 mb-5">
+                    <div class="court-schema-v7" style="padding: 24px 12px; min-height: 240px;">
                         <div class="court-net"></div>
                         
-                        <div class="players-row-v7 top mb-6">
+                        <div class="players-row-v7 top mb-10">
                             <div class="p-slot-v7 active" id="slot-0-wrap">
                                 <div class="p-img-box" style="border-color:var(--primary)">
-                                    <img src="${userData.fotoPerfil || userData.fotoURL || './imagenes/Logojafs.png'}">
+                                    <img src="${userData.fotoPerfil || userData.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.nombreUsuario || userData.nombre || 'TÚ')}&background=random&color=fff`}">
                                 </div>
                                 <span class="p-badge" style="color:var(--primary); border-color:currentColor">${(userData.nivel || 2.5).toFixed(1)}</span>
-                                <span class="text-[8px] font-black uppercase text-white tracking-widest mt-1 truncate w-16 text-center">${userData.nombreUsuario || 'TÚ'}</span>
+                                <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:var(--primary)">${userData.nombreUsuario || 'TÚ'}</span>
                             </div>
-                            <div class="p-slot-v7" id="slot-1-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:1})">
-                                <div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>
-                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2">VACÍO</span>
+                            <div class="p-slot-v7 pointer" id="slot-1-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:1})">
+                                <div class="p-img-box empty" style="border-color:var(--primary); opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
+                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:var(--primary); opacity:0.5">COMPAÑERO</span>
                             </div>
                         </div>
                         
                         <div class="vs-divider-v7">
-                           <div class="vs-line"></div>
-                           <div class="vs-circle">VS</div>
-                           <div class="vs-line"></div>
+                           <div class="vs-line" style="background:rgba(255,255,255,0.1)"></div>
+                           <div class="vs-circle" style="background:#0a0e19; border-color:rgba(255,255,255,0.2)">VS</div>
+                           <div class="vs-line" style="background:rgba(255,255,255,0.1)"></div>
                         </div>
                         
-                        <div class="players-row-v7 bottom mt-6">
-                            <div class="p-slot-v7" id="slot-2-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:2})">
-                                <div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>
-                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2">VACÍO</span>
+                        <div class="players-row-v7 bottom mt-10">
+                            <div class="p-slot-v7 pointer" id="slot-2-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:2})">
+                                <div class="p-img-box empty" style="border-color:var(--secondary); opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
+                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:var(--secondary); opacity:0.5">RIVAL 1</span>
                             </div>
-                            <div class="p-slot-v7" id="slot-3-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:3})">
-                                <div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>
-                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2">VACÍO</span>
+                            <div class="p-slot-v7 pointer" id="slot-3-wrap" onclick="window.openPlayerSelector('NEW', 'amistoso', {idx:3})">
+                                <div class="p-img-box empty" style="border-color:var(--secondary); opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
+                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:var(--secondary); opacity:0.5">RIVAL 2</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Configuración Técnica -->
-                <span class="cfg-label-v7">PARAMETROS DE ENTORNO</span>
-                <div class="flex-row gap-3 mb-6">
-                    <div class="l-input-box flex-1">
-                        <label>SUPERFICIE</label>
-                        <select id="inp-surface" class="bg-transparent border-none text-white font-black text-xs text-center w-full outline-none">
+                <span class="cfg-label-v7">PARÁMETROS TÁCTICOS</span>
+                <div class="flex-row gap-3 mb-5">
+                    <div class="l-input-box flex-1 p-3 bg-white/5 rounded-xl border border-white/5">
+                        <label class="text-[6px] font-black text-muted uppercase block mb-1">SUPERFICIE</label>
+                        <select id="inp-surface" class="bg-transparent border-none text-white font-black text-[10px] text-center w-full outline-none">
                             <option value="indoor">INDOOR</option>
                             <option value="outdoor">OUTDOOR</option>
                         </select>
                     </div>
-                    <div class="l-input-box flex-1">
-                        <label>PISTA</label>
-                        <select id="sel-court" class="bg-transparent border-none text-white font-black text-xs text-center w-full outline-none" onchange="window.toggleCourtInput(this)">
-                            <option value="Mistral-Homes">MISTRAL-HOMES</option>
-                            <option value="custom">OTRA PISTA...</option>
+                    <div class="l-input-box flex-1 p-3 bg-white/5 rounded-xl border border-white/5">
+                        <label class="text-[6px] font-black text-muted uppercase block mb-1">PISTA</label>
+                        <select id="sel-court" class="bg-transparent border-none text-white font-black text-[10px] text-center w-full outline-none" onchange="window.toggleCourtInput(this)">
+                            <option value="Mistral-Homes">MISTRAL</option>
+                            <option value="custom">OTRA...</option>
                         </select>
-                        <input type="text" id="inp-court-custom" class="hidden mt-2 bg-white/5 border border-white/10 w-full text-[10px] p-2 rounded text-white font-bold uppercase" placeholder="NOMBRE PISTA" oninput="document.getElementById('inp-court').value = this.value">
+                        <input type="text" id="inp-court-custom" class="hidden mt-1 bg-white/10 border-none w-full text-[9px] p-1 rounded text-white font-bold uppercase" placeholder="..." oninput="document.getElementById('inp-court').value = this.value">
                         <input type="hidden" id="inp-court" value="Mistral-Homes">
                     </div>
                 </div>
                 
-                <div class="range-box-v7 mb-6">
+                <div class="range-box-v7 mb-5" style="padding: 12px 6px;">
                     <div class="val-input">
-                        <span>NIVEL MIN</span>
-                        <input type="number" id="inp-min-lvl" value="2.0" step="0.1" max="7">
+                        <span style="font-size: 7px; margin-bottom: 2px;">LVL MIN</span>
+                        <input type="number" id="inp-min-lvl" value="2.0" step="0.1" max="7" style="font-size: 1.1rem; height: 24px;">
                     </div>
                     <div class="range-sep"></div>
                      <div class="val-input">
-                        <span>NIVEL MAX</span>
-                        <input type="number" id="inp-max-lvl" value="6.0" step="0.1" max="7">
+                        <span style="font-size: 7px; margin-bottom: 2px;">LVL MAX</span>
+                        <input type="number" id="inp-max-lvl" value="6.0" step="0.1" max="7" style="font-size: 1.1rem; height: 24px;">
                     </div>
                 </div>
 
-                <div id="reto-options" class="hidden-v5 mb-6">
-                    <div class="bet-input-wrap-v7">
-                        <i class="fas fa-coins text-sport-gold text-xl"></i>
-                        <input type="number" id="inp-bet" value="50" placeholder="Apuesta">
-                        <span class="suffix">FP POT</span>
+                <div id="reto-options" class="hidden-v5 mb-5">
+                    <div class="bet-input-wrap-v7" style="padding: 10px 15px;">
+                        <i class="fas fa-coins text-sport-gold text-lg"></i>
+                        <input type="number" id="inp-bet" value="50" placeholder="Apuesta" style="font-size: 1rem;">
+                        <span class="suffix text-[8px] font-black">PUNTOS</span>
                     </div>
                 </div>
 
-                <!-- Visibilidad: Pública / Privada -->
-                <span class="cfg-label-v7">VISIBILIDAD</span>
-                <div class="mode-selector-v7 mb-6">
-                    <div id="opt-public" class="mode-card-v7 active" onclick="setMatchVisibility('public')">
-                        <div class="mode-icon"><i class="fas fa-globe"></i></div>
-                        <div>
-                            <span class="m-name">Pública</span>
-                            <span class="m-desc text-[9px] opacity-60">Visible para todos</span>
-                        </div>
+                <div class="flex-row items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 mb-6">
+                    <div class="flex-col">
+                        <span class="text-white font-black text-[10px] tracking-widest">PARTIDA PRIVADA</span>
+                        <span class="text-[7px] text-muted uppercase">SOLO CON INVITACIÓN</span>
                     </div>
-                    <div id="opt-private" class="mode-card-v7" onclick="setMatchVisibility('private')">
-                        <div class="mode-icon"><i class="fas fa-lock"></i></div>
-                        <div>
-                            <span class="m-name">Privada</span>
-                            <span class="m-desc text-[9px] opacity-60">Solo invitados</span>
-                        </div>
-                    </div>
+                    <label class="toggle-v7">
+                        <input type="checkbox" id="inp-private" onchange="window._creationVisibility = this.checked ? 'private' : 'public'">
+                        <span class="t-slider"></span>
+                    </label>
                 </div>
 
-                <button class="btn-confirm-v7" onclick="executeCreateMatch('${dateStr}', '${hour}')">
-                    <div>
-                        <span class="t-main">CONFIRMAR RESERVA</span>
-                        <span class="t-sub block">PISTA CENTRAL • TARIFA PLANA</span>
-                    </div>
-                    <i class="fas fa-fingerprint"></i>
-                </button>
+                <div class="flex-col gap-2">
+                    <button class="btn-confirm-v7" onclick="executeCreateMatch('${dateStr}', '${hour}')">
+                        <span class="t-main">DESPLEGAR MISIÓN</span>
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                    ${renderApoingLink("Gestionar reserva en Apoing", "opacity-40 hover:opacity-100 transition-opacity")}
+                </div>
             </div>
         </div>
     `;
@@ -579,7 +554,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                 const box = document.getElementById('creation-weather');
                 if (box) {
                     box.className = 'meta-pill';
-                    box.innerHTML = `<i class="fas fa-cloud-sun text-white"></i><span>${Math.round(w.current.temperature_2m)}°C</span>`;
+                    box.innerHTML = `<i class="fas fa-cloud-sun text-primary mr-1"></i><span>${Math.round(w.current.temperature_2m)}°C</span>`;
                 }
             }
         } catch(e) {}
@@ -592,15 +567,20 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
 
     window.setMatchType = (t) => {
         window._creationType = t;
-        document.getElementById('opt-am').classList.toggle('active', t === 'amistoso');
-        document.getElementById('opt-re').classList.toggle('active', t === 'reto');
-        document.getElementById('reto-options').classList.toggle('hidden-v5', t !== 'reto');
+        const optAm = document.getElementById('opt-am');
+        const optRe = document.getElementById('opt-re');
+        const retoOpts = document.getElementById('reto-options');
+        if (optAm) optAm.classList.toggle('active', t === 'amistoso');
+        if (optRe) optRe.classList.toggle('active', t === 'reto');
+        if (retoOpts) retoOpts.classList.toggle('hidden-v5', t !== 'reto');
     };
 
     window.setMatchVisibility = (v) => {
         window._creationVisibility = v;
-        document.getElementById('opt-public').classList.toggle('active', v === 'public');
-        document.getElementById('opt-private').classList.toggle('active', v === 'private');
+        const optPub = document.getElementById('opt-public');
+        const optPriv = document.getElementById('opt-private');
+        if (optPub) optPub.classList.toggle('active', v === 'public');
+        if (optPriv) optPriv.classList.toggle('active', v === 'private');
     };
 }
 
@@ -615,7 +595,9 @@ async function getPlayerData(uid) {
         return { name: parts[1], level: parseFloat(parts[2]), id: uid, isGuest: true, pala: parts[3] || 'Desconocida' };
     }
     const d = await getDocument('usuarios', uid);
-    return d ? { name: d.nombreUsuario || d.nombre, photo: d.fotoPerfil || d.fotoURL, level: d.nivel || 2.5, id: uid } : null;
+    const name = d.nombreUsuario || d.nombre;
+    const photo = d.fotoPerfil || d.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+    return d ? { name, photo, level: d.nivel || 2.5, id: uid } : null;
 }
 
 /**
@@ -624,19 +606,19 @@ async function getPlayerData(uid) {
  */
 function renderPlayerSlot(p, idx, canEdit, mid, col) {
     const isTeamA = idx < 2;
-    // Using p-slot-v7 logic
+    const teamColor = isTeamA ? 'var(--primary)' : 'var(--secondary)';
+    
     if (p) {
-        const photo = p.photo || p.fotoPerfil || p.fotoURL || './imagenes/Logojafs.png';
-        const colorClass = isTeamA ? 'border-primary' : 'border-secondary';
+        const photo = p.photo || p.fotoPerfil || p.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random&color=fff`;
         return `
             <div class="p-slot-v7 pointer" 
                  onclick="${mid && !p.id.startsWith('GUEST_') ? `window.viewProfile('${p.id}')` : ''}">
-                <div class="p-img-box" style="border-color:${isTeamA ? 'var(--primary)' : 'var(--secondary)'}">
+                <div class="p-img-box" style="border-color:${teamColor}">
                     <img src="${photo}">
                 </div>
-                <span class="p-badge" style="color:${isTeamA ? 'var(--primary)' : 'var(--secondary)'}; border-color:currentColor">${p.level.toFixed(1)}</span>
-                <span class="text-[8px] font-black uppercase text-white tracking-widest mt-1 truncate w-16 text-center">${p.name}</span>
-                ${canEdit && idx > 0 ? `<button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px]" onclick="event.stopPropagation(); executeMatchAction('remove', '${mid}', '${col}', {idx:${idx}})"><i class="fas fa-times"></i></button>` : ''}
+                <span class="p-badge" style="color:${teamColor}; border-color:currentColor">${p.level.toFixed(1)}</span>
+                <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${teamColor}">${p.name}</span>
+                ${canEdit ? `<button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px] shadow-lg z-20 hover:scale-110 transition-transform" onclick="event.stopPropagation(); executeMatchAction('remove', '${mid}', '${col}', {idx:${idx}})"><i class="fas fa-times"></i></button>` : ''}
             </div>
         `;
     }
@@ -644,10 +626,10 @@ function renderPlayerSlot(p, idx, canEdit, mid, col) {
     return `
         <div class="p-slot-v7" 
              onclick="${canEdit ? `window.openPlayerSelector('${mid}', '${col}', {idx:${idx}})` : ''}">
-            <div class="p-img-box empty" style="border:1px dashed rgba(255,255,255,0.2)">
+            <div class="p-img-box empty" style="border:1.5px dashed ${teamColor}; opacity:0.3">
                 <i class="fas fa-plus text-white opacity-50"></i>
             </div>
-            <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-3">VACÍO</span>
+            <span class="text-[8px] font-black uppercase tracking-widest mt-2" style="color:${teamColor}; opacity:0.4">VACÍO</span>
         </div>
     `;
 }
@@ -655,39 +637,144 @@ function renderPlayerSlot(p, idx, canEdit, mid, col) {
 /**
  * Determines available actions for a match.
  */
-function renderMatchActions(m, isParticipant, isOrganizer, uid, id, col) {
+function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col) {
+    const realPlayerCount = (m.jugadores || []).filter(v => v).length;
     const isPlayed = m.estado === 'jugado';
-    if (isPlayed) return `<button class="btn-confirm-v7" onclick="window.location.href='diario.html?matchId=${id}'"><span class="t-main">VER ANALITICAS</span><i class="fas fa-chart-pie"></i></button>`;
+    if (isPlayed) return `<button class="btn-confirm-v7 opacity-80" onclick="openResultForm('${id}', '${col}')"><span class="t-main">SOLO LECTURA</span><i class="fas fa-eye"></i></button>`;
 
-    if (!isParticipant) {
-        return `
-            <button class="btn-confirm-v7" onclick="executeMatchAction('join', '${id}', '${col}')">
-                <span class="t-main">UNIRSE AL SQUAD</span>
-                <i class="fas fa-fingerprint"></i>
-            </button>
+    let actionsHtml = '';
+    
+    // Admin/Organizer Force View
+    if (isOrganizer && !isParticipant) {
+        actionsHtml = `
+            <div class="flex-row gap-2 w-full mb-3">
+                <button class="flex-1 py-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-black text-cyan-400" onclick="window.startSwapMode('${id}', '${col}')">POSICIÓN</button>
+                <button class="flex-1 py-4 rounded-xl bg-red-500/10 border border-red-500/30 text-[10px] font-black text-red-500" onclick="executeMatchAction('delete', '${id}', '${col}')">BORRAR</button>
+            </div>
+            ${realPlayerCount === 4 ? `
+                ${isAdmin ? `
+                  <button class="btn-confirm-v7" onclick="openResultForm('${id}', '${col}')">
+                      <span class="t-main">EDITAR RESULTADO</span>
+                      <i class="fas fa-flag-checkered"></i>
+                  </button>
+                ` : `
+                  <button class="btn-confirm-v7 opacity-60" onclick="openResultForm('${id}', '${col}')" title="Solo lectura (no participante)">
+                      <span class="t-main">SOLO LECTURA</span>
+                      <i class="fas fa-eye"></i>
+                  </button>
+                `}
+            ` : `<div class="px-6 py-4 rounded-xl bg-white/5 border border-white/5 text-center w-full">
+                    <span class="text-[10px] font-black text-muted uppercase tracking-widest">ORGANIZANDO (${realPlayerCount}/4)</span>
+                 </div>`}
         `;
+        return actionsHtml;
     }
 
-    const realPlayerCount = (m.jugadores || []).filter(id => id).length;
-    return `
-        <div class="flex-row gap-3 w-full">
-            <button class="flex-1 py-4 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black text-white hover:bg-white/10" onclick="executeMatchAction('leave', '${id}', '${col}')">
-                ABANDONAR
-            </button>
-            ${isOrganizer ? 
-                `<button class="flex-1 py-4 rounded-xl bg-red-500/10 border border-red-500/30 text-[10px] font-black text-red-500 hover:bg-red-500/20" onclick="executeMatchAction('delete', '${id}', '${col}')">CANCELAR</button>` : 
-                `<button class="flex-1 py-4 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black text-muted opacity-40 cursor-not-allowed" disabled title="Solo el organizador puede cancelar">CANCELAR</button>`
-            }
-        </div>
-        ${realPlayerCount === 4 ? `
-            <button class="btn-confirm-v7 mt-2 ${!isOrganizer ? 'opacity-40 cursor-not-allowed' : ''}" 
-                    ${!isOrganizer ? 'disabled title="Solo el organizador puede reportar resultado"' : `onclick="openResultForm('${id}', '${col}')"`}>
-                <span class="t-main">${!isOrganizer ? 'ESPERANDO RESULTADO' : 'FINALIZAR & REPORTAR'}</span>
-                <i class="fas ${!isOrganizer ? 'fa-hourglass-half' : 'fa-flag-checkered'}"></i>
-            </button>
-        ` : ''}
-    `;
+    if (!isParticipant) {
+        if (realPlayerCount >= 4) {
+            actionsHtml = `<div class="px-6 py-4 rounded-xl bg-white/5 border border-white/5 text-center w-full">
+                <span class="text-[10px] font-black text-muted uppercase tracking-widest">PROTOCOLO COMPLETO (4/4)</span>
+            </div>`;
+        } else {
+            actionsHtml = `<button class="btn-confirm-v7" onclick="executeMatchAction('join', '${id}', '${col}')">
+                <span class="t-main">UNIRSE AL SQUAD</span>
+                <i class="fas fa-fingerprint"></i>
+            </button>`;
+        }
+    } else {
+        actionsHtml = `
+            <div class="flex-row gap-2 w-full">
+                <button class="flex-1 py-4 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black text-white hover:bg-white/10" onclick="executeMatchAction('leave', '${id}', '${col}')">
+                    ABANDONAR
+                </button>
+                <button class="flex-1 py-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-black text-cyan-400 hover:bg-cyan-500/20" onclick="window.startSwapMode('${id}', '${col}')">
+                    POSICIÓN
+                </button>
+                ${isOrganizer ? 
+                    `<button class="flex-1 py-4 rounded-xl bg-red-500/10 border border-red-500/30 text-[10px] font-black text-red-500 hover:bg-red-500/20" onclick="executeMatchAction('delete', '${id}', '${col}')">CANCELAR</button>` : 
+                    `<button class="flex-1 py-4 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black text-muted opacity-40 cursor-not-allowed" disabled>CANCELAR</button>`
+                }
+            </div>
+            ${realPlayerCount === 4 ? `
+                <button class="btn-confirm-v7 mt-2" onclick="openResultForm('${id}', '${col}')">
+                    <span class="t-main">REPORTAR RESULTADO</span>
+                    <i class="fas fa-flag-checkered"></i>
+                </button>
+            ` : ''}
+        `;
+    }
+    return actionsHtml;
 }
+
+window.startSwapMode = async (mid, col) => {
+    const slots = document.querySelectorAll('.p-slot-v7');
+    const myUid = auth.currentUser?.uid;
+    if (!myUid) return;
+    const me = await getDocument('usuarios', myUid);
+    const isAdmin = me?.rol === 'Admin' || auth.currentUser?.email === 'Juanan221091@gmail.com';
+    const match = await getDocument(col, mid);
+    if (!match) return;
+    const isOrganizer = match.organizerId === myUid || match.creador === myUid || isAdmin;
+    const isParticipant = (match.jugadores || []).includes(myUid);
+    const isPlayed = String(match.estado || '').toLowerCase() === 'jugado' || !!match.resultado?.sets;
+    if (isPlayed) {
+        showToast("BLOQUEADO", "No se puede cambiar posición en un partido finalizado.", "warning");
+        return;
+    }
+    if (!isOrganizer && !isParticipant) {
+        showToast("SIN PERMISOS", "Solo organizador/admin o participantes pueden cambiar posición.", "error");
+        return;
+    }
+    
+    // Remove existing overlays first
+    document.querySelectorAll('.swap-overlay').forEach(el => el.remove());
+
+    if (isOrganizer && !isParticipant) {
+        let firstPick = null;
+        showToast("MODO POSICIÓN", "Selecciona dos plazas para intercambiar.", "info");
+        slots.forEach((s, idx) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'swap-overlay absolute inset-0 bg-cyan-400/20 backdrop-blur-sm rounded-2xl flex center z-20 cursor-pointer';
+            overlay.innerHTML = `<span class="text-[8px] font-black text-black bg-cyan-300 px-2 py-1 rounded">ELEGIR</span>`;
+            overlay.onclick = async (e) => {
+                e.stopPropagation();
+                if (firstPick === null) {
+                    firstPick = idx;
+                    overlay.innerHTML = `<span class="text-[8px] font-black text-black bg-primary px-2 py-1 rounded">1ª PLAZA</span>`;
+                    return;
+                }
+                if (firstPick === idx) return;
+                await window.executeMatchAction('swap', mid, col, { from: firstPick, to: idx });
+                document.querySelectorAll('.swap-overlay').forEach(el => el.remove());
+            };
+            s.style.position = 'relative';
+            s.appendChild(overlay);
+        });
+        return;
+    }
+
+    showToast("MODO POSICIÓN", "Selecciona una nueva plaza para intercambiarte", "info");
+    
+    slots.forEach((s, idx) => {
+        // Check if this slot contains me
+        const isMe = s.innerHTML.includes(myUid) || s.querySelector(`img[src*="${encodeURIComponent(myUid)}"]`);
+        if (isMe) {
+            s.classList.add('ring-2', 'ring-primary');
+            return;
+        }
+        
+        const overlay = document.createElement('div');
+        overlay.className = 'swap-overlay absolute inset-0 bg-primary/20 backdrop-blur-sm rounded-2xl flex center z-20 cursor-pointer animate-pulse';
+        overlay.innerHTML = `<span class="text-[8px] font-black text-black bg-primary px-2 py-1 rounded">MOVER AQUÍ</span>`;
+        overlay.onclick = (e) => {
+            e.stopPropagation();
+            window.executeMatchAction('swap', mid, col, {to: idx});
+            document.querySelectorAll('.swap-overlay').forEach(el => el.remove());
+        };
+        s.style.position = 'relative';
+        s.appendChild(overlay);
+    });
+};
 
 
 
@@ -709,7 +796,15 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
         const labels = { 'join': 'Uniéndose...', 'leave': 'Abandonando...', 'delete': 'Cancelando...', 'remove': 'Procesando...', 'add': 'Añadiendo...' };
         showLoading(labels[action] || "Sincronizando...", true);
 
-        const isOrganizer = m.organizerId === user.uid || m.creador === user.uid || (await getDocument('usuarios', user.uid))?.rol === 'Admin';
+        const isAdmin = (await getDocument('usuarios', user.uid))?.rol === 'Admin' || user.email === 'Juanan221091@gmail.com';
+        const isOrganizer = m.organizerId === user.uid || m.creador === user.uid || isAdmin;
+        const isPlayed = String(m.estado || '').toLowerCase() === 'jugado' || !!m.resultado?.sets;
+        const isPastKickoff = Number.isFinite(matchDate?.getTime?.()) && Date.now() > matchDate.getTime();
+        const timeLockedActions = ['join', 'add', 'swap'];
+        if (isPastKickoff && !isPlayed && timeLockedActions.includes(action)) {
+            hideLoading();
+            return showToast("BLOQUEADO", "La franja ya pasó. Solo se permite consulta o reporte de resultado.", "warning");
+        }
         
         if (action === 'join') {
             const emptyIdx = jugs.findIndex(id => !id);
@@ -779,6 +874,13 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             const wasFull = jugs.filter(id => id).length === 4;
             const idx = jugs.indexOf(user.uid);
             if (idx !== -1) {
+                const now = new Date();
+                const elapsedMs = now - matchDate;
+                if (elapsedMs > (90 * 60 * 1000)) { // 90 mins
+                    hideLoading();
+                    return showToast("BLOQUEADO", "No puedes abandonar un partido que ya ha comenzado (Lock 1.30h)", "error");
+                }
+
                 jugs[idx] = null;
                 const activeJugs = jugs.filter(id => id && !id.startsWith('GUEST_'));
                 
@@ -800,6 +902,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                             AIOrchestrator.dispatch('MATCH_UNREADY', { uid: user.uid, matchId: id });
                         } catch(err) {}
                     }
+                    
                     const meDoc = await getDocument('usuarios', user.uid);
                     const leaveName = meDoc?.nombreUsuario || meDoc?.nombre || 'Un jugador';
                     const stillInMatch = jugs.filter(id => id && id !== user.uid && !id.startsWith('GUEST_'));
@@ -846,23 +949,35 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             
             const removedUid = jugs[extra.idx];
             if (removedUid && !removedUid.startsWith('GUEST_')) {
-                const adminName = auth.currentUser?.displayName || 'El organizador';
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
                 await createNotification(
                     removedUid,
                     "Baja del Squad",
-                    `${adminName} te ha retirado de la partida del ${day}.`,
+                    `Se te ha retirado de la partida del ${day}.`,
                     'warning',
                     'calendario.html',
                     { type: 'match_removed', matchId: id, matchCollection: col, dedupId: `match_removed_${id}_${removedUid}` }
                 );
             }
+            
             jugs[extra.idx] = null;
-            await updateDoc(ref, { 
+            const updates = { 
                 jugadores: jugs,
                 equipoA: [jugs[0], jugs[1]],
                 equipoB: [jugs[2], jugs[3]]
-            });
+            };
+
+            // If we removed the creator, reassign or handle it
+            if (extra.idx === 0) {
+                 const newCreator = jugs.find(j => j && !j.startsWith('GUEST_'));
+                 if (newCreator) {
+                     updates.creador = newCreator;
+                     updates.organizerId = newCreator;
+                     await createNotification(newCreator, "Nuevo Host", "Has sido designado como el nuevo organizador del partido.", "info", "calendario.html");
+                 }
+            }
+
+            await updateDoc(ref, updates);
             hideLoading();
             triggerFeedback({title: "ELIMINADO", msg: "Jugador expulsado", type: "info"});
         }
@@ -896,6 +1011,29 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
              }
              hideLoading();
              triggerFeedback({title: "AÑADIDO", msg: "Agente reclutado", type: "success"});
+        }
+        else if (action === 'swap') {
+            const played = String(m.estado || '').toLowerCase() === 'jugado' || !!m.resultado?.sets;
+            if (played) {
+                hideLoading();
+                return showToast("BLOQUEADO", "No se puede cambiar posición tras finalizar.", "warning");
+            }
+            const fromIdx = extra.from !== undefined ? Number(extra.from) : jugs.indexOf(user.uid);
+            const toIdx = extra.to;
+            if (fromIdx === -1 || toIdx === undefined) { hideLoading(); return; }
+            
+            const temp = jugs[toIdx];
+            jugs[toIdx] = jugs[fromIdx];
+            jugs[fromIdx] = temp;
+            
+            await updateDoc(ref, { 
+                jugadores: jugs,
+                equipoA: [jugs[0], jugs[1]],
+                equipoB: [jugs[2], jugs[3]]
+            });
+            hideLoading();
+            triggerFeedback({title: "POSICIÓN ACTUALIZADA", msg: "Alineación reconfigurada", type: "success"});
+            if(window.closeMatchModal) window.closeMatchModal();
         }
     } catch(e) { 
         const { hideLoading } = await import('./modules/ui-loader.js?v=6.5');
@@ -1025,6 +1163,55 @@ window.openResultForm = async (id, col) => {
     const area = document.getElementById('match-detail-area');
     if (!area) return;
     ensureApoingStyles();
+    const meUid = auth.currentUser?.uid;
+    const matchDoc = await getDocument(col, id);
+    if (!matchDoc) {
+        showToast("ERROR", "No se pudo cargar el partido.", "error");
+        return;
+    }
+    const players = Array.isArray(matchDoc?.jugadores) ? matchDoc.jugadores : [];
+    const meData = meUid ? await getDocument("usuarios", meUid) : null;
+    const isAdmin = meData?.rol === "Admin" || auth.currentUser?.email === "Juanan221091@gmail.com";
+    const isParticipant = !!meUid && players.includes(meUid);
+    const isPlayed = String(matchDoc?.estado || "").toLowerCase() === "jugado" || !!matchDoc?.resultado?.sets;
+
+    if (isPlayed) {
+        const resultRead = matchDoc?.resultado?.sets || 'Sin resultado';
+        area.innerHTML = `
+            <div class="booking-hub-v7 animate-up p-3 max-w-sm mx-auto">
+                <h3 class="hub-title-v7 text-center mb-4">Partido finalizado</h3>
+                <div class="p-4 rounded-2xl border border-white/10 bg-white/5 text-center">
+                    <span class="text-[9px] uppercase tracking-[3px] font-black text-muted">Solo lectura</span>
+                    <div class="text-2xl font-black italic text-white mt-2">${resultRead}</div>
+                    <p class="text-[10px] text-white/65 mt-3">Este partido ya fue disputado y queda en modo lectura.</p>
+                </div>
+                <button class="btn-confirm-v7 mt-4" onclick="window.closeMatchModal()">
+                    <span class="t-main">ENTENDIDO</span>
+                    <i class="fas fa-check"></i>
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    if (!isParticipant && !isAdmin) {
+        const resultRead = matchDoc?.resultado?.sets || 'Aún sin resultado';
+        area.innerHTML = `
+            <div class="booking-hub-v7 animate-up p-3 max-w-sm mx-auto">
+                <h3 class="hub-title-v7 text-center mb-4">Resultado del Partido</h3>
+                <div class="p-4 rounded-2xl border border-white/10 bg-white/5 text-center">
+                    <span class="text-[9px] uppercase tracking-[3px] font-black text-muted">Modo lectura</span>
+                    <div class="text-2xl font-black italic text-white mt-2">${resultRead}</div>
+                    <p class="text-[10px] text-white/65 mt-3">Solo los jugadores que participan en este partido pueden anotar o modificar el resultado.</p>
+                </div>
+                <button class="btn-confirm-v7 mt-4" onclick="window.closeMatchModal()">
+                    <span class="t-main">ENTENDIDO</span>
+                    <i class="fas fa-check"></i>
+                </button>
+            </div>
+        `;
+        return;
+    }
 
     // Use V7 Booking Hub style for result form
     area.innerHTML = `
@@ -1287,7 +1474,7 @@ window.selectUserForNew = (uid) => {
                 <img src="${u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png'}">
             </div>
             <span class="p-badge" style="color:${color}; border-color:currentColor">${(Number(u.nivel)||2.5).toFixed(1)}</span>
-            <span class="text-[8px] font-black uppercase text-white tracking-widest mt-1 truncate w-16 text-center">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
+            <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${color}">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
             <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px] shadow-lg z-10 hover:scale-110 transition-transform" onclick="event.stopPropagation(); window.removeUserFromNew(${extra.idx})"><i class="fas fa-times"></i></button>
         `;
     }
@@ -1302,4 +1489,3 @@ window.removeUserFromNew = (idx) => {
         slot.onclick = () => window.openPlayerSelector('NEW', window._creationType, {idx});
     }
 };
-

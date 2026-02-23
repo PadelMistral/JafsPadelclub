@@ -289,7 +289,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
                 else if (g2 > g1) t2Sets++;
             });
             
-            if (t1Sets === 0 && t2Sets === 0) throw "Formato de resultado invÃ¡lido (Ej: 6-4 6-3)";
+            if (t1Sets === 0 && t2Sets === 0) throw "Formato de resultado inválido (Ej: 6-4 6-3)";
             
             const t1Wins = t1Sets > t2Sets;
             const isComp = col === 'partidosReto' || match.tipo === 'reto';

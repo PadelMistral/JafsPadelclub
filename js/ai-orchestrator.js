@@ -8,19 +8,19 @@ import { calculateCourtCondition } from './utils/weather-utils.js';
 // We will use the new notification service which we will create shortly
 import { createNotification } from './services/notification-service.js'; 
 
-const ADJECTIVES = ['TitÃ¡n', 'Gladiador', 'Mago', 'Estratega', 'Muro', 'Francotirador', 'Bestia', 'SamurÃ¡i'];
+const ADJECTIVES = ['Titán', 'Gladiador', 'Mago', 'Estratega', 'Muro', 'Francotirador', 'Bestia', 'Samurái'];
 const WEAK_PHRASES = [
-    "Hoy te han movido mÃ¡s que a un flan.",
-    "Â¿Las piernas eran de plomo?",
+    "Hoy te han movido más que a un flan.",
+    "¿Las piernas eran de plomo?",
     "Esa bandeja se fue a Cuenca...",
-    "MÃ¡s globos que en una fiesta de cumpleaÃ±os, pero cortos.",
+    "Más globos que en una fiesta de cumpleaños, pero cortos.",
     "La red hoy era tu enemiga mortal."
 ];
 const STRONG_PHRASES = [
     "Hoy la sacaste por 3 hasta sin querer.",
-    "Esa volea tenÃ­a veneno puro.",
-    "Infranqueable. ParecÃ­as un muro de hormigÃ³n.",
-    "Tu vÃ­bora mordÃ­a hoy.",
+    "Esa volea tenía veneno puro.",
+    "Infranqueable. Parecías un muro de hormigón.",
+    "Tu víbora mordía hoy.",
     "Has dominado el tiempo y el espacio en la pista."
 ];
 
@@ -41,13 +41,13 @@ export const AIOrchestrator = {
      * Called on Login and major events.
      */
     init: async (userUid) => {
-        console.log("ðŸ§  AI BRAIN: Orchestrator awakening for", userUid);
+        console.log("🧠 AI BRAIN: Orchestrator awakening for", userUid);
         const state = await AIOrchestrator.recalculatePlayerState(userUid);
         return state;
     },
 
     /**
-     * Dispatch Event â€” allows any module to notify the Brain.
+     * Dispatch Event — allows any module to notify the Brain.
      * All events are handled gracefully with error isolation.
      */
     dispatch: async (eventType, payload) => {
@@ -56,33 +56,33 @@ export const AIOrchestrator = {
         const targetUid = payload?.uid || user?.uid;
         if (!targetUid) return;
 
-        console.log(`ðŸ§  AI BRAIN: Event [${eventType}]`, payload?.matchId || '');
+        console.log(`🧠 AI BRAIN: Event [${eventType}]`, payload?.matchId || '');
 
         try {
             switch (eventType) {
 
-                // â”€â”€â”€ POST-MATCH: Full recalculation â”€â”€â”€
+                // ─── POST-MATCH: Full recalculation ───
                 case 'MATCH_FINISHED':
                     await AIOrchestrator.recalculatePlayerState(targetUid);
                     break;
 
-                // â”€â”€â”€ PRE-MATCH: 4/4 players joined â”€â”€â”€
+                // ─── PRE-MATCH: 4/4 players joined ───
                 case 'MATCH_READY':
                     await AIOrchestrator.recalculatePlayerState(targetUid);
                     break;
 
-                // â”€â”€â”€ PLAYER LEFT FULL MATCH â”€â”€â”€
+                // ─── PLAYER LEFT FULL MATCH ───
                 case 'MATCH_UNREADY':
-                    // Light refresh â€” no heavy metrics, just clear "pre-match" focus
+                    // Light refresh — no heavy metrics, just clear "pre-match" focus
                     await AIOrchestrator.recalculatePlayerState(targetUid);
                     break;
 
-                // â”€â”€â”€ MATCH CREATED â”€â”€â”€
+                // ─── MATCH CREATED ───
                 case 'MATCH_CREATED':
-                    // No-op for now â€” could log creation activity in future
+                    // No-op for now — could log creation activity in future
                     break;
 
-                // â”€â”€â”€ DIARY: Subjective biometrics & Learning Analysis â”€â”€â”€
+                // ─── DIARY: Subjective biometrics & Learning Analysis ───
                 case 'DIARY_SAVED':
                     if (payload?.diaryEntry) {
                         try {
@@ -146,24 +146,24 @@ export const AIOrchestrator = {
                             });
 
                             // 5. Notify
-                            await createNotification(targetUid, "ðŸ¤– NÃšCLEO IA: ANÃLISIS", funPhrase, "info");
+                            await createNotification(targetUid, "🤖 NÚCLEO IA: ANÁLISIS", funPhrase, "info");
 
-                        } catch(e) { console.warn("âš ï¸ AI: Diary stats processing error", e); }
+                        } catch(e) { console.warn("⚠️ AI: Diary stats processing error", e); }
                     }
                     await AIOrchestrator.recalculatePlayerState(targetUid);
                     break;
 
-                // â”€â”€â”€ LOGIN â”€â”€â”€
+                // ─── LOGIN ───
                 case 'LOGIN':
                     await AIOrchestrator.init(targetUid);
                     break;
 
-                // â”€â”€â”€ ADMIN MANUAL OVERRIDE â”€â”€â”€
+                // ─── ADMIN MANUAL OVERRIDE ───
                 case 'ADMIN_UPDATE':
                     await AIOrchestrator.recalculatePlayerState(targetUid);
                     break;
 
-                // â”€â”€â”€ INVITATIONS â”€â”€â”€
+                // ─── INVITATIONS ───
                 case 'INVITATION_ACCEPTED':
                     // Could trigger a prediction refresh if needed
                     break;
@@ -171,10 +171,10 @@ export const AIOrchestrator = {
                     break;
 
                 default:
-                    console.warn(`ðŸ§  AI BRAIN: Unknown event [${eventType}]`);
+                    console.warn(`🧠 AI BRAIN: Unknown event [${eventType}]`);
             }
         } catch (err) {
-            console.error(`ðŸ§  AI BRAIN: Error processing [${eventType}]`, err);
+            console.error(`🧠 AI BRAIN: Error processing [${eventType}]`, err);
         }
     },
 
@@ -187,7 +187,7 @@ export const AIOrchestrator = {
             const userDoc = await getDocument('usuarios', uid);
             if (!userDoc) return null;
 
-            // â”€â”€ 1. GATHER CONTEXT â”€â”€
+            // ── 1. GATHER CONTEXT ──
             const q = query(
                 collection(db, 'rankingLogs'), 
                 where('uid', '==', uid), 
@@ -199,20 +199,20 @@ export const AIOrchestrator = {
                 const snaps = await getDocs(q);
                 recentLogs = snaps.docs.map(d => d.data());
             } catch(e) {
-                // Index might not exist yet â€” graceful degradation
-                console.warn("âš ï¸ AI: rankingLogs query failed (index?)", e.code || e.message);
+                // Index might not exist yet — graceful degradation
+                console.warn("⚠️ AI: rankingLogs query failed (index?)", e.code || e.message);
             }
 
-            // â”€â”€ 1.5 DEEP ANALYSIS (AI-Engine) â”€â”€
+            // ── 1.5 DEEP ANALYSIS (AI-Engine) ──
             const deepAnalysis = AI.analyzeProfile(userDoc, recentLogs, userDoc.diario || []);
 
-            // â”€â”€ 2. METRICS â”€â”€
+            // ── 2. METRICS ──
             const eloTrend = recentLogs.slice(0,5).reduce((acc, curr) => acc + (curr.diff || 0), 0);
             const stats = userDoc.advancedStats || {};
             const fatigue = stats.fatigueIndex || 0; 
             const mental = stats.pressure || 50;
 
-            // â”€â”€ 3. ACCURACY & UPSETS (Last Match) â”€â”€
+            // ── 3. ACCURACY & UPSETS (Last Match) ──
             let updatedAccuracy = stats.modelAccuracy || 85;
             let totalUpsets = stats.upsets || 0;
 
@@ -231,10 +231,10 @@ export const AIOrchestrator = {
                         updatedAccuracy = Math.round((updatedAccuracy * 0.9) + (analysis.accuracy * 0.1));
                         if (upset.isUpset) totalUpsets++;
                     }
-                } catch(err) { console.warn("âš ï¸ AI Sync:", err.message); }
+                } catch(err) { console.warn("⚠️ AI Sync:", err.message); }
             }
 
-            // â”€â”€ 4. RUN AUTOMATION ENGINE â”€â”€
+            // ── 4. RUN AUTOMATION ENGINE ──
             const activeMode = AutomationEngine.determineActiveMode({
                 recentResult: recentLogs[0]?.diff > 0 ? 'win' : 'loss',
                 eloTrend,
@@ -245,12 +245,12 @@ export const AIOrchestrator = {
                 accuracy: updatedAccuracy
             });
 
-            // â”€â”€ 5. GENERATE INTERVENTIONS â”€â”€
+            // ── 5. GENERATE INTERVENTIONS ──
             const interventions = AutomationEngine.generateInterventionPlan(activeMode.mode, { 
                 style: deepAnalysis.style
             });
 
-            // â”€â”€ 6. BUILD UNIFIED STATE â”€â”€
+            // ── 6. BUILD UNIFIED STATE ──
             const newState = {
                 timestamp: new Date().toISOString(),
                 // Core Status
@@ -280,7 +280,7 @@ export const AIOrchestrator = {
                 }
             };
 
-            // â”€â”€ 7. PERSIST TO FIRESTORE â”€â”€
+            // ── 7. PERSIST TO FIRESTORE ──
             await updateDocument('usuarios', uid, { 
                 playerState: newState,
                 'advancedStats.momentum': activeMode.mode,
@@ -292,7 +292,7 @@ export const AIOrchestrator = {
             return newState;
 
         } catch (e) {
-            console.error("ðŸ§  AI BRAIN: Critical failure", e);
+            console.error("🧠 AI BRAIN: Critical failure", e);
             return null;
         }
     }

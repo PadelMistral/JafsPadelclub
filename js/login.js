@@ -159,6 +159,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!ud) {
                         notifyUser('SINCRONIZACIÓN', 'No se pudo validar tu perfil. Revisa conexión y vuelve a intentar.', 'warning');
                         authTransitionInProgress = false;
+                        const ldr = document.getElementById('master-loader');
+                        if (ldr) ldr.style.display = 'none';
                         return;
                     }
                     const isApproved = ud?.status === 'approved' || ud?.aprobado === true || ud?.rol === 'Admin';
@@ -170,15 +172,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         auth.signOut().then(() => {
                             notifyUser('ACCESO DENEGADO', 'Tu cuenta está pendiente de aprobación.', 'warning');
                             authTransitionInProgress = false;
+                            const ldr = document.getElementById('master-loader');
+                            if (ldr) ldr.style.display = 'none';
                         }).catch(() => {
                             authTransitionInProgress = false;
+                            const ldr = document.getElementById('master-loader');
+                            if (ldr) ldr.style.display = 'none';
                         });
                     }
                 })
                 .catch(() => {
                     notifyUser('SIN CONEXIÓN', 'No se pudo comprobar el estado de tu cuenta.', 'error');
                     authTransitionInProgress = false;
+                    const ldr = document.getElementById('master-loader');
+                    if (ldr) ldr.style.display = 'none';
                 });
+        } else {
+            // No user, hide loader to show login form
+            const ldr = document.getElementById('master-loader');
+            if (ldr) ldr.style.display = 'none';
         }
     });
 

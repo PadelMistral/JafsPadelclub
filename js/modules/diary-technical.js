@@ -32,7 +32,7 @@ export async function submitTechnicalEntry(entryData) {
         // Fire and forget, but inside try/catch to log errors
         evolveUserAttributes(auth.currentUser.uid, enrichedEntry).catch(console.error);
 
-        triggerFeedback({ title: "BITÃCORA ACTUALIZADA", msg: "AnÃ¡lisis tÃ©cnico registrado.", type: "success" });
+        triggerFeedback({ title: "BITÁCORA ACTUALIZADA", msg: "Análisis técnico registrado.", type: "success" });
         return docRef.id;
     } catch (e) {
         handleOperationError(e);

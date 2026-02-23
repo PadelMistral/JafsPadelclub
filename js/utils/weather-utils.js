@@ -25,12 +25,12 @@ export function calculateCourtCondition(temp, rain, wind) {
       condition: "Viento",
       icon: "fa-wind",
       color: "wx-cloud",
-      advice: "Evita globos altos. Juega mÃ¡s plano y profundo.",
+      advice: "Evita globos altos. Juega más plano y profundo.",
     };
   }
   if (temp < 10) {
     return {
-      condition: "FrÃ­o",
+      condition: "Frío",
       icon: "fa-snowflake",
       color: "wx-cloud",
       advice: "Bola pesada y poco rebote. Calienta bien.",
@@ -50,14 +50,14 @@ export function calculateCourtCondition(temp, rain, wind) {
       condition: "Nublado",
       icon: "fa-cloud",
       color: "wx-cloud",
-      advice: "CondiciÃ³n estable. Trabaja ritmo y paciencia.",
+      advice: "Condición estable. Trabaja ritmo y paciencia.",
     };
   }
   return {
     condition: "Soleado",
     icon: "fa-sun",
     color: "wx-sun",
-    advice: "Pista rÃ¡pida. Ataca despuÃ©s del saque.",
+    advice: "Pista rápida. Ataca después del saque.",
   };
 }
 
