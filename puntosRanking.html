@@ -19,6 +19,13 @@
     <link rel="stylesheet" href="./css/ranking.css">
     <link rel="stylesheet" href="./css/final-premium.css">
     <link rel="stylesheet" href="./css/ux-enhance.css">
+    <style>
+        html,
+        body {
+            background: #020617 !important;
+            color: #fff;
+        }
+    </style>
 </head>
 
 <body>
@@ -118,6 +125,10 @@
                 </div>
 
                 <div class="level-progress-row">
+                    <div class="level-progress-head">
+                        <span class="level-progress-kicker">PROGRESO DE NIVEL</span>
+                        <span class="level-progress-percent" id="level-percent">0%</span>
+                    </div>
                     <div class="level-bar">
                         <div class="level-fill" id="level-fill" style="width: 50%"></div>
                     </div>
@@ -126,6 +137,12 @@
                         <span id="level-prev" class="opacity-50">2.0</span>
                         <span class="text-primary">NIVEL <span id="my-level">2.5</span></span>
                         <span id="level-next" class="opacity-50">3.0</span>
+                    </div>
+                    <div class="rank-level-state" id="rank-level-state">
+                        <span class="level-state-pill" id="level-state-pill">ESTABLE</span>
+                        <span class="level-state-text" id="level-state-text">
+                            <b id="level-points-down">0</b> pts para bajar · <b id="level-points-up">0</b> pts para subir
+                        </span>
                     </div>
                 </div>
 

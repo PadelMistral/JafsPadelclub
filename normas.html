@@ -1,18 +1,15 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es" data-theme="dark">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Normas | Padel Matrix</title>
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Rajdhani:wght@600;700;800;900&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Rajdhani:wght@600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./css/global.css">
     <style>
+        .nebula-bg { display: none !important; }
         .norm-card {
             background: rgba(255, 255, 255, 0.02);
             border: 1px solid var(--glass-border);
@@ -20,7 +17,6 @@
             padding: 25px;
             margin-bottom: 20px;
         }
-
         .norm-num {
             width: 40px;
             height: 40px;
@@ -35,7 +31,6 @@
             margin-bottom: 15px;
             box-shadow: 0 0 15px var(--neon-cyan-glow);
         }
-
         .norm-title {
             font-family: var(--font-display);
             font-size: 1.4rem;
@@ -43,7 +38,6 @@
             margin-bottom: 10px;
             color: var(--neon-cyan);
         }
-
         .norm-text {
             font-size: 0.85rem;
             color: var(--text-dim);
@@ -51,42 +45,35 @@
         }
     </style>
 </head>
-
 <body class="app-body">
-    <div class="nebula-bg">
-        <div class="star-layer"></div>
-    </div>
+    <div class="sport-bg"></div>
+    <div class="nebula-bg"><div class="star-layer"></div></div>
 
     <div class="app-container">
         <header class="header-content">
-            <h1 class="brand-text text-gradient"
-                style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 900;">DIRECTIVAS.PADMIN</h1>
+            <h1 class="brand-text text-gradient" style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 900;">DIRECTIVAS.PADMIN</h1>
             <div class="header-right">
                 <button class="btn-glass" onclick="window.history.back()"><i class="fas fa-times"></i></button>
             </div>
         </header>
 
         <main class="main-content animate-up">
-
             <div class="norm-card animate-up">
                 <div class="norm-num">01</div>
                 <h2 class="norm-title">SISTEMA ELO</h2>
-                <p class="norm-text">El nexo calcula tu nivel basado en resultados reales. Ganar a rivales superiores
-                    otorga bonificaciones cuánticas, mientras que las derrotas ajustan tu posición en la Matrix.</p>
+                <p class="norm-text">El nexo calcula tu nivel basado en resultados reales. Ganar a rivales superiores otorga bonificaciones cuánticas, mientras que las derrotas ajustan tu posición en la Matrix.</p>
             </div>
 
             <div class="norm-card animate-up" style="animation-delay: 0.1s;">
                 <div class="norm-num">02</div>
                 <h2 class="norm-title">PROTOCOLOS DE PISTA</h2>
-                <p class="norm-text">Una vez confirmada la misión (4/4 jugadores), el enlace es vinculante. Las
-                    cancelaciones de última hora pueden afectar a tu nivel de reputación en la red.</p>
+                <p class="norm-text">Una vez confirmada la misión (4/4 jugadores), el enlace es vinculante. Las cancelaciones de última hora pueden afectar a tu nivel de reputación en la red.</p>
             </div>
 
             <div class="norm-card animate-up" style="animation-delay: 0.2s;">
                 <div class="norm-num">03</div>
                 <h2 class="norm-title">CÓDIGO DE ALIADOS</h2>
-                <p class="norm-text">El respeto es la base de la Hermandad. Cualquier comportamiento disruptivo en las
-                    sesiones resultará en un purgado permanente de tu identidad digital.</p>
+                <p class="norm-text">El respeto es la base de la Hermandad. Cualquier comportamiento disruptivo en las sesiones resultará en un purgado permanente de tu identidad digital.</p>
             </div>
 
             <div class="text-center p-8 opacity-20 text-2xs font-bold tracking-widest">
@@ -100,5 +87,4 @@
         initAppUI('normas');
     </script>
 </body>
-
 </html>

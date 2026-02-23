@@ -15,15 +15,66 @@ service cloud.firestore {
       return matchData.creador == currentUid() || matchData.organizerId == currentUid();
     }
 
-    function isParticipantAfterUpdate() {
-      return request.resource.data.jugadores is list &&
+    function isMatchFinished(data) {
+      return (data.estado == 'jugado' || data.estado == 'cancelado' || data.estado == 'anulado') ||
+             (data.resultado is map && data.resultado.sets is string);
+    }
+
+    function participantInBeforeAndAfter() {
+      return resource.data.jugadores is list &&
+             request.resource.data.jugadores is list &&
+             resource.data.jugadores.hasAny([currentUid()]) &&
              request.resource.data.jugadores.hasAny([currentUid()]);
+    }
+
+    function isParticipantResultUpdate() {
+      return participantInBeforeAndAfter() &&
+             !isMatchFinished(resource.data) &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'resultado',
+               'estado',
+               'diaryImpactBy',
+               'eloSummary',
+               'rankingProcessedAt',
+               'rankingProcessedResult',
+               'rankingProcessedBy'
+             ]);
+    }
+
+    function isParticipantTeamSwapUpdate() {
+      return participantInBeforeAndAfter() &&
+             !isMatchFinished(resource.data) &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'jugadores',
+               'equipoA',
+               'equipoB'
+             ]);
+    }
+
+    function isSelfJoinOrLeaveUpdate() {
+      return resource.data.jugadores is list &&
+             request.resource.data.jugadores is list &&
+             !isMatchFinished(resource.data) &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'jugadores',
+               'equipoA',
+               'equipoB',
+               'creador',
+               'organizerId'
+             ]) &&
+             (
+               (!resource.data.jugadores.hasAny([currentUid()]) &&
+                request.resource.data.jugadores.hasAny([currentUid()])) ||
+               (resource.data.jugadores.hasAny([currentUid()]) &&
+                !request.resource.data.jugadores.hasAny([currentUid()]))
+             );
     }
 
     // EXCEPCIÃ“N MAESTRA PARA ADMIN (Email directo o Rol en DB)
     function isAdmin() {
       return signedIn() && (
-        request.auth.token.email == 'Juanan221091@gmail.com' || 
+        request.auth.token.email == 'Juanan221091@gmail.com' ||
+        request.auth.token.email == 'juanan221091@gmail.com' || 
         (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'Admin')
       );
@@ -56,19 +107,10 @@ service cloud.firestore {
       allow read, list: if isApproved();
       allow create: if isApproved();
       allow update: if isAdmin() || (isApproved() && (
-        // 1. Propietario u Organizador
-        isMatchOwner(resource.data) ||
-        // 2. Participantes reportando resultado
-        (resource.data.jugadores.hasAny([currentUid()]) && 
-         request.resource.data.diff(resource.data).affectedKeys().hasAny(['resultado', 'estado', 'diaryImpactBy'])) ||
-        // 3. Unirse al partido (Si hay hueco y no estaba)
-        (!resource.data.jugadores.hasAny([currentUid()]) &&
-         request.resource.data.jugadores.hasAny([currentUid()]) &&
-         request.resource.data.jugadores.size() == 4) ||
-        // 4. Salirse del partido
-        (resource.data.jugadores.hasAny([currentUid()]) &&
-         !request.resource.data.jugadores.hasAny([currentUid()]) &&
-         request.resource.data.jugadores.size() == 4)
+        (isMatchOwner(resource.data) && resource.data.jugadores.hasAny([currentUid()])) ||
+        isParticipantResultUpdate() ||
+        isParticipantTeamSwapUpdate() ||
+        isSelfJoinOrLeaveUpdate()
       ));
       allow delete: if isAdmin() || (isApproved() && resource.data.creador == currentUid());
       
@@ -81,18 +123,10 @@ service cloud.firestore {
       allow read, list: if isApproved();
       allow create: if isApproved();
       allow update: if isAdmin() || (isApproved() && (
-        isMatchOwner(resource.data) ||
-        // 2. Participantes reportando resultado
-        (resource.data.jugadores.hasAny([currentUid()]) && 
-         request.resource.data.diff(resource.data).affectedKeys().hasAny(['resultado', 'estado', 'diaryImpactBy'])) ||
-        // 3. Unirse al partido
-        (!resource.data.jugadores.hasAny([currentUid()]) &&
-         request.resource.data.jugadores.hasAny([currentUid()]) &&
-         request.resource.data.jugadores.size() == 4) ||
-        // 4. Salirse del partido
-        (resource.data.jugadores.hasAny([currentUid()]) &&
-         !request.resource.data.jugadores.hasAny([currentUid()]) &&
-         request.resource.data.jugadores.size() == 4)
+        (isMatchOwner(resource.data) && resource.data.jugadores.hasAny([currentUid()])) ||
+        isParticipantResultUpdate() ||
+        isParticipantTeamSwapUpdate() ||
+        isSelfJoinOrLeaveUpdate()
       ));
       allow delete: if isAdmin() || (isApproved() && resource.data.creador == currentUid());
 
@@ -155,5 +189,3 @@ service cloud.firestore {
     }
   }
 }
-
-

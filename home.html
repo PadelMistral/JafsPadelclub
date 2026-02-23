@@ -19,6 +19,13 @@
     <link rel="stylesheet" href="./css/final-premium.css">
     <link rel="stylesheet" href="./css/master-polish.css">
     <link rel="stylesheet" href="./css/ux-enhance.css">
+    <style>
+        html,
+        body {
+            background: #020617 !important;
+            color: #fff;
+        }
+    </style>
 </head>
 
 <body>
@@ -39,7 +46,9 @@
                         </div>
 
                         <div class="welcome-name-row">
-                            <h1 id="user-name" class="welcome-hero-name">JUGADOR</h1>
+                            <div class="welcome-name-inline">
+                                <h1 id="user-name" class="welcome-hero-name">JUGADOR</h1>
+                            </div>
                             <div class="flex-row items-center gap-2">
                                 <span id="user-rank" class="welcome-rank-chip">#--</span>
                                 <span id="user-rank-trend" class="welcome-trend-pill"></span>
@@ -65,29 +74,39 @@
                             </div>
                         </div>
 
-                        <div id="online-count-display" class="mt-4">
+                        <div class="welcome-live-strip mt-2">
+                            <div id="welcome-live-time" class="welcome-live-chip welcome-time-chip">
+                                <i class="fas fa-stopwatch clock-digital-icon" aria-hidden="true"></i>
+                                <div class="welcome-live-copy">
+                                    <span class="time-main">--:--<span class="time-sec">:--</span></span>
+                                    <span class="time-sub">CARGANDO HORA</span>
+                                </div>
+                            </div>
+                            <div id="welcome-live-weather" class="welcome-live-chip welcome-weather-chip weather-cloud">
+                                <i class="fas fa-cloud weather-main-icon"></i>
+                                <div class="welcome-live-copy">
+                                    <span class="weather-temp">--°C</span>
+                                    <span class="weather-cond">Cargando clima</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="online-count-display" class="mt-3">
                             <!-- Dynamic online count -->
                         </div>
-                        <div class="welcome-live-strip mt-2">
-                            <span id="welcome-live-time" class="welcome-live-chip"><i class="fas fa-clock"></i>
-                                --:--:--</span>
-                            <span id="welcome-live-weather" class="welcome-live-chip"><i class="fas fa-cloud"></i>
-                                Benicalap: cargando clima...</span>
-                        </div>
                     </div>
-
                     <div class="welcome-avatar-wrap">
                         <div class="avatar-xl shadow-glow-primary welcome-avatar-frame">
                             <img id="welcome-avatar" src="./imagenes/Logojafs.png" alt="Avatar"
                                 style="width:100%;height:100%;object-fit:cover;">
                         </div>
                     </div>
+
                 </div>
             </section>
 
             <section id="next-match-container" class="mt-3"></section>
 
-            <!-- OPEN MATCHES SCANNER (MOVED HIGHER) -->
+            <!-- OPEN MATCHES SCANNER -->
             <section class="mt-3 card-premium-v7 p-4 animate-up border-glow-cyan open-matches-section"
                 style="animation-delay: 0.1s;">
                 <div class="flex-row between items-center mb-4">
@@ -122,7 +141,6 @@
                 </div>
             </section>
 
-            <!-- UPCOMING MATCHES (NEW SECTION) -->
             <section class="mt-3 card-premium-v7 p-4 animate-up" style="animation-delay: 0.2s;">
                 <div class="flex-row between items-center mb-4">
                     <div class="flex-col">
@@ -152,7 +170,7 @@
                 </div>
             </section>
 
-            <!-- TOP STATS (PREMIUM V7) -->
+            <!-- TOP STATS -->
             <section class="mt-3 grid gap-3" style="grid-template-columns: repeat(3, 1fr);">
                 <div class="stat-card-v7 cyan clickable" id="home-stat-level">
                     <span class="text-[10px] font-black uppercase text-muted tracking-widest">Nivel</span>
@@ -178,7 +196,6 @@
                 </div>
             </section>
 
-            <!-- TOP 3 PODIUM (NEW VERTICAL) -->
             <section class="mt-4 mb-4">
                 <div class="flex-row between items-center mb-3">
                     <span class="text-[10px] font-black text-muted uppercase tracking-[3px]">Elite Matrix Top 3</span>
@@ -189,7 +206,6 @@
                 </div>
             </section>
 
-            <!-- ECOSYSTEM HEALTH & LEVEL BREAKDOWN -->
             <section class="card card-premium-v7 mt-3 animate-fade-in shadow-cyan/10">
                 <div class="flex-row between items-center mb-4">
                     <div class="flex-col">
@@ -207,7 +223,6 @@
                     </div>
                 </div>
 
-                <!-- Detailed Progress Bar -->
                 <div class="progress-bar-v7 large mb-2">
                     <div id="home-level-bar" class="fill-bar gradient-cyan" style="width: 50%;"></div>
                 </div>
@@ -218,7 +233,6 @@
                 </div>
             </section>
 
-            <!-- ADN PLAYER STATE & RIVAL INTELLIGENCE -->
             <section class="mt-3 grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));">
                 <div id="adn-panel" class="card-premium-v7 p-4 animate-up border-glow-cyan"
                     style="animation-delay: 0.1s;">
