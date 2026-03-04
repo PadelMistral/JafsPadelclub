@@ -258,17 +258,21 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 62px;
+  height: 68px; /* Slightly taller */
   background: var(--nav-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
   border-top: 1px solid var(--border);
   z-index: 5000;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: space-around;
-  padding: 0 8px;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding: 0 10px;
+  padding-bottom: max(
+    10px,
+    env(safe-area-inset-bottom, 0px)
+  ); /* More padding */
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
 }
 
 /* Global spacing between cards */

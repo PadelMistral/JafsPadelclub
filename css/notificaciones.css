@@ -511,5 +511,123 @@
 .btn-health-opt.success:hover {
   background: rgba(34, 197, 94, 0.1);
 }
-.status-banner-v10 { background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 20px; padding: 16px; margin-bottom: 24px; display: flex; flex-direction: column; gap: 8px; backdrop-filter: blur(10px); } .status-chip-v10 { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(255, 255, 255, 0.04); border-radius: 50px; border: 1px solid rgba(255, 255, 255, 0.1); width: fit-content; } .chip-dot { width: 8px; height: 8px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 10px #fbbf24; } .status-banner-v10.ok .chip-dot { background: #22c55e; box-shadow: 0 0 10px #22c55e; } .status-banner-v10.error .chip-dot { background: #ef4444; box-shadow: 0 0 10px #ef4444; } #global-push-status { font-family: " Rajdhani\, sans-serif; font-size: 13px; font-weight: 800; text-transform: uppercase; color: #fff; letter-spacing: 1px; } .status-explanation { font-size: 11px; color: rgba(255, 255, 255, 0.5); line-height: 1.4; margin: 0; }
-.notif-help-v10 { margin-top: 40px; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 25px; } .help-title { color: var(--text-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; text-align: center; } .help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; } .help-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 15px; } .help-card h5 { font-size: 10px; font-weight: 800; color: var(--primary); margin-bottom: 8px; text-transform: uppercase; } .help-card p { font-size: 11px; color: var(--text-muted); line-height: 1.5; } .btn-micro-guide { width: 100%; height: 36px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-dim); font-size: 10px; font-weight: 800; cursor: pointer; transition: all 0.2s; } .btn-micro-guide:hover { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.2); }
+/* === PUSH STATUS BANNER V10 === */
+.status-banner-v10 {
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  backdrop-filter: blur(10px);
+}
+
+.status-chip-v10 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: fit-content;
+}
+
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 10px #fbbf24;
+}
+
+.status-banner-v10.ok .chip-dot {
+  background: #22c55e;
+  box-shadow: 0 0 10px #22c55e;
+}
+
+.status-banner-v10.error .chip-dot {
+  background: #ef4444;
+  box-shadow: 0 0 10px #ef4444;
+}
+
+#global-push-status {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #fff;
+  letter-spacing: 1px;
+}
+
+.status-explanation {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.notif-help-v10 {
+  margin-top: 40px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 25px;
+}
+
+.help-title {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.help-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 15px;
+}
+
+.help-card h5 {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.help-card p {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.btn-micro-guide {
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-micro-guide:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
