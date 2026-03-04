@@ -8,6 +8,8 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 
+import { getAppBase, getFullUrl } from "./path-utils.js";
+
 const DEFAULT_ICON = "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff";
 const ONESIGNAL_SDK_SRC =
   "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
@@ -84,62 +86,18 @@ function uniqueBy(arr, keyFn) {
 }
 
 function getWorkerCandidates() {
-  const host = window.location.hostname || "";
-  const isLocal = host === "localhost" || host === "127.0.0.1";
-  const preferredScope = "/onesignal-sdk/";
-  if (isLocal) {
-    return [
-      {
-        base: "./",
-        swPath: "./OneSignalSDKWorker.js",
-        updaterPath: "./OneSignalSDKUpdaterWorker.js",
-        scope: "./onesignal-sdk/",
-      },
-      {
-        base: "./",
-        swPath: "./OneSignalSDKWorker.js",
-        updaterPath: "./OneSignalSDKUpdaterWorker.js",
-        scope: "./",
-      },
-      {
-        base: "/",
-        swPath: "/OneSignalSDKWorker.js",
-        updaterPath: "/OneSignalSDKUpdaterWorker.js",
-        scope: "/",
-      },
-    ];
-  }
+  const base = getAppBase();
+  pushLog("info", "detecting_app_base", { base, pathname: window.location.pathname });
 
-  const seg = window.location.pathname.split("/").filter(Boolean);
-  const first = seg[0] || "";
-  const inferredBase = first && !first.includes(".") ? `/${first}/` : "/";
-  const candidates = [
+  // Preferred candidate: local Service Worker files in root of the app
+  return [
     {
-      base: "/",
-      swPath: "/OneSignalSDKWorker.js",
-      updaterPath: "/OneSignalSDKUpdaterWorker.js",
-      scope: preferredScope,
-    },
-    {
-      base: inferredBase,
-      swPath: `${inferredBase}OneSignalSDKWorker.js`,
-      updaterPath: `${inferredBase}OneSignalSDKUpdaterWorker.js`,
-      scope: inferredBase,
-    },
-    {
-      base: "/",
-      swPath: "/OneSignalSDKWorker.js",
-      updaterPath: "/OneSignalSDKUpdaterWorker.js",
-      scope: "/",
-    },
-    {
-      base: "/JafsPadelclub/",
-      swPath: "/JafsPadelclub/OneSignalSDKWorker.js",
-      updaterPath: "/JafsPadelclub/OneSignalSDKUpdaterWorker.js",
-      scope: "/JafsPadelclub/",
-    },
+      base: base,
+      swPath: `${base}OneSignalSDKWorker.js`,
+      updaterPath: `${base}OneSignalSDKUpdaterWorker.js`,
+      scope: base,
+    }
   ];
-  return uniqueBy(candidates, (c) => `${c.swPath}|${c.scope}`);
 }
 
 async function filterReachableWorkerCandidates(candidates = []) {
@@ -304,30 +262,31 @@ async function ensureOneSignalInitialized() {
 
     await ensureOneSignalScript();
 
+    // 1. Cleanup stale workers first
+    await cleanupStaleServiceWorkers();
+
     const candidates = await filterReachableWorkerCandidates(getWorkerCandidates());
     const swDiag = await getServiceWorkerDiagnostics();
     const appScope = swDiag?.appShell?.scope || null;
     let initOk = false;
     let lastError = null;
+    
     for (const cfg of candidates) {
-      const targetScope = cfg.scope || "/";
-      if (appScope && targetScope === appScope) {
-        pushLog("warn", "onesignal_scope_conflict_skip", { targetScope, appScope, swPath: cfg.swPath });
-        continue;
-      }
       try {
         await retryWithBackoff(async () => {
           await oneSignalExec(async (OneSignal) => {
             await OneSignal.init({
-              appId,
+              appId: "ce289ac1-60a6-4277-94d0-4d3765e197c3",
+              safari_web_id: "web.onesignal.auto.10a9c80d-13fc-463d-9d41-3838ae45a6c3",
+              notifyButton: { enable: false },
+              serviceWorkerParam: { scope: cfg.scope },
               serviceWorkerPath: cfg.swPath,
               serviceWorkerUpdaterPath: cfg.updaterPath,
-              serviceWorkerParam: { scope: cfg.scope },
               allowLocalhostAsSecureOrigin: true,
-              notifyButton: { enable: false }
             });
           });
-        });
+        }, { attempts: 3 });
+
         window.__pushWorkerConfig = cfg;
         pushLog("info", "onesignal_init_ok", { swPath: cfg.swPath, scope: cfg.scope });
         persistPushState({ oneSignal: { initialized: true, swPath: cfg.swPath, scope: cfg.scope } });
@@ -807,10 +766,13 @@ export async function checkNotificationStatus() {
       swConflict = Boolean(swDiag?.conflict);
       appShellActive = Boolean(swDiag?.appShell?.active || swDiag?.appShell?.installing || swDiag?.appShell?.waiting);
       oneSignalWorkerActive = Boolean(swDiag?.oneSignal?.active || swDiag?.oneSignal?.installing || swDiag?.oneSignal?.waiting);
+      const oneSignalActiveWorker = swDiag?.oneSignal?.active || swDiag?.oneSignal?.installing || swDiag?.oneSignal?.waiting;
+      const oneSignalScriptURL = oneSignalActiveWorker?.scriptURL || null;
       appShellScope = swDiag?.appShell?.scope || null;
       oneSignalScope = swDiag?.oneSignal?.scope || null;
       
-      console.log(`🛠️ [Push Health] SW Registros Activos: ${swCount} | Scope: ${swScope}`);
+      console.log(`🛠️ [Push Health] SW Registros Activos: ${swCount}`);
+      if (oneSignalScope) console.log(`🛰️ [Push Health] OneSignal Scope: ${oneSignalScope} | URL: ${oneSignalScriptURL}`);
       if (swConflict) console.warn(`⚠️ [Push Health] Conflicto de SW detectado!`);
     } catch (e) {
       console.error(`❌ [Push Health] Error leyendo Service Workers:`, e);
@@ -887,6 +849,7 @@ export async function checkNotificationStatus() {
     swConflict,
     appShellActive,
     oneSignalWorkerActive,
+    oneSignalScriptURL,
     appShellScope,
     oneSignalScope,
     oneSignalAvailable,
@@ -1024,4 +987,72 @@ export async function sendExternalPush({ title, message, uids = [], url = "home.
   }
 }
 
+/**
+ * Unregisters any Service Workers that are not at the correct base or are known legacy paths.
+ */
+export async function cleanupStaleServiceWorkers() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        const correctBase = getAppBase();
+        const legacyPaths = [
+            'legacy-sw.js',
+            '/JafsPadelclub/',
+            '/JafPadel/',
+            'OneSignalSDKWorker.js' // We'll re-register correctly
+        ];
 
+        for (const reg of regs) {
+            const scriptURL = reg.active?.scriptURL || reg.installing?.scriptURL || reg.waiting?.scriptURL || "";
+            const scope = reg.scope;
+
+            const isLegacyPath = legacyPaths.some(lp => scriptURL.includes(lp) || scope.includes(lp));
+            const isWrongScope = !scope.startsWith(window.location.origin + correctBase);
+
+            if (isLegacyPath || isWrongScope) {
+                pushLog("info", "cleaning_stale_sw", { scriptURL, scope, reason: isLegacyPath ? 'legacy' : 'wrong_scope' });
+                await reg.unregister();
+            }
+        }
+    } catch (e) {
+        pushLog("error", "cleanup_sw_failed", { error: e?.message });
+    }
+}
+
+/**
+ * Diagnostic health check for development
+ */
+export async function runPushDiagnostics() {
+    const base = getAppBase();
+    const status = await checkNotificationStatus();
+    
+    console.group("🚀 [OneSignal Diagnostics]");
+    console.log("App Base Path (Detected):", base);
+    console.log("Full Origin:", window.location.origin);
+    console.log("-----------------------------------");
+    console.log("OneSignal SW ScriptURL:", status.oneSignalScriptURL || "NOT REGISTERED");
+    console.log("OneSignal SW Scope:", status.oneSignalScope || "NOT REGISTERED");
+    console.log("-----------------------------------");
+    
+    const expectedScope = window.location.origin + base;
+    const scopeOk = status.oneSignalScope === expectedScope;
+    
+    if (status.oneSignalScope) {
+        if (scopeOk) {
+            console.log("✅ Scope Validation: MATCH (Correct)");
+        } else {
+            console.error(`❌ Scope Validation: MISMATCH! \nExpected: ${expectedScope}\nActual:   ${status.oneSignalScope}`);
+        }
+    }
+    
+    if (status.issues.length > 0) {
+        console.warn("Issues detected:", status.issues);
+    }
+    
+    if (status.oneSignalScope && status.appShellScope && status.oneSignalScope === status.appShellScope) {
+        console.warn("Co-existence warning: Both OneSignal and App SW share the same scope.");
+    }
+    
+    console.groupEnd();
+    return status;
+}

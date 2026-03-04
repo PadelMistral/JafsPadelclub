@@ -1311,9 +1311,9 @@ export function initVecinaChat() {
       } else {
         panel.style.setProperty("left", "0", "important");
         panel.style.setProperty("right", "0", "important");
-        panel.style.setProperty("bottom", "calc(86px + env(safe-area-inset-bottom))", "important");
+        panel.style.setProperty("bottom", "calc(106px + env(safe-area-inset-bottom))", "important");
         panel.style.setProperty("width", "100%", "important");
-        panel.style.setProperty("height", "85dvh", "important");
+        panel.style.setProperty("height", "82dvh", "important");
       }
     }
   };

@@ -25,7 +25,8 @@
             <!-- PAGE HEADER -->
             <header class="notif-header-v8 animate-fade-in no-flicker">
                 <div class="flex-col">
-                    <h1 class="page-title-pro"><i class="fas fa-bell"></i> Centro de Alertas</h1>
+                    <h1 class="page-title-pro"><i class="fas fa-bell"></i>Notificaciónes<span
+                            class="text-primary"></span></h1>
                     <p class="page-sub-pro">Partidos · Retos · Eventos · Sistema</p>
                 </div>
                 <div class="header-actions-v8">
@@ -64,92 +65,103 @@
                 <button id="btn-request-push" class="btn-perm-action">INTENTAR REACTIVAR</button>
             </div>
 
-            <!-- ════ PLATFORM GUIDE CARD (solo visible si denied) ════ -->
-            <div id="notif-denied-guide" class="notif-denied-guide hidden animate-up">
-                <div class="denied-guide-header">
-                    <i class="fas fa-shield-exclamation text-sport-red"></i>
-                    <span>Notificaciones Bloqueadas</span>
-                </div>
+            <!-- ════ PLATFORM GUIDE MODAL (solo visible si denied) ════ -->
+            <div id="notif-denied-guide" class="modal-overlay hidden">
+                <div class="modal-card glass-strong"
+                    style="max-width:400px; max-height:85vh; overflow-y:auto; position:relative;">
+                    <button class="close-btn"
+                        style="position:absolute; top:12px; right:12px; background:transparent; border:none; color:#fff;"
+                        onclick="this.closest('.modal-overlay').classList.add('hidden')"><i
+                            class="fas fa-times"></i></button>
+                    <div class="denied-guide-header mt-2">
+                        <i class="fas fa-shield-exclamation text-sport-red"></i>
+                        <span>Notificaciones Bloqueadas</span>
+                    </div>
 
-                <!-- Android / Chrome -->
-                <div class="guide-section" id="guide-android">
-                    <div class="guide-step">
-                        <span class="guide-step-num">1</span>
-                        <div>
-                            <span class="guide-step-title"><i class="fab fa-chrome text-primary mr-1"></i>Abre
-                                Chrome</span>
-                            <p class="guide-step-desc">Toca el icono <i class="fas fa-lock text-primary"></i> en la
-                                barra de dirección (arriba)</p>
+                    <!-- Android / Chrome -->
+                    <div class="guide-section" id="guide-android">
+                        <div class="guide-step">
+                            <span class="guide-step-num">1</span>
+                            <div>
+                                <span class="guide-step-title"><i class="fab fa-chrome text-primary mr-1"></i>Abre
+                                    Chrome</span>
+                                <p class="guide-step-desc">Toca el icono <i class="fas fa-lock text-primary"></i> en la
+                                    barra de dirección (arriba)</p>
+                            </div>
+                        </div>
+                        <div class="guide-step">
+                            <span class="guide-step-num">2</span>
+                            <div>
+                                <span class="guide-step-title">Permisos del sitio</span>
+                                <p class="guide-step-desc">Busca <b>Notificaciones</b> y cámbialo a <b
+                                        class="text-sport-green">Permitir</b></p>
+                            </div>
+                        </div>
+                        <div class="guide-step">
+                            <span class="guide-step-num">3</span>
+                            <div>
+                                <span class="guide-step-title">Recarga</span>
+                                <p class="guide-step-desc">Pulsa el botón de abajo para aplicar el cambio</p>
+                            </div>
                         </div>
                     </div>
-                    <div class="guide-step">
-                        <span class="guide-step-num">2</span>
-                        <div>
-                            <span class="guide-step-title">Permisos del sitio</span>
-                            <p class="guide-step-desc">Busca <b>Notificaciones</b> y cámbialo a <b
-                                    class="text-sport-green">Permitir</b></p>
-                        </div>
-                    </div>
-                    <div class="guide-step">
-                        <span class="guide-step-num">3</span>
-                        <div>
-                            <span class="guide-step-title">Recarga</span>
-                            <p class="guide-step-desc">Pulsa el botón de abajo para aplicar el cambio</p>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- iOS / Safari -->
-                <div class="guide-section" id="guide-ios">
-                    <div class="guide-step">
-                        <span class="guide-step-num">1</span>
-                        <div>
-                            <span class="guide-step-title"><i class="fab fa-safari text-cyan mr-1"></i>Añadir a
-                                inicio</span>
-                            <p class="guide-step-desc">En Safari, pulsa <i class="fas fa-arrow-up-from-bracket"></i> →
-                                "Añadir a pantalla de inicio"</p>
+                    <!-- iOS / Safari -->
+                    <div class="guide-section" id="guide-ios">
+                        <div class="guide-step">
+                            <span class="guide-step-num">1</span>
+                            <div>
+                                <span class="guide-step-title"><i class="fab fa-safari text-cyan mr-1"></i>Añadir a
+                                    inicio</span>
+                                <p class="guide-step-desc">En Safari, pulsa <i class="fas fa-arrow-up-from-bracket"></i>
+                                    →
+                                    "Añadir a pantalla de inicio"</p>
+                            </div>
+                        </div>
+                        <div class="guide-step">
+                            <span class="guide-step-num">2</span>
+                            <div>
+                                <span class="guide-step-title">Abre desde la app</span>
+                                <p class="guide-step-desc">Abre Padeluminatis desde el icono de tu pantalla de inicio
+                                </p>
+                            </div>
+                        </div>
+                        <div class="guide-step">
+                            <span class="guide-step-num">3</span>
+                            <div>
+                                <span class="guide-step-title">Configuración iOS</span>
+                                <p class="guide-step-desc">Ve a <b>Ajustes → Notificaciones → Padeluminatis</b> y
+                                    actívalas
+                                </p>
+                            </div>
                         </div>
                     </div>
-                    <div class="guide-step">
-                        <span class="guide-step-num">2</span>
-                        <div>
-                            <span class="guide-step-title">Abre desde la app</span>
-                            <p class="guide-step-desc">Abre Padeluminatis desde el icono de tu pantalla de inicio</p>
-                        </div>
-                    </div>
-                    <div class="guide-step">
-                        <span class="guide-step-num">3</span>
-                        <div>
-                            <span class="guide-step-title">Configuración iOS</span>
-                            <p class="guide-step-desc">Ve a <b>Ajustes → Notificaciones → Padeluminatis</b> y actívalas
-                            </p>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Desktop / Firefox -->
-                <div class="guide-section" id="guide-desktop">
-                    <div class="guide-step">
-                        <span class="guide-step-num">1</span>
-                        <div>
-                            <span class="guide-step-title"><i class="fas fa-lock text-primary mr-1"></i>Candado en
-                                URL</span>
-                            <p class="guide-step-desc">Haz clic en el icono del candado en la barra de direcciones</p>
+                    <!-- Desktop / Firefox -->
+                    <div class="guide-section" id="guide-desktop">
+                        <div class="guide-step">
+                            <span class="guide-step-num">1</span>
+                            <div>
+                                <span class="guide-step-title"><i class="fas fa-lock text-primary mr-1"></i>Candado en
+                                    URL</span>
+                                <p class="guide-step-desc">Haz clic en el icono del candado en la barra de direcciones
+                                </p>
+                            </div>
+                        </div>
+                        <div class="guide-step">
+                            <span class="guide-step-num">2</span>
+                            <div>
+                                <span class="guide-step-title">Restablecer permiso</span>
+                                <p class="guide-step-desc">Busca <b>Notificaciones</b> → cambia a <b
+                                        class="text-sport-green">Permitir</b> o <b>Preguntar</b></p>
+                            </div>
                         </div>
                     </div>
-                    <div class="guide-step">
-                        <span class="guide-step-num">2</span>
-                        <div>
-                            <span class="guide-step-title">Restablecer permiso</span>
-                            <p class="guide-step-desc">Busca <b>Notificaciones</b> → cambia a <b
-                                    class="text-sport-green">Permitir</b> o <b>Preguntar</b></p>
-                        </div>
-                    </div>
-                </div>
 
-                <button class="btn btn-primary w-full mt-3" onclick="window.location.reload()">
-                    <i class="fas fa-sync-alt mr-1"></i> RECARGAR Y ACTIVAR
-                </button>
+                    <button class="btn btn-primary w-full mt-3" onclick="window.location.reload()">
+                        <i class="fas fa-sync-alt mr-1"></i> RECARGAR Y ACTIVAR
+                    </button>
+                </div>
             </div>
 
             <!-- FILTER TABS -->

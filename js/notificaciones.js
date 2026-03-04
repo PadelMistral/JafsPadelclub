@@ -15,6 +15,7 @@ import {
   checkNotificationStatus,
   showNotificationHelpModal,
 } from "./modules/push-notifications.js";
+import { getAppBase } from "./modules/path-utils.js";
 
 let currentUser = null;
 let allNotifs = [];
@@ -103,6 +104,11 @@ async function handleRequestPushClick() {
 
     // Si está bloqueado por el navegador
     if (health?.permission === "denied") {
+      const modal = document.getElementById('notif-denied-guide');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('active'); // show overlay
+      }
       openBrowserNotificationSettings();
       showToast("Bloqueado", "Habilita el permiso en los ajustes del candado arriba.", "warning");
       return;
@@ -127,7 +133,7 @@ async function handleRequestPushClick() {
     
     refreshNotificationState();
   } catch (e) {
-    console.error("Manual push request error:", e);
+    console.warn("UI refresh push failed:", e);
     showToast("Error", "Fallo al sincronizar. Reintenta en unos segundos.", "error");
   } finally {
     if (btn) btn.disabled = false;
@@ -198,32 +204,18 @@ async function forceReregisterServiceWorker() {
 
 async function registerAppShellServiceWorker() {
   try {
-    const host = window.location.hostname || "";
-    const isLocal = host === "localhost" || host === "127.0.0.1";
-    const seg = window.location.pathname.split("/").filter(Boolean);
-    const first = seg[0] || "";
-    const inferredBase = !isLocal && first && !first.includes(".") ? `/${first}/` : "/";
-    const candidates = isLocal
-      ? [
-          { swPath: "./sw.js", scope: "./" },
-          { swPath: "/sw.js", scope: "/" },
-        ]
-      : [
-          { swPath: `${inferredBase}sw.js`, scope: inferredBase },
-          { swPath: "/sw.js", scope: "/" },
-          { swPath: "/JafsPadelclub/sw.js", scope: "/JafsPadelclub/" },
-        ];
-
-    for (const cfg of candidates) {
-      try {
+    const base = getAppBase();
+    const cfg = { swPath: `${base}sw.js`, scope: base };
+    
+    try {
         const reg = await navigator.serviceWorker.register(cfg.swPath, {
           scope: cfg.scope,
           updateViaCache: "none",
         });
         return { ok: true, reg };
-      } catch (_) {}
+    } catch (_) {
+        return { ok: false };
     }
-    return { ok: false };
   } catch (_) {
     return { ok: false };
   }
@@ -302,13 +294,20 @@ function renderPermissionState(health) {
       btn.textContent = "ESTADO OK";
       btn.disabled = true;
       btn.style.opacity = "0.5";
+      // User request: hide if active
+      card.style.display = "none"; 
+      // Also hide reactivate box if active
+      const reactivateBox = document.getElementById("denied-help-box");
+      if (reactivateBox) reactivateBox.classList.add("hidden");
     } else if (health.permission === "denied") {
+      card.style.display = "flex";
       card.classList.add("state-blocked");
       text.textContent = "Estado: Notificaciones silenciadas.";
       btn.textContent = "DESBLOQUEAR";
       btn.disabled = false;
       btn.style.opacity = "1";
     } else {
+      card.style.display = "flex";
       card.classList.add("state-default");
       text.textContent = "Estado: Pendiente de activación.";
       btn.textContent = "ACTIVAR AHORA";
@@ -431,4 +430,60 @@ window.deleteNotif = async (id) => {
   if (!confirm("¿Borrar alerta?")) return;
   await deleteDoc(doc(db, "notificaciones", id));
   showToast("Borrado", "Alerta eliminada", "info");
+};
+
+// GUI COMPLETA MODAL
+window.showPushHelpGuide = () => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '15000';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong animate-up" style="max-width:400px; padding:0; overflow:hidden; border-radius: 24px !important;">
+            <div class="p-6 border-b border-white-05 flex items-center justify-between bg-white/02">
+                <h3 class="text-sm font-black italic tracking-widest text-primary uppercase">Guía de Notificaciones</h3>
+                <button class="text-white/40 hover:text-white" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body custom-scroll p-6" style="max-height: 70vh;">
+                <div class="flex-col gap-6">
+                    <div class="help-step">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="w-6 h-6 rounded-lg bg-primary/20 text-primary flex items-center justify-center text-xs font-black">1</span>
+                            <h4 class="text-xs font-black uppercase text-white">Activar Permisos</h4>
+                        </div>
+                        <p class="text-[11px] text-white/50 leading-relaxed pl-9">Pulsa el botón "Sincronizar Dispositivo" en la parte superior. Si el navegador pregunta, selecciona "Permitir".</p>
+                    </div>
+                    
+                    <div class="help-step">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="w-6 h-6 rounded-lg bg-primary/20 text-primary flex items-center justify-center text-xs font-black">2</span>
+                            <h4 class="text-xs font-black uppercase text-white">Añadir a Inicio (iOS)</h4>
+                        </div>
+                        <p class="text-[11px] text-white/50 leading-relaxed pl-9">En iPhone, pulsa el botón compartir <i class="fas fa-arrow-up-from-bracket mx-1 text-primary"></i> y elige "Añadir a pantalla de inicio". Las notificaciones solo funcionan desde el icono del escritorio.</p>
+                    </div>
+
+                    <div class="help-step">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="w-6 h-6 rounded-lg bg-secondary/20 text-secondary flex items-center justify-center text-xs font-black">3</span>
+                            <h4 class="text-xs font-black uppercase text-white">Desbloquear Bloqueo</h4>
+                        </div>
+                        <p class="text-[11px] text-white/50 leading-relaxed pl-9">Si denegaste el permiso por error, pulsa el icono del candado en la barra de direcciones <i class="fas fa-lock mx-1"></i> y restablece los permisos de Notificaciones.</p>
+                    </div>
+
+                    <div class="bg-primary/05 border border-primary/10 rounded-2xl p-4 mt-2">
+                        <div class="flex items-start gap-3">
+                            <i class="fas fa-bolt text-primary mt-1"></i>
+                            <div class="flex-col gap-1">
+                                <span class="text-[10px] font-black text-primary uppercase">Pro Tip</span>
+                                <p class="text-[10px] text-white/60">Si nada funciona, usa el botón "Diagnóstico de Red" en esta página.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 border-t border-white-05 text-center">
+                <button class="btn btn-primary w-full py-3 uppercase text-[10px] font-black" onclick="this.closest('.modal-overlay').remove()">ENTENDIDO</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
 };

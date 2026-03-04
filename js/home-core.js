@@ -102,39 +102,47 @@ document.addEventListener("DOMContentLoaded", () => {
       injectNavbar("home");
       renderWelcome();
       bindTabs();
-      bindAI();
       initWeather();
       startPresence();
-      refreshAICoachTip();
+      initNexus(); // New: Nexus Online
       bindNotificationNudge();
+      checkSystemAlerts(userDoc);
+      checkHomeNotices(); // Added this line
 
-      unsubAm =
-        (await subscribeCol(
+      // Loading matches with safety fallback
+      try {
+        const amPromise = subscribeCol(
           "partidosAmistosos",
           (list) => mergeMatches("partidosAmistosos", list),
           [],
           [["fecha", "asc"]],
-          250,
-        )) || null;
-      unsubRe =
-        (await subscribeCol(
+          200,
+        );
+        const rePromise = subscribeCol(
           "partidosReto",
           (list) => mergeMatches("partidosReto", list),
           [],
           [["fecha", "asc"]],
-          250,
-        )) || null;
+          200,
+        );
 
-      // Fallback: if one collection doesn't load after 3s, render anyway
+        const [uA, uR] = await Promise.all([amPromise, rePromise]);
+        unsubAm = uA;
+        unsubRe = uR;
+      } catch (err) {
+        console.error("Match loading error:", err);
+      }
+
+      // Final fallback to ensure UI isn't stuck
       setTimeout(() => {
-        if (!matchLoadFallbackFired && loadedCollections.size >= 1) {
+        if (!matchLoadFallbackFired) {
           matchLoadFallbackFired = true;
           renderNextMatch();
-          const activeTab =
-            document.querySelector(".hv2-tab.active")?.dataset.filter || "open";
-          renderMatchesByFilter(activeTab);
+          renderMatchesByFilter(
+            document.querySelector(".hv2-tab.active")?.dataset.filter || "open",
+          );
         }
-      }, 3000);
+      }, 3500);
 
       window.getAICoachContext = () =>
         getCoreAIContext({ uid: currentUser.uid });
@@ -143,7 +151,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function cleanup() {
-  [unsubAm, unsubRe].forEach((fn) => {
+  [unsubAm, unsubRe, unsubNexus].forEach((fn) => {
     if (typeof fn === "function")
       try {
         fn();
@@ -151,6 +159,7 @@ function cleanup() {
   });
   unsubAm = null;
   unsubRe = null;
+  unsubNexus = null;
   allMatches = [];
   loadedCollections = new Set();
   colSignature.clear();
@@ -201,6 +210,10 @@ function renderWelcome() {
     const photo = d?.fotoPerfil || d?.fotoURL || d?.photoURL || "";
     avatarEl.src = photo || "./imagenes/Logojafs.png";
     avatarEl.alt = name;
+    
+    // User request: Same photo for brand logo
+    const brandImg = el("hv2-brand-image-id");
+    if (brandImg) brandImg.src = photo || "./imagenes/Logojafs.png";
   }
   const fallback = el("welcome-avatar-fallback");
   if (fallback) {
@@ -215,40 +228,139 @@ function renderWelcome() {
 
   // Division chip based on ELO
   const divChip = el("user-division-chip");
+  const welcomeCard = document.querySelector(".hv2-welcome");
   if (divChip) {
     let divName = "BRONCE",
       divColor = "#cd7f32",
       divBg = "rgba(205,127,50,0.1)",
-      divBorder = "rgba(205,127,50,0.25)";
+      divBorder = "rgba(205,127,50,0.25)",
+      divGlow = "rgba(205,127,50,0.05)";
     if (pts >= 1400) {
       divName = "ELITE";
       divColor = "#a855f7";
-      divBg = "rgba(168,85,247,0.1)";
-      divBorder = "rgba(168,85,247,0.3)";
+      divBg = "rgba(168,85,247,0.15)";
+      divBorder = "rgba(168,85,247,0.4)";
+      divGlow = "rgba(168,85,247,0.1)";
     } else if (pts >= 1200) {
       divName = "DIAMANTE";
       divColor = "#00d4ff";
-      divBg = "rgba(0,212,255,0.1)";
-      divBorder = "rgba(0,212,255,0.25)";
+      divBg = "rgba(0,212,255,0.12)";
+      divBorder = "rgba(0,212,255,0.3)";
+      divGlow = "rgba(0,212,255,0.08)";
     } else if (pts >= 1050) {
       divName = "ORO";
       divColor = "#facc15";
-      divBg = "rgba(250,204,21,0.1)";
-      divBorder = "rgba(250,204,21,0.25)";
+      divBg = "rgba(250,204,21,0.12)";
+      divBorder = "rgba(250,204,21,0.3)";
+      divGlow = "rgba(250,204,21,0.08)";
     } else if (pts >= 950) {
       divName = "PLATA";
-      divColor = "#94a3b8";
-      divBg = "rgba(148,163,184,0.1)";
-      divBorder = "rgba(148,163,184,0.25)";
+      divColor = "#e2e8f0";
+      divBg = "rgba(255,255,255,0.08)";
+      divBorder = "rgba(255,255,255,0.2)";
+      divGlow = "rgba(255,255,255,0.04)";
     }
     divChip.innerHTML = `<i class="fas fa-shield-halved"></i> ${divName}`;
     divChip.style.color = divColor;
     divChip.style.background = divBg;
     divChip.style.borderColor = divBorder;
+    if (welcomeCard) {
+      welcomeCard.style.setProperty("--welcome-glow-color", divGlow);
+      welcomeCard.style.borderColor = divBorder;
+    }
   }
 
   refreshWelcomeRank();
   startClock();
+  setTimeout(checkHomeNotices, 1000);
+}
+
+/* ── Home Notices ── */
+async function checkHomeNotices() {
+    const d = currentUserData;
+    if (!d || !d.uid) return;
+
+    const notices = [];
+    const now = new Date();
+
+    // 1. Matches Today
+    try {
+        const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        
+        const q = query(collection(db, "partidos"), where("jugadores", "array-contains", d.uid));
+        const snap = await getDocs(q);
+        const todayMatches = snap.docs.filter(doc => {
+            const data = doc.data();
+            const fecha = data.fecha?.toDate?.() || new Date(data.fecha);
+            return fecha >= todayStart && fecha <= todayEnd && data.estado === "Abierto";
+        });
+
+        if (todayMatches.length > 0) {
+            notices.push({
+                type: 'game',
+                title: '¡HOY JUEGAS!',
+                message: `Tienes ${todayMatches.length} ${todayMatches.length > 1 ? 'partidos' : 'partido'} programado para hoy. ¡A por todas!`,
+                action: () => window.location.href = 'calendario.html'
+            });
+        }
+    } catch (e) {
+        console.warn("Home Notice Check (Games) Failed:", e);
+    }
+
+    // 2. Pending Diary
+    const lastMatches = window.__lastMatchesParticipated || [];
+    const diaryEntries = d.diario || [];
+    const missingDiary = lastMatches.filter(m => {
+        const matchTime = m.fecha?.toDate?.() || new Date(m.fecha);
+        const isOldEnough = (now - matchTime) > 2 * 60 * 60 * 1000; // 2h after match
+        if (!isOldEnough) return false;
+        return !diaryEntries.some(e => e.matchId === m.id);
+    });
+
+    if (missingDiary.length > 0) {
+        notices.push({
+            type: 'diary',
+            title: 'DIARIO PENDIENTE',
+            message: 'No has apuntado tus datos en el diario del último partido. ¡No pierdas tu racha táctica!',
+            action: () => window.location.href = 'diario.html'
+        });
+    }
+
+    // Display Notices
+    if (notices.length > 0) {
+        const notice = notices[0]; // Show first for now
+        showHomeAlertModal(notice);
+    }
+}
+
+function showHomeAlertModal(notice) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '14000';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong animate-scale-in" style="max-width:320px; border:1px solid rgba(255,255,255,0.15); padding: 24px;">
+            <div class="flex-col items-center text-center gap-4">
+                <div class="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary text-2xl">
+                    <i class="fas ${notice.type === 'game' ? 'fa-calendar-check' : 'fa-book-sparkles'}"></i>
+                </div>
+                <div class="flex-col gap-1">
+                    <h3 class="text-lg font-black italic tracking-widest text-primary">${notice.title}</h3>
+                    <p class="text-xs text-white/70 leading-relaxed">${notice.message}</p>
+                </div>
+                <button class="btn-premium-v7 w-full py-3 uppercase text-[10px] font-black" id="notice-btn-go">CONTINUAR</button>
+                <button class="text-[9px] font-black text-white/30 uppercase tracking-widest" id="notice-btn-close">CERRAR</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#notice-btn-go').onclick = () => {
+        notice.action();
+        overlay.remove();
+    };
+    overlay.querySelector('#notice-btn-close').onclick = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
 function startClock() {
@@ -356,26 +468,151 @@ async function initWeather() {
   }
 }
 
-/* ── AI Coach Tip ── */
-const aiTips = [
-  "Analiza tu próximo rival con el asistente IA",
-  "¿Quieres saber tu mejor socio de dobles?",
-  "Pregunta por tu racha y cómo mejorarla",
-  "Descubre qué partidos abiertos te convienen",
-  "Consulta tu progresión de nivel",
-  "¿Lluvia hoy? Pregunta por pistas cubiertas",
-];
-function refreshAICoachTip() {
-  const tipEl = document.getElementById("ai-tip-text");
-  if (!tipEl) return;
-  const idx = Math.floor(Math.random() * aiTips.length);
-  tipEl.textContent = aiTips[idx];
+/* ── System Alerts & Notifs ── */
+async function checkSystemAlerts(userData) {
+  if (!userData || !currentUser) return;
+
+  const alerts = [];
+  const now = new Date();
+
+  // 1. Check for Match Today
+  const today = allMatches
+    .filter((m) => {
+      const d = toDateSafe(m.fecha);
+      return (
+        d &&
+        d.getDate() === now.getDate() &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear() &&
+        (m.jugadores || []).includes(currentUser.uid)
+      );
+    })
+    .sort((a, b) => toDateSafe(a.fecha) - toDateSafe(b.fecha));
+
+  if (today.length > 0) {
+    const next = today[0];
+    const time = toDateSafe(next.fecha).toLocaleTimeString("es-ES", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    alerts.push({
+      title: "Partido Hoy",
+      body: `¡Hoy tienes partido a las ${time}! Prepárate para la victoria.`,
+      icon: "fa-calendar-check",
+      color: "var(--primary)",
+    });
+  }
+
+  // 2. Check for Pending Diary
+  const lastPlayed = allMatches
+    .filter((m) => {
+      return (
+        isFinishedMatch(m) && (m.jugadores || []).includes(currentUser.uid)
+      );
+    })
+    .sort((a, b) => toDateSafe(b.fecha) - toDateSafe(a.fecha))[0];
+
+  if (lastPlayed) {
+    const hasDiary = (userData.diario || []).some(
+      (e) => e.matchId === lastPlayed.id,
+    );
+    if (!hasDiary) {
+      alerts.push({
+        title: "Diario Pendiente",
+        body: `No has registrado tus sensaciones del último partido. ¡Suma puntos extra ahora!`,
+        icon: "fa-book",
+        color: "var(--sport-yellow)",
+        link: "diario.html",
+      });
+    }
+  }
+
+  // Show as Toasts if there are any
+  if (alerts.length > 0 && typeof window.__appToast === "function") {
+    setTimeout(() => {
+      alerts.forEach((a, i) => {
+        setTimeout(() => {
+          window.__appToast(a.title, a.body, "info");
+        }, i * 3000);
+      });
+    }, 2000);
+  }
+}
+
+/* ── Recomendaciones Dinámicas ── */
+function refreshRecommendations() {
+  const recomEl = document.getElementById("recom-content");
+  if (!recomEl) return;
+
+  const recs = [];
+
+  // Clima
+  if (typeof weather !== "undefined" && weather?.current) {
+    const code = weather.current.weather_code || 0;
+    const wind = weather.current.wind_speed_10m || 0;
+    if (code <= 1)
+      recs.push(
+        "☀️ Hoy el tiempo es soleado, ideal para un partido exterior. ¡Aprovecha!",
+      );
+    else if (code > 50)
+      recs.push(
+        "☔ Parece que va a llover. Intenta buscar partidos en pistas cubiertas (Indoor).",
+      );
+
+    if (wind > 15) {
+      recs.push(
+        `🌬️ Viento fuerte hoy (${wind} km/h). Ten cuidado con los globos largos y ajusta tu posicionamiento al viento.`,
+      );
+    }
+  }
+
+  // Partidos
+  if (typeof allMatches !== "undefined" && allMatches.length > 0) {
+    const now = new Date();
+    const todayMatches = allMatches.filter((m) => {
+      let d = toDateSafe(m.fecha);
+      if (!d) return false;
+      return (
+        d.getDate() === now.getDate() &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear()
+      );
+    });
+    if (todayMatches.length > 0) {
+      recs.push(
+        `🎾 Hoy hay mucho movimiento en la red. Hay ${todayMatches.length} partidos programados hoy. ¿Ya tienes el tuyo?`,
+      );
+    }
+  }
+
+  // Tips Tácticos
+  recs.push(
+    `🔥 Mejora tu derecha: mantén la pala alta en la red y flexiona bien las piernas al defender el fondo de pista.`,
+  );
+  recs.push(
+    `🧠 Recuerda comunicarte constantemente con tu compañero: "Mía", "Tuya", "Corto", "Largo". La comunicación gana partidos.`,
+  );
+  recs.push(
+    `💪 Después de un buen partido, pasa por "DIARIO" y apunta tus sensaciones para sumar Puntos VIP a tu ranking.`,
+  );
+  recs.push(
+    `🏆 Analiza a tus posibles rivales antes de entrar a pista y crea una táctica. Piensa dónde están sus puntos débiles.`,
+  );
+
+  const idx = Math.floor(Math.random() * recs.length);
+  recomEl.innerHTML = `<span class="animate-fade-in inline-block">${recs[idx]}</span>`;
+
+  // Cambiar recomendación cada pcoos segundos de forma cíclica
+  if (!window._recomCycleInit) {
+    window._recomCycleInit = true;
+    setInterval(refreshRecommendations, 12000);
+  }
 }
 
 /* ── Notifications ── */
 function bindNotificationNudge() {
-  // Legacy — replaced by AI Coach tip
-  refreshAICoachTip();
+  // Inicializamos recomendaciones por primera vez
+  refreshRecommendations();
 }
 
 /* ── Match Data ── */
@@ -655,67 +892,88 @@ function renderMatchCard(match, idx = 0) {
   `;
 }
 
-/* ── AI Chat ── */
-function bindAI() {
-  const btn = document.getElementById("btn-open-ai");
-  const send = document.getElementById("lia-send-btn");
+/* ── Match Modal ── */
 
-  btn?.addEventListener("click", () => {
-    document.getElementById("modal-lia-chat")?.classList.add("active");
-  });
+/* ── Nexus Online — Connected Connected Users ── */
+let unsubNexus = null;
+async function initNexus() {
+  const container = document.getElementById("nexus-container");
+  if (!container) return;
 
-  const showAIResponse = (outBox, text) => {
-    if (!outBox) return;
-    outBox.innerHTML = `<div class="ai-response-card"><div class="ai-response-icon"><i class="fas fa-robot"></i></div><div class="ai-response-text">${text.replace(/\n/g, "<br>")}</div></div>`;
-  };
+  // Real-time listener for users seen in the last 10 minutes
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-  send?.addEventListener("click", async () => {
-    const outBox = document.getElementById("lia-response");
-    const inputEl = document.getElementById("lia-query");
-    const q =
-      String(inputEl?.value || "").trim() || "Resumen táctico rápido para hoy";
-    if (outBox)
-      outBox.innerHTML = `<div class="ai-loading"><div class="spinner-neon"></div><span>Analizando datos...</span></div>`;
-    const out = await queryCoreAI({
-      uid: currentUser?.uid,
-      query: q,
-      phase: "chat",
-    }).catch(() => null);
-    showAIResponse(outBox, out?.text || "No se pudo cargar el consejo IA.");
-    if (inputEl) inputEl.value = "";
-  });
+  unsubNexus = await subscribeCol(
+    "usuarios",
+    (users) => {
+      const online = users
+        .filter((u) => {
+          if (!u.ultimoAcceso) return false;
+          const last = u.ultimoAcceso?.toDate
+            ? u.ultimoAcceso.toDate()
+            : new Date(u.ultimoAcceso);
+          return last > tenMinAgo;
+        })
+        .sort(
+          (a, b) =>
+            (b.ultimoAcceso?.seconds || 0) - (a.ultimoAcceso?.seconds || 0),
+        );
 
-  // Enter key to send
-  document.getElementById("lia-query")?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      send?.click();
-    }
-  });
-
-  window.runAIQuickCommand = async (text) => {
-    const outEl = document.getElementById("lia-response");
-    if (outEl)
-      outEl.innerHTML = `<div class="ai-loading"><div class="spinner-neon"></div><span>Consultando...</span></div>`;
-    const out = await queryCoreAI({
-      uid: currentUser?.uid,
-      query: text,
-      phase: "chat",
-    }).catch(() => null);
-    showAIResponse(outEl, out?.text || "No se pudo obtener respuesta.");
-  };
+      renderNexus(online);
+    },
+    [],
+    [["ultimoAcceso", "desc"]],
+    40,
+  );
 }
 
-/* ── Match Modal ── */
-window.openMatch = async (id, col) => {
+function renderNexus(users) {
+  const list = document.getElementById("nexus-list");
+  const count = document.getElementById("nexus-count");
+  if (!list || !count) return;
+
+  count.textContent = `${users.length} CONECTADOS`;
+
+  if (users.length === 0) {
+    list.innerHTML = `<div class="text-[9px] opacity-30 italic px-2">No hay otros iluminatis en línea ahora</div>`;
+    return;
+  }
+
+  list.innerHTML = users
+    .map((u) => {
+      const isMe = u.id === currentUser?.uid;
+      const name = u.nombreUsuario || u.nombre || "Jugador";
+      const photo =
+        u.fotoPerfil || u.fotoURL || u.photoURL || "./imagenes/Logojafs.png";
+
+      return `
+      <div class="nexus-user ${isMe ? "is-me" : ""}" onclick="window.location.href='perfil.html?uid=${u.id}'">
+        <div class="nexus-avatar">
+          <img src="${photo}" alt="${name}" onerror="this.src='./imagenes/Logojafs.png'">
+        </div>
+        <span class="nexus-uname">${isMe ? "TÚ" : name.split(" ")[0]}</span>
+      </div>
+    `;
+    })
+    .join("");
+}
+
+window.openMatch = (id, col) => {
   const modal = document.getElementById("modal-match");
   const area = document.getElementById("match-detail-area");
   if (!modal || !area) return;
   modal.classList.add("active");
-  await renderMatchDetail(area, id, col, currentUser, currentUserData || {});
+  renderMatchDetail(area, id, col, currentUser, currentUserData || {});
 };
 
-window.closeHomeMatchModal = () =>
+window.closeHomeMatchModal = () => {
   document.getElementById("modal-match")?.classList.remove("active");
-window.closeLiaModal = () =>
-  document.getElementById("modal-lia-chat")?.classList.remove("active");
+};
+
+// Ensure cleanup includes Nexus
+const originalCleanup = cleanup;
+cleanup = () => {
+  originalCleanup();
+  if (typeof unsubNexus === "function") unsubNexus();
+  unsubNexus = null;
+};

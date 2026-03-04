@@ -473,8 +473,11 @@ if (typeof window !== 'undefined' && !window.viewProfile) {
     };
 }
 
+import { getAppBase } from './modules/path-utils.js';
+
 /**
- * Shared UI Initialization
+ * UTILS & CONFIG
+ */Initialization
  */
 export function initAppUI(activePageName) {
     if (typeof window !== 'undefined') {
@@ -527,19 +530,10 @@ export function initAppUI(activePageName) {
         const registerSW = () => {
             const host = window.location.hostname || '';
             const isLocal = host === 'localhost' || host === '127.0.0.1';
-            const seg = window.location.pathname.split('/').filter(Boolean);
-            const first = seg[0] || '';
-            const inferredBase = !isLocal && first && !first.includes('.') ? `/${first}/` : '/';
-            const candidates = isLocal
-                ? [
-                    { swPath: './sw.js', swScope: './' },
-                    { swPath: '/sw.js', swScope: '/' },
-                  ]
-                : [
-                    { swPath: `${inferredBase}sw.js`, swScope: inferredBase },
-                    { swPath: '/sw.js', swScope: '/' },
-                    { swPath: '/JafsPadelclub/sw.js', swScope: '/JafsPadelclub/' },
-                  ];
+            const base = getAppBase();
+            const candidates = [
+                { swPath: `${base}sw.js`, swScope: base }
+            ];
 
             let attempt = Promise.reject(new Error('sw-init'));
             candidates.forEach((cfg) => {

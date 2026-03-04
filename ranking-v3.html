@@ -43,9 +43,9 @@
 
     <main class="page-content ranking-page">
         <div class="ranking-header-v7 animate-fade-in text-center mb-10">
-            <h1 class="page-title-pro">RANKING <span class="text-primary">V3.0</span> <span
-                    class="v3-badge">EXPERIMENTAL</span></h1>
-            <p class="page-sub-pro">Sistema de progresión ultra-estable y equilibrado</p>
+            <h1 class="page-title-pro">RANKING <span class="text-primary">Luminatis</span> <span
+                    class="v3-badge">#</span></h1>
+            <p class="page-sub-pro">Sistema de progresión estable y equilibrado</p>
         </div>
 
         <div class="ranking-podium-v7 animate-fade-in mb-10">
@@ -113,13 +113,12 @@
     </main>
 
     <div id="modal-match" class="modal-overlay">
-        <div class="modal-sheet">
+        <div class="modal-card glass-strong">
             <div class="modal-header">
-                <h2 id="modal-titulo" class="modal-title">Detalle</h2>
-                <button class="btn-close-modal" onclick="window.closeRankingMatchModal()"><i
-                        class="fas fa-times"></i></button>
+                <h3 class="modal-title" id="modal-titulo">DETALLE DE PARTIDA</h3>
+                <button class="close-btn" onclick="window.closeRankingMatchModal()">&times;</button>
             </div>
-            <div id="match-detail-area" class="modal-body custom-scroll"></div>
+            <div class="modal-body scroll-y" id="match-detail-area" style="max-height: 80vh;"></div>
         </div>
     </div>
 

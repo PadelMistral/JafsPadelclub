@@ -23,7 +23,9 @@
     <main class="page-content calendar-main-v5">
         <div class="container px-1">
             <div class="calendar-title-row">
-                <h1 class="page-title-pro">Calendario<span class="text-lime">Luminatis</span></h1>
+                <h1 class="font-display font-black text-4xl italic tracking-tighter uppercase">
+                    Calendario <span class="text-primary italic glow-text-blue">Luminatis</span>
+                </h1>
                 <p class="page-sub-pro">Reservas internas + sincronización Apoing en tiempo real</p>
             </div>
 
@@ -49,12 +51,11 @@
                 </div>
             </div>
 
-            <!-- APOING SYNC STATUS (MOVED UP) -->
-            <div class="cal-apoing-status-v5 animate-fade-in" style="animation-delay: 0.05s;">
-                <div class="apoing-chip">
+            <!-- APOING SYNC STATUS & UPCOMING RESERVATIONS -->
+            <div id="apoing-info-container" class="cal-apoing-info-v5 animate-fade-in" style="animation-delay: 0.05s;">
+                <div class="apoing-chip" onclick="window.showApoingGuide()">
                     <span id="apoing-sync-state" class="apoing-sync-state">Sincronizando Apoing...</span>
-                    <button class="btn-micro" onclick="window.showApoingGuide()"><i
-                            class="fas fa-question-circle"></i></button>
+                    <i class="fas fa-chevron-right ml-2 opacity-50"></i>
                 </div>
             </div>
 

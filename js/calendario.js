@@ -111,6 +111,70 @@ function updateApoingSyncBadge(text, tone = "") {
     badge.textContent = text;
     badge.classList.remove("ok", "warn", "err");
     if (tone) badge.classList.add(tone);
+    
+    // Also update the full info box if we have events
+    updateUpcomingApoingBox();
+}
+
+function updateUpcomingApoingBox() {
+    const container = document.getElementById("apoing-info-container");
+    if (!container) return;
+
+    if (!apoingEvents.length) {
+        container.innerHTML = `
+            <div class="apoing-chip" onclick="window.showApoingGuide()">
+                <span id="apoing-sync-state" class="apoing-sync-state">Sin reservas en Apoing</span>
+                <i class="fas fa-chevron-right ml-2 opacity-50"></i>
+            </div>
+        `;
+        return;
+    }
+
+    const now = new Date();
+    // Filter out club events (duration > 95) and keep only user's own reservations
+    const myNext = apoingEvents
+        .filter(e => e.dtStart >= now)
+        .filter(e => isApoingMine(e))
+        .filter(e => (eventDurationMs(e) / 60000) <= 95)
+        .sort((a,b) => a.dtStart - b.dtStart)[0];
+
+    if (!myNext) {
+        container.innerHTML = `
+            <div class="apoing-chip" onclick="window.showApoingGuide()">
+                <span id="apoing-sync-state" class="apoing-sync-state">Apoing OK: Sin próximas reservas tuyas</span>
+                <i class="fas fa-chevron-right ml-2 opacity-50"></i>
+            </div>
+        `;
+    } else {
+        const dateStr = myNext.dtStart.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+        const timeStr = myNext.dtStart.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        
+        container.innerHTML = `
+            <div class="apoing-upcoming-box-v2 animate-scale-in" onclick="window.showApoingGuide()">
+                <div class="v2-box-glow"></div>
+                <div class="flex-row items-center gap-3 relative z-10 w-full">
+                    <div class="v2-box-icon">
+                        <i class="fas fa-calendar-star"></i>
+                        <div class="v2-icon-pulse"></div>
+                    </div>
+                    <div class="flex-col flex-1">
+                        <div class="flex-row items-center justify-between">
+                            <span class="v2-tag">PRÓXIMA RESERVA</span>
+                            <span class="v2-status">ACTIVA</span>
+                        </div>
+                        <div class="v2-datetime">
+                            <span class="v2-date">${dateStr}</span>
+                            <span class="v2-sep"></span>
+                            <span class="v2-time">${timeStr}</span>
+                        </div>
+                    </div>
+                    <div class="v2-arrow">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
 }
 
 function getApoingIcsUrl() {
@@ -839,23 +903,25 @@ function renderSlot(date, hour) {
 
         state = mine ? "apoing-mine" : "apoing-other";
         
+        const ownerName = shortName(apoingEvent.owner || (mine ? userData?.nombreUsuario || "Tú" : "Club"));
+
         if (isClubSocial) {
             label = "CLUB SOCIAL";
             sub = mine ? "TU RESERVA CLUB" : "OCUPADO (CLUB)";
-            ownerSub = "NO ES PISTA DE PADEL";
+            ownerSub = ownerName;
         } else {
             label = mine ? "MI PISTA" : "OCUPADA";
             sub = mine
                 ? (totalSlotReservations > 1 ? `MÍA + ${totalSlotReservations - 1} EXTERNAS` : "RESERVA APOING")
                 : (totalSlotReservations > 1 ? `${totalSlotReservations} RESERVAS CLUB` : "OCUPADA EN APOING");
-            ownerSub = apoingEvent.owner ? `TITULAR: ${shortName(apoingEvent.owner)}` : "GESTIÓN EXTERNA";
+            ownerSub = ownerName;
         }
             
         const apoingIconColor = mine ? 'text-orange-400' : 'text-amber-500';
         
         extraIcon = `
             <div class="apoing-slot-mini absolute top-2 right-2 flex items-center gap-1">
-                ${mine ? `<span class="text-[8px] font-black ${isClubSocial ? 'text-blue-400' : 'text-orange-400'}">${isClubSocial ? 'CLUB' : 'APOING'}</span>` : ''}
+                ${mine ? `<span class="text-[8px] font-black ${isClubSocial ? 'text-blue-400' : 'text-orange-400'}">${isClubSocial ? 'TUYA' : 'MÍA'}</span>` : ''}
                 <i class="fas ${isClubSocial ? 'fa-house-user' : 'fa-calendar-check'} ${apoingIconColor} text-[10px]"></i>
             </div>
         `;

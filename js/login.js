@@ -1,6 +1,7 @@
 ﻿import { login, loginWithGoogle, getDocument, observerAuth, auth } from './firebase-service.js';
 import { showToast } from './ui-core.js';
 import { initPushNotifications } from './modules/push-notifications.js';
+import { getAppBase } from './modules/path-utils.js';
 
 const LOGIN_BOOT_FLAG = '__padelLoginBooted';
 const LOGIN_SW_RELOAD_FLAG = '__padelLoginSwReloaded';
@@ -9,55 +10,15 @@ function initAuthPageServiceWorker() {
     if (!('serviceWorker' in navigator) || window.__swRegisterBound) return;
     window.__swRegisterBound = true;
 
-    const activateWaiting = (reg) => {
-        if (!reg?.waiting) return;
-        try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
-    };
-
-    const bindInstall = (reg) => {
-        if (!reg) return;
-        const worker = reg.installing;
-        if (!worker || worker.__authSwBound) return;
-        worker.__authSwBound = true;
-        worker.addEventListener('statechange', () => {
-            if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-                activateWaiting(reg);
-            }
-        });
-    };
-
-    // Use the combined OneSignal Worker to avoid registration conflicts
-    const swPath = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-        ? './OneSignalSDKWorker.js' 
-        : '/JafsPadelclub/OneSignalSDKWorker.js';
-    const swScope = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-        ? './' 
-        : '/JafsPadelclub/';
+    const base = getAppBase();
+    const swPath = `${base}sw.js`;
 
     navigator.serviceWorker.register(swPath, { 
-        scope: swScope,
+        scope: base,
         updateViaCache: 'none' 
     }).then((reg) => {
-        activateWaiting(reg);
-        reg.addEventListener('updatefound', () => bindInstall(reg));
-        bindInstall(reg);
         reg.update().catch(() => {});
     }).catch((err) => console.error('SW auth register error:', err));
-
-    if (!window.__swControllerChangeBoundAuth) {
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (window[LOGIN_SW_RELOAD_FLAG]) return;
-            
-            const lastRel = sessionStorage.getItem('sw_last_loop_reload');
-            const now = Date.now();
-            if (lastRel && (now - parseInt(lastRel)) < 8000) return;
-            
-            window[LOGIN_SW_RELOAD_FLAG] = true;
-            sessionStorage.setItem('sw_last_loop_reload', now.toString());
-            setTimeout(() => window.location.reload(), 150);
-        });
-        window.__swControllerChangeBoundAuth = true;
-    }
 }
 
 function withTimeout(promise, ms = 15000) {
