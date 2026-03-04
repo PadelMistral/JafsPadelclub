@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#020617">
+    <title>Detalle Evento | Padeluminatis Pro</title>
+    <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="./css/global.css">
+    <link rel="stylesheet" href="./css/evento-detalle.css">
+</head>
+
+<body>
+    <div class="sport-bg"></div>
+
+    <main class="page-content event-detail-page">
+        <!-- Hero Section -->
+        <section class="ed-hero animate-up">
+            <div id="ed-hero-content" class="ed-hero-inner">
+                <div class="ed-skeleton-hero"></div>
+            </div>
+        </section>
+
+        <!-- Stats Grid -->
+        <section id="ed-stats-strip" class="ed-stats-strip animate-up" style="animation-delay: 0.1s;"></section>
+
+        <!-- Navigation Tabs -->
+        <section class="ed-nav-section animate-up" style="animation-delay: 0.15s;">
+            <div class="ed-tabs">
+                <button class="ed-tab active" data-tab="info"><i class="fas fa-info-circle"></i> INFO</button>
+                <button class="ed-tab" data-tab="bracket"><i class="fas fa-sitemap"></i> BRACKET</button>
+                <button class="ed-tab" data-tab="clasificacion"><i class="fas fa-list-ol"></i> LIGA</button>
+                <button class="ed-tab" data-tab="partidos"><i class="fas fa-table-tennis-paddle-ball"></i>
+                    PARTIDOS</button>
+                <button id="btn-ed-admin" class="ed-tab admin-only hidden" data-tab="admin"><i
+                        class="fas fa-shield-halved"></i> ADMIN</button>
+            </div>
+        </section>
+
+        <!-- Dynamic Panels -->
+        <div id="ed-panels" class="ed-panels animate-up" style="animation-delay: 0.2s;">
+            <div id="pane-info" class="ed-pane active"></div>
+            <div id="pane-bracket" class="ed-pane hidden"></div>
+            <div id="pane-clasificacion" class="ed-pane hidden"></div>
+            <div id="pane-partidos" class="ed-pane hidden"></div>
+            <div id="pane-admin" class="ed-pane hidden"></div>
+        </div>
+
+        <!-- Join Bar -->
+        <div id="ed-action-bar" class="ed-action-bar hidden">
+            <div id="ed-action-content" class="ed-action-inner"></div>
+        </div>
+    </main>
+
+    <!-- Modals for Admin Actions -->
+    <div id="modal-ed-match" class="modal-overlay">
+        <div class="modal-card glass-strong">
+            <div class="modal-header">
+                <h3 class="modal-title">Resultado Partido</h3>
+                <button class="close-btn"
+                    onclick="document.getElementById('modal-ed-match').classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body p-4" id="ed-match-form"></div>
+        </div>
+    </div>
+
+    <script type="module" src="./js/evento-detalle.js"></script>
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        initGalaxyBackground();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,256 @@
+﻿rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // --- FUNCIONES CORE ---
+    function signedIn() { 
+      return request.auth != null; 
+    }
+    
+    function currentUid() { 
+      return request.auth.uid; 
+    }
+
+    function maxPlayers() { return 4; }
+    function resultLockMinutes() { return 90; }
+
+    function isMatchOwner(matchData) {
+      return matchData.creador == currentUid() || matchData.organizerId == currentUid();
+    }
+
+    function isMatchFinished(data) {
+      return (data.estado == 'jugado' || data.estado == 'cancelado' || data.estado == 'anulado') ||
+             (data.resultado is map && data.resultado.sets is string);
+    }
+
+    function playersListIsValid(data) {
+      return data.jugadores is list && data.jugadores.size() == maxPlayers();
+    }
+
+    function hasMax4Players(data) {
+      return playersListIsValid(data);
+    }
+
+    function fullRoster(data) {
+      return playersListIsValid(data) &&
+             data.jugadores[0] != null &&
+             data.jugadores[1] != null &&
+             data.jugadores[2] != null &&
+             data.jugadores[3] != null;
+    }
+
+    function canReportResultNow(data) {
+      return data.fecha is timestamp &&
+             fullRoster(data) &&
+             request.time >= data.fecha + duration.value(resultLockMinutes(), 'm');
+    }
+
+    function canMutateRosterNow(data) {
+      return data.fecha is timestamp &&
+             request.time < data.fecha + duration.value(resultLockMinutes(), 'm') &&
+             !isMatchFinished(data);
+    }
+
+    function canWriteResultNow(data) {
+      return !isMatchFinished(data) &&
+             canReportResultNow(data);
+    }
+
+    function participantInBeforeAndAfter() {
+      return resource.data.jugadores is list &&
+             request.resource.data.jugadores is list &&
+             resource.data.jugadores.hasAny([currentUid()]) &&
+             request.resource.data.jugadores.hasAny([currentUid()]);
+    }
+
+    function isParticipantResultUpdate() {
+      return participantInBeforeAndAfter() &&
+             canWriteResultNow(resource.data) &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'resultado',
+               'estado',
+               'diaryImpactBy',
+               'eloSummary',
+               'rankingProcessedAt',
+               'rankingProcessedResult',
+               'rankingProcessedBy'
+             ]);
+    }
+
+    function isParticipantTeamSwapUpdate() {
+      return participantInBeforeAndAfter() &&
+             hasMax4Players(resource.data) &&
+             hasMax4Players(request.resource.data) &&
+             canMutateRosterNow(resource.data) &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'jugadores',
+               'equipoA',
+               'equipoB'
+             ]);
+    }
+
+    function isSelfJoinOrLeaveUpdate() {
+      return resource.data.jugadores is list &&
+             request.resource.data.jugadores is list &&
+             hasMax4Players(resource.data) &&
+             hasMax4Players(request.resource.data) &&
+             canMutateRosterNow(resource.data) &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'jugadores',
+               'equipoA',
+               'equipoB',
+               'creador',
+               'organizerId'
+             ]) &&
+             (
+               (!resource.data.jugadores.hasAny([currentUid()]) &&
+                request.resource.data.jugadores.hasAny([currentUid()])) ||
+               (resource.data.jugadores.hasAny([currentUid()]) &&
+                !request.resource.data.jugadores.hasAny([currentUid()]))
+             );
+    }
+
+    function isOwnerManagedUpdate() {
+      return isMatchOwner(resource.data) &&
+             canMutateRosterNow(resource.data) &&
+             hasMax4Players(request.resource.data) &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'jugadores',
+               'equipoA',
+               'equipoB',
+               'creador',
+               'organizerId'
+             ]);
+    }
+
+    // EXCEPCIÃ“N MAESTRA PARA ADMIN (Email directo o Rol en DB)
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.email == 'Juanan221091@gmail.com' ||
+        request.auth.token.email == 'juanan221091@gmail.com' || 
+        (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'Admin')
+      );
+    }
+
+    function isApproved() {
+      return isAdmin() || (signedIn() && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) && 
+             (get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.status == 'approved' ||
+              get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.aprobado == true));
+    }
+
+    // --- REGLAS POR COLECCIÃ“N ---
+
+    match /usuarios/{uid} {
+      allow get: if signedIn();
+      allow list: if isApproved();
+      allow create: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow update: if isAdmin() || (signedIn() && (
+        request.auth.uid == uid ||
+        (isApproved() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['puntosRanking', 'lastDiaryImpact']))
+      ));
+      allow delete: if isAdmin();
+
+      match /devices/{deviceId} {
+        allow read, write: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      }
+    }
+
+    match /partidosAmistosos/{matchId} {
+      allow read, list: if isApproved();
+      allow create: if isApproved() && hasMax4Players(request.resource.data);
+      allow update: if isAdmin() || (isApproved() && hasMax4Players(request.resource.data) && (
+        isOwnerManagedUpdate() ||
+        isParticipantResultUpdate() ||
+        isParticipantTeamSwapUpdate() ||
+        isSelfJoinOrLeaveUpdate()
+      ));
+      allow delete: if isAdmin() || (isApproved() && resource.data.creador == currentUid());
+      
+      match /chat/{msgId} {
+        allow read, write: if isApproved();
+      }
+    }
+
+    match /partidosReto/{matchId} {
+      allow read, list: if isApproved();
+      allow create: if isApproved() && hasMax4Players(request.resource.data);
+      allow update: if isAdmin() || (isApproved() && hasMax4Players(request.resource.data) && (
+        isOwnerManagedUpdate() ||
+        isParticipantResultUpdate() ||
+        isParticipantTeamSwapUpdate() ||
+        isSelfJoinOrLeaveUpdate()
+      ));
+      allow delete: if isAdmin() || (isApproved() && resource.data.creador == currentUid());
+
+      match /chat/{msgId} {
+        allow read, write: if isApproved();
+      }
+    }
+
+    match /rankingLogs/{logId} {
+      allow read, list: if isApproved();
+      allow create: if isAdmin() || isApproved();
+      allow update, delete: if isAdmin();
+    }
+
+    match /matchPointDetails/{id} {
+      allow read, list: if isApproved();
+      allow create: if isAdmin() || isApproved();
+      allow update, delete: if isAdmin();
+    }
+
+    match /notificaciones/{id} {
+      allow read, delete: if signedIn() && (resource.data.destinatario == currentUid() || resource.data.uid == currentUid());
+      allow create: if isApproved();
+      allow update: if signedIn() && (resource.data.destinatario == currentUid() || resource.data.uid == currentUid());
+    }
+
+    match /analytics/{id} {
+      allow read, list: if isAdmin();
+      allow create, update: if isApproved() &&
+        request.resource.data.keys().hasOnly(['day', 'shard', 'updatedAt', 'counters', 'metrics', 'flags']) &&
+        request.resource.data.day is string &&
+        request.resource.data.shard is int &&
+        request.resource.data.counters is map &&
+        request.resource.data.metrics is map &&
+        request.resource.data.flags is map;
+      allow delete: if isAdmin();
+    }
+
+    match /sugerenciasIA/{id} {
+      allow create: if isApproved();
+      allow get: if isAdmin() || (signedIn() && resource.data.uid == currentUid());
+      allow list: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /palasCatalogo/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /diarioTecnico/{id} {
+      allow read: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
+      allow create: if signedIn() && (isAdmin() || request.resource.data.uid == currentUid());
+      allow update, delete: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
+    }
+
+    match /diario/{id} {
+      allow read: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
+      allow create: if signedIn() && (isAdmin() || request.resource.data.uid == currentUid());
+      allow update, delete: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
+    }
+
+    match /palas/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && (isAdmin() || request.resource.data.createdBy == currentUid());
+      allow update, delete: if signedIn() && (isAdmin() || resource.data.createdBy == currentUid());
+    }
+
+    // REGLA DE SEGURIDAD GLOBAL (BLOQUEO POR DEFECTO PERO PERMISO ADMIN)
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

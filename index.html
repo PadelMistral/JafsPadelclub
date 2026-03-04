@@ -1,0 +1,289 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#020617">
+    <title>Acceso | Padeluminatis Pro</title>
+    <meta name="description" content="Accede al circuito Padeluminatis">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/global.css">
+    <link rel="stylesheet" href="./css/auth.css">
+</head>
+
+<body class="body-auth">
+    <div class="sport-bg"></div>
+
+    <div id="master-loader" class="master-loader">
+        <div class="loader-cosmic-bg"></div>
+        <div class="loader-box">
+            <div class="loader-visual">
+                <div class="loader-ring"></div>
+                <div class="loader-ring inner"></div>
+                <img src="./imagenes/Logojafs.png" class="loader-logo" alt="Padeluminatis">
+            </div>
+            <div class="loader-text-group">
+                <div id="loader-status" class="loader-status">Iniciando Sincronización</div>
+                <div class="loader-bar-container">
+                    <div id="progress-fill" class="loader-bar-fill"></div>
+                </div>
+                <div class="loader-percentage">SECURE CONNECTION</div>
+            </div>
+        </div>
+    </div>
+
+    <main class="auth-screen">
+        <div class="auth-card animate-fade-in" id="login-form-card">
+            <div class="auth-card-glow"></div>
+            <div class="auth-header">
+                <div class="auth-logo-box">
+                    <img src="./imagenes/Logojafs.png" class="auth-logo" alt="Padeluminatis">
+                </div>
+                <h1 class="auth-title">ACCESO</h1>
+                <p class="auth-subtitle">Sincroniza tu ficha</p>
+            </div>
+
+            <form id="loginForm" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <div class="input-icon-wrapper">
+                        <input type="text" id="email" autocomplete="username" placeholder="correo@ejemplo.com">
+                        <i class="fas fa-user input-icon"></i>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">contraseña</label>
+                    <div class="input-icon-wrapper">
+                        <input type="password" id="password" autocomplete="current-password" placeholder="••••••••">
+                        <i class="fas fa-lock input-icon"></i>
+                        <i class="fas fa-eye toggle-pass" id="togglePassword"></i>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg w-full">
+                    <i class="fas fa-shield-halved"></i> Acceder
+                </button>
+            </form>
+
+            <div class="auth-divider">
+                <span>o</span>
+            </div>
+
+            <button type="button" id="googleLogin" class="btn btn-ghost w-full">
+                <i class="fab fa-google"></i> Continuar con Google
+            </button>
+
+            <div class="auth-footer">
+                <a href="recuperar.html" class="auth-link">¿Olvidaste tu contraseña?</a>
+                <div class="auth-sep"></div>
+                <a href="registro.html" class="auth-link">Crear nuevo usuario</a>
+            </div>
+        </div>
+    </main>
+
+    <style>
+        .master-loader {
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            background: #02040a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .loader-cosmic-bg {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(198, 255, 0, 0.05) 0%, transparent 70%);
+            animation: pulseBg 4s infinite alternate;
+        }
+
+        @keyframes pulseBg {
+            from {
+                opacity: 0.3;
+                transform: scale(1);
+            }
+
+            to {
+                opacity: 0.7;
+                transform: scale(1.2);
+            }
+        }
+
+        .loader-box {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+            z-index: 10;
+        }
+
+        .loader-visual {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loader-logo {
+            width: 70px;
+            height: 70px;
+            object-fit: contain;
+            filter: drop-shadow(0 0 20px rgba(198, 255, 0, 0.4));
+            z-index: 5;
+            animation: logoPulse 2s infinite ease-in-out;
+            margin-bottom: 0 !important;
+        }
+
+        @keyframes logoPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                filter: drop-shadow(0 0 20px rgba(198, 255, 0, 0.4));
+            }
+
+            50% {
+                transform: scale(1.05);
+                filter: drop-shadow(0 0 35px rgba(198, 255, 0, 0.7));
+            }
+        }
+
+        .loader-ring {
+            position: absolute;
+            inset: 0;
+            border: 2px solid rgba(198, 255, 0, 0.1);
+            border-top: 2px solid #c6ff00;
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+        }
+
+        .loader-ring.inner {
+            inset: 15px;
+            border: 1px solid rgba(0, 212, 255, 0.1);
+            border-bottom: 1px solid #00d4ff;
+            animation: spinReverse 2.5s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes spinReverse {
+            to {
+                transform: rotate(-360deg);
+            }
+        }
+
+        .loader-text-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            width: 280px;
+        }
+
+        .loader-status {
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-family: 'Rajdhani';
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        .loader-bar-container {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .loader-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #c6ff00, #00d4ff);
+            box-shadow: 0 0 15px rgba(198, 255, 0, 0.5);
+            transition: width 0.3s ease;
+        }
+
+        .loader-percentage {
+            font-size: 0.6rem;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.3);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+
+        .toggle-pass {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+        }
+
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0;
+            color: rgba(255, 255, 255, 0.35);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .auth-divider::before,
+        .auth-divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #fff;
+        }
+
+        .auth-footer {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .auth-sep {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+    </style>
+
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem } from './js/modules/theme-manager.js';
+        initThemeSystem();
+        initGalaxyBackground();
+    </script>
+    <script type="module" src="./js/login.js"></script>
+</body>
+
+</html>

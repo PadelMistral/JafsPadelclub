@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#020617">
+  <title>Admin | Padeluminatis</title>
+  <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="./css/global.css">
+  <link rel="stylesheet" href="./css/admin-core.css">
+</head>
+
+<body>
+  <div class="sport-bg"></div>
+  <main class="page-content admin-page">
+    <div class="admin-shell">
+      <section class="admin-card">
+        <div class="flex-row between items-center mb-2">
+          <h1 class="text-xl font-black">ADMIN DASHBOARD</h1>
+          <button id="btn-refresh-admin" class="btn-mini"><i class="fas fa-rotate"></i> REFRESH</button>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi-item">
+            <div class="kpi-value" id="kpi-users">0</div>
+            <div class="kpi-label">Usuarios</div>
+          </div>
+          <div class="kpi-item">
+            <div class="kpi-value" id="kpi-matches">0</div>
+            <div class="kpi-label">Partidos</div>
+          </div>
+          <div class="kpi-item">
+            <div class="kpi-value" id="kpi-active">0</div>
+            <div class="kpi-label">Activos</div>
+          </div>
+          <div class="kpi-item">
+            <div class="kpi-value" id="kpi-avg">0</div>
+            <div class="kpi-label">ELO Medio</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="admin-card">
+        <div class="tabs-grid">
+          <button class="admin-tab active" data-pane="users">USUARIOS</button>
+          <button class="admin-tab" data-pane="matches">PARTIDOS</button>
+          <button class="admin-tab" data-pane="eventos">EVENTOS</button>
+          <button class="admin-tab" data-pane="ranking">RANKING</button>
+          <button class="admin-tab" data-pane="logs">LOGS</button>
+          <button class="admin-tab" data-pane="system">SISTEMA</button>
+        </div>
+      </section>
+
+      <section id="pane-users" class="admin-card admin-pane">
+        <div class="toolbar-grid toolbar-users">
+          <input id="users-search" placeholder="Buscar usuario o email" />
+          <select id="users-role-filter">
+            <option value="all">Todos los roles</option>
+            <option value="Admin">Admin</option>
+            <option value="Jugador">Jugador</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Nivel</th>
+                <th>Puntos</th>
+                <th>Rol</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="users-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="pane-matches" class="admin-card admin-pane hidden">
+        <div class="toolbar-grid toolbar-matches">
+          <select id="matches-filter">
+            <option value="all">Todos</option>
+            <option value="open">Abiertos</option>
+            <option value="played">Jugados/Cerrados</option>
+          </select>
+          <select id="matches-type-filter">
+            <option value="all">Todos los tipos</option>
+            <option value="partidosAmistosos">Amistosos</option>
+            <option value="partidosReto">Retos</option>
+          </select>
+          <input id="matches-search" placeholder="Buscar por fecha o estado" />
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>Fecha</th>
+                <th>Plazas</th>
+                <th>Estado</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="matches-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="pane-eventos" class="admin-card admin-pane hidden">
+        <div class="toolbar-grid toolbar-eventos">
+          <input id="ev-search" placeholder="Buscar evento..." />
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Formato</th>
+                <th>Inscritos</th>
+                <th>Estado</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="ev-body-admin"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="pane-ranking" class="admin-card admin-pane hidden">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Puesto</th>
+                <th>Jugador</th>
+                <th>Puntos</th>
+                <th>Nivel</th>
+                <th>Control manual</th>
+              </tr>
+            </thead>
+            <tbody id="ranking-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="pane-logs" class="admin-card admin-pane hidden">
+        <div class="toolbar-grid toolbar-logs">
+          <input id="logs-search" placeholder="Filtrar logs por acción o detalle" />
+        </div>
+        <div id="logs-list"></div>
+      </section>
+
+      <section id="pane-system" class="admin-card admin-pane hidden">
+        <h2 class="admin-pane-title"><i class="fas fa-sliders"></i> CONTROL GLOBAL</h2>
+        <div class="system-grid">
+          <div class="system-box">
+            <h3><i class="fas fa-bullhorn"></i> Broadcast</h3>
+            <input id="sys-broadcast-title" placeholder="Título de notificación" />
+            <textarea id="sys-broadcast-message" rows="3" placeholder="Mensaje global"></textarea>
+            <input id="sys-broadcast-link" placeholder="Enlace (ej: home.html)" />
+            <select id="sys-broadcast-type">
+              <option value="info">Info</option>
+              <option value="warning">Warning</option>
+              <option value="ranking_up">Ranking</option>
+            </select>
+            <button id="btn-broadcast" class="btn-mini wide"><i class="fas fa-paper-plane"></i> ENVIAR A TODOS</button>
+          </div>
+
+          <div class="system-box">
+            <h3><i class="fas fa-ranking-star"></i> Ajustes de Ranking</h3>
+            <input id="sys-elo-delta" type="number" placeholder="Delta ELO global (+/-)" />
+            <input id="sys-min-matches" type="number" placeholder="Mínimo partidos (opcional)" />
+            <button id="btn-apply-elo-delta" class="btn-mini wide">APLICAR DELTA ELO</button>
+            <button id="btn-recalc-levels" class="btn-mini wide">RECALCULAR NIVELES</button>
+          </div>
+
+          <div class="system-box border border-sport-red/30 bg-sport-red/5">
+            <h3 class="text-sport-red"><i class="fas fa-skull-crossbones"></i> ZONA PELIGRO</h3>
+            <p class="text-[9px] opacity-60 mb-2">BORRA EL RANKING ACTUAL Y RECALCULA TODO CON EL MOTOR ELO V3.</p>
+            <button id="btn-wipe-recalc"
+              class="btn-mini wide danger bg-sport-red/10 border-sport-red/40 text-sport-red hover:bg-sport-red/20">
+              <i class="fas fa-rotate"></i> RESET TOTAL ELO V3
+            </button>
+            <button id="btn-nuke-logs" class="btn-mini wide danger mt-2 opacity-50">BORRAR TODOS LOS LOGS</button>
+          </div>
+
+          <div class="system-box">
+            <h3><i class="fas fa-shield-halved"></i> Mantenimiento</h3>
+            <button id="btn-cancel-stale" class="btn-mini wide">CANCELAR ABIERTOS VENCIDOS</button>
+            <button id="btn-reset-presence" class="btn-mini wide">RESETEAR PRESENCIA</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="./js/admin.js"></script>
+  <script type="module" src="./js/admin-recalc-elo.js"></script>
+</body>
+
+</html>

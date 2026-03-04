@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#020617">
+    <title>Perfil | Padeluminatis Pro</title>
+    <meta name="description" content="Tu perfil de jugador en Padeluminatis">
+    <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/global.css">
+    <link rel="stylesheet" href="./css/perfil.css">
+</head>
+
+<body>
+    <!-- Galactic Background -->
+    <div class="sport-bg"></div>
+
+    <!-- Header & Nav injected by JS -->
+
+    <main class="page-content profile-page">
+
+        <!-- Profile Hero Card -->
+        <section class="profile-hero animate-fade-in">
+            <div class="profile-hero-bg"></div>
+            <div class="profile-hero-content">
+                <!-- Avatar -->
+                <div class="profile-avatar-wrapper" onclick="document.getElementById('upload-photo').click()">
+                    <div class="profile-avatar">
+                        <img id="p-avatar" src="./imagenes/default-avatar.png" alt="Avatar">
+                        <div class="avatar-initial" id="avatar-fallback" style="display:none;">?</div>
+                    </div>
+                    <div class="avatar-edit-btn">
+                        <i class="fas fa-camera"></i>
+                    </div>
+                    <div class="avatar-ring"></div>
+                </div>
+                <input type="file" id="upload-photo" hidden accept="image/*">
+
+                <!-- Name & Badge -->
+                <h1 class="profile-name" id="p-name">Cargando...</h1>
+                <div class="profile-badge">
+                    <i class="fas fa-crown"></i>
+                    <span id="p-role">Atleta Pro</span>
+                </div>
+                <div id="profile-division-badge" class="profile-division-badge"></div>
+
+                <!-- Quick Stats Horizontal (Premium V7) -->
+                <div class="grid grid-cols-3 gap-3 w-full max-w-[340px] mt-6">
+                    <div class="stat-card-v7 cyan clickable" id="profile-stat-level">
+                        <span class="text-[9px] font-black uppercase text-muted tracking-widest">Nivel</span>
+                        <span id="p-nivel" class="text-lg font-black italic">2.5</span>
+                    </div>
+                    <div class="stat-card-v7 gold clickable" id="profile-stat-points">
+                        <span class="text-[9px] font-black uppercase text-muted tracking-widest">Puntos</span>
+                        <span id="p-puntos" class="text-lg font-black italic">0</span>
+                    </div>
+                    <div class="stat-card-v7 lime clickable" id="profile-stat-streak">
+                        <span class="text-[9px] font-black uppercase text-muted tracking-widest">Racha</span>
+                        <span id="p-streak" class="text-lg font-black italic">0</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.08s;">
+            <div id="fut-card-container" class="fut-card-wrap"
+                style="max-height: 480px; overflow: hidden; display: flex; justify-content: center;">
+                <div class="text-center py-6 opacity-40 text-[10px] font-black uppercase">Cargando carta de jugador...
+                </div>
+            </div>
+        </section>
+
+        <!-- Level Progress Breakdown -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.1s;">
+            <div class="card card-premium-v7 shadow-cyan/10">
+                <div class="flex-row between items-center mb-4">
+                    <div class="flex-col">
+                        <span class="text-[10px] font-black text-muted uppercase tracking-widest">Progreso de
+                            Nivel</span>
+                        <span id="p-level-current"
+                            class="text-xs font-black text-white italic mt-1">Sincronizando...</span>
+                    </div>
+                    <div class="flex-col items-end">
+                        <span class="text-[10px] font-black text-muted uppercase tracking-widest">Próximo Nivel</span>
+                        <span id="level-upper" class="text-xs font-black text-primary italic mt-1">3.0</span>
+                    </div>
+                </div>
+
+                <div class="progress-bar-v7 large mb-2">
+                    <div id="level-bar" class="fill-bar gradient-cyan" style="width: 50%;"></div>
+                </div>
+
+                <div class="flex-row between text-[9px] font-black text-muted uppercase">
+                    <span id="level-lower">2.5</span>
+                    <div id="level-progress-detail" class="flex-row gap-2"></div>
+                    <span id="level-upper-bottom">3.0</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ELO se visualiza ahora en mi-elo.html para mayor detalle -->
+
+
+        <!-- Stats Cards Grid -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.14s;">
+            <div class="section-header">
+                <h2 class="section-title">Métricas de Rendimiento</h2>
+            </div>
+            <div class="profile-stats-grid-v9">
+                <div class="stat-card-v9 cyan">
+                    <span class="s-lbl">PARTIDOS</span>
+                    <span class="s-val" id="stat-total-matches">0</span>
+                    <div class="s-icon"><i class="fas fa-gamepad"></i></div>
+                </div>
+                <div class="stat-card-v9 gold">
+                    <span class="s-lbl">VICTORIAS</span>
+                    <span class="s-val" id="stat-total-wins">0</span>
+                    <div class="s-icon"><i class="fas fa-trophy"></i></div>
+                </div>
+                <div class="stat-card-v9 magenta">
+                    <span class="s-lbl">RACHA</span>
+                    <span class="s-val" id="stat-streak">0</span>
+                    <div class="s-icon"><i class="fas fa-fire"></i></div>
+                </div>
+                <div class="stat-card-v9 lime">
+                    <span class="s-lbl">EFICACIA</span>
+                    <span class="s-val" id="stat-winrate">0%</span>
+                    <div class="s-icon"><i class="fas fa-percent"></i></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Más datos: Chat IA -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.16s;">
+            <div id="profile-chat-ia-cta"
+                class="card card-premium-v7 p-4 border-glow-cyan cursor-pointer hover:bg-cyan/10 transition-colors"
+                onclick="window.openAIHubFromProfile && window.openAIHubFromProfile()">
+                <div class="flex-row items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                        <i class="fas fa-comments text-primary text-xl"></i>
+                    </div>
+                    <div class="flex-col flex-1">
+                        <span class="text-[11px] font-black text-primary uppercase tracking-widest">Todo lo demás, en el
+                            Chat IA</span>
+                        <span class="text-[10px] text-white/70 mt-0.5">Estadísticas avanzadas, rivales, comparativas,
+                            consejos según tu diario y partidos.</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-primary/80"></i>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section id="profile-settings-section" class="profile-section animate-fade-in" style="animation-delay: 0.25s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-cog text-white/30 mr-2"></i>Configuración</h2>
+            </div>
+            <div class="settings-card">
+                <!-- Alias -->
+                <div class="setting-item">
+                    <div class="setting-left">
+                        <i class="fas fa-id-badge"></i>
+                        <span>Alias de Combate</span>
+                    </div>
+                    <div class="setting-right">
+                        <input type="text" id="p-username-inp" class="setting-input" placeholder="Tu alias...">
+                        <button class="setting-save-btn" id="p-save-name">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- Phone -->
+                <div class="setting-item">
+                    <div class="setting-left">
+                        <i class="fas fa-mobile-screen"></i>
+                        <span>Teléfono</span>
+                    </div>
+                    <div class="setting-right">
+                        <input type="tel" id="p-phone-inp" class="setting-input" placeholder="600 000 000">
+                        <button class="setting-save-btn success" id="p-save-phone">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- Apoing Calendar Link -->
+                <div class="setting-item">
+                    <div class="setting-left">
+                        <i class="fas fa-calendar-plus"></i>
+                        <span>Calendario Apoing</span>
+                    </div>
+                    <div class="setting-right setting-right-stack">
+                        <input type="url" id="apoing-url-inp" class="setting-input"
+                            placeholder="https://www.apoing.com/calendars/....ics">
+                        <div class="setting-actions-row">
+                            <button class="setting-save-btn success" id="btn-save-apoing"
+                                title="Guardar enlace de calendario">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button class="setting-save-btn" id="btn-share-apoing" title="Compartir mi disponibilidad">
+                                <i class="fas fa-share-nodes"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Change Password -->
+                <div class="setting-item flex-col" style="align-items:stretch;">
+                    <div class="flex-row items-center gap-3 mb-3">
+                        <i class="fas fa-lock text-muted"></i>
+                        <span class="text-xs font-bold text-white">Cambiar Contraseña</span>
+                    </div>
+                    <input type="password" id="p-new-password" class="setting-input mb-2 w-full"
+                        placeholder="Nueva contraseña (mín. 6 caracteres)">
+                    <input type="password" id="p-confirm-password" class="setting-input mb-3 w-full"
+                        placeholder="Confirmar nueva contraseña">
+                    <button class="btn btn-sm btn-secondary w-full" id="btn-change-password">
+                        <i class="fas fa-shield-halved mr-1"></i> Actualizar Contraseña
+                    </button>
+                </div>
+                <!-- Links -->
+                <a href="diario.html" class="setting-item link">
+                    <div class="setting-left">
+                        <i class="fas fa-book-medical"></i>
+                        <span>Diario Táctico</span>
+                    </div>
+                    <i class="fas fa-chevron-right setting-arrow"></i>
+                </a>
+                <a href="historial.html" class="setting-item link">
+                    <div class="setting-left">
+                        <i class="fas fa-history"></i>
+                        <span>Historial Partidos</span>
+                    </div>
+                    <i class="fas fa-chevron-right setting-arrow"></i>
+                </a>
+            </div>
+        </section>
+
+        <!-- Apoing Calendar Preview -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.28s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-calendar-check text-primary mr-2"></i>Mis Reservas Apoing
+                </h2>
+            </div>
+            <div id="apoing-preview" class="card card-premium-v7 p-4">
+                <div class="flex-col gap-2 items-center py-4 opacity-40">
+                    <i class="fas fa-calendar-plus text-2xl"></i>
+                    <span class="text-[11px] font-bold">Configura tu calendario Apoing en Ajustes</span>
+                    <span class="text-[9px] text-muted">Verás aquí un resumen de tus reservas activas</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Address Section (Accordion - hidden by default) -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.3s;">
+            <details class="profile-accordion">
+                <summary class="profile-accordion-trigger">
+                    <h2 class="section-title" style="margin:0;"><i
+                            class="fas fa-map-marker-alt text-muted mr-2"></i>Dirección</h2>
+                    <i class="fas fa-chevron-down accordion-arrow"></i>
+                </summary>
+                <div class="address-card" style="margin-top: 12px;">
+                    <div class="address-grid">
+                        <div class="address-field">
+                            <label>Bloque</label>
+                            <input type="text" id="addr-bloque" placeholder="-">
+                        </div>
+                        <div class="address-field">
+                            <label>Piso</label>
+                            <input type="text" id="addr-piso" placeholder="-">
+                        </div>
+                        <div class="address-field">
+                            <label>Puerta</label>
+                            <input type="text" id="addr-puerta" placeholder="-">
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary w-full mt-4" id="save-address">
+                        <i class="fas fa-save"></i>
+                        Guardar Dirección
+                    </button>
+                </div>
+            </details>
+        </section>
+
+        <!-- Gear Section -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.35s;">
+            <div class="section-header">
+                <h2 class="section-title">Inventario de Palas</h2>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-sm btn-secondary" onclick="window.location.href='palas.html'">
+                        <i class="fas fa-microscope"></i> Lab
+                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="openGearModal()">
+                        <i class="fas fa-plus"></i> Añadir
+                    </button>
+                </div>
+            </div>
+            <div id="gear-container" class="gear-list">
+                <!-- Gear cards injected by JS -->
+            </div>
+        </section>
+
+        <!-- Theme Selector Section -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.35s;">
+            <div class="section-header">
+                <h2 class="section-title">Tema Visual</h2>
+                <span class="section-subtitle">Personaliza tu experiencia</span>
+            </div>
+            <div id="theme-selector-container" class="settings-card" style="padding: 16px;">
+                <!-- Theme options injected by JS -->
+            </div>
+        </section>
+
+        <!-- Logout -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.45s;">
+            <button class="btn btn-ghost btn-danger-text w-full" id="btn-logout">
+                <i class="fas fa-sign-out-alt"></i>
+                Cerrar Sesión
+            </button>
+        </section>
+
+    </main>
+
+    <!-- Gear Modal -->
+    <div id="modal-gear" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">Nueva Pala</h3>
+                <button class="modal-close" onclick="document.getElementById('modal-gear').classList.remove('active')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Marca</label>
+                    <input type="text" id="gear-marca" class="input" placeholder="Ej: Nox, Bullpadel, Adidas...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Modelo</label>
+                    <input type="text" id="gear-modelo" class="input" placeholder="Ej: AT10 Genius, Hack 03...">
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="form-group">
+                    <label class="form-label">Características</label>
+
+                    <div class="range-group">
+                        <span class="range-label">Potencia</span>
+                        <input type="range" id="gear-potencia" min="1" max="10" value="5" class="form-range">
+                        <span class="range-value secondary" id="val-potencia">5</span>
+                    </div>
+
+                    <div class="range-group">
+                        <span class="range-label">Control</span>
+                        <input type="range" id="gear-control" min="1" max="10" value="5" class="form-range">
+                        <span class="range-value primary" id="val-control">5</span>
+                    </div>
+
+                    <div class="range-group">
+                        <span class="range-label">Manejabilidad</span>
+                        <input type="range" id="gear-manejo" min="1" max="10" value="5" class="form-range">
+                        <span class="range-value success" id="val-manejo">5</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Forma</label>
+                    <select id="gear-forma" class="form-select">
+                        <option value="">Selecciona Forma...</option>
+                        <option value="redonda">Redonda (Control)</option>
+                        <option value="lagrima">Lágrima (Equilibrada)</option>
+                        <option value="diamante">Diamante (Potencia)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Peso</label>
+                    <select id="gear-peso" class="form-select">
+                        <option value="">Selecciona Peso...</option>
+                        <option value="355-365">Ligera (355-365g)</option>
+                        <option value="365-375">Media (365-375g)</option>
+                        <option value="375-385">Pesada (375-385g)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost"
+                    onclick="document.getElementById('modal-gear').classList.remove('active')">
+                    Cancelar
+                </button>
+                <button class="btn btn-primary" onclick="savePala()">
+                    <i class="fas fa-save"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module" src="./js/perfil.js"></script>
+
+
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem, renderThemeSelector } from './js/modules/theme-manager.js';
+
+        initThemeSystem();
+        initGalaxyBackground();
+
+        // Render theme selector once DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            renderThemeSelector('theme-selector-container');
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#020617">
+    <title>Ranking V3 | Padeluminatis</title>
+    <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="./css/global.css">
+    <link rel="stylesheet" href="./css/ranking.css">
+    <style>
+        .v3-badge {
+            background: linear-gradient(135deg, #00d4ff, #0066ff);
+            color: white;
+            font-size: 10px;
+            font-weight: 900;
+            padding: 2px 8px;
+            border-radius: 50px;
+            margin-left: 10px;
+            vertical-align: middle;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+
+        .podium-item {
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        .podium-item:hover {
+            transform: translateY(-5px) scale(1.02);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sport-bg"></div>
+
+    <main class="page-content ranking-page">
+        <div class="ranking-header-v7 animate-fade-in text-center mb-10">
+            <h1 class="page-title-pro">RANKING <span class="text-primary">V3.0</span> <span
+                    class="v3-badge">EXPERIMENTAL</span></h1>
+            <p class="page-sub-pro">Sistema de progresión ultra-estable y equilibrado</p>
+        </div>
+
+        <div class="ranking-podium-v7 animate-fade-in mb-10">
+            <!-- Podium Rank 2 -->
+            <div class="podium-item silver animate-up" id="pod-2" style="animation-delay: 0.1s;">
+                <div class="podium-badge"><i class="fas fa-medal"></i></div>
+                <div class="podium-avatar-wrapper" id="p-av-2"></div>
+                <div class="podium-info">
+                    <span class="p-name" id="p-name-2">...</span>
+                    <span class="p-pts" id="p-pts-2">0</span>
+                </div>
+                <div class="podium-base base-cyan"></div>
+            </div>
+
+            <!-- Podium Rank 1 -->
+            <div class="podium-item gold animate-up" id="pod-1">
+                <div class="podium-badge gold"><i class="fas fa-crown"></i></div>
+                <div class="podium-avatar-wrapper lg" id="p-av-1"></div>
+                <div class="podium-info">
+                    <span class="p-name" id="p-name-1">...</span>
+                    <span class="p-pts" id="p-pts-1">0</span>
+                </div>
+                <div class="podium-base base-gold"></div>
+            </div>
+
+            <!-- Podium Rank 3 -->
+            <div class="podium-item bronze animate-up" id="pod-3" style="animation-delay: 0.2s;">
+                <div class="podium-badge bronze"><i class="fas fa-award"></i></div>
+                <div class="podium-avatar-wrapper" id="p-av-3"></div>
+                <div class="podium-info">
+                    <span class="p-name" id="p-name-3">...</span>
+                    <span class="p-pts" id="p-pts-3">0</span>
+                </div>
+                <div class="podium-base base-magenta"></div>
+            </div>
+        </div>
+
+        <section class="leaderboard-section animate-fade-in">
+            <div class="section-header">
+                <h2 class="section-title">Circuito Padeluminatis V3</h2>
+                <span id="lb-total-info" class="lb-total-info">-- jugadores registrados</span>
+            </div>
+
+            <div class="flex flex-wrap gap-2 mb-4">
+                <input id="rank-search" class="input" style="max-width:300px;"
+                    placeholder="Buscar jugador por nombre o nivel...">
+                <select id="rank-filter" class="input" style="max-width:150px;">
+                    <option value="all">Filtro: Todo</option>
+                    <option value="friends">Solo Amigos</option>
+                    <option value="pro">Nivel > 4.0</option>
+                </select>
+            </div>
+
+            <div class="lb-header-row">
+                <span class="lb-h-rank">#</span>
+                <span class="lb-h-player">JUGADOR</span>
+                <span class="lb-h-level">NIVEL</span>
+                <span class="lb-h-pts">PUNTOS</span>
+            </div>
+
+            <div id="lb-list" class="leaderboard-list">
+                <div class="text-center py-10 opacity-30 font-black uppercase text-xs">Cargando clasificación...</div>
+            </div>
+        </section>
+    </main>
+
+    <div id="modal-match" class="modal-overlay">
+        <div class="modal-sheet">
+            <div class="modal-header">
+                <h2 id="modal-titulo" class="modal-title">Detalle</h2>
+                <button class="btn-close-modal" onclick="window.closeRankingMatchModal()"><i
+                        class="fas fa-times"></i></button>
+            </div>
+            <div id="match-detail-area" class="modal-body custom-scroll"></div>
+        </div>
+    </div>
+
+    <script type="module" src="./js/ranking-v3.js"></script>
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem } from './js/modules/theme-manager.js';
+        initThemeSystem();
+        initGalaxyBackground();
+    </script>
+    <script>
+        window.closeRankingMatchModal = () => document.getElementById('modal-match')?.classList.remove('active');
+    </script>
+</body>
+
+</html>
