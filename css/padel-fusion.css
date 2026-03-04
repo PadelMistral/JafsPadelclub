@@ -1,0 +1,91 @@
+/* css/padel-fusion.css
+   Fusion layer for shell/layout normalization. */
+
+:root {
+  --app-shell-header: calc(72px + env(safe-area-inset-top, 0px));
+  --app-shell-nav: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+
+html,
+body {
+  background: transparent !important;
+}
+
+.sport-bg {
+  z-index: -10 !important;
+  background: var(--bg-void, #020617) !important;
+}
+
+.app-header {
+  background: var(--header-bg, rgba(8, 12, 24, 0.95)) !important;
+  height: var(--app-shell-header) !important;
+}
+
+.bottom-nav {
+  background: var(--nav-bg, rgba(8, 12, 24, 0.95)) !important;
+  min-height: var(--app-shell-nav) !important;
+}
+
+.page-content,
+.home-main,
+.ranking-page,
+.diario-main,
+.profile-page,
+.notif-page,
+.calendar-main-v5 {
+  padding-top: var(--app-shell-header) !important;
+  padding-bottom: var(--app-shell-nav) !important;
+}
+
+.modal-overlay {
+  z-index: 12000 !important;
+}
+
+.modal-card,
+.modal-sheet {
+  max-height: calc(100dvh - 20px) !important;
+  overflow-y: auto !important;
+}
+
+.modal-body {
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+#modal-match .modal-card,
+#modal-user .user-modal-sheet,
+#modal-match-detail .modal-sheet {
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.55) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+}
+
+#modal-match .modal-header,
+#modal-user .user-modal-head,
+.ranking-breakdown-head {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 5 !important;
+}
+
+.apoing-link-v7 {
+  width: 100% !important;
+  justify-content: center !important;
+}
+
+.header-avatar,
+#header-avatar-container {
+  overflow: hidden !important;
+}
+
+#header-avatar-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+.text-sport-green {
+  color: #4ade80 !important;
+}
+
+.text-sport-red {
+  color: #f87171 !important;
+}

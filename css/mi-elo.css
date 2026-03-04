@@ -1,0 +1,326 @@
+/* ═══════════════════════════════════════════════
+   MI ELO — CSS
+   ═══════════════════════════════════════════════ */
+
+.elo-page {
+  padding-bottom: 120px;
+  font-family: "Inter", "Rajdhani", sans-serif;
+}
+
+.elo-header {
+  margin-bottom: 16px;
+}
+
+/* Summary Card */
+.elo-summary-card {
+  background: linear-gradient(
+    145deg,
+    rgba(10, 20, 42, 0.9),
+    rgba(8, 16, 38, 0.85)
+  );
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 24px;
+  padding: 24px 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.elo-summary-card::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -30%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(0, 212, 255, 0.1), transparent 60%);
+  pointer-events: none;
+}
+
+.elo-big-number {
+  position: relative;
+  z-index: 2;
+  margin-bottom: 16px;
+}
+.elo-big-val {
+  display: block;
+  font-family: "Rajdhani", sans-serif;
+  font-size: clamp(2.5rem, 8vw, 4rem);
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  text-shadow: 0 0 30px rgba(0, 212, 255, 0.2);
+}
+.elo-big-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(0, 212, 255, 0.6);
+  margin-top: 4px;
+}
+
+.elo-summary-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+  position: relative;
+  z-index: 2;
+}
+.elo-ss {
+  padding: 10px 6px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  text-align: center;
+}
+.elo-ss-val {
+  display: block;
+  font-family: "Rajdhani", sans-serif;
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+}
+.elo-ss-lbl {
+  display: block;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 2px;
+}
+
+/* Level progress */
+.elo-level-progress {
+  position: relative;
+  z-index: 2;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.elo-lp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.elo-div-badge {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sport-gold, #facc15);
+  background: rgba(250, 204, 21, 0.1);
+  border: 1px solid rgba(250, 204, 21, 0.2);
+  border-radius: 50px;
+  padding: 3px 12px;
+}
+.elo-lp-detail {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+}
+.elo-lp-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.elo-lp-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--primary, #00d4ff), #0066ff);
+  transition: width 0.8s ease;
+}
+.elo-lp-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* Breakdown section */
+.elo-breakdown-section {
+  background: rgba(10, 20, 40, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 22px;
+  padding: 16px;
+}
+.elo-section-head {
+  margin-bottom: 12px;
+}
+.elo-section-title {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.85);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.elo-section-title i {
+  color: var(--primary, #00d4ff);
+  margin-right: 6px;
+  font-size: 12px;
+}
+
+.elo-breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Match breakdown card */
+.elo-match-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  transition: all 0.2s ease;
+  animation: hv2-card-in 0.35s ease both;
+}
+.elo-match-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(0, 212, 255, 0.2);
+}
+
+.elo-mr-result {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+.elo-mr-result.win {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.elo-mr-result.loss {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+.elo-mr-result.draw {
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.2);
+}
+.elo-mr-result.diary {
+  background: rgba(167, 139, 250, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+}
+
+.elo-mr-info {
+  min-width: 0;
+}
+.elo-mr-date {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 2px;
+}
+.elo-mr-matchup {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.elo-mr-score {
+  font-size: 10px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+.elo-mr-delta {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 16px;
+  font-weight: 900;
+  text-align: right;
+  min-width: 50px;
+}
+.elo-mr-delta.positive {
+  color: #4ade80;
+}
+.elo-mr-delta.negative {
+  color: #f87171;
+}
+.elo-mr-delta.neutral {
+  color: #fbbf24;
+}
+
+.elo-mr-after {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: right;
+  display: block;
+}
+
+.elo-loading,
+.elo-empty {
+  text-align: center;
+  padding: 30px;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@keyframes hv2-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Skeleton */
+.hv2-skeleton-row {
+  height: 60px;
+  border-radius: 16px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.02) 25%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.02) 75%
+  );
+  background-size: 200% 100%;
+  animation: elo-shimmer 1.5s infinite;
+  margin-bottom: 8px;
+}
+@keyframes elo-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .elo-summary-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

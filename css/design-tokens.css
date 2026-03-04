@@ -1,0 +1,157 @@
+﻿/* FASE 4 - Design Tokens v2.0 — Padeluminatis Pro */
+:root {
+  color-scheme: dark;
+
+  /* ── Core Palette ── */
+  --color-bg: #020617;
+  --color-surface: rgba(10, 16, 28, 0.92);
+  --color-surface-2: rgba(15, 23, 42, 0.82);
+  --color-surface-3: rgba(20, 30, 55, 0.75);
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-text: #f8fafc;
+  --color-text-muted: rgba(248, 250, 252, 0.6);
+  --color-text-dim: rgba(248, 250, 252, 0.35);
+
+  /* ── Sport Accent Colors ── */
+  --color-primary: #00d4ff;
+  --color-secondary: #c6ff00;
+  --color-danger: #ef4444;
+  --color-success: #22c55e;
+  --color-warning: #fbbf24;
+  --sport-gold: #facc15;
+  --sport-cyan: #00d4ff;
+  --sport-lime: #c6ff00;
+  --sport-magenta: #f472b6;
+  --sport-orange: #ff9f43;
+  --sport-green: #22c55e;
+  --primary: var(--color-primary);
+
+  /* ── Typography ── */
+  --font-heading: "Rajdhani", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --fs-2xs: 9px;
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 18px;
+  --fs-xl: 24px;
+  --fs-2xl: 32px;
+
+  /* ── Spacing Scale ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* ── Radius ── */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 999px;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.38);
+  --shadow-glow-cyan: 0 0 20px rgba(0, 212, 255, 0.15);
+  --shadow-glow-gold: 0 0 20px rgba(250, 204, 21, 0.15);
+
+  /* ── Motion ── */
+  --ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 180ms;
+  --dur-base: 260ms;
+  --dur-slow: 420ms;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --color-bg: #f3f7fb;
+    --color-surface: rgba(255, 255, 255, 0.94);
+    --color-surface-2: rgba(247, 250, 252, 0.94);
+    --color-border: rgba(2, 6, 23, 0.12);
+    --color-text: #0f172a;
+    --color-text-muted: rgba(15, 23, 42, 0.68);
+    --shadow-sm: 0 6px 16px rgba(15, 23, 42, 0.08);
+    --shadow-md: 0 10px 28px rgba(15, 23, 42, 0.12);
+    --shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.16);
+  }
+}
+
+[data-theme="minimal"] {
+  color-scheme: light;
+  --color-bg: #f3f7fb;
+  --color-surface: rgba(255, 255, 255, 0.94);
+  --color-surface-2: rgba(247, 250, 252, 0.94);
+  --color-border: rgba(2, 6, 23, 0.12);
+  --color-text: #0f172a;
+  --color-text-muted: rgba(15, 23, 42, 0.68);
+  --color-primary: #0f172a;
+  --color-secondary: #334155;
+}
+
+/* Shared premium micro-interactions */
+.u-lift {
+  transition:
+    transform var(--dur-base) var(--ease-standard),
+    box-shadow var(--dur-base) var(--ease-standard),
+    border-color var(--dur-base) var(--ease-standard);
+}
+
+.u-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.u-fade-in {
+  animation: uiFadeIn var(--dur-slow) var(--ease-standard) both;
+}
+
+@keyframes uiFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.skeleton {
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 25%,
+    rgba(255, 255, 255, 0.16) 40%,
+    rgba(255, 255, 255, 0.06) 55%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .u-lift,
+  .u-fade-in,
+  .skeleton {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
