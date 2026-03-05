@@ -316,3 +316,41 @@
   background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
 }
+
+/* Responsive hardening */
+.event-detail-page,
+.ed-panels,
+.ed-pane,
+.ed-info-card,
+.ed-stats-strip,
+.ed-tabs,
+.ed-standing-table,
+.bracket-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.event-detail-page {
+  overflow-x: clip;
+}
+
+@media (max-width: 720px) {
+  .ed-stats-strip {
+    grid-template-columns: 1fr;
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+
+  .ed-panels {
+    padding: 0 14px;
+  }
+
+  .ed-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ed-tab {
+    padding: 9px 12px;
+    font-size: 9px;
+  }
+}

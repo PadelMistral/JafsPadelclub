@@ -1,0 +1,56 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#020617" />
+  <title>Sorteo del Evento | Padeluminatis</title>
+  <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="./css/global.css" />
+  <link rel="stylesheet" href="./css/evento-sorteo.css" />
+</head>
+<body>
+  <div class="sport-bg"></div>
+
+  <main class="page-content sorteo-page">
+    <section class="sorteo-hero animate-up">
+      <div>
+        <h1 class="sorteo-title"><i class="fas fa-wand-magic-sparkles"></i> Sorteo Champions</h1>
+        <p class="sorteo-sub" id="sorteo-subtitle">Cargando evento...</p>
+      </div>
+      <div class="sorteo-actions">
+        <a id="btn-back-event" class="btn btn-ghost" href="eventos.html"><i class="fas fa-arrow-left"></i> Evento</a>
+        <button id="btn-run-draw" class="btn btn-primary hidden"><i class="fas fa-play"></i> Ejecutar sorteo</button>
+      </div>
+    </section>
+
+    <section class="draw-stage animate-up" style="animation-delay:0.08s;">
+      <div class="draw-orb-wrap">
+        <div class="draw-orb" id="draw-orb"><i class="fas fa-futbol"></i></div>
+        <div class="draw-pulse"></div>
+      </div>
+      <div class="draw-live" id="draw-live">Esperando sorteo...</div>
+      <div class="draw-steps" id="draw-steps"></div>
+    </section>
+
+    <section class="groups-stage animate-up" style="animation-delay:0.12s;">
+      <div class="groups-grid">
+        <article class="group-card" id="group-A"><h3>GRUPO A</h3><div class="group-list"></div></article>
+        <article class="group-card" id="group-B"><h3>GRUPO B</h3><div class="group-list"></div></article>
+      </div>
+    </section>
+
+    <section class="knockout-stage animate-up" style="animation-delay:0.16s;">
+      <h3 class="k-title">Cuadro eliminatorio</h3>
+      <div id="knockout-bracket" class="k-bracket"></div>
+    </section>
+  </main>
+
+  <script type="module" src="./js/evento-sorteo.js"></script>
+  <script type="module">
+    import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+    initGalaxyBackground();
+  </script>
+</body>
+</html>

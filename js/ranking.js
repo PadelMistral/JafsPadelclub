@@ -77,6 +77,74 @@ async function getCachedMatch(matchId) {
   return match || null;
 }
 
+function toNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getPointsComponents(raw = {}) {
+  const pc = raw || {};
+  const used = new Set();
+  const pick = (...keys) => {
+    for (const k of keys) {
+      if (pc[k] !== undefined) {
+        used.add(k);
+        return toNum(pc[k]);
+      }
+    }
+    return 0;
+  };
+
+  const base = pick("base");
+  const dificultad = pick("dificultad", "rival");
+  const sets = pick("sets");
+  const rendimiento = pick("rendimientoBonus", "companero", "compañero");
+  const racha = pick("racha");
+  const penalizacion = pick("smurfPenalty", "penalizacion", "penalty");
+  const diario = pick("diarioCoach", "diarioBonus", "diario");
+  const justicia = pick("ajusteJusticia", "fairnessAdjustment");
+
+  const excluded = new Set([
+    ...used,
+    "multiplicador",
+    "expectedScore",
+    "expected",
+    "K",
+    "k",
+    "levelBefore",
+    "levelAfter",
+    "newTotal",
+    "oldTotal",
+    "prob",
+    "probability",
+    "winProb",
+    "notes",
+  ]);
+
+  let extras = 0;
+  Object.entries(pc).forEach(([k, v]) => {
+    if (excluded.has(k)) return;
+    const num = Number(v);
+    if (!Number.isFinite(num)) return;
+    if (Math.abs(num) > 1000) return;
+    extras += num;
+  });
+
+  const total = base + dificultad + sets + rendimiento + racha + penalizacion + diario + justicia + extras;
+  return {
+    base,
+    dificultad,
+    sets,
+    rendimiento,
+    racha,
+    penalizacion,
+    diario,
+    justicia,
+    extras,
+    total,
+  };
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initAppUI("ranking");
   initBackground();
@@ -606,7 +674,7 @@ window.loadPointsHistory = async (mode = 'mine') => {
         }
         const title = isDiary ? (isPeerDiary ? "Evaluacion Diario" : "Analisis Diario") : (isWin ? "Victoria" : "Derrota");
         return `
-          <div class="history-entry ${isDiary ? "bonus" : (isWin ? "win" : "loss")}" onclick="window.showMatchBreakdownV3('${item.id}')">
+          <div class="history-entry ${isDiary ? "bonus" : (isWin ? "win" : "loss")}" onclick="event.stopPropagation();window.showMatchBreakdownV3('${item.id}')">
             <div class="history-icon"><i class="fas ${isDiary ? "fa-book" : (isWin ? "fa-arrow-up" : "fa-arrow-down")}"></i></div>
             <div class="history-details">
               ${userNameLabel}
@@ -626,7 +694,7 @@ window.loadPointsHistory = async (mode = 'mine') => {
       const userNameLabel = g.primary?.userNameLabel || "";
       const diaryHint = g.hasDiary ? `<span class="text-[9px] opacity-70 ml-1">(Incluye ${g.diaryCount} ajuste(s) de diario)</span>` : "";
       return `
-        <div class="history-entry ${isWin ? "win" : "loss"}" onclick="window.showMatchBreakdownV3('${g.id}')">
+        <div class="history-entry ${isWin ? "win" : "loss"}" onclick="event.stopPropagation();window.showMatchBreakdownV3('${g.id}')">
           <div class="history-icon"><i class="fas fa-layer-group"></i></div>
           <div class="history-details">
             ${userNameLabel}
@@ -667,7 +735,7 @@ window.showMatchBreakdownV3 = async (logId) => {
   // Crear overlay del modal
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay active";
-  overlay.style.zIndex = "11000";
+  overlay.style.zIndex = "999999";
 
   const isDiary = String(log.type || "").startsWith("DIARY_");
   const isPeerDiary = log.type === "DIARY_PEER_BONUS";
@@ -679,7 +747,7 @@ window.showMatchBreakdownV3 = async (logId) => {
   const matchId = log.matchId;
 
   overlay.innerHTML = `
-    <div class="modal-card glass-strong animate-up p-0 overflow-hidden" style="max-width:380px">
+    <div class="modal-card glass-strong animate-up p-0 overflow-hidden" style="max-width:380px" onclick="event.stopPropagation()">
       <div class="modal-header ranking-breakdown-head">
         <span class="modal-title font-black italic tracking-widest">${isDiary ? 'RECOMPENSA DIARIO' : 'DESGLOSE TÁCTICO'}</span>
         <button class="close-btn" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
@@ -814,22 +882,25 @@ window.showMatchBreakdownV3 = async (logId) => {
       (levelDiff < 0 ? '<i class="fas fa-angles-down text-sport-red ml-1"></i>' : '');
 
     const pc = puntosDetalle || {};
-    const vBase = Number(pc.base ?? 0);
-    const vDif = Number(pc.dificultad ?? pc.rival ?? 0);
-    const vSets = Number(pc.sets ?? 0);
-    const vRend = Number(pc.rendimientoBonus ?? pc.companero ?? 0); // Rendimiento replaces compañero conceptually in new formula
-    const vSmurf = Number(pc.smurfPenalty ?? 0);
-    const vDiario = Number(pc.diarioCoach ?? 0);
-    const vJusticia = Number(pc.ajusteJusticia ?? 0);
-    const sumComputed = vBase + vDif + vSets + vRend + vSmurf + vDiario + vJusticia;
+    const comp = getPointsComponents(pc);
+    const vBase = comp.base;
+    const vDif = comp.dificultad;
+    const vSets = comp.sets;
+    const vRend = comp.rendimiento;
+    const vSmurf = comp.penalizacion;
+    const vDiario = comp.diario;
+    const vJusticia = comp.justicia;
+    const sumComputed = comp.total;
     const operationRows = [
       { k: "Base esperado", v: vBase, why: "Puntos iniciales calculados según la probabilidad (ELO)." },
       { k: "Dificultad real", v: vDif, why: "Ajuste preciso por el nivel real de los rivales frente al propio." },
       { k: "Diferencia de sets", v: vSets, why: "Premio o penalización por dominio numérico en el resultado." },
       { k: "Rendimiento/MVP", v: vRend, why: "Bonificación extra por desempeño destacado en el partido." },
+      { k: "Racha", v: comp.racha, why: "Ajuste por racha competitiva activa." },
       { k: "Diario Coach", v: vDiario, why: "Impacto aplicado desde reflexiones del diario coach." },
       { k: "Penalización Abuso", v: vSmurf, why: "Deducción de puntos por abusar de rivales con nivel muy inferior." },
       { k: "Ajuste de Justicia", v: vJusticia, why: "Balance automatizado anti-farm para redondear el impacto." },
+      { k: "Extras detectados", v: comp.extras, why: "Suma de otros campos numéricos válidos detectados en el registro." },
     ].filter(r => r.v !== 0);
 
     const math = log.details?.math || {};
@@ -1180,68 +1251,28 @@ async function renderUserDetailedHistory(uid) {
         }
         if (window.logCache) window.logCache.set(doc.id, log);
 
-        // ===== CORRECCIÓN IMPORTANTE =====
-        // Buscar puntosDetalle en TODAS las ubicaciones posibles
-        const pc = log.details?.puntosCalculados || 
-                   log.details?.puntosDetalle || 
-                   puntosDetalle;
-        
+        const pc = log.details?.puntosCalculados || log.details?.puntosDetalle || puntosDetalle;
         let detailHtml = "";
         if (pc) {
-            if (pc.base !== undefined && pc.rival !== undefined && pc.companero !== undefined) {
-                detailHtml = `
-                    <div class="mt-2 p-3 bg-black/40 rounded-2xl border border-white/5 flex-col gap-2" style="font-size: 8px;">
-                        <div class="flex-row between opacity-70">
-                            <span class="font-bold tracking-widest text-[#00C3FF]">BASE</span>
-                            <span class="font-mono text-white">${pc.base.toFixed(1)}</span>
-                        </div>
-                        <div class="flex-row between opacity-70">
-                            <span class="font-bold tracking-widest text-[#FF6B35]">DIFICULTAD RIVAL</span>
-                            <span class="font-mono text-white">${pc.rival >= 0 ? '+' : ''}${pc.rival.toFixed(1)}</span>
-                        </div>
-                        <div class="flex-row between opacity-70">
-                            <span class="font-bold tracking-widest text-sport-gold">BONO COMPAÑERO</span>
-                            <span class="font-mono text-white">${pc.companero >= 0 ? '+' : ''}${pc.companero.toFixed(1)}</span>
-                        </div>
-                        <div class="flex-row between opacity-70">
-                            <span class="font-bold tracking-widest text-primary">MULTIPLICADOR</span>
-                            <span class="font-mono text-white">x${(pc.multiplicador || 1).toFixed(2)}</span>
-                        </div>
-                        <div class="flex-row between pt-1 border-t border-white/5">
-                            <span class="font-black text-primary uppercase">SUMA TOTAL PARTIDO</span>
-                            <span class="font-mono text-primary font-black">${(log.diff >= 0 ? '+' : '')}${log.diff.toFixed(1)}</span>
-                        </div>
-                    </div>
-                `;
-            } 
-            else if (pc.base !== undefined) {
-                detailHtml = `
-                    <div class="mt-2 p-3 bg-black/40 rounded-2xl border border-white/5 flex-col gap-2" style="font-size: 8px;">
-                        <div class="flex-row between opacity-70">
-                            <span class="font-bold tracking-widest text-[#00C3FF]">CALIBRACIÓN BASE</span>
-                            <span class="font-mono text-white">${(pc.base || 0).toFixed(1)}</span>
-                        </div>
-                        <div class="flex-row between opacity-70">
-                            <span class="font-bold tracking-widest text-[#FF6B35]">DIFICULTAD RIVAL</span>
-                            <span class="font-mono text-white">${(pc.dificultad >= 0 ? '+' : '')}${(pc.dificultad || 0).toFixed(1)}</span>
-                        </div>
-                        <div class="flex-row between opacity-70">
-                            <span class="font-bold tracking-widest text-sport-gold">RACHA / PERF</span>
-                            <span class="font-mono text-white">${((pc.racha || 0) + (pc.sets || 0) >= 0 ? '+' : '')}${((pc.racha || 0) + (pc.sets || 0)).toFixed(1)}</span>
-                        </div>
-                        ${pc.ajusteJusticia !== undefined ? `
-                        <div class="flex-row between opacity-70">
-                            <span class="font-bold tracking-widest text-cyan">AJUSTE JUSTICIA</span>
-                            <span class="font-mono text-white">${(pc.ajusteJusticia >= 0 ? '+' : '')}${(pc.ajusteJusticia || 0).toFixed(1)}</span>
-                        </div>
-                        ` : ""}
-                        <div class="flex-row between pt-1 border-t border-white/5">
-                            <span class="font-black text-primary uppercase">SUMA TOTAL PARTIDO</span>
-                            <span class="font-mono text-primary font-black">${(log.diff >= 0 ? '+' : '')}${log.diff.toFixed(1)}</span>
-                        </div>
-                    </div>
-                `;
-            }
+          const comp = getPointsComponents(pc);
+          detailHtml = `
+            <div class="mt-2 p-3 bg-black/40 rounded-2xl border border-white/5 flex-col gap-2" style="font-size: 8px;">
+              <div class="flex-row between opacity-70"><span class="font-bold tracking-widest text-[#00C3FF]">BASE</span><span class="font-mono text-white">${comp.base.toFixed(2)}</span></div>
+              <div class="flex-row between opacity-70"><span class="font-bold tracking-widest text-[#FF6B35]">DIFICULTAD</span><span class="font-mono text-white">${comp.dificultad >= 0 ? "+" : ""}${comp.dificultad.toFixed(2)}</span></div>
+              <div class="flex-row between opacity-70"><span class="font-bold tracking-widest text-sport-gold">SETS + REND + RACHA</span><span class="font-mono text-white">${(comp.sets + comp.rendimiento + comp.racha) >= 0 ? "+" : ""}${(comp.sets + comp.rendimiento + comp.racha).toFixed(2)}</span></div>
+              <div class="flex-row between opacity-70"><span class="font-bold tracking-widest text-cyan">DIARIO + JUSTICIA</span><span class="font-mono text-white">${(comp.diario + comp.justicia) >= 0 ? "+" : ""}${(comp.diario + comp.justicia).toFixed(2)}</span></div>
+              <div class="flex-row between opacity-70"><span class="font-bold tracking-widest text-white/70">PENALIZACIONES + EXTRAS</span><span class="font-mono text-white">${(comp.penalizacion + comp.extras) >= 0 ? "+" : ""}${(comp.penalizacion + comp.extras).toFixed(2)}</span></div>
+              <div class="flex-row between opacity-70"><span class="font-bold tracking-widest text-primary">MULTIPLICADOR</span><span class="font-mono text-white">x${toNum(pc.multiplicador || 1).toFixed(2)}</span></div>
+              <div class="flex-row between pt-1 border-t border-white/5">
+                <span class="font-black text-primary uppercase">SUMA COMPONENTES</span>
+                <span class="font-mono text-primary font-black">${comp.total >= 0 ? "+" : ""}${comp.total.toFixed(2)}</span>
+              </div>
+              <div class="flex-row between">
+                <span class="font-black text-white/75 uppercase">TOTAL LOG</span>
+                <span class="font-mono text-white font-black">${toNum(log.diff) >= 0 ? "+" : ""}${toNum(log.diff).toFixed(2)}</span>
+              </div>
+            </div>
+          `;
         }
 
         const lBefore = log.details?.levelBefore || 2.5;
@@ -1251,7 +1282,7 @@ async function renderUserDetailedHistory(uid) {
 
         return `
                 <div class="sport-card ${isWin ? "match-positive" : "match-negative"} p-4 mb-3 flex-col gap-3 border-l-4 ${isWin ? "border-l-sport-green shadow-[0_0_15px_rgba(0,255,100,0.1)]" : "border-l-sport-red shadow-[0_0_15px_rgba(255,50,50,0.1)]"} bg-white/5 rounded-3xl" 
-                     onclick="window.showMatchBreakdownV3('${doc.id}')" 
+                     onclick="event.stopPropagation();window.showMatchBreakdownV3('${doc.id}')" 
                      style="cursor:pointer">
                     
                     <div class="flex-row between items-center">

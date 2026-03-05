@@ -76,6 +76,7 @@ function getCurrentPageMeta() {
         'perfil.html': { id: 'profile', subtitle: 'PERFIL' },
         'palas.html': { id: 'palas', subtitle: 'PALAS' },
         'eventos.html': { id: 'events', subtitle: 'EVENTOS' },
+        'evento-sorteo.html': { id: 'events', subtitle: 'SORTEO' },
         'notificaciones.html': { id: 'notifications', subtitle: 'NOTIFICACIONES' },
         'admin.html': { id: 'admin', subtitle: 'ADMIN' },
     };

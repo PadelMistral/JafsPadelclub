@@ -30,6 +30,8 @@ const DATA_CACHE = {
   globalUsers: [],
   openMatches: [],
   weather: null,
+  apoingConfigured: false,
+  apoingNext: null,
   systemStats: null,
   lastUpdate: 0,
 };
@@ -166,6 +168,8 @@ async function _syncData() {
       return filled < 4 && !isFinishedMatch(m) && !isCancelledMatch(m) && !isExpiredOpenMatch(m);
     });
     DATA_CACHE.weather = weatherData || null;
+    DATA_CACHE.apoingConfigured = Boolean(String(uData?.apoingCalendarUrl || "").trim());
+    DATA_CACHE.apoingNext = _extractNextApoingReservation();
     const finishedMatches = DATA_CACHE.matches.filter((m) => isFinishedMatch(m) && !isCancelledMatch(m)).length;
     DATA_CACHE.systemStats = {
       totalUsers: DATA_CACHE.globalUsers.length,
@@ -339,6 +343,91 @@ const Analyzer = {
         hasStress: avgStress > 6,
         lastLesson: latest.tactica?.leccion || null
     };
+  },
+
+  findMostPlayedRival: (uid) => {
+    const tally = {};
+    (DATA_CACHE.matches || []).forEach((m) => {
+      if (!Array.isArray(m.jugadores)) return;
+      const myIdx = m.jugadores.indexOf(uid);
+      if (myIdx === -1) return;
+      const rivals = myIdx < 2 ? [m.jugadores[2], m.jugadores[3]] : [m.jugadores[0], m.jugadores[1]];
+      rivals.forEach((rid) => {
+        if (!rid || rid === uid || String(rid).startsWith("GUEST_")) return;
+        if (!tally[rid]) tally[rid] = { total: 0, wins: 0, losses: 0 };
+        tally[rid].total += 1;
+        const res = _getUserMatchOutcome(m, uid);
+        if (res === "W") tally[rid].wins += 1;
+        if (res === "L") tally[rid].losses += 1;
+      });
+    });
+
+    const best = Object.entries(tally).sort((a, b) => b[1].total - a[1].total)[0];
+    if (!best) return null;
+    const [rid, stats] = best;
+    return { id: rid, name: _getUserNameById(rid), stats };
+  },
+
+  findMostPlayedPartner: (uid) => {
+    const tally = {};
+    (DATA_CACHE.matches || []).forEach((m) => {
+      if (!Array.isArray(m.jugadores)) return;
+      const myIdx = m.jugadores.indexOf(uid);
+      if (myIdx === -1) return;
+      const partnerIdx = myIdx === 0 ? 1 : (myIdx === 1 ? 0 : (myIdx === 2 ? 3 : 2));
+      const pid = m.jugadores[partnerIdx];
+      if (!pid || pid === uid || String(pid).startsWith("GUEST_")) return;
+
+      if (!tally[pid]) tally[pid] = { total: 0, wins: 0, losses: 0 };
+      tally[pid].total += 1;
+      const res = _getUserMatchOutcome(m, uid);
+      if (res === "W") tally[pid].wins += 1;
+      if (res === "L") tally[pid].losses += 1;
+    });
+
+    const best = Object.entries(tally).sort((a, b) => b[1].total - a[1].total)[0];
+    if (!best) return null;
+    const [pid, stats] = best;
+    return { id: pid, name: _getUserNameById(pid), stats };
+  },
+
+  getRivalIntel: (uid, rivalId) => {
+    if (!uid || !rivalId) return null;
+    const h2h = (DATA_CACHE.matches || [])
+      .filter((m) => Array.isArray(m.jugadores) && m.jugadores.includes(uid) && m.jugadores.includes(rivalId))
+      .filter((m) => isFinishedMatch(m) && !isCancelledMatch(m))
+      .sort((a, b) => (_toDateSafe(b.fecha)?.getTime?.() || 0) - (_toDateSafe(a.fecha)?.getTime?.() || 0));
+
+    if (!h2h.length) return null;
+
+    let wins = 0;
+    let losses = 0;
+    let recentW = 0;
+    let recentL = 0;
+
+    h2h.forEach((m, idx) => {
+      const res = _getUserMatchOutcome(m, uid);
+      if (res === "W") wins += 1;
+      if (res === "L") losses += 1;
+      if (idx < 3) {
+        if (res === "W") recentW += 1;
+        if (res === "L") recentL += 1;
+      }
+    });
+
+    const total = wins + losses;
+    const winRate = total ? Math.round((wins / total) * 100) : 0;
+    const rival = (DATA_CACHE.globalUsers || []).find((u) => u.id === rivalId) || {};
+    const rivalState = rival?.playerState?.modeLabel || rival?.playerState?.mode || "Estado no disponible";
+
+    let weakness = "rinde equilibrado contra ti";
+    if (winRate >= 65) weakness = "sufre cuando mantienes presión y cierres largos";
+    else if (winRate >= 55) weakness = "le cuesta sostener ritmo en partidos igualados";
+    else if (winRate <= 35) weakness = "te domina en momentos decisivos";
+    else if (winRate <= 45) weakness = "te obliga a errores en intercambios largos";
+
+    const trend = recentW > recentL ? "favorable" : recentW < recentL ? "adversa" : "estable";
+    return { total, wins, losses, winRate, trend, rivalState, weakness };
   }
 };
 
@@ -441,6 +530,21 @@ function _formatMatchDate(d) {
   });
 }
 
+function _getUserNameById(uid) {
+  if (!uid) return "Jugador";
+  const u = (DATA_CACHE.globalUsers || []).find((x) => x.id === uid);
+  return u?.nombreUsuario || u?.nombre || "Jugador";
+}
+
+function _getUserMatchOutcome(match, uid) {
+  if (!match || !Array.isArray(match.jugadores) || !match.jugadores.includes(uid)) return null;
+  if (!isFinishedMatch(match) || isCancelledMatch(match)) return null;
+  const winnerTeam = resolveWinnerTeam(match);
+  if (winnerTeam !== 1 && winnerTeam !== 2) return null;
+  const myIdx = match.jugadores.indexOf(uid);
+  return myIdx < 2 ? (winnerTeam === 1 ? "W" : "L") : (winnerTeam === 2 ? "W" : "L");
+}
+
 function _weatherCodeToLabel(code = 0) {
   const c = Number(code || 0);
   if (c === 0) return "despejado";
@@ -497,6 +601,60 @@ function _buildWeatherSummary(dayOffset = 0) {
     wind: Math.round(windy),
     advice: court?.advice || "",
   };
+}
+
+function _parseIcsDateToken(raw = "") {
+  const token = String(raw || "").trim();
+  if (!token) return null;
+
+  const compact = token.replace(/[-:]/g, "");
+  const utc = compact.endsWith("Z");
+  const base = utc ? compact.slice(0, -1) : compact;
+
+  const m = base.match(/^(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?(\d{2})?$/);
+  if (!m) return null;
+  const [, y, mo, d, h = "00", mi = "00", s = "00"] = m;
+
+  const dt = utc
+    ? new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)))
+    : new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function _extractNextApoingReservation() {
+  try {
+    const now = Date.now();
+    const keys = [];
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const k = sessionStorage.key(i);
+      if (String(k || "").startsWith("apoing_raw_cache_")) keys.push(k);
+    }
+    if (!keys.length) return null;
+
+    let nearest = null;
+    keys.forEach((key) => {
+      const cached = JSON.parse(sessionStorage.getItem(key) || "null");
+      const raw = String(cached?.data || "");
+      if (!raw.includes("BEGIN:VEVENT")) return;
+
+      const blocks = raw.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/gm) || [];
+      blocks.forEach((block) => {
+        const dtMatch = block.match(/DTSTART[^:]*:([0-9TZ-]+)/i);
+        if (!dtMatch?.[1]) return;
+        const start = _parseIcsDateToken(dtMatch[1]);
+        if (!start || start.getTime() < now) return;
+
+        const summaryMatch = block.match(/SUMMARY:(.+)/i);
+        const summary = (summaryMatch?.[1] || "Reserva Apoing").trim();
+        if (!nearest || start.getTime() < nearest.date.getTime()) {
+          nearest = { date: start, summary };
+        }
+      });
+    });
+    return nearest;
+  } catch {
+    return null;
+  }
 }
 
 // --- GENERATIVE RESPONSE INTELLIGENCE ---
@@ -717,6 +875,7 @@ function _generateResponse(intent, query) {
       const help = [
         "Home: estado actual, nivel, IA y accesos rápidos.",
         "Calendario: reserva pista, únete a abiertos y revisa horarios.",
+        "Apoing: sincroniza reservas con tu enlace .ics desde Perfil.",
         "Ranking: clasificación, variaciones ELO y desglose de puntos.",
         "Diario: registra partido/sensaciones para mejorar recomendaciones.",
         "Perfil: métricas de juego, progreso y ajustes personales."
@@ -770,15 +929,64 @@ function _generateResponse(intent, query) {
   }
 
   if (intent === "CMD_RIVAL_INTEL") {
-      let msg = currentPersonality === 'vecina' ? "Pues mira, hay de todo en la viña del señor. " : "Inteligencia de Rivales: ";
-      // Pick 3 random top players
-      const top = DATA_CACHE.globalUsers.sort((a,b) => (b.nivel||0) - (a.nivel||0)).slice(0,3);
+      const top = DATA_CACHE.globalUsers.slice().sort((a,b) => (b.nivel||0) - (a.nivel||0)).slice(0,3);
       const names = top.map(t => t.nombreUsuario || t.nombre).join(", ");
-      
-      msg += currentPersonality === 'vecina'
-        ? `Por arriba están ${names}, que se creen los reyes del mambo. Tú a lo tuyo, {NAME}, que con tu nivel {LEVEL} puedes darles un susto.`
-        : `Los objetivos de alto valor actuales son: ${names}. Se recomienda estudiar sus métricas antes del desafío.`;
-      return R(msg);
+      const nemesis = Analyzer.findNemesis(u.id);
+      if (!nemesis) {
+        return currentPersonality === 'vecina'
+          ? R(`Rivales top ahora: ${names}. No tienes una némesis clara, así que toca ir a por cualquiera.`)
+          : R(`Objetivos principales actuales: ${names}. No se detecta némesis dominante en tus enfrentamientos recientes.`);
+      }
+
+      const intel = Analyzer.getRivalIntel(u.id, nemesis.id);
+      const nName = nemesis.nombreUsuario || nemesis.nombre || nemesis.name || "Rival";
+      if (!intel) {
+        return currentPersonality === "vecina"
+          ? `Tu rival más delicado es ${nName}, pero aún no tengo historial suficiente para sacar patrón.`
+          : `Rival crítico detectado: ${nName}. Historial insuficiente para inferir debilidades robustas.`;
+      }
+      return currentPersonality === "vecina"
+        ? `Radar rival: tu némesis es **${nName}** (estado: ${intel.rivalState}). Cara a cara: ${intel.wins}-${intel.losses} (${intel.winRate}% de victorias). Tendencia ${intel.trend}. Debilidad detectada: ${intel.weakness}.`
+        : `Intel de rival: némesis ${nName} (${intel.rivalState}). H2H ${intel.wins}V-${intel.losses}D (${intel.winRate}% winrate), tendencia ${intel.trend}. Patrón: ${intel.weakness}.`;
+  }
+
+  if (intent === "CMD_MOST_PLAYED") {
+      const rival = Analyzer.findMostPlayedRival(u.id);
+      const partner = Analyzer.findMostPlayedPartner(u.id);
+      const parts = [];
+      if (rival) {
+        parts.push(`Rival más repetido: ${rival.name} (${rival.stats.total} partidos, ${rival.stats.wins}V-${rival.stats.losses}D)`);
+      }
+      if (partner) {
+        parts.push(`Compañero más repetido: ${partner.name} (${partner.stats.total} partidos, ${partner.stats.wins}V-${partner.stats.losses}D)`);
+      }
+      if (!parts.length) {
+        return currentPersonality === "vecina"
+          ? "Aún no tienes suficientes partidos cerrados para sacar tu rival y compañero más jugados."
+          : "No hay muestra suficiente para identificar rival/compañero más frecuente.";
+      }
+      return currentPersonality === "vecina"
+        ? `Tus números de relación en pista:\n- ${parts.join("\n- ")}`
+        : `Frecuencia de emparejamientos:\n- ${parts.join("\n- ")}`;
+  }
+
+  if (intent === "CMD_APOING_NEXT") {
+      const nextApoing = DATA_CACHE.apoingNext;
+      const configured = DATA_CACHE.apoingConfigured;
+      if (!configured) {
+        return currentPersonality === "vecina"
+          ? "No tienes Apoing conectado todavía. Ve a Perfil y guarda tu URL .ics para que te saque la próxima reserva."
+          : "Apoing no configurado. Guarda tu enlace .ics en Perfil para habilitar lectura de próxima reserva.";
+      }
+      if (!nextApoing?.date) {
+        return currentPersonality === "vecina"
+          ? "Apoing está conectado, pero ahora no veo reservas futuras en esta sesión. Entra en Calendario para sincronizar y te lo digo al instante."
+          : "Apoing configurado, sin reservas futuras detectadas en la sesión actual. Sincroniza en Calendario para actualizar.";
+      }
+      const when = _formatMatchDate(nextApoing.date);
+      return currentPersonality === "vecina"
+        ? `Tu próxima reserva Apoing es **${when}** (${nextApoing.summary}).`
+        : `Próxima reserva Apoing detectada: ${when} (${nextApoing.summary}).`;
   }
   
   if (intent === "CMD_STATS_READ") {
@@ -789,9 +997,12 @@ function _generateResponse(intent, query) {
         .slice()
         .sort((a, b) => Number(b.puntosRanking || 0) - Number(a.puntosRanking || 0))
         .findIndex((x) => x.id === ctx.uid) + 1;
+      const rival = Analyzer.findMostPlayedRival(u.id);
+      const partner = Analyzer.findMostPlayedPartner(u.id);
+      const nextApoing = DATA_CACHE.apoingNext?.date ? _formatMatchDate(DATA_CACHE.apoingNext.date) : "sin reserva detectada";
       return currentPersonality === 'vecina'
-        ? `Números reales: ELO ${ctx.lastPoints}, nivel ${ctx.level}, récord ${wins}-${losses} en ${played} partidos, winrate ${ctx.winRate}, racha ${ctx.streakText}, ranking #${rankPos > 0 ? rankPos : "--"}.`
-        : `Métricas personales: ELO ${ctx.lastPoints} | Nivel ${ctx.level} | Récord ${wins}-${losses} (${played} partidos) | WinRate ${ctx.winRate} | Racha ${ctx.streakText} | Ranking #${rankPos > 0 ? rankPos : "--"}.`;
+        ? `Números reales: ELO ${ctx.lastPoints}, nivel ${ctx.level}, récord ${wins}-${losses} en ${played} partidos, winrate ${ctx.winRate}, racha ${ctx.streakText}, ranking #${rankPos > 0 ? rankPos : "--"}. Rival más jugado: ${rival ? `${rival.name} (${rival.stats.total})` : "N/D"}. Compañero más jugado: ${partner ? `${partner.name} (${partner.stats.total})` : "N/D"}. Próxima reserva Apoing: ${nextApoing}.`
+        : `Métricas personales: ELO ${ctx.lastPoints} | Nivel ${ctx.level} | Récord ${wins}-${losses} (${played} partidos) | WinRate ${ctx.winRate} | Racha ${ctx.streakText} | Ranking #${rankPos > 0 ? rankPos : "--"} | Rival más jugado: ${rival ? `${rival.name} (${rival.stats.total})` : "N/D"} | Compañero más jugado: ${partner ? `${partner.name} (${partner.stats.total})` : "N/D"} | Próxima reserva Apoing: ${nextApoing}.`;
   }
 
   if (intent === "CMD_GEAR_ADVICE") {
@@ -871,9 +1082,14 @@ function _generateResponse(intent, query) {
   const climateLine = wToday
     ? `Clima hoy: ${wToday.condition}, ${wToday.avgTemp}°C, lluvia ${wToday.rainProb}%.`
     : "Clima hoy no disponible todavía.";
+  const mostRival = Analyzer.findMostPlayedRival(u.id);
+  const mostPartner = Analyzer.findMostPlayedPartner(u.id);
+  const apoingLine = DATA_CACHE.apoingNext?.date
+    ? `Apoing: ${_formatMatchDate(DATA_CACHE.apoingNext.date)}.`
+    : (DATA_CACHE.apoingConfigured ? "Apoing conectado sin próxima reserva detectada." : "Apoing no configurado.");
   return currentPersonality === "vecina"
-    ? `Te doy estado rápido: ELO ${ctx.lastPoints}, nivel ${ctx.level}, racha ${ctx.streakText}, próximos ${upcoming}, abiertos ${open}. ${climateLine} Prueba comandos: nivel, próximo partido, abiertos, clima hoy/mañana, compara con...`
-    : `Resumen instantáneo: ELO ${ctx.lastPoints}, nivel ${ctx.level}, racha ${ctx.streakText}, próximos ${upcoming}, abiertos ${open}. ${climateLine} Comandos útiles: nivel, próximo partido, abiertos, clima hoy/mañana, compara con...`;
+    ? `Te doy estado rápido: ELO ${ctx.lastPoints}, nivel ${ctx.level}, racha ${ctx.streakText}, próximos ${upcoming}, abiertos ${open}. ${climateLine} Rival más jugado: ${mostRival ? mostRival.name : "N/D"}. Compañero top: ${mostPartner ? mostPartner.name : "N/D"}. ${apoingLine} Prueba: nivel, próximo partido, rival más jugado, apoing, rivales.`
+    : `Resumen instantáneo: ELO ${ctx.lastPoints}, nivel ${ctx.level}, racha ${ctx.streakText}, próximos ${upcoming}, abiertos ${open}. ${climateLine} Rival más jugado: ${mostRival ? mostRival.name : "N/D"}. Compañero más recurrente: ${mostPartner ? mostPartner.name : "N/D"}. ${apoingLine} Comandos útiles: nivel, próximo partido, rival más jugado, apoing, rivales.`;
 }
 
 
@@ -893,12 +1109,16 @@ function _detectIntent(query) {
   if (q.includes("nivel") || q.includes("progreso") || q.includes("progeso") || q.includes("subir")) return "CMD_LEVEL_PROGRESS";
   if (q.includes("historial") || q.includes("visto") || q.includes("partidos")) return "CMD_HISTORY";
   if (q.includes("consejo") || q.includes("ayudame") || q.includes("que hago")) return "CMD_ADVICE";
-  if (q.includes("nemesis") || q.includes("rival") || q.includes("odio")) return "CMD_NEMESIS";
+  if (q.includes("nemesis") || q.includes("némesis") || q.includes("odio")) return "CMD_NEMESIS";
   if (q.includes("victima") || q.includes("gano siempre") || q.includes("facil")) return "CMD_VICTIM";
   if (q.includes("quien va primero") || q.includes("lider") || q.includes("quien manda") || q.includes("clasificacion") || q.includes("podio")) return "CMD_RANKING_TOP"; 
   if (q.includes("compara") || q.includes(" vs ") || q.includes("contra")) return "CMD_COMPARE";
   if (q.includes("socio") || q.includes("pareja") || q.includes("compañero")) return "CMD_PARTNER_SYNC";
   if (q.includes("recomienda") || q.includes("quien jugar") || q.includes("retar")) return "CMD_RIVAL_INTEL";
+  if (q.includes("apoing") || q.includes("reserva apoing")) return "CMD_APOING_NEXT";
+  if (q.includes("rival mas jugado") || q.includes("rival más jugado") || q.includes("con quien juego mas") || q.includes("con quién juego más")) return "CMD_MOST_PLAYED";
+  if (q.includes("companero mas jugado") || q.includes("compañero más jugado")) return "CMD_MOST_PLAYED";
+  if (q.includes("debilidad rival") || q.includes("estado rival")) return "CMD_RIVAL_INTEL";
   if (q.includes("estadistica") || q.includes("datos") || q.includes("numeros")) return "CMD_STATS_READ";
   if (q.includes("pala") || q.includes("raqueta") || q.includes("material")) return "CMD_GEAR_ADVICE";
   if (q.includes("ganar") || q.includes("pronostico") || q.includes("suerte")) return "CMD_PREDICT";
@@ -909,6 +1129,20 @@ function _detectIntent(query) {
 }
 
 // --- PUBLIC INTERFACE & UI ---
+
+function _escapeHtml(text = "") {
+  return String(text)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function _formatChatText(text = "") {
+  const safe = _escapeHtml(text);
+  return safe
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\n/g, "<br>");
+}
 
 export async function sendMessage(prefillText = "") {
   const input = document.getElementById("ai-input-field");
@@ -925,7 +1159,7 @@ export async function sendMessage(prefillText = "") {
   // User Msg
   const userDiv = document.createElement("div");
   userDiv.className = "ai-msg user";
-  userDiv.innerHTML = `<p>${visualText}</p>`;
+  userDiv.innerHTML = `<p>${_formatChatText(visualText)}</p>`;
   msgs.appendChild(userDiv);
   
   input.value = "";
@@ -948,7 +1182,7 @@ export async function sendMessage(prefillText = "") {
 
   // Replace Loading
   setTimeout(() => {
-    botDiv.innerHTML = `<p>${response}</p>`;
+    botDiv.innerHTML = `<p>${_formatChatText(response)}</p>`;
     msgs.scrollTop = msgs.scrollHeight;
   }, 600 + Math.random() * 800);
 }
@@ -1049,8 +1283,8 @@ export function initVecinaChat() {
                     <button onclick="window.compareWithSelected()" class="text-[9px] font-black text-primary uppercase bg-primary/10 px-2 py-1 rounded-lg border border-primary/20">VS</button>
                 </div>
 
-                <div id="ai-command-wrap" class="ai-command-container-v7 mb-4 overflow-x-auto custom-scroll-hidden">
-                    <div class="flex flex-row gap-2 pb-1" style="width: max-content;">
+                <div id="ai-command-wrap" class="ai-command-container-v7 mb-4 custom-scroll-hidden">
+                    <div class="ai-quick-grid">
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_TUTORIAL','Guia')"><i class="fas fa-book-sparkles"></i><span>Guia</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_STATS_READ','Datos')"><i class="fas fa-chart-line-up"></i><span>Datos</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_HISTORY','Historial')"><i class="fas fa-history"></i><span>Historial</span></button>
@@ -1060,14 +1294,16 @@ export function initVecinaChat() {
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_NEMESIS','Nemesis')"><i class="fas fa-skull"></i><span>Nemesis</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_VICTIM','Victima')"><i class="fas fa-ghost"></i><span>Victima</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_PARTNER_SYNC','Socio')"><i class="fas fa-user-group"></i><span>Socio</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_MOST_PLAYED','Más jugados')"><i class="fas fa-people-arrows"></i><span>Más jugados</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_LEVEL_PROGRESS','Nivel')"><i class="fas fa-gauge-high"></i><span>Nivel</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_NEXT_MATCH','Próximo')"><i class="fas fa-calendar-check"></i><span>Próximo</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_OPEN_MATCHES','Abiertos')"><i class="fas fa-door-open"></i><span>Abiertos</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_APOING_NEXT','Apoing')"><i class="fas fa-link"></i><span>Apoing</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_WEATHER_TODAY','Clima Hoy')"><i class="fas fa-cloud-sun"></i><span>Hoy</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_WEATHER_TOMORROW','Clima Mañana')"><i class="fas fa-cloud-rain"></i><span>Mañana</span></button>
                     </div>
                 </div>
-                <details class="ai-cmd-details mb-3" open>
+                <details class="ai-cmd-details mb-3">
                     <summary><i class="fas fa-terminal"></i> VER TODOS LOS COMANDOS</summary>
                     <div class="ai-cmd-grid">
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_GREETING','Hola')">Hola</button>
@@ -1081,6 +1317,7 @@ export function initVecinaChat() {
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_NEMESIS','Némesis')">Némesis</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_VICTIM','Víctima')">Víctima</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_PARTNER_SYNC','Socio')">Socio</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_MOST_PLAYED','Más jugados')">Más jugados</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_RIVAL_INTEL','Rivales')">Rivales</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_DIARY_ANALYSIS','Diario')">Diario</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_PREDICT','Pronóstico')">Pronóstico</button>
@@ -1090,11 +1327,12 @@ export function initVecinaChat() {
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_OPEN_MATCHES','Abiertos')">Partidos abiertos</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_WEATHER_TODAY','Clima hoy')">Clima hoy</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_WEATHER_TOMORROW','Clima mañana')">Clima mañana</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_APOING_NEXT','Apoing')">Apoing</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_APP_HELP','Ayuda App')">Ayuda app</button>
                     </div>
                 </details>
                 <div class="ai-input-container-v7">
-                    <input type="text" id="ai-input-field" class="ai-input-v7" placeholder="Escribe aquí..." autocomplete="off">
+                    <input type="text" id="ai-input-field" class="ai-input-v7" placeholder="Pregúntame por tu próximo partido, nivel, rival o Apoing..." autocomplete="off">
                     <button id="ai-send-btn" class="ai-send-btn-v7">
                         <i class="fas fa-paper-plane"></i>
                     </button>
@@ -1134,6 +1372,7 @@ export function initVecinaChat() {
                 width: 100%;
                 height: 85dvh; 
                 max-height: 800px;
+                max-width: 100vw;
                 z-index: 12050;
                 transform: none;
                 opacity: 0;
@@ -1174,10 +1413,10 @@ export function initVecinaChat() {
             .ai-avatar-box.vecina { background: rgba(198, 255, 0, 0.1); color: #c6ff00; border: 1px solid rgba(198, 255, 0, 0.2); }
             
             .ai-chat-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-bottom: 20px; scroll-behavior: smooth; }
-            .ai-msg { max-width: 85%; animation: fadeIn 0.3s; }
+            .ai-msg { max-width: min(92%, 680px); animation: fadeIn 0.3s; }
             .ai-msg.user { align-self: flex-end; }
             .ai-msg.bot { align-self: flex-start; }
-            .ai-msg p { padding: 12px 16px; border-radius: 20px; font-size: 0.9rem; line-height: 1.45; margin: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+            .ai-msg p { padding: 12px 16px; border-radius: 20px; font-size: 0.9rem; line-height: 1.45; margin: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.1); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
             .ai-msg.user p { background: var(--primary); color: #000; border-bottom-right-radius: 4px; font-weight: 700; }
             .ai-msg.bot p { background: rgba(255,255,255,0.08); color: #fff; border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.05); }
             
@@ -1187,25 +1426,31 @@ export function initVecinaChat() {
                 border-radius: 20px; 
                 border: 1px solid rgba(255,255,255,0.05);
             }
+            .ai-quick-grid {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 6px;
+            }
             .ai-quick-btn-v7 { 
                 display: flex; 
                 flex-direction: column; 
                 align-items: center; 
                 justify-content: center;
-                gap: 5px; 
-                padding: 10px; 
+                gap: 3px; 
+                padding: 7px 4px; 
                 background: rgba(255,255,255,0.05); 
-                border-radius: 16px; 
+                border-radius: 12px; 
                 border: 1px solid rgba(255,255,255,0.05); 
                 color: #fff; 
                 cursor: pointer; 
                 transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
-                min-width: 75px;
-                height: 60px;
+                min-width: 0;
+                width: 100%;
+                height: 52px;
             }
             .ai-quick-btn-v7:hover { background: rgba(255,255,255,0.1); border-color: var(--primary); transform: translateY(-2px); }
-            .ai-quick-btn-v7 i { font-size: 16px; color: var(--primary); }
-            .ai-quick-btn-v7 span { font-size: 8px; text-transform: uppercase; font-weight: 900; letter-spacing: 0.5px; opacity: 0.8; }
+            .ai-quick-btn-v7 i { font-size: 13px; color: var(--primary); }
+            .ai-quick-btn-v7 span { font-size: 7px; text-transform: uppercase; font-weight: 900; letter-spacing: 0.2px; opacity: 0.88; line-height: 1; }
             
             .ai-input-container-v7 { 
                 display: flex; 
@@ -1217,8 +1462,10 @@ export function initVecinaChat() {
                 box-shadow: 0 8px 32px rgba(0,0,0,0.4);
             }
             .ai-chat-footer {
-                max-height: 44dvh;
+                max-height: 48dvh;
                 overflow-y: auto;
+                overscroll-behavior: contain;
+                padding-bottom: calc(12px + env(safe-area-inset-bottom));
             }
             .ai-cmd-details summary {
                 list-style: none;
@@ -1262,7 +1509,7 @@ export function initVecinaChat() {
                 background: rgba(198,255,0,.08);
                 color: #e5ffad;
             }
-            .ai-input-v7 { flex: 1; background: transparent; border: none; color: #fff; padding: 10px 15px; font-size: 0.95rem; outline: none; }
+            .ai-input-v7 { flex: 1; min-width: 0; background: transparent; border: none; color: #fff; padding: 10px 15px; font-size: 0.95rem; outline: none; }
             .ai-send-btn-v7 { 
                 width: 48px; 
                 height: 48px; 
@@ -1289,6 +1536,19 @@ export function initVecinaChat() {
             }
 
             @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+            @media (max-width: 540px) {
+                .ai-chat-header { min-height: 62px; padding-inline: 14px; }
+                .ai-chat-body { padding: 14px !important; gap: 12px; }
+                .ai-msg p { font-size: 0.84rem; padding: 10px 12px; }
+                .ai-chat-footer { max-height: 52dvh; padding: 12px !important; }
+                .ai-cmd-grid { grid-template-columns: 1fr; }
+                .ai-send-btn-v7 { width: 42px; height: 42px; }
+                .ai-quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+                .ai-quick-btn-v7 { height: 48px; padding: 6px 2px; border-radius: 10px; }
+                .ai-quick-btn-v7 i { font-size: 11px; }
+                .ai-quick-btn-v7 span { font-size: 6px; letter-spacing: 0.1px; }
+            }
         </style>
     `;
   document.body.insertAdjacentHTML("beforeend", chatHTML);

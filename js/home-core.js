@@ -1,4 +1,4 @@
-/* Home V2 - Clean and Real Player Names */
+﻿/* Home V2 - Clean and Real Player Names */
 import { db, subscribeCol, getDocument } from "./firebase-service.js";
 import {
   collection,
@@ -6,6 +6,8 @@ import {
   query,
   orderBy,
   limit,
+  addDoc,
+  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI } from "./ui-core.js";
 import { injectHeader, injectNavbar } from "./modules/ui-loader.js";
@@ -34,7 +36,10 @@ let currentUser = null;
 let currentUserData = null;
 let unsubAm = null;
 let unsubRe = null;
+let unsubEv = null;
+let unsubMyEvents = null;
 let allMatches = [];
+let myEvents = [];
 let weather = null;
 let presenceTimer = null;
 let loadedCollections = new Set();
@@ -139,10 +144,26 @@ document.addEventListener("DOMContentLoaded", () => {
           [["fecha", "asc"]],
           200,
         );
+        const evPromise = subscribeCol(
+          "eventoPartidos",
+          (list) => mergeMatches("eventoPartidos", list),
+          [],
+          [["fecha", "asc"]],
+          400,
+        );
 
-        const [uA, uR] = await Promise.all([amPromise, rePromise]);
+        const [uA, uR, uE] = await Promise.all([amPromise, rePromise, evPromise]);
         unsubAm = uA;
         unsubRe = uR;
+        unsubEv = uE;
+
+        unsubMyEvents = await subscribeCol(
+          "eventos",
+          (list) => mergeMyEvents(list),
+          [],
+          [["createdAt", "desc"]],
+          200,
+        );
       } catch (err) {
         console.error("Match loading error:", err);
       }
@@ -166,7 +187,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function cleanup() {
-  [unsubAm, unsubRe, unsubNexus].forEach((fn) => {
+  [unsubAm, unsubRe, unsubEv, unsubMyEvents, unsubNexus].forEach((fn) => {
     if (typeof fn === "function")
       try {
         fn();
@@ -174,6 +195,8 @@ function cleanup() {
   });
   unsubAm = null;
   unsubRe = null;
+  unsubEv = null;
+  unsubMyEvents = null;
   unsubNexus = null;
   allMatches = [];
   loadedCollections = new Set();
@@ -304,35 +327,32 @@ function renderWelcome() {
 /* Home Notices */
 async function checkHomeNotices() {
     const d = currentUserData;
-    if (!d || !d.uid) return;
+    if (!d || !currentUser?.uid) return;
 
     const notices = [];
     const now = new Date();
 
     // 1. Matches Today
-    try {
-        const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-        
-        const q = query(collection(db, "partidos"), where("jugadores", "array-contains", d.uid));
-        const snap = await getDocs(q);
-        const todayMatches = snap.docs.filter(doc => {
-            const data = doc.data();
-            const fecha = data.fecha?.toDate?.() || new Date(data.fecha);
-            return fecha >= todayStart && fecha <= todayEnd && data.estado === "Abierto";
-        });
+    const todayMatches = allMatches.filter((m) => {
+        const fecha = toDateSafe(m?.fecha);
+        if (!fecha) return false;
+        return (
+            fecha.getDate() === now.getDate() &&
+            fecha.getMonth() === now.getMonth() &&
+            fecha.getFullYear() === now.getFullYear() &&
+            (m.jugadores || []).includes(currentUser.uid) &&
+            !isFinishedMatch(m) &&
+            !isCancelledMatch(m)
+        );
+    });
 
-        if (todayMatches.length > 0) {
-            notices.push({
-                type: 'game',
-                title: '¡HOY JUEGAS!',
-                message: `Tienes ${todayMatches.length} ${todayMatches.length > 1 ? 'partidos' : 'partido'} programado para hoy. ¡A por todas!`,
-                action: () => window.location.href = 'calendario.html'
-            });
-        }
-    } catch (e) {
-        console.warn("Home Notice Check (Games) Failed:", e);
+    if (todayMatches.length > 0) {
+        notices.push({
+            type: 'game',
+            title: '¡HOY JUEGAS!',
+            message: `Tienes ${todayMatches.length} ${todayMatches.length > 1 ? 'partidos' : 'partido'} programado para hoy. ¡A por todas!`,
+            action: () => window.location.href = 'calendario.html'
+        });
     }
 
     // 2. Pending Diary
@@ -641,6 +661,150 @@ function bindNotificationNudge() {
   refreshRecommendations();
 }
 
+function getNormalizedPlayers(match) {
+  if (Array.isArray(match?.jugadores) && match.jugadores.length) {
+    return [...match.jugadores];
+  }
+  if (Array.isArray(match?.playerUids) && match.playerUids.length) {
+    return [...new Set(match.playerUids)].slice(0, 4);
+  }
+  return [];
+}
+
+function isEventMatch(match) {
+  return String(match?.col || "") === "eventoPartidos";
+}
+
+function mergeMyEvents(list = []) {
+  if (!currentUser?.uid) return;
+  myEvents = (list || [])
+    .filter((ev) => Array.isArray(ev?.inscritos) && ev.inscritos.some((i) => i?.uid === currentUser.uid))
+    .filter((ev) => !["finalizado", "cancelado"].includes(String(ev?.estado || "").toLowerCase()));
+  renderEventSpotlight();
+  maybeCreateEventDayNotice();
+}
+
+function toDateMs(value) {
+  const d = toDateSafe(value);
+  return d ? d.getTime() : 0;
+}
+
+function getMineUpcomingEventMatches() {
+  const now = Date.now();
+  return allMatches
+    .filter((m) => isEventMatch(m))
+    .filter((m) => (m.jugadores || []).includes(currentUser?.uid))
+    .filter((m) => !isFinishedMatch(m) && !isCancelledMatch(m))
+    .filter((m) => toDateMs(m.fecha) >= now - 10 * 60 * 1000)
+    .sort((a, b) => toDateMs(a.fecha) - toDateMs(b.fecha));
+}
+
+function renderEventSpotlight() {
+  const wrap = document.getElementById("event-spotlight");
+  const body = document.getElementById("event-spotlight-body");
+  const link = document.getElementById("event-spotlight-link");
+  if (!wrap || !body) return;
+
+  const upcoming = getMineUpcomingEventMatches().slice(0, 3);
+  const nextEvent = myEvents[0] || null;
+  if (!nextEvent && !upcoming.length) {
+    wrap.classList.add("hidden");
+    return;
+  }
+
+  wrap.classList.remove("hidden");
+  if (nextEvent?.id && link) link.href = `evento-detalle.html?id=${nextEvent.id}`;
+
+  const cards = [];
+  if (nextEvent) {
+    const inscritos = Array.isArray(nextEvent.inscritos) ? nextEvent.inscritos.length : 0;
+    cards.push(`
+      <div class="hv2-event-chip">
+        <div class="hv2-event-chip-title">${(nextEvent.nombre || "Evento").toUpperCase()}</div>
+        <div class="hv2-event-chip-sub">Estado: ${String(nextEvent.estado || "inscripcion").toUpperCase()} · ${inscritos}/${Number(nextEvent.plazasMax || 16)} inscritos</div>
+      </div>
+    `);
+  }
+
+  if (upcoming.length) {
+    upcoming.forEach((m) => {
+      const d = toDateSafe(m.fecha);
+      const when = d
+        ? d.toLocaleString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+        : "Sin fecha";
+      cards.push(`
+        <div class="hv2-event-chip" onclick="window.openMatch('${m.id}','${m.col}')">
+          <div class="hv2-event-chip-title">PARTIDO EVENTO · ${String(m.phase || "evento").toUpperCase()}</div>
+          <div class="hv2-event-chip-sub">${m.teamAName || "TBD"} vs ${m.teamBName || "TBD"} · ${when}</div>
+        </div>
+      `);
+    });
+  } else {
+    cards.push(`
+      <div class="hv2-event-chip">
+        <div class="hv2-event-chip-title">Sin partido asignado</div>
+        <div class="hv2-event-chip-sub">Reserva en calendario y vincula un partido pendiente de evento.</div>
+      </div>
+    `);
+  }
+
+  body.innerHTML = cards.join("");
+}
+
+async function createSelfNoticeOnce(key, title, message, link = "home.html", data = {}) {
+  if (!currentUser?.uid) return;
+  const storageKey = `home_notice:${currentUser.uid}:${key}`;
+  try {
+    if (localStorage.getItem(storageKey)) return;
+  } catch {}
+  try {
+    await addDoc(collection(db, "notificaciones"), {
+      destinatario: currentUser.uid,
+      receptorId: currentUser.uid,
+      remitente: currentUser.uid,
+      tipo: "event_reminder",
+      type: "event_reminder",
+      titulo: title,
+      mensaje: message,
+      enlace: link,
+      data,
+      leido: false,
+      seen: false,
+      read: false,
+      uid: currentUser.uid,
+      title,
+      message,
+      timestamp: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    });
+    try {
+      localStorage.setItem(storageKey, "1");
+    } catch {}
+  } catch (_) {}
+}
+
+function sameDay(a, b) {
+  return (
+    a.getDate() === b.getDate() &&
+    a.getMonth() === b.getMonth() &&
+    a.getFullYear() === b.getFullYear()
+  );
+}
+
+function maybeCreateEventDayNotice() {
+  const next = getMineUpcomingEventMatches()[0];
+  const d = toDateSafe(next?.fecha);
+  if (!next || !d) return;
+  if (!sameDay(d, new Date())) return;
+  const key = `event_today:${next.id}:${new Date().toISOString().slice(0, 10)}`;
+  const msg = `Hoy juegas partido de evento a las ${d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}.`;
+  createSelfNoticeOnce(key, "Partido de evento hoy", msg, `evento-detalle.html?id=${next.eventoId || ""}&tab=partidos`, {
+    type: "event_match_today",
+    matchId: next.id,
+    eventId: next.eventoId || null,
+  });
+}
+
 /* Match data */
 async function mergeMatches(col, list) {
   const sig = JSON.stringify(list.map((m) => m.id + m.estado));
@@ -649,7 +813,12 @@ async function mergeMatches(col, list) {
 
   allMatches = [
     ...allMatches.filter((m) => m.col !== col),
-    ...list.map((m) => ({ ...m, col })),
+    ...list.map((m) => ({
+      ...m,
+      col,
+      jugadores: getNormalizedPlayers(m),
+      organizerId: m.organizerId || m.organizadorId || m.creador || null,
+    })),
   ].sort((a, b) => {
     const da = toDateSafe(a.fecha);
     const db = toDateSafe(b.fecha);
@@ -674,6 +843,8 @@ async function mergeMatches(col, list) {
   await preloadPlayerNames(allMatches);
 
   renderNextMatch();
+  renderEventSpotlight();
+  maybeCreateEventDayNotice();
   const activeTab =
     document.querySelector(".hv2-tab.active")?.dataset.filter || "open";
   renderMatchesByFilter(activeTab);
@@ -692,6 +863,7 @@ function beginHomeEntryOverlay(name = "Jugador") {
   const pct = document.getElementById("home-entry-pct");
   if (!overlay || !fill || !pct) return;
 
+  document.body.classList.add("home-booting");
   overlay.classList.remove("hidden");
   if (title) title.textContent = `BIENVENIDO DE NUEVO ${String(name).toUpperCase()}`;
   homeEntryOverlayValue = 0;
@@ -715,7 +887,10 @@ function completeHomeEntryOverlay() {
   homeEntryOverlayValue = 100;
   fill.style.width = "100%";
   pct.textContent = "100%";
-  setTimeout(() => overlay.classList.add("hidden"), 520);
+  setTimeout(() => {
+    overlay.classList.add("hidden");
+    document.body.classList.remove("home-booting");
+  }, 520);
 }
 
 /* Tabs */
@@ -754,8 +929,9 @@ function renderNextMatch() {
   const players = [...(next.jugadores || [])];
   while (players.length < 4) players.push(null);
 
+  const isEvent = isEventMatch(next);
   const isReto = String(next.col || "").includes("Reto");
-  const freeSlots = players.filter((p) => !p).length;
+  const freeSlots = isEvent ? 0 : players.filter((p) => !p).length;
   const tempVal = weather?.current
     ? Math.round(weather.current.temperature_2m || 0)
     : null;
@@ -798,14 +974,14 @@ function renderNextMatch() {
     const isMe = uid === currentUser?.uid;
     const teamCls = team === "a" ? "is-team-a" : "is-team-b";
     const cls = !uid ? "empty" : isMe ? "is-me" : teamCls;
-    return `<span class="hv2-sb-player-name ${cls}">${uid ? name : "LIBRE"}</span>`;
+    return `<span class="hv2-sb-player-name ${cls}">${uid ? name : isEvent ? "TBD" : "LIBRE"}</span>`;
   };
 
   box.innerHTML = `
     <div class="hv2-scoreboard" onclick="window.openMatch('${next.id}','${next.col}')">
       <div class="hv2-court-bg"></div>
       <div class="hv2-sb-header">
-        <span class="hv2-sb-type">${isReto ? "⚡ LIGA RETO" : "🎾 AMISTOSO"}</span>
+        <span class="hv2-sb-type">${isEvent ? "EVENTO" : isReto ? "LIGA RETO" : "AMISTOSO"}</span>
         <span class="hv2-sb-countdown">${countdown}</span>
         <div class="hv2-sb-meta">
           <span class="hv2-sb-meta-item" style="color:${tempColor}"><i class="fas fa-thermometer-half"></i> ${temp}</span>
@@ -832,7 +1008,7 @@ function renderNextMatch() {
         </div>
       </div>
       <div class="hv2-sb-footer">
-        <span class="hv2-sb-slots ${freeSlots > 0 ? "has-slots" : "full"}">${freeSlots > 0 ? `${freeSlots} plaza${freeSlots === 1 ? "" : "s"} libre${freeSlots === 1 ? "" : "s"}` : "COMPLETO"}</span>
+        <span class="hv2-sb-slots ${freeSlots > 0 ? "has-slots" : "full"}">${isEvent ? (next.phase ? String(next.phase).toUpperCase() : "EVENTO") : (freeSlots > 0 ? `${freeSlots} plaza${freeSlots === 1 ? "" : "s"} libre${freeSlots === 1 ? "" : "s"}` : "COMPLETO")}</span>
         <span class="hv2-sb-action">VER PARTIDO <i class="fas fa-chevron-right"></i></span>
       </div>
     </div>
@@ -894,10 +1070,11 @@ function renderMatchCard(match, idx = 0) {
   if (!date) return "";
   const players = [...(match.jugadores || [])];
   while (players.length < 4) players.push(null);
+  const isEvent = isEventMatch(match);
   const isReto = String(match.col || "").includes("Reto");
   const isMine = (match.jugadores || []).includes(currentUser?.uid);
   const finished = isFinishedMatch(match);
-  const freeSlots = players.filter((p) => !p).length;
+  const freeSlots = isEvent ? 0 : players.filter((p) => !p).length;
   const delay = Math.min(300, idx * 40);
   const orgName = match.organizador
     ? getPlayerDisplayName(match.organizador)
@@ -930,12 +1107,14 @@ function renderMatchCard(match, idx = 0) {
   const hasResult = match.resultado?.sets || match.resultado?.score;
   const resultStr = hasResult ? match.resultado.sets || "" : "";
   const badge = finished
-    ? `<span class="hv2-mc-badge ${hasResult ? "closed-badge" : "pending-badge"}">${hasResult ? "✓ " + resultStr : "PENDIENTE"}</span>`
-    : isReto
-      ? `<span class="hv2-mc-badge reto-badge">⚡ RETO</span>`
-      : freeSlots > 0
-        ? `<span class="hv2-mc-badge open-badge">${freeSlots} LIBRE</span>`
-        : `<span class="hv2-mc-badge full-badge">COMPLETO</span>`;
+    ? `<span class="hv2-mc-badge ${hasResult ? "closed-badge" : "pending-badge"}">${hasResult ? "CERRADO " + resultStr : "PENDIENTE"}</span>`
+    : isEvent
+      ? `<span class="hv2-mc-badge open-badge">EVENTO${match.phase ? ` · ${String(match.phase).toUpperCase()}` : ""}</span>`
+      : isReto
+        ? `<span class="hv2-mc-badge reto-badge">RETO</span>`
+        : freeSlots > 0
+          ? `<span class="hv2-mc-badge open-badge">${freeSlots} LIBRE</span>`
+          : `<span class="hv2-mc-badge full-badge">COMPLETO</span>`;
 
   return `
     <div class="hv2-match-card ${isMine ? "mine-card" : ""} ${finished ? "finished-card" : ""}" style="animation-delay:${delay}ms" onclick="window.openMatch('${match.id}','${match.col}')">
@@ -1121,6 +1300,15 @@ window.openNexusModal = () => {
   modal.classList.add("active");
 };
 window.openMatch = (id, col) => {
+  if (String(col || "") === "eventoPartidos") {
+    const row = allMatches.find(
+      (m) => m.id === id && String(m.col || "") === "eventoPartidos",
+    );
+    if (row?.eventoId) {
+      window.location.href = `evento-detalle.html?id=${row.eventoId}&tab=partidos`;
+      return;
+    }
+  }
   const modal = document.getElementById("modal-match");
   const area = document.getElementById("match-detail-area");
   if (!modal || !area) return;
@@ -1156,6 +1344,9 @@ cleanup = () => {
   if (typeof unsubNexus === "function") unsubNexus();
   unsubNexus = null;
 };
+
+
+
 
 
 

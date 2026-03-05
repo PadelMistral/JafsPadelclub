@@ -4,7 +4,7 @@
    ===================================================== */
 
 import { db, auth, subscribeDoc, subscribeCol, updateDocument, getDocument } from './firebase-service.js';
-import { collection, getDocs, query, orderBy, limit, where, addDoc, doc, getDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import { collection, getDocs, query, orderBy, limit, where, addDoc, doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast, countUp } from './ui-core.js';
 import { renderMatchDetail, renderCreationForm } from './match-service.js';
 import { isExpiredOpenMatch, isFinishedMatch, isCancelledMatch } from "./utils/match-utils.js";
@@ -24,9 +24,19 @@ let apoingSlotMap = new Map();
 let apoingLastSyncAt = 0;
 let apoingNextRetryAt = 0;
 let apoingMyFutureCountLast = null;
+const APOING_DEBUG = true;
+
+function apoingLog(step, data = null) {
+    if (!APOING_DEBUG) return;
+    try {
+        if (data === null || data === undefined) console.log(`[Apoing][${step}]`);
+        else console.log(`[Apoing][${step}]`, data);
+    } catch (_) {}
+}
 
 const DEFAULT_APOING_ICS_URL = ""; // Empty by default now to avoid confusion
 const APOING_PROXY_LIST = [
+    "/api/apoing-ics?url=",
     "https://api.allorigins.win/raw?url=",
     "https://corsproxy.io/?",
     "https://proxy.cors.sh/", // Fallback 3
@@ -148,8 +158,12 @@ function updateUpcomingApoingBox() {
 
 function getApoingIcsUrl() {
     const byUser = String(userData?.apoingCalendarUrl || "").trim();
-    const byStorage = String(localStorage.getItem("apoingCalendarUrl") || "").trim();
+    const byStorage = String(localStorage.getItem(getApoingStorageKey(currentUser?.uid)) || "").trim();
     return byUser || byStorage || DEFAULT_APOING_ICS_URL;
+}
+
+function getApoingStorageKey(uid) {
+    return `apoingCalendarUrl:${uid || "anon"}`;
 }
 
 function isClubSocialEvent(ev = {}) {
@@ -159,41 +173,94 @@ function isClubSocialEvent(ev = {}) {
 
 function isPadelMistralEvent(ev = {}) {
     const txt = normalizeName(`${ev.summary || ""} ${ev.description || ""}`);
-    return txt.includes("padel mistral homes") || (txt.includes("padel") && txt.includes("mistral homes"));
+    return txt.includes("padel mistral homes") || txt.includes("padel") || txt.includes("pista") || txt.includes("reserva");
 }
 
 function isRelevantApoingEvent(ev = {}) {
-    return isPadelMistralEvent(ev) && !isClubSocialEvent(ev);
+    const txt = normalizeName(`${ev.summary || ""} ${ev.description || ""}`);
+    const looksPadel = isPadelMistralEvent(ev) || txt.includes("partido") || txt.includes("court");
+    return looksPadel && !isClubSocialEvent(ev);
 }
 
 async function getApoingSources() {
     const sources = [];
+    const pushUnique = (row) => {
+        const uid = String(row?.uid || "").trim();
+        const icsUrl = String(row?.icsUrl || "").trim();
+        if (!uid || !icsUrl) return;
+        if (!/^https:\/\/www\.apoing\.com\/calendars\/.+\.ics$/i.test(icsUrl)) return;
+        if (sources.some((s) => s.uid === uid)) return;
+        sources.push({
+            uid,
+            name: row?.name || "Jugador",
+            email: row?.email || "",
+            icsUrl,
+        });
+        apoingLog("source.added", { uid, name: row?.name || "Jugador", icsPreview: `${icsUrl.slice(0, 45)}...` });
+    };
+
     try {
-        const usersSnap = await getDocs(collection(db, "usuarios"));
-        usersSnap.forEach((d) => {
+        const publicSnap = await getDocs(collection(db, "apoingCalendars"));
+        publicSnap.forEach((d) => {
             const data = d.data() || {};
-            const url = String(data.apoingCalendarUrl || "").trim();
-            if (!url) return;
-            sources.push({
+            if (data.active === false) return;
+            pushUnique({
                 uid: d.id,
-                name: data.nombreUsuario || data.nombre || "Jugador",
+                name: data.nombre || data.nombreUsuario || "Jugador",
                 email: data.email || "",
-                icsUrl: url,
+                icsUrl: data.icsUrl || "",
             });
         });
     } catch (_) {}
 
+    if (!sources.length) {
+        try {
+            const usersSnap = await getDocs(collection(db, "usuarios"));
+            usersSnap.forEach((d) => {
+                const data = d.data() || {};
+                pushUnique({
+                    uid: d.id,
+                    name: data.nombreUsuario || data.nombre || "Jugador",
+                    email: data.email || "",
+                    icsUrl: data.apoingCalendarUrl || "",
+                });
+            });
+        } catch (_) {}
+    }
+
     const myUrl = getApoingIcsUrl();
     const hasMe = currentUser?.uid && sources.some((s) => s.uid === currentUser.uid);
     if (currentUser?.uid && myUrl && !hasMe) {
-        sources.push({
+        pushUnique({
             uid: currentUser.uid,
             name: userData?.nombreUsuario || userData?.nombre || "Tú",
             email: currentUser.email || "",
             icsUrl: myUrl,
         });
     }
+    apoingLog("sources.ready", {
+        total: sources.length,
+        uids: sources.map((s) => s.uid),
+    });
     return sources;
+}
+
+async function ensureMyApoingSourceSync() {
+    if (!currentUser?.uid) return;
+    const myUrl = getApoingIcsUrl();
+    if (!myUrl) return;
+    if (!/^https:\/\/www\.apoing\.com\/calendars\/.+\.ics$/i.test(String(myUrl).trim())) return;
+    try {
+        await setDoc(doc(db, "apoingCalendars", currentUser.uid), {
+            uid: currentUser.uid,
+            nombre: userData?.nombreUsuario || userData?.nombre || currentUser.email || "Jugador",
+            email: currentUser.email || "",
+            icsUrl: String(myUrl).trim(),
+            active: true,
+            updatedAt: serverTimestamp(),
+        }, { merge: true });
+        apoingLog("source.sync.self.ok", { uid: currentUser.uid });
+    } catch (_) {}
 }
 
 function unfoldIcsLines(raw = "") {
@@ -389,26 +456,7 @@ function extractOwnerFromApoingEvent(ev = {}) {
 
 function isApoingMine(ev = {}) {
     if (!currentUser) return false;
-    if (ev?.sourceUid) return ev.sourceUid === currentUser.uid;
-    
-    const owner = normalizeName(ev.owner || "");
-    const summary = normalizeName(ev.summary || "");
-    const desc = normalizeName(ev.description || "");
-    const fullText = `${summary} ${desc}`;
-
-    const myNames = [
-        normalizeName(userData?.nombreUsuario || ""),
-        normalizeName(userData?.nombre || ""),
-        normalizeName(String(currentUser?.email || "").split("@")[0] || "")
-    ].filter(s => s && s.length > 2);
-
-    // 1. Direct match on extracted owner
-    if (owner && myNames.some(s => owner.includes(s) || s.includes(owner))) return true;
-    
-    // 2. Search names in summary/description (common in Apoing)
-    if (myNames.some(s => fullText.includes(s))) return true;
-    
-    return false;
+    return ev?.sourceUid === currentUser.uid;
 }
 
 function buildSlotKey(dateObj, hour) {
@@ -458,6 +506,7 @@ async function fetchApoingIcs(url, timeoutMs = 25000) {
         if (!resp.ok) throw new Error(`apoing_http_${resp.status}`);
         const txt = await resp.text();
         if (!String(txt || "").includes("BEGIN:VCALENDAR")) throw new Error("apoing_invalid_ics");
+        apoingLog("ics.fetch.ok", { urlPreview: `${String(url).slice(0, 70)}...`, size: String(txt || "").length });
         return txt;
     } finally {
         clearTimeout(t);
@@ -478,8 +527,10 @@ async function fetchRawApoingByUrl(icsUrl) {
     let lastErr = null;
     for (const candidate of candidates) {
         try {
+            apoingLog("ics.fetch.try", { candidate: `${String(candidate).slice(0, 80)}...` });
             return await fetchApoingIcs(candidate);
         } catch (e) {
+            apoingLog("ics.fetch.fail", { candidate: `${String(candidate).slice(0, 80)}...`, err: e?.message || String(e) });
             lastErr = e;
         }
     }
@@ -491,10 +542,12 @@ async function syncApoingReservations(force = false) {
     if (!force && now - apoingLastSyncAt < APOING_SYNC_TTL_MS && apoingEvents.length) return;
 
     const sources = await getApoingSources();
+    apoingLog("sync.start", { force, sourceCount: sources.length });
     if (!sources.length) {
         apoingEvents = [];
         apoingSlotMap = new Map();
         updateApoingSyncBadge("Reservas de Apoing: 0", "warn");
+        apoingLog("sync.no-sources");
         return;
     }
 
@@ -506,6 +559,7 @@ async function syncApoingReservations(force = false) {
             try {
                 const icsUrl = String(source.icsUrl || "").trim();
                 if (!icsUrl) continue;
+                apoingLog("source.sync.begin", { uid: source.uid, name: source.name, icsPreview: `${icsUrl.slice(0, 45)}...` });
                 const cacheKey = `apoing_raw_cache_${icsUrl}`;
                 let raw = "";
 
@@ -529,15 +583,39 @@ async function syncApoingReservations(force = false) {
                     sourceName: source.name,
                     sourceEmail: source.email,
                 }));
+                apoingLog("source.sync.stats", {
+                    uid: source.uid,
+                    parsed: parsed.length,
+                    filtered: filtered.length,
+                    expanded: expanded.length,
+                    first: expanded[0]
+                        ? {
+                            summary: expanded[0].summary || "",
+                            start: expanded[0].dtStart?.toISOString?.() || "",
+                            end: expanded[0].dtEnd?.toISOString?.() || "",
+                        }
+                        : null,
+                });
                 allEvents.push(...expanded);
             } catch (errSource) {
                 console.warn("Apoing source sync failed", source?.uid, errSource?.message || errSource);
+                apoingLog("source.sync.error", { uid: source?.uid || "", err: errSource?.message || String(errSource) });
             }
         }
 
         const events = allEvents.sort((a, b) => (a.dtStart?.getTime?.() || 0) - (b.dtStart?.getTime?.() || 0));
         apoingEvents = events;
         indexApoingEvents(events);
+        const byUser = {};
+        events.forEach((e) => {
+            const uid = String(e?.sourceUid || "unknown");
+            byUser[uid] = (byUser[uid] || 0) + 1;
+        });
+        apoingLog("sync.done", {
+            totalEvents: events.length,
+            byUser,
+            slotKeys: apoingSlotMap.size,
+        });
         apoingLastSyncAt = now;
         apoingNextRetryAt = 0;
 
@@ -550,6 +628,7 @@ async function syncApoingReservations(force = false) {
         updateApoingSyncBadge(`Reservas de Apoing: ${myFutureCount} tuyas · ${events.length} total`, events.length ? "ok" : "warn");
     } catch (e) {
         console.warn("Apoing sync fallback failed:", e?.message || e);
+        apoingLog("sync.error", { err: e?.message || String(e) });
         apoingEvents = [];
         apoingSlotMap = new Map();
         apoingLastSyncAt = now;
@@ -576,6 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 calendarBootUid = user.uid;
                 currentUser = user;
                 userData = userDoc || {};
+                ensureMyApoingSourceSync().catch(() => {});
 
                 calendarMatchUnsubs.forEach((unsub) => {
                     try { if (typeof unsub === 'function') unsub(); } catch (_) {}
@@ -584,8 +664,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const unsubA = await subscribeCol('partidosAmistosos', () => syncMatches());
                 const unsubR = await subscribeCol('partidosReto', () => syncMatches());
+                const unsubE = await subscribeCol('eventoPartidos', () => syncMatches());
                 if (typeof unsubA === 'function') calendarMatchUnsubs.push(unsubA);
                 if (typeof unsubR === 'function') calendarMatchUnsubs.push(unsubR);
+                if (typeof unsubE === 'function') calendarMatchUnsubs.push(unsubE);
 
                 syncMatches();
             } catch (e) {
@@ -626,14 +708,16 @@ function startClock() {
 
 async function syncMatches() {
     try {
-        const [snapA, snapR] = await Promise.all([
+        const [snapA, snapR, snapE] = await Promise.all([
             window.getDocsSafe(collection(db, "partidosAmistosos")),
-            window.getDocsSafe(collection(db, "partidosReto"))
+            window.getDocsSafe(collection(db, "partidosReto")),
+            window.getDocsSafe(collection(db, "eventoPartidos"))
         ]);
         
         allMatches = [];
         snapA.forEach(d => allMatches.push({ id: d.id, col: 'partidosAmistosos', ...d.data() }));
         snapR.forEach(d => allMatches.push({ id: d.id, col: 'partidosReto', isComp: true, ...d.data() }));
+        snapE.forEach(d => allMatches.push({ id: d.id, col: 'eventoPartidos', isEvent: true, ...d.data() }));
         await autoCancelExpiredMatches(allMatches);
 
         await Promise.all([
@@ -722,8 +806,10 @@ window.saveApoingUrl = async () => {
     const url = document.getElementById('inp-apoing-url')?.value.trim();
     if (!url) return;
     
-    // Save locally
-    localStorage.setItem('apoingCalendarUrl', url); // Changed key to match getApoingIcsUrl
+    // Save locally scoped by user to avoid cross-account leaks
+    if (currentUser?.uid) {
+        localStorage.setItem(getApoingStorageKey(currentUser.uid), url);
+    }
     
     // Save to Firebase profile if possible
     if (currentUser?.uid) {
@@ -731,6 +817,14 @@ window.saveApoingUrl = async () => {
             await updateDocument('usuarios', currentUser.uid, {
                 apoingCalendarUrl: url
             });
+            await setDoc(doc(db, "apoingCalendars", currentUser.uid), {
+                uid: currentUser.uid,
+                nombre: userData?.nombreUsuario || userData?.nombre || currentUser.email || "Jugador",
+                email: currentUser.email || "",
+                icsUrl: url,
+                active: true,
+                updatedAt: serverTimestamp(),
+            }, { merge: true });
         } catch(e) { console.warn("Failed to save URL to profile", e); }
     }
     
@@ -893,6 +987,14 @@ function renderSlot(date, hour) {
     let isLocked = false;
 
     if (match) {
+        if (match.col === 'eventoPartidos') {
+            const isMineEvent = !!currentUser && (match.playerUids || []).includes(currentUser.uid);
+            const isPlayedEvent = String(match.estado || '').toLowerCase() === 'jugado';
+            state = isPlayedEvent ? 'jugado' : (isMineEvent ? 'propia' : 'cerrada');
+            label = isPlayedEvent ? 'EVENTO JUGADO' : 'PARTIDO EVENTO';
+            sub = isPlayedEvent ? (match.resultado || 'VER RES') : (match.phase ? String(match.phase).toUpperCase() : 'TORNEO');
+            ownerSub = `EVENTO: ${shortName(match.teamAName || '?')} VS ${shortName(match.teamBName || '?')}`;
+        } else {
         // Private Match Check
         if (match.visibility === 'private' && currentUser) {
             const uid = currentUser.uid;
@@ -954,6 +1056,7 @@ function renderSlot(date, hour) {
             if (!ownerSub && match.creatorName) {
                 ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
             }
+        }
         }
     } else if (apoingEvent) {
         const mine = isApoingMine(apoingEvent);
@@ -1073,6 +1176,12 @@ window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
 
         if (id) {
             const mData = allMatches.find(m => m.id === id);
+            if (mData?.col === 'eventoPartidos') {
+                if (title) title.textContent = 'PARTIDO DE EVENTO';
+                area.innerHTML = renderEventMatchDetail(mData);
+                slotInteractionBusy = false;
+                return;
+            }
             const finished = mData && (mData.resultado?.sets || ['jugado','jugada','finalizado'].includes(String(mData.estado || '').toLowerCase()));
             
             if (finished) {
@@ -1120,6 +1229,31 @@ window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
         slotInteractionBusy = false;
     }
 };
+
+function renderEventMatchDetail(match) {
+    const phase = String(match.phase || 'group');
+    const phaseLabel = phase === 'group' ? `Grupo ${match.group || ''}` : (phase === 'semi' ? 'Semifinal' : (phase === 'final' ? 'Final' : 'Evento'));
+    const dateLabel = match.fecha ? new Date(match.fecha?.toDate ? match.fecha.toDate() : match.fecha).toLocaleString('es-ES') : 'Sin fecha programada';
+    const result = match.resultado || '--';
+    const canManage = !!currentUser && (
+        (Array.isArray(match.playerUids) && match.playerUids.includes(currentUser.uid)) ||
+        userData?.rol === 'Admin'
+    );
+    return `
+        <div class="p-4 flex-col gap-3">
+            <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
+                <div class="text-[9px] font-black uppercase tracking-widest text-primary mb-2">Evento · ${phaseLabel}</div>
+                <div class="text-sm font-black text-white mb-1">${match.teamAName || '?'} vs ${match.teamBName || '?'}</div>
+                <div class="text-[10px] text-white/70 mb-1">Fecha: ${dateLabel}</div>
+                <div class="text-[10px] text-white/70">Resultado: ${result}</div>
+            </div>
+            <div class="flex-row gap-2">
+                <a class="btn btn-ghost w-full" href="evento-detalle.html?id=${match.eventoId}&tab=partidos">Abrir evento</a>
+                ${canManage ? `<button class="btn btn-primary w-full" onclick="window.location.href='evento-detalle.html?id=${match.eventoId}&tab=partidos&admin=1'">Gestionar</button>` : ''}
+            </div>
+        </div>
+    `;
+}
 
 function escapeHtml(raw = "") {
     return String(raw || "")

@@ -51,7 +51,9 @@
 .events-filter-scroll {
   display: flex;
   gap: 8px;
-  overflow-x: auto;
+  overflow-x: visible;
+  flex-wrap: wrap;
+  width: 100%;
   padding-bottom: 6px;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -76,6 +78,9 @@
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s ease;
+  flex: 1 1 calc(33.333% - 6px);
+  justify-content: center;
+  min-width: 0;
 }
 .evf-tab:hover {
   background: rgba(0, 212, 255, 0.08);
@@ -438,21 +443,20 @@
 /* ── DETAIL MODAL ── */
 .ev-detail-tabs {
   display: flex;
-  gap: 0;
+  gap: 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.ev-detail-tabs::-webkit-scrollbar {
-  display: none;
+  overflow-x: visible;
+  flex-wrap: wrap;
+  padding: 6px 0;
 }
 .ev-dtab {
-  flex-shrink: 0;
-  padding: 12px 16px;
+  flex: 1 1 calc(50% - 6px);
+  min-width: 0;
+  padding: 10px 8px;
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.5);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -661,17 +665,15 @@
 /* ── ADMIN MODAL ── */
 .ev-admin-tabs {
   display: flex;
-  overflow-x: auto;
-  gap: 0;
+  overflow-x: visible;
+  gap: 6px;
+  flex-wrap: wrap;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  scrollbar-width: none;
-}
-.ev-admin-tabs::-webkit-scrollbar {
-  display: none;
 }
 .ev-admin-tab {
-  flex-shrink: 0;
-  padding: 11px 14px;
+  flex: 1 1 calc(50% - 6px);
+  min-width: 0;
+  padding: 10px 8px;
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.45);
@@ -870,4 +872,57 @@
   text-transform: uppercase;
   display: block;
   margin-bottom: 4px;
+}
+
+@media (max-width: 640px) {
+  .events-filter-scroll {
+    gap: 6px;
+  }
+  .evf-tab {
+    padding: 7px 8px;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+    flex: 1 1 calc(50% - 4px);
+  }
+  .evf-tab i {
+    font-size: 10px;
+  }
+}
+
+/* Responsive hardening */
+.events-page {
+  overflow-x: clip;
+}
+
+.events-grid-v3,
+.events-grid-section,
+.events-filter-section,
+.events-header-v3,
+.event-card-v3,
+.bracket-wrap,
+.bracket-round,
+.bracket-match {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 680px) {
+  .events-grid-v3 {
+    grid-template-columns: 1fr;
+  }
+
+  .events-header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .btn-create-event {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .form-row-2,
+  .form-row-3 {
+    grid-template-columns: 1fr;
+  }
 }

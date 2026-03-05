@@ -171,16 +171,24 @@ export async function createNotification(
       // Database check against PERMANENT sent log
       // This ensures that even if the notification is deleted from the inbox, 
       // we don't send it again.
-      const q = query(
-        collection(db, "notif_sent_log"),
-        where("key", "==", dedupId),
-        limit(1),
-      );
-      const logExisting = window.getDocsSafe
-        ? await window.getDocsSafe(q)
-        : await getDocs(q);
-        
-      if (!logExisting.empty) {
+      let alreadyLogged = false;
+      try {
+        const q = query(
+          collection(db, "notif_sent_log"),
+          where("key", "==", dedupId),
+          limit(1),
+        );
+        const logExisting = window.getDocsSafe
+          ? await window.getDocsSafe(q)
+          : await getDocs(q);
+        alreadyLogged = !logExisting.empty;
+      } catch (e) {
+        // If the sent-log collection is unavailable (rules not deployed yet),
+        // keep notifications flowing and rely on local TTL dedup.
+        console.warn("notif_sent_log read skipped:", e?.code || e?.message || e);
+      }
+
+      if (alreadyLogged) {
         writeDedupStamp(registryKey);
         return;
       }
@@ -210,11 +218,15 @@ export async function createNotification(
 
       // Register the send in the permanent log
       if (docRef.id) {
-        await addDoc(collection(db, "notif_sent_log"), {
-          key: dedupId,
-          uid,
-          timestamp: serverTimestamp()
-        });
+        try {
+          await addDoc(collection(db, "notif_sent_log"), {
+            key: dedupId,
+            uid,
+            timestamp: serverTimestamp()
+          });
+        } catch (e) {
+          console.warn("notif_sent_log write skipped:", e?.code || e?.message || e);
+        }
         writeDedupStamp(registryKey);
       }
       return docRef;
@@ -1065,6 +1077,5 @@ export default {
   suggestDiaryEntry,
   cleanupAutoNotifications,
 };
-
 
 

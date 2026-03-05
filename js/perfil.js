@@ -13,6 +13,9 @@ import {
   where,
   orderBy,
   limit,
+  setDoc,
+  doc,
+  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { showToast, countUp, initAppUI } from "./ui-core.js";
 import {
@@ -35,6 +38,14 @@ import {
   observeCoreSession,
 } from "./core/core-engine.js";
 import { isFinishedMatch, isCancelledMatch, resolveWinnerTeam } from "./utils/match-utils.js";
+const APOING_PROFILE_DEBUG = true;
+function apoingProfileLog(step, data = null) {
+  if (!APOING_PROFILE_DEBUG) return;
+  try {
+    if (data === null || data === undefined) console.log(`[ApoingProfile][${step}]`);
+    else console.log(`[ApoingProfile][${step}]`, data);
+  } catch (_) {}
+}
 
 window.openAIHubFromProfile = function () {
   try { sessionStorage.setItem("openAIHub", "1"); } catch (_) {}
@@ -59,6 +70,184 @@ document.addEventListener("DOMContentLoaded", () => {
   let globalLogsCacheAt = 0;
   let advStatsCacheAt = 0;
   let selectedEloRange = 30;
+
+  const getApoingStorageKey = (uid) => `apoingCalendarUrl:${uid || "anon"}`;
+  const APOING_PROFILE_PROXY_LIST = [
+    "/api/apoing-ics?url=",
+    "https://api.allorigins.win/raw?url=",
+    "https://cors.isomorphic-git.org/",
+  ];
+  const APOING_PROFILE_PROXY_3 = "https://r.jina.ai/http://";
+
+  function unfoldIcsLines(raw = "") {
+    const lines = String(raw || "").split(/\r?\n/);
+    const unfolded = [];
+    for (const line of lines) {
+      if (!line) continue;
+      if ((line.startsWith(" ") || line.startsWith("\t")) && unfolded.length) {
+        unfolded[unfolded.length - 1] += line.trim();
+      } else {
+        unfolded.push(line.trim());
+      }
+    }
+    return unfolded;
+  }
+
+  function parseIcsDate(value = "") {
+    const v = String(value || "").trim().toUpperCase();
+    const dOnly = v.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (dOnly) {
+      const [, y, mo, d] = dOnly;
+      return new Date(Number(y), Number(mo) - 1, Number(d), 0, 0, 0);
+    }
+    const m = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?/);
+    if (!m) return null;
+    const [, y, mo, d, h, mi, s = "00", isZulu] = m;
+    if (isZulu === "Z") return new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)));
+    return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
+  }
+
+  function decodeIcsText(text = "") {
+    return String(text || "")
+      .replaceAll("\\n", "\n")
+      .replaceAll("\\,", ",")
+      .replaceAll("\\;", ";")
+      .replaceAll("\\\\", "\\");
+  }
+
+  function parseIcsEvents(icsText = "") {
+    const lines = unfoldIcsLines(icsText);
+    const out = [];
+    let current = null;
+    for (const line of lines) {
+      if (line === "BEGIN:VEVENT") {
+        current = {};
+        continue;
+      }
+      if (line === "END:VEVENT") {
+        if (current?.dtStart && current?.dtEnd) out.push(current);
+        current = null;
+        continue;
+      }
+      if (!current) continue;
+      const split = line.indexOf(":");
+      if (split <= 0) continue;
+      const rawKey = line.slice(0, split).trim();
+      const value = decodeIcsText(line.slice(split + 1).trim());
+      const key = rawKey.split(";")[0].toUpperCase();
+      if (key === "SUMMARY") current.summary = value;
+      if (key === "DESCRIPTION") current.description = value;
+      if (key === "DTSTART") current.dtStart = parseIcsDate(value);
+      if (key === "DTEND") current.dtEnd = parseIcsDate(value);
+    }
+    return out.filter((e) => e.dtStart instanceof Date && e.dtEnd instanceof Date);
+  }
+
+  async function fetchApoingIcs(url, timeoutMs = 22000) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const resp = await fetch(url, { method: "GET", cache: "no-store", signal: ctrl.signal });
+      if (!resp.ok) throw new Error(`apoing_http_${resp.status}`);
+      const txt = await resp.text();
+      if (!String(txt || "").includes("BEGIN:VCALENDAR")) throw new Error("apoing_invalid_ics");
+      apoingProfileLog("ics.fetch.ok", { urlPreview: `${String(url).slice(0, 70)}...`, size: String(txt || "").length });
+      return txt;
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  async function fetchRawApoingByUrl(icsUrl = "") {
+    const cleanUrl = String(icsUrl || "").trim();
+    if (!cleanUrl) throw new Error("apoing_empty_url");
+    const candidates = [
+      `${APOING_PROFILE_PROXY_3}${cleanUrl.replace(/^https?:\/\//i, "")}`,
+      ...APOING_PROFILE_PROXY_LIST.map((p) => `${p}${encodeURIComponent(cleanUrl)}`),
+    ];
+    let lastErr = null;
+    for (const candidate of candidates) {
+      try {
+        apoingProfileLog("ics.fetch.try", { candidate: `${String(candidate).slice(0, 80)}...` });
+        return await fetchApoingIcs(candidate);
+      } catch (e) {
+        apoingProfileLog("ics.fetch.fail", { candidate: `${String(candidate).slice(0, 80)}...`, err: e?.message || String(e) });
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error("apoing_fetch_failed");
+  }
+
+  function renderApoingPreviewEmpty(message = "Configura tu calendario Apoing en Ajustes", sub = "Verás aquí un resumen de tus reservas activas") {
+    const box = document.getElementById("apoing-preview");
+    if (!box) return;
+    box.innerHTML = `
+      <div class="flex-col gap-2 items-center py-4 opacity-40">
+        <i class="fas fa-calendar-plus text-2xl"></i>
+        <span class="text-[11px] font-bold">${message}</span>
+        <span class="text-[9px] text-muted">${sub}</span>
+      </div>
+    `;
+  }
+
+  async function renderApoingPreview(data = {}) {
+    const box = document.getElementById("apoing-preview");
+    if (!box) return;
+    const localUrl = String(localStorage.getItem(getApoingStorageKey(currentUser?.uid)) || "").trim();
+    const apoingUrl = String(data?.apoingCalendarUrl || localUrl || "").trim();
+    apoingProfileLog("preview.input", {
+      uid: currentUser?.uid || "",
+      hasUserUrl: Boolean(String(data?.apoingCalendarUrl || "").trim()),
+      hasLocalUrl: Boolean(localUrl),
+      urlPreview: apoingUrl ? `${apoingUrl.slice(0, 45)}...` : "",
+    });
+    if (!apoingUrl) {
+      renderApoingPreviewEmpty();
+      return;
+    }
+
+    try {
+      box.innerHTML = `<div class="center py-4 opacity-50"><i class="fas fa-circle-notch fa-spin text-primary"></i></div>`;
+      const raw = await fetchRawApoingByUrl(apoingUrl);
+      const now = Date.now();
+      const events = parseIcsEvents(raw)
+        .filter((e) => (e.dtStart?.getTime?.() || 0) >= now)
+        .filter((e) => /padel|pádel|reserva|pista|court/i.test(`${e.summary || ""} ${e.description || ""}`))
+        .sort((a, b) => a.dtStart - b.dtStart)
+        .slice(0, 6);
+      apoingProfileLog("preview.events", {
+        count: events.length,
+        first: events[0]
+          ? {
+              summary: events[0].summary || "",
+              start: events[0].dtStart?.toISOString?.() || "",
+              end: events[0].dtEnd?.toISOString?.() || "",
+            }
+          : null,
+      });
+
+      if (!events.length) {
+        renderApoingPreviewEmpty("No se han detectado reservas futuras", "Cuando tengas reservas en Apoing, aparecerán aquí automáticamente");
+        return;
+      }
+
+      box.innerHTML = events.map((ev) => {
+        const day = ev.dtStart.toLocaleDateString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit" }).toUpperCase();
+        const h1 = ev.dtStart.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+        const h2 = ev.dtEnd.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+        const title = String(ev.summary || "Reserva de pista");
+        return `
+          <div class="apoing-slot">
+            <div class="apoing-slot-time">${day}</div>
+            <div class="apoing-slot-info">${h1} - ${h2} · ${title}</div>
+          </div>
+        `;
+      }).join("");
+    } catch (_) {
+      apoingProfileLog("preview.error");
+      renderApoingPreviewEmpty("No se pudo sincronizar Apoing", "Revisa tu URL .ics o vuelve a intentarlo más tarde");
+    }
+  }
 
   observeCoreSession({
     onSignedOut: () => {
@@ -155,7 +344,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const apoingInp = document.getElementById("apoing-url-inp");
     if (apoingInp) {
-      const stored = String(localStorage.getItem("apoingCalendarUrl") || "").trim();
+      const stored = String(localStorage.getItem(getApoingStorageKey(currentUser?.uid)) || "").trim();
       apoingInp.value = String(data.apoingCalendarUrl || stored || "");
     }
 
@@ -204,6 +393,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Gear/Palas
     renderGear(data.palas || []);
     renderUltimateFutCard(data);
+    renderApoingPreview(data).catch(() => {});
   }
 
   function getLevelProgressState(rawNivel, rawPuntos) {
@@ -1352,9 +1542,24 @@ document.addEventListener("DOMContentLoaded", () => {
         showToast("Apoing", "Sincronizando enlace de calendario...", "info");
       }
       await updateDocument("usuarios", currentUser.uid, { apoingCalendarUrl: safe });
+      apoingProfileLog("save.userDoc.ok", { uid: currentUser.uid });
+      await setDoc(doc(db, "apoingCalendars", currentUser.uid), {
+        uid: currentUser.uid,
+        nombre: userData?.nombreUsuario || userData?.nombre || currentUser.email || "Jugador",
+        email: currentUser.email || "",
+        icsUrl: safe,
+        active: true,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      apoingProfileLog("save.publicDoc.ok", {
+        uid: currentUser.uid,
+        urlPreview: `${safe.slice(0, 45)}...`,
+      });
       try {
-        localStorage.setItem("apoingCalendarUrl", safe);
+        localStorage.setItem(getApoingStorageKey(currentUser.uid), safe);
       } catch (_) {}
+      if (userData) userData.apoingCalendarUrl = safe;
+      renderApoingPreview({ ...(userData || {}), apoingCalendarUrl: safe }).catch(() => {});
       showToast("Apoing", "Enlace de calendario guardado", "success");
     } catch (e) {
       showToast("Error", "No se pudo guardar el enlace de Apoing.", "error");
@@ -1367,7 +1572,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const inp = document.getElementById("apoing-url-inp");
     if (!inp) return;
     const url = String(inp.value || "").trim() ||
-      String(userData?.apoingCalendarUrl || localStorage.getItem("apoingCalendarUrl") || "").trim();
+      String(userData?.apoingCalendarUrl || localStorage.getItem(getApoingStorageKey(currentUser?.uid)) || "").trim();
     if (!url) {
       showToast("Apoing", "Configura primero tu enlace de calendario.", "warning");
       return;
@@ -1468,4 +1673,3 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
 });
-

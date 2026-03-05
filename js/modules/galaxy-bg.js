@@ -8,6 +8,8 @@ export function initGalaxyBackground() {
   const bg = document.querySelector(".sport-bg");
   if (!bg || bg.dataset.initialized) return;
   bg.dataset.initialized = "true";
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+  const isLowPower = reducedMotion || window.innerWidth < 768;
 
   // Inject galaxy styles if not already present
   if (!document.getElementById('galaxy-v7-styles')) {
@@ -179,12 +181,19 @@ export function initGalaxyBackground() {
   bg.appendChild(mist);
 
   // Star Layers
-  const starLayers = [
-    { class: "tiny", count: 200, depth: 1 },
-    { class: "small", count: 120, depth: 2 },
-    { class: "medium", count: 60, depth: 3 },
-    { class: "large", count: 25, depth: 4 }
-  ];
+  const starLayers = isLowPower
+    ? [
+        { class: "tiny", count: 80, depth: 1 },
+        { class: "small", count: 40, depth: 2 },
+        { class: "medium", count: 18, depth: 3 },
+        { class: "large", count: 8, depth: 4 },
+      ]
+    : [
+        { class: "tiny", count: 200, depth: 1 },
+        { class: "small", count: 120, depth: 2 },
+        { class: "medium", count: 60, depth: 3 },
+        { class: "large", count: 25, depth: 4 },
+      ];
 
   const coloredStars = [
     "colored-cyan", "colored-purple", "colored-gold",
@@ -230,6 +239,7 @@ export function initGalaxyBackground() {
 
   // Shooting Stars Generator
   const createShootingStar = () => {
+    if (document.hidden || reducedMotion) return;
     const shootingStar = document.createElement("div");
     shootingStar.className = "shooting-star";
     shootingStar.style.left = `${5 + Math.random() * 65}%`;
@@ -240,10 +250,16 @@ export function initGalaxyBackground() {
     setTimeout(() => shootingStar.remove(), duration * 1000 + 500);
   };
 
-  // Spawn shooting stars
-  const shootingStarInterval = setInterval(() => {
-    if (Math.random() > 0.5) createShootingStar();
-  }, 4000);
+  // Spawn shooting stars using adaptive timeout loop to reduce timer pressure.
+  let shootingStarTimer = null;
+  const scheduleShootingStar = () => {
+    const delay = isLowPower ? 6500 : 4200;
+    shootingStarTimer = setTimeout(() => {
+      if (Math.random() > 0.55) createShootingStar();
+      scheduleShootingStar();
+    }, delay);
+  };
+  scheduleShootingStar();
 
   setTimeout(() => createShootingStar(), 1500);
   setTimeout(() => createShootingStar(), 4000);
@@ -251,6 +267,7 @@ export function initGalaxyBackground() {
 
   // Cleanup function
   window.cleanupGalaxyBackground = () => {
-    clearInterval(shootingStarInterval);
+    if (shootingStarTimer) clearTimeout(shootingStarTimer);
+    shootingStarTimer = null;
   };
 }

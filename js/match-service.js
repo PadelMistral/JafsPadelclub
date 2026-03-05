@@ -207,6 +207,70 @@ async function safeOnSnapshot(q, onNext) {
     return onSnapshot(q, onNext, () => {});
 }
 
+function getEventLinkValue() {
+    const sel = document.getElementById('inp-event-link');
+    const val = String(sel?.value || '');
+    if (!val) return null;
+    const parts = val.split('|');
+    if (parts.length < 2) return null;
+    return { eventoId: parts[0], eventMatchId: parts[1], phase: parts[2] || '' };
+}
+
+async function loadEventLinkOptions(dateStr, hour, uid) {
+    const sel = document.getElementById('inp-event-link');
+    if (!sel || !uid) return;
+    sel.innerHTML = `<option value="">Sin vincular (partido normal)</option>`;
+    try {
+        const snap = await getDocs(query(collection(db, 'eventoPartidos'), where('playerUids', 'array-contains', uid), limit(300)));
+        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const pending = rows
+            .filter((m) => String(m.estado || '') !== 'jugado')
+            .filter((m) => !m.fecha || !Number.isFinite(new Date(m.fecha?.toDate ? m.fecha.toDate() : m.fecha).getTime()))
+            .sort((a, b) => String(a.phase || '').localeCompare(String(b.phase || '')));
+
+        const options = pending.map((m) => {
+            const phase = String(m.phase || 'evento').toUpperCase();
+            const label = `${phase} · ${m.teamAName || '?'} VS ${m.teamBName || '?'}`;
+            return `<option value="${m.eventoId}|${m.id}|${m.phase || ''}">${label}</option>`;
+        });
+
+        sel.innerHTML = `<option value="">Sin vincular (partido normal)</option>${options.join('')}`;
+        if (options.length > 0) {
+            sel.selectedIndex = 1;
+        }
+        const info = document.getElementById('event-link-help');
+        if (info) {
+            info.textContent = options.length
+                ? `Partidos de evento pendientes: ${options.length}. Se selecciona automaticamente el siguiente rival.`
+                : 'No tienes partidos de evento pendientes sin fecha.';
+        }
+    } catch (_) {
+        const info = document.getElementById('event-link-help');
+        if (info) info.textContent = 'No se pudieron cargar partidos de evento.';
+    }
+}
+
+async function syncLinkedEventMatchFromRegularMatch(matchId, col, resultStr) {
+    try {
+        const mSnap = await getDoc(doc(db, col, matchId));
+        if (!mSnap.exists()) return;
+        const m = mSnap.data() || {};
+        const eventMatchId = m.eventMatchId || m?.eventLink?.eventMatchId;
+        if (!eventMatchId) return;
+        const parsed = parseMatchResult(resultStr);
+        const winnerTeamId = parsed.winnerTeam === 'A' ? m.eventTeamAId : m.eventTeamBId;
+        if (!winnerTeamId) return;
+        await updateDoc(doc(db, 'eventoPartidos', eventMatchId), {
+            resultado: resultStr,
+            ganadorTeamId: winnerTeamId,
+            estado: 'jugado',
+            linkedMatchId: matchId,
+            linkedMatchCollection: col,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (_) {}
+}
+
 /**
  * Creates match in Firestore.
  */
@@ -230,6 +294,7 @@ window.executeCreateMatch = async (dateStr, hour) => {
     if (jugs.length > MAX_PLAYERS) jugs.length = MAX_PLAYERS;
     
     const matchDate = new Date(`${dateStr}T${hour}`);
+    const linkedEvent = getEventLinkValue();
     
     const createT0 = performance.now();
     try {
@@ -240,6 +305,22 @@ window.executeCreateMatch = async (dateStr, hour) => {
         const creatorName = creatorDoc?.nombreUsuario || creatorDoc?.nombre || 'Un jugador';
         const visibility = window._creationVisibility || 'public';
         const invitedUsers = jugs.filter(id => id && id !== auth.currentUser.uid && !id.startsWith('GUEST_'));
+
+        let linkedEventMatch = null;
+        if (linkedEvent?.eventMatchId) {
+            const emRef = doc(db, 'eventoPartidos', linkedEvent.eventMatchId);
+            const emSnap = await getDoc(emRef);
+            if (emSnap.exists()) {
+                const em = emSnap.data() || {};
+                const isPlayable = String(em.estado || '') !== 'jugado';
+                const canLink = Array.isArray(em.playerUids) ? em.playerUids.includes(auth.currentUser.uid) : false;
+                if (isPlayable && canLink) linkedEventMatch = { id: emSnap.id, ...em };
+            }
+            if (!linkedEventMatch) {
+                hideLoading();
+                return showToast("Evento", "El partido de evento seleccionado ya no está disponible.", "warning");
+            }
+        }
 
         const matchData = {
             creador: auth.currentUser.uid,
@@ -255,7 +336,16 @@ window.executeCreateMatch = async (dateStr, hour) => {
             equipoA: [jugs[0], jugs[1]],
             equipoB: [jugs[2], jugs[3]],
             surface: document.getElementById('inp-surface')?.value || 'indoor',
-            courtType: document.getElementById('inp-court')?.value || 'normal'
+            courtType: document.getElementById('inp-court')?.value || 'normal',
+            eventLink: linkedEventMatch ? {
+                eventoId: linkedEventMatch.eventoId,
+                eventMatchId: linkedEventMatch.id,
+                phase: linkedEventMatch.phase || '',
+            } : null,
+            eventoId: linkedEventMatch?.eventoId || null,
+            eventMatchId: linkedEventMatch?.id || null,
+            eventTeamAId: linkedEventMatch?.teamAId || null,
+            eventTeamBId: linkedEventMatch?.teamBId || null,
         };
 
         // Pre-Match Prediction (if filled)
@@ -284,6 +374,15 @@ window.executeCreateMatch = async (dateStr, hour) => {
 
         const matchRef = await addDoc(collection(db, col), matchData);
         const createdMatchId = matchRef.id;
+        if (linkedEventMatch?.id) {
+            await updateDoc(doc(db, 'eventoPartidos', linkedEventMatch.id), {
+                fecha: matchDate,
+                estado: 'programado',
+                linkedMatchId: createdMatchId,
+                linkedMatchCollection: col,
+                updatedAt: serverTimestamp(),
+            });
+        }
         analyticsCount("matches.created", 1);
         analyticsTiming("match.create_ms", performance.now() - createT0);
 
@@ -827,6 +926,14 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                     </label>
                 </div>
 
+                <div class="l-input-box mb-5 p-3 bg-white/5 rounded-xl border border-white/5">
+                    <label class="text-[7px] font-black text-muted uppercase block mb-1">VINCULAR A EVENTO</label>
+                    <select id="inp-event-link" class="bg-transparent border-none text-white font-black text-[10px] w-full outline-none">
+                        <option value="">Sin vincular (partido normal)</option>
+                    </select>
+                    <p id="event-link-help" class="text-[9px] text-muted mt-2">Cargando partidos de evento...</p>
+                </div>
+
                 <div class="flex-col gap-2">
                     <button class="btn-confirm-v7" onclick="executeCreateMatch('${dateStr}', '${hour}')">
                         <span class="t-main">DESPLEGAR MISIÓN</span>
@@ -874,6 +981,8 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
         if (optPub) optPub.classList.toggle('active', v === 'public');
         if (optPriv) optPriv.classList.toggle('active', v === 'private');
     };
+
+    loadEventLinkOptions(dateStr, hour, currentUser?.uid).catch(() => {});
 }
 
 /**
@@ -1733,6 +1842,7 @@ window.openResultForm = async (id, col) => {
             if (!rankingSync?.success) {
                 throw new Error(rankingSync?.error || 'ranking-sync-failed');
             }
+            await syncLinkedEventMatchFromRegularMatch(id, col, resultStr);
             const meData = await getDocument('usuarios', auth.currentUser.uid);
             const meName = meData?.nombreUsuario || meData?.nombre || 'Un jugador';
             const targetUids = (rankingSync?.changes || [])

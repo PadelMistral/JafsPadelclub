@@ -3,7 +3,7 @@
 import { db, auth, observerAuth, getDocument, addDocument, updateDocument } from './firebase-service.js';
 import { initAppUI, showToast } from './ui-core.js';
 import {
-    collection, getDocs, doc, setDoc, updateDoc, deleteDoc,
+    collection, getDocs, doc, updateDoc, deleteDoc, addDoc,
     query, where, orderBy, serverTimestamp, onSnapshot, writeBatch
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 
@@ -64,6 +64,10 @@ function subscribeEvents() {
         renderEvents();
     }, err => {
         console.error('Events error:', err);
+        if (String(err?.code || '').includes('permission-denied')) {
+            renderFallback('No tienes permisos de lectura para eventos. Revisa y publica firestore.rules.');
+            return;
+        }
         renderFallback();
     });
 }
@@ -95,14 +99,14 @@ function renderEvents() {
     container.innerHTML = events.map((ev, i) => buildEventCard(ev, i)).join('');
 }
 
-function renderFallback() {
+function renderFallback(message = 'Comprueba tu conexión e inténtalo de nuevo.') {
     const container = document.getElementById('events-container');
     if (!container) return;
     container.innerHTML = `
       <div class="events-empty">
         <i class="fas fa-wifi-slash"></i>
         <h3>Sin conexión</h3>
-        <p>Comprueba tu conexión e inténtalo de nuevo.</p>
+        <p>${message}</p>
       </div>`;
 }
 
@@ -359,6 +363,31 @@ window.switchDetailTab = (tab, btn) => {
     document.getElementById(`dtab-${tab}`)?.classList.remove('hidden');
 };
 
+async function notifyEventInbox(targetUid, title, message, data = {}) {
+    if (!targetUid || !currentUser?.uid) return;
+    try {
+        await addDoc(collection(db, 'notificaciones'), {
+            destinatario: targetUid,
+            receptorId: targetUid,
+            remitente: currentUser.uid,
+            tipo: 'evento',
+            type: 'evento',
+            titulo: title,
+            mensaje: message,
+            enlace: `eventos.html`,
+            data,
+            leido: false,
+            seen: false,
+            read: false,
+            uid: targetUid,
+            title,
+            message,
+            timestamp: serverTimestamp(),
+            createdAt: serverTimestamp(),
+        });
+    } catch (_) {}
+}
+
 /* ────────────────────────────────────────────────────────
    INSCRIPCIÓN
    ──────────────────────────────────────────────────────── */
@@ -373,6 +402,7 @@ window.inscribirseEvento = async (eventId) => {
     const slots = Number(ev.plazasMax || 16);
     const filled = Array.isArray(ev.inscritos) ? ev.inscritos.length : 0;
     if (filled >= slots) { showToast('Completo', 'No quedan plazas disponibles', 'warning'); return; }
+    if (String(ev.estado || '') !== 'inscripcion') { showToast('Inscripción cerrada', 'Este evento ya no acepta inscripciones.', 'warning'); return; }
 
     // Level check
     const myLevel = Number(currentUserData?.nivel || 2.5);
@@ -384,29 +414,36 @@ window.inscribirseEvento = async (eventId) => {
     }
 
     try {
+        const pref = prompt('Posición preferida: derecha / reves / me da igual', 'me da igual');
+        if (pref === null) return;
+        let pairCode = '';
+        if (String(ev.modalidad || 'parejas') === 'parejas' && ev.companeroObligatorio === true) {
+            const code = prompt('Código de pareja (igual para ambos)', 'pareja-1');
+            if (code === null) return;
+            pairCode = String(code || '').trim().toLowerCase();
+            if (!pairCode) { showToast('Pareja', 'Debes indicar código de pareja.', 'warning'); return; }
+        }
+
         const newInscripto = {
             uid: currentUser.uid,
             nombre: currentUserData?.nombreUsuario || currentUserData?.nombre || 'Jugador',
             nivel: myLevel,
-            inscritoEn: serverTimestamp(),
+            sidePreference: String(pref).toLowerCase().includes('der') ? 'derecha' : (String(pref).toLowerCase().includes('rev') ? 'reves' : 'flex'),
+            pairCode,
+            inscritoEn: new Date().toISOString(),
         };
 
         const evRef = doc(db, 'eventos', eventId);
         const { arrayUnion } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
         await updateDoc(evRef, { inscritos: arrayUnion(newInscripto) });
 
-        // Add to event's clasificacion collection if league
-        if (ev.formato === 'league' || ev.formato === 'league_knockout') {
-            await setDoc(doc(db, 'eventoClasificacion', `${eventId}_${currentUser.uid}`), {
-                eventoId: eventId,
-                uid: currentUser.uid,
-                nombre: newInscripto.nombre,
-                pj: 0, ganados: 0, perdidos: 0, empates: 0,
-                puntos: 0, diferencia: 0,
-            }, { merge: true });
-        }
-
         showToast('¡Inscrito!', `Te has unido a "${ev.nombre}"`, 'success');
+        await notifyEventInbox(
+            currentUser.uid,
+            'Inscripcion realizada',
+            `Te has unido a "${ev.nombre}".`,
+            { type: 'event_joined', eventId }
+        );
         document.getElementById('modal-event-detail')?.classList.remove('active');
     } catch (e) {
         console.error(e);
@@ -445,8 +482,12 @@ function setupCreateModal() {
             opt.querySelector('.format-card').classList.add('active');
             const fmt = opt.dataset.format;
             const leagueWrap = document.getElementById('ev-league-points-wrap');
+            const groupWrap = document.getElementById('ev-group-count-wrap');
             if (leagueWrap) {
                 leagueWrap.style.display = (fmt === 'knockout') ? 'none' : 'block';
+            }
+            if (groupWrap) {
+                groupWrap.style.display = (fmt === 'league_knockout') ? 'block' : 'none';
             }
         });
     });
@@ -472,10 +513,13 @@ async function saveNewEvent() {
 
     const formato = document.querySelector('input[name="ev-format"]:checked')?.value || 'league_knockout';
     const modalidad = document.querySelector('.ev-mode-btn.active')?.dataset.mode || 'parejas';
+    const pairingPolicy = document.getElementById('ev-pairing-policy')?.value || 'balanced';
     const companeroObligatorio = document.getElementById('ev-partner-required')?.checked ?? true;
     const regDeadlineStr = document.getElementById('ev-reg-deadline')?.value;
     const startDateStr = document.getElementById('ev-start-date')?.value;
     const plazasMax = Number(document.getElementById('ev-max-slots')?.value || 16);
+    const groupCountRaw = Number(document.getElementById('ev-group-count')?.value || 2);
+    const groupCount = Math.min(4, Math.max(2, groupCountRaw));
     const premio = document.getElementById('ev-prize')?.value.trim() || '';
     const nivelMin = document.getElementById('ev-level-min')?.value || '';
     const nivelMax = document.getElementById('ev-level-max')?.value || '';
@@ -483,6 +527,11 @@ async function saveNewEvent() {
     const puntosEmpate = Number(document.getElementById('ev-pts-draw')?.value || 1);
     const puntosDerrota = Number(document.getElementById('ev-pts-loss')?.value || 0);
     const descripcion = document.getElementById('ev-description')?.value.trim() || '';
+
+    if (Number.isFinite(Number(nivelMin)) && Number.isFinite(Number(nivelMax)) && Number(nivelMin) > Number(nivelMax)) {
+        showToast('Niveles inválidos', 'El nivel mínimo no puede ser mayor que el nivel máximo.', 'warning');
+        return;
+    }
 
     const btn = document.getElementById('btn-save-event');
     btn.disabled = true;
@@ -505,6 +554,11 @@ async function saveNewEvent() {
             estado: 'inscripcion',
             inscritos: [],
             bracket: [],
+            groups: { A: [], B: [] },
+            teams: [],
+            groupCount: formato === 'league_knockout' ? groupCount : 2,
+            pairingPolicy,
+            drawState: { status: 'pending', steps: [], version: 0 },
             organizadorId: currentUser.uid,
             organizadorNombre: currentUserData?.nombreUsuario || currentUserData?.nombre || 'Admin',
             createdAt: serverTimestamp(),
@@ -513,14 +567,17 @@ async function saveNewEvent() {
         if (regDeadlineStr) payload.fechaInscripcion = new Date(regDeadlineStr);
         if (startDateStr)   payload.fechaInicio      = new Date(startDateStr);
 
-        const newEvId = await addDocument('eventos', payload);
+        const newEvRef = await addDocument('eventos', payload);
+        const newEvId = newEvRef?.id;
         showToast('¡Evento creado!', `"${nombre}" ya está publicado`, 'success');
         document.getElementById('modal-create-event').classList.remove('active');
         
         // Redirección inmediata a la nueva página del evento
-        setTimeout(() => {
-            window.location.href = `evento-detalle.html?id=${newEvId}`;
-        }, 1200);
+        if (newEvId) {
+            setTimeout(() => {
+                window.location.href = `evento-detalle.html?id=${newEvId}`;
+            }, 1200);
+        }
     } catch (e) {
         console.error(e);
         showToast('Error al crear', e.message, 'error');
@@ -614,10 +671,15 @@ async function renderAdminMatches(ev) {
     try {
         const snap = await window.getDocsSafe(query(
             collection(db, 'eventoPartidos'),
-            where('eventoId', '==', ev.id),
-            orderBy('ronda', 'asc')
+            where('eventoId', '==', ev.id)
         ));
-        const matches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const matches = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => {
+                const pa = String(a.phase || '').localeCompare(String(b.phase || ''));
+                if (pa !== 0) return pa;
+                return Number(a.round || a.ronda || 1) - Number(b.round || b.ronda || 1);
+            });
 
         if (!matches.length) {
             return `
@@ -637,8 +699,8 @@ async function renderAdminMatches(ev) {
             ${matches.map(m => `
             <div class="ev-admin-match-row">
                 <div class="flex-col flex-1">
-                    <span class="font-bold text-[12px]">${m.equipoA || '?'} vs ${m.equipoB || '?'}</span>
-                    <span class="text-[10px] text-muted">Ronda ${m.ronda||1}</span>
+                    <span class="font-bold text-[12px]">${m.teamAName || m.equipoA || '?'} vs ${m.teamBName || m.equipoB || '?'}</span>
+                    <span class="text-[10px] text-muted">${String(m.phase || 'evento').toUpperCase()} · Ronda ${m.round || m.ronda || 1}</span>
                 </div>
                 <div class="flex-row items-center gap-2">
                     ${m.resultado ? `<span class="text-[11px] font-black text-primary">${m.resultado}</span>` : ''}
@@ -735,6 +797,12 @@ window.generarPartidos = async (eventId) => {
     }
     try {
         const teams = [...ev.inscritos];
+        const prevSnap = await window.getDocsSafe(query(
+            collection(db, 'eventoPartidos'),
+            where('eventoId', '==', eventId)
+        ));
+        await Promise.all(prevSnap.docs.map((d) => deleteDoc(doc(db, 'eventoPartidos', d.id))));
+
         if (ev.formato === 'league' || ev.formato === 'league_knockout') {
             await generateLeagueMatches(eventId, teams, ev);
         } else {
@@ -754,13 +822,26 @@ async function generateLeagueMatches(eventId, teams, ev) {
     for (let i = 0; i < teams.length; i++) {
         for (let j = i + 1; j < teams.length; j++) {
             const matchRef = doc(collection(db, 'eventoPartidos'));
+            const teamAId = teams[i].uid || `A_${i + 1}`;
+            const teamBId = teams[j].uid || `B_${j + 1}`;
             batch.set(matchRef, {
                 eventoId: eventId,
+                tipo: 'evento',
+                phase: 'league',
+                round: roundNum,
+                teamAId,
+                teamBId,
+                teamAName: teams[i].nombre || teams[i].name || `Equipo ${i + 1}`,
+                teamBName: teams[j].nombre || teams[j].name || `Equipo ${j + 1}`,
+                playerUids: [teamAId, teamBId].filter(Boolean),
+                ganadorTeamId: null,
+                fecha: null,
+                // legacy compatibility fields
                 ronda: roundNum,
-                equipoA: teams[i].nombre,
-                equipoAUid: teams[i].uid,
-                equipoB: teams[j].nombre,
-                equipoBUid: teams[j].uid,
+                equipoA: teams[i].nombre || teams[i].name || `Equipo ${i + 1}`,
+                equipoAUid: teamAId,
+                equipoB: teams[j].nombre || teams[j].name || `Equipo ${j + 1}`,
+                equipoBUid: teamBId,
                 resultado: null,
                 ganador: null,
                 estado: 'pendiente',
@@ -776,20 +857,39 @@ async function generateKnockoutBracket(eventId, teams, ev) {
     // Shuffle teams
     const shuffled = [...teams].sort(() => Math.random() - 0.5);
     const pairs = [];
-    for (let i = 0; i < shuffled.length - 1; i += 2) {
-        pairs.push([shuffled[i], shuffled[i + 1]]);
+    for (let i = 0; i < shuffled.length; i += 2) {
+        pairs.push([shuffled[i], shuffled[i + 1] || null]);
     }
     const batch = writeBatch(db);
     pairs.forEach((pair, idx) => {
         const matchRef = doc(collection(db, 'eventoPartidos'));
+        const a = pair[0];
+        const b = pair[1];
+        const teamAId = a?.uid || `KO_A_${idx + 1}`;
+        const teamBId = b?.uid || null;
         batch.set(matchRef, {
             eventoId: eventId,
+            tipo: 'evento',
+            phase: 'knockout',
+            matchCode: `ADM_R1_M${idx + 1}`,
+            round: 1,
+            slot: idx + 1,
+            sourceA: null,
+            sourceB: null,
+            teamAId,
+            teamBId,
+            teamAName: a?.nombre || a?.name || `Equipo ${idx * 2 + 1}`,
+            teamBName: b?.nombre || b?.name || null,
+            playerUids: [teamAId, teamBId].filter(Boolean),
+            ganadorTeamId: null,
+            fecha: null,
+            // legacy compatibility fields
             ronda: 1,
             posicionBracket: idx,
-            equipoA: pair[0].nombre,
-            equipoAUid: pair[0].uid,
-            equipoB: pair[1].nombre,
-            equipoBUid: pair[1].uid,
+            equipoA: a?.nombre || a?.name || `Equipo ${idx * 2 + 1}`,
+            equipoAUid: teamAId,
+            equipoB: b?.nombre || b?.name || null,
+            equipoBUid: teamBId,
             resultado: null,
             ganador: null,
             estado: 'pendiente',
@@ -805,28 +905,51 @@ window.editMatchResult = async (eventId, matchId) => {
     const ganador = prompt('¿Quién ganó? (A o B):')?.toUpperCase();
     if (ganador !== 'A' && ganador !== 'B') { showToast('Ganador inválido', 'Escribe A o B', 'warning'); return; }
     try {
+        const match = await getDocument('eventoPartidos', matchId);
+        const winnerTeamId = ganador === 'A'
+            ? (match?.teamAId || match?.equipoAUid || null)
+            : (match?.teamBId || match?.equipoBUid || null);
         await updateDoc(doc(db, 'eventoPartidos', matchId), {
-            resultado, ganador, estado: 'jugado',
+            resultado,
+            ganador,
+            ganadorTeamId: winnerTeamId,
+            estado: 'jugado',
+            updatedAt: serverTimestamp(),
         });
 
         // Update standings if league
         const ev = allEvents.find(e => e.id === eventId);
         if (ev && (ev.formato === 'league' || ev.formato === 'league_knockout')) {
-            const matchSnap = await window.getDocsSafe(query(
-                collection(db, 'eventoPartidos'), where('__name__', '==', matchId)
-            ));
-            // simplified: update winner points
-            const match = matchSnap.docs[0]?.data();
             if (match) {
-                const winnerUid = ganador === 'A' ? match.equipoAUid : match.equipoBUid;
-                const loserUid  = ganador === 'A' ? match.equipoBUid : match.equipoAUid;
-                const winKey  = `${eventId}_${winnerUid}`;
-                const loseKey = `${eventId}_${loserUid}`;
-                const { increment } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
-                const b = writeBatch(db);
-                b.update(doc(db, 'eventoClasificacion', winKey),  { pj: increment(1), ganados: increment(1), puntos: increment(ev.puntosVictoria || 3) });
-                b.update(doc(db, 'eventoClasificacion', loseKey), { pj: increment(1), perdidos: increment(1), puntos: increment(ev.puntosDerrota || 0) });
-                await b.commit();
+                const winnerUid = ganador === 'A'
+                    ? (match.teamAId || match.equipoAUid)
+                    : (match.teamBId || match.equipoBUid);
+                const loserUid  = ganador === 'A'
+                    ? (match.teamBId || match.equipoBUid)
+                    : (match.teamAId || match.equipoAUid);
+                if (!winnerUid || !loserUid) {
+                    showToast('Resultado guardado', 'Partido cerrado sin actualización de clasificación.', 'info');
+                } else {
+                    const winKey  = `${eventId}_${winnerUid}`;
+                    const loseKey = `${eventId}_${loserUid}`;
+                    const { increment } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
+                    const b = writeBatch(db);
+                    b.set(doc(db, 'eventoClasificacion', winKey),  {
+                        eventoId: eventId,
+                        uid: winnerUid,
+                        pj: increment(1),
+                        ganados: increment(1),
+                        puntos: increment(ev.puntosVictoria || 3)
+                    }, { merge: true });
+                    b.set(doc(db, 'eventoClasificacion', loseKey), {
+                        eventoId: eventId,
+                        uid: loserUid,
+                        pj: increment(1),
+                        perdidos: increment(1),
+                        puntos: increment(ev.puntosDerrota || 0)
+                    }, { merge: true });
+                    await b.commit();
+                }
             }
         }
         showToast('Resultado guardado', '', 'success');
@@ -852,7 +975,7 @@ window.addManualPlayer = async (eventId) => {
             inscritos: arrayUnion({
                 uid: `manual_${Date.now()}`,
                 nombre,
-                inscritoEn: serverTimestamp(),
+                inscritoEn: new Date().toISOString(),
                 manual: true
             })
         });
@@ -867,6 +990,17 @@ window.addManualMatch = async (eventId) => {
     try {
         await addDocument('eventoPartidos', {
             eventoId: eventId,
+            tipo: 'evento',
+            phase: 'league',
+            round: 1,
+            teamAId: `manual_a_${Date.now()}`,
+            teamBId: `manual_b_${Date.now()}`,
+            teamAName: equipoA,
+            teamBName: equipoB,
+            playerUids: [],
+            ganadorTeamId: null,
+            fecha: null,
+            // legacy fields
             ronda: 1,
             equipoA, equipoB,
             resultado: null, ganador: null, estado: 'pendiente',

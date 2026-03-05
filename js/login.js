@@ -308,6 +308,7 @@ function startSpectacularLoading(userName) {
         return;
     }
 
+    document.documentElement.classList.add('auth-transitioning');
     document.body.classList.add('auth-transitioning');
     if (loginCard) loginCard.style.opacity = '0';
     if (authScreen) authScreen.style.display = 'none';
