@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -122,6 +122,16 @@
         </div>
     </div>
 
+    <div id="modal-rank-user" class="modal-overlay">
+        <div class="modal-card glass-strong rank-user-modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="rank-user-title">DETALLE DE JUGADOR</h3>
+                <button class="close-btn" onclick="document.getElementById('modal-rank-user')?.classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body scroll-y" id="rank-user-body" style="max-height: 80vh;"></div>
+        </div>
+    </div>
+
     <script type="module" src="./js/ranking-v3.js"></script>
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
@@ -135,3 +145,4 @@
 </body>
 
 </html>
+

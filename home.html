@@ -19,6 +19,15 @@
 
 <body>
     <div class="sport-bg"></div>
+    <div id="home-entry-overlay" class="home-entry-overlay hidden">
+        <div class="home-entry-nebula"></div>
+        <div class="home-entry-box">
+            <div class="home-entry-title" id="home-entry-title">BIENVENIDO</div>
+            <div class="home-entry-sub">Preparando tu panel...</div>
+            <div class="home-entry-bar"><span id="home-entry-fill"></span></div>
+            <div class="home-entry-pct" id="home-entry-pct">0%</div>
+        </div>
+    </div>
 
     <main class="page-content home-page">
 
@@ -30,7 +39,8 @@
             <!-- Top row: live clock + weather ambient -->
             <div class="hv2-hud-bar">
                 <div class="hv2-hud-brand">
-                    <img id="hv2-brand-image-id" src="./imagenes/Logojafs.png" alt="JAFS" class="hv2-brand-mini">
+                    <img id="hv2-brand-image-id" src="./imagenes/default-avatar.png" alt="Perfil" class="hv2-brand-mini">
+                    <span id="hv2-brand-fallback" class="hv2-brand-mini hv2-brand-initial" style="display:none;">J</span>
                     <span class="hv2-brand-text">Padel<span class="text-primary italic">Luminatis</span></span>
                 </div>
                 <div class="hv2-hud-clock">
@@ -48,7 +58,7 @@
             <!-- Player identity -->
             <div class="hv2-player-row">
                 <div class="hv2-avatar-wrap" onclick="window.location.href='perfil.html'">
-                    <img id="welcome-avatar" src="./imagenes/Logojafs.png" alt="Avatar" class="hv2-avatar-img"
+                    <img id="welcome-avatar" src="./imagenes/default-avatar.png" alt="Avatar" class="hv2-avatar-img"
                         onerror="this.style.display='none'; document.getElementById('welcome-avatar-fallback').style.display='flex';">
                     <div id="welcome-avatar-fallback" class="avatar-initial"
                         style="display:none; width:100%; height:100%; align-items:center; justify-content:center; font-size:22px; color:rgba(0,212,255,0.8);">
@@ -142,6 +152,9 @@
                 <button type="button" class="hv2-tab" data-filter="mine" style="grid-column: span 2;">
                     <i class="fas fa-user"></i> Mis Partidas
                 </button>
+                <button type="button" class="hv2-tab" data-filter="closed" style="grid-column: span 4;">
+                    <i class="fas fa-lock"></i> Cerradas (futuras)
+                </button>
             </div>
             <div id="matches-list" class="hv2-matches-grid">
                 <div class="hv2-skeleton-row"></div>
@@ -173,6 +186,16 @@
                     onclick="document.getElementById('modal-match').classList.remove('active')">&times;</button>
             </div>
             <div class="modal-body scroll-y" id="match-detail-area" style="max-height: 80vh;"></div>
+        </div>
+    </div>
+
+    <div id="modal-nexus" class="modal-overlay">
+        <div class="modal-card glass-strong nexus-modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title" id="nexus-modal-title">USUARIOS CONECTADOS</h3>
+                <button class="close-btn" onclick="document.getElementById('modal-nexus').classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body scroll-y" id="nexus-modal-list" style="max-height: 70vh;"></div>
         </div>
     </div>
 

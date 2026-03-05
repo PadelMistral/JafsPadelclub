@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -19,8 +19,8 @@
     <div class="admin-shell">
       <section class="admin-card">
         <div class="flex-row between items-center mb-2">
-          <h1 class="text-xl font-black">ADMIN DASHBOARD</h1>
-          <button id="btn-refresh-admin" class="btn-mini"><i class="fas fa-rotate"></i> REFRESH</button>
+          <h1 class="text-xl font-black">Panel de administración</h1>
+          <button id="btn-refresh-admin" class="btn-mini"><i class="fas fa-rotate"></i> Actualizar datos</button>
         </div>
         <div class="kpi-grid">
           <div class="kpi-item">
@@ -154,7 +154,7 @@
       </section>
 
       <section id="pane-system" class="admin-card admin-pane hidden">
-        <h2 class="admin-pane-title"><i class="fas fa-sliders"></i> CONTROL GLOBAL</h2>
+        <h2 class="admin-pane-title"><i class="fas fa-sliders"></i> Control global</h2>
         <div class="system-grid">
           <div class="system-box">
             <h3><i class="fas fa-bullhorn"></i> Broadcast</h3>
@@ -166,31 +166,31 @@
               <option value="warning">Warning</option>
               <option value="ranking_up">Ranking</option>
             </select>
-            <button id="btn-broadcast" class="btn-mini wide"><i class="fas fa-paper-plane"></i> ENVIAR A TODOS</button>
+            <button id="btn-broadcast" class="btn-mini wide"><i class="fas fa-paper-plane"></i> Enviar aviso a todos</button>
           </div>
 
           <div class="system-box">
-            <h3><i class="fas fa-ranking-star"></i> Ajustes de Ranking</h3>
+            <h3><i class="fas fa-ranking-star"></i> Recalcular puntos y niveles</h3>
             <input id="sys-elo-delta" type="number" placeholder="Delta ELO global (+/-)" />
             <input id="sys-min-matches" type="number" placeholder="Mínimo partidos (opcional)" />
-            <button id="btn-apply-elo-delta" class="btn-mini wide">APLICAR DELTA ELO</button>
-            <button id="btn-recalc-levels" class="btn-mini wide">RECALCULAR NIVELES</button>
+            <button id="btn-apply-elo-delta" class="btn-mini wide">Aplicar ajuste manual de puntos</button>
+            <button id="btn-recalc-levels" class="btn-mini wide">Recalcular niveles según puntuación</button>
           </div>
 
           <div class="system-box border border-sport-red/30 bg-sport-red/5">
             <h3 class="text-sport-red"><i class="fas fa-skull-crossbones"></i> ZONA PELIGRO</h3>
-            <p class="text-[9px] opacity-60 mb-2">BORRA EL RANKING ACTUAL Y RECALCULA TODO CON EL MOTOR ELO V3.</p>
+            <p class="text-[9px] opacity-60 mb-2">Borra el ranking actual y recalcula todo el historial partido a partido.</p>
             <button id="btn-wipe-recalc"
               class="btn-mini wide danger bg-sport-red/10 border-sport-red/40 text-sport-red hover:bg-sport-red/20">
-              <i class="fas fa-rotate"></i> RESET TOTAL ELO V3
+              <i class="fas fa-rotate"></i> Recalcular todo desde cero
             </button>
-            <button id="btn-nuke-logs" class="btn-mini wide danger mt-2 opacity-50">BORRAR TODOS LOS LOGS</button>
+            <button id="btn-nuke-logs" class="btn-mini wide danger mt-2 opacity-50">Borrar todos los logs</button>
           </div>
 
           <div class="system-box">
             <h3><i class="fas fa-shield-halved"></i> Mantenimiento</h3>
-            <button id="btn-cancel-stale" class="btn-mini wide">CANCELAR ABIERTOS VENCIDOS</button>
-            <button id="btn-reset-presence" class="btn-mini wide">RESETEAR PRESENCIA</button>
+            <button id="btn-cancel-stale" class="btn-mini wide">Cancelar partidos abiertos vencidos</button>
+            <button id="btn-reset-presence" class="btn-mini wide">Resetear presencia online</button>
           </div>
         </div>
       </section>

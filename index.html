@@ -32,7 +32,7 @@
                 <div class="loader-bar-container">
                     <div id="progress-fill" class="loader-bar-fill"></div>
                 </div>
-                <div class="loader-percentage">SECURE CONNECTION</div>
+                <div class="loader-percentage">0%</div>
             </div>
         </div>
     </div>
@@ -275,6 +275,69 @@
         .auth-sep {
             height: 1px;
             background: rgba(255, 255, 255, 0.05);
+        }
+
+        .auth-transitioning .auth-screen {
+            display: none !important;
+        }
+
+        .auth-transitioning {
+            overflow: hidden;
+        }
+
+        .welcome-entry-toast {
+            position: fixed;
+            inset: 0;
+            z-index: 12000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            animation: welcomeFadeOut 2.1s ease forwards;
+        }
+
+        .welcome-entry-toast .welcome-entry-card {
+            padding: 24px 28px;
+            border-radius: 20px;
+            border: 1px solid rgba(198, 255, 0, 0.5);
+            background: linear-gradient(135deg, rgba(2, 6, 23, 0.94), rgba(8, 47, 73, 0.82));
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45), 0 0 32px rgba(198, 255, 0, 0.25);
+            text-align: center;
+            transform: translateY(8px) scale(0.95);
+            animation: welcomePopIn 0.45s cubic-bezier(0.2, 1, 0.2, 1) forwards;
+        }
+
+        .welcome-entry-toast .welcome-entry-title {
+            font-size: 2rem;
+            font-weight: 900;
+            letter-spacing: 1.5px;
+            color: #c6ff00;
+            text-transform: uppercase;
+        }
+
+        .welcome-entry-toast .welcome-entry-sub {
+            margin-top: 6px;
+            font-size: 0.9rem;
+            font-weight: 800;
+            color: rgba(255, 255, 255, 0.86);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        @keyframes welcomePopIn {
+            to {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes welcomeFadeOut {
+            0%, 75% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+            }
         }
     </style>
 

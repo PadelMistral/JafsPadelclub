@@ -27,16 +27,34 @@
         <section class="profile-hero animate-fade-in">
             <div class="profile-hero-bg"></div>
             <div class="profile-hero-content">
-                <!-- Avatar -->
-                <div class="profile-avatar-wrapper" onclick="document.getElementById('upload-photo').click()">
-                    <div class="profile-avatar">
-                        <img id="p-avatar" src="./imagenes/default-avatar.png" alt="Avatar">
-                        <div class="avatar-initial" id="avatar-fallback" style="display:none;">?</div>
+                <div class="profile-top-row">
+                    <!-- Avatar -->
+                    <div class="profile-avatar-wrapper" onclick="document.getElementById('upload-photo').click()">
+                        <div class="profile-avatar">
+                            <img id="p-avatar" src="./imagenes/default-avatar.png" alt="Avatar">
+                            <div class="avatar-initial" id="avatar-fallback" style="display:none;">?</div>
+                        </div>
+                        <div class="avatar-edit-btn">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                        <div class="avatar-ring"></div>
                     </div>
-                    <div class="avatar-edit-btn">
-                        <i class="fas fa-camera"></i>
+
+                    <!-- Quick Stats Horizontal (Premium V7) -->
+                    <div class="profile-hero-stats">
+                        <div class="stat-card-v7 cyan clickable" id="profile-stat-level">
+                            <span class="text-[9px] font-black uppercase text-muted tracking-widest">Nivel</span>
+                            <span id="p-nivel" class="text-lg font-black italic">2.5</span>
+                        </div>
+                        <div class="stat-card-v7 gold clickable" id="profile-stat-points">
+                            <span class="text-[9px] font-black uppercase text-muted tracking-widest">Puntos</span>
+                            <span id="p-puntos" class="text-lg font-black italic">0</span>
+                        </div>
+                        <div class="stat-card-v7 lime clickable" id="profile-stat-streak">
+                            <span class="text-[9px] font-black uppercase text-muted tracking-widest">Racha</span>
+                            <span id="p-streak" class="text-lg font-black italic">0</span>
+                        </div>
                     </div>
-                    <div class="avatar-ring"></div>
                 </div>
                 <input type="file" id="upload-photo" hidden accept="image/*">
 
@@ -48,21 +66,6 @@
                 </div>
                 <div id="profile-division-badge" class="profile-division-badge"></div>
 
-                <!-- Quick Stats Horizontal (Premium V7) -->
-                <div class="grid grid-cols-3 gap-3 w-full max-w-[340px] mt-6">
-                    <div class="stat-card-v7 cyan clickable" id="profile-stat-level">
-                        <span class="text-[9px] font-black uppercase text-muted tracking-widest">Nivel</span>
-                        <span id="p-nivel" class="text-lg font-black italic">2.5</span>
-                    </div>
-                    <div class="stat-card-v7 gold clickable" id="profile-stat-points">
-                        <span class="text-[9px] font-black uppercase text-muted tracking-widest">Puntos</span>
-                        <span id="p-puntos" class="text-lg font-black italic">0</span>
-                    </div>
-                    <div class="stat-card-v7 lime clickable" id="profile-stat-streak">
-                        <span class="text-[9px] font-black uppercase text-muted tracking-widest">Racha</span>
-                        <span id="p-streak" class="text-lg font-black italic">0</span>
-                    </div>
-                </div>
             </div>
         </section>
 
