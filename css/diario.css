@@ -444,6 +444,37 @@
   display: none !important;
 }
 
+.journal-acc-item {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+
+.journal-acc-head {
+  list-style: none;
+  cursor: pointer;
+  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.journal-acc-head::-webkit-details-marker {
+  display: none;
+}
+
+.journal-acc-item[open] .journal-acc-head {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 212, 255, 0.06);
+}
+
+.journal-acc-body {
+  padding: 9px 11px 10px;
+}
+
 
 
 @import url("./galactic-overrides.css");

@@ -64,6 +64,24 @@ function buildHeaderAvatarMarkup(userData = null) {
     return `<img src="${photo}" alt="Perfil" id="header-avatar-img">`;
 }
 
+function getCurrentPageMeta() {
+    const currentPage = (window.location.pathname.split('/').pop() || 'home.html').toLowerCase();
+    const pageMap = {
+        'home.html': { id: 'home', subtitle: 'INICIO' },
+        'calendario.html': { id: 'calendar', subtitle: 'CALENDARIO' },
+        'diario.html': { id: 'events', subtitle: 'DIARIO' },
+        'ranking-v3.html': { id: 'ranking', subtitle: 'RANKING' },
+        'puntosranking.html': { id: 'ranking', subtitle: 'RANKING' },
+        'historial.html': { id: 'history', subtitle: 'HISTORIAL' },
+        'perfil.html': { id: 'profile', subtitle: 'PERFIL' },
+        'palas.html': { id: 'palas', subtitle: 'PALAS' },
+        'eventos.html': { id: 'events', subtitle: 'EVENTOS' },
+        'notificaciones.html': { id: 'notifications', subtitle: 'NOTIFICACIONES' },
+        'admin.html': { id: 'admin', subtitle: 'ADMIN' },
+    };
+    return pageMap[currentPage] || { id: '', subtitle: 'SECCIÓN' };
+}
+
 /**
  * Injects the App Header with logo, admin link (if admin), and profile
  */
@@ -73,20 +91,7 @@ export async function injectHeader(userData = null) {
     const header = document.createElement('header');
     header.className = 'app-header';
     
-    const currentPage = (window.location.pathname.split('/').pop() || 'home.html').toLowerCase();
-    const sectionMap = {
-        'home.html': 'HOME',
-        'calendario.html': 'CALENDARIO',
-        'diario.html': 'DIARIO',
-        'ranking-v3.html': 'RANKING',
-        'historial.html': 'HISTORIAL',
-        'perfil.html': 'PERFIL',
-        'palas.html': 'PALAS',
-        'eventos.html': 'EVENTOS',
-        'notificaciones.html': 'NOTIFICACIONES',
-        'admin.html': 'ADMIN'
-    };
-    const pageTitle = sectionMap[currentPage] || 'SECCIÓN';
+    const pageMeta = getCurrentPageMeta();
     
     // Check Admin rights locally
     const isAdmin = userData?.rol === 'Admin' || (auth.currentUser?.email === 'Juanan221091@gmail.com');
@@ -98,7 +103,7 @@ export async function injectHeader(userData = null) {
             </div>
             <div class="header-text">
                 <span class="header-title">PADELUMINATIS</span>
-                <span class="header-subtitle">${pageTitle}</span>
+                <span class="header-subtitle">${pageMeta.subtitle}</span>
             </div>
         </div>
         
@@ -176,10 +181,13 @@ export async function injectNavbar(activePage) {
         history: `<i class="fa-solid fa-clock-rotate-left"></i>`
     };
 
+    const currentFromPath = getCurrentPageMeta().id;
+    const resolvedActivePage = currentFromPath || activePage;
+
     const items = [
         { id: 'home', icon: icons.home, label: 'Inicio', link: 'home.html', color: '#2bbcff' },
         { id: 'ranking', icon: icons.ranking, label: 'Ranking', link: 'ranking-v3.html', color: '#eab308' },
-        { id: 'calendar', icon: icons.calendar, label: 'Reserva', link: 'calendario.html', center: true },
+        { id: 'calendar', icon: icons.calendar, label: 'Calendario', link: 'calendario.html', center: true },
         { id: 'events', icon: icons.events, label: 'Diario', link: 'diario.html', color: '#ff00ff' },
         { id: 'history', icon: icons.history, label: 'Historial', link: 'historial.html', color: '#c6ff00' }
     ];
@@ -190,7 +198,7 @@ export async function injectNavbar(activePage) {
             ${items.map(item => {
                 if (item.center) {
                     return `
-                        <a href="${item.link}" class="nav-item-v8 center-item ${activePage === item.id ? 'active' : ''}">
+                        <a href="${item.link}" class="nav-item-v8 center-item ${resolvedActivePage === item.id ? 'active' : ''}" aria-current="${resolvedActivePage === item.id ? 'page' : 'false'}">
                             <div class="nav-icon-v8 main-action">
                                 ${item.icon}
                             </div>
@@ -198,7 +206,7 @@ export async function injectNavbar(activePage) {
                     `;
                 }
                 return `
-                    <a href="${item.link}" class="nav-item-v8 ${activePage === item.id ? 'active' : ''}" style="--item-clr: ${item.color}">
+                    <a href="${item.link}" class="nav-item-v8 ${resolvedActivePage === item.id ? 'active' : ''}" style="--item-clr: ${item.color}" aria-current="${resolvedActivePage === item.id ? 'page' : 'false'}">
                         <div class="nav-icon-v8">
                             ${item.icon}
                         </div>
@@ -211,6 +219,14 @@ export async function injectNavbar(activePage) {
     `;
 
     document.body.appendChild(nav);
+    nav.querySelectorAll('a.nav-item-v8').forEach((a) => {
+        a.addEventListener('click', (e) => {
+            const href = a.getAttribute('href');
+            if (!href) return;
+            e.preventDefault();
+            window.location.href = href;
+        });
+    });
     
     // Presence Heartbeat
     if (auth.currentUser) {

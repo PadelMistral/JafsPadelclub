@@ -24,15 +24,15 @@ window.WIPE_AND_RECALC_ALL_MATCHES = async function () {
 
     // 1. Reset all users
     const usersSnap = await getDocs(collection(db, "usuarios"));
-    const { ratingFromLevel } = await import("./config/elo-system.js");
+    const { levelFromRating } = await import("./config/elo-system.js");
     let batch = writeBatch(db);
     let count = 0;
-    console.log(`🔄 Initializing ${usersSnap.docs.length} users based on current levels...`);
+    console.log(`🔄 Inicializando ${usersSnap.docs.length} usuarios con puntuación base...`);
 
     for (const d of usersSnap.docs) {
         const u = d.data();
-        const startLevel = Number(u.nivel || 2.5);
-        const startRating = ratingFromLevel(startLevel);
+        const startRating = Number(ELO_CONFIG.BASE_RATING || 1000);
+        const startLevel = Number(levelFromRating(startRating) || 2.5);
 
         batch.update(d.ref, {
             puntosRanking: startRating,

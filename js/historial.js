@@ -64,8 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const list = [];
-        snapA.forEach(d => list.push({ id: d.id, ...d.data(), isComp: false }));
-        snapR.forEach(d => list.push({ id: d.id, ...d.data(), isComp: true }));
+        snapA.forEach(d => list.push({ id: d.id, col: "partidosAmistosos", ...d.data(), isComp: false }));
+        snapR.forEach(d => list.push({ id: d.id, col: "partidosReto", ...d.data(), isComp: true }));
 
         allMatches = list.map(m => {
             const isParticipant = m.jugadores?.includes(currentUser.uid);
@@ -224,9 +224,28 @@ async function showMatchDetail(m) {
     modal.classList.add('active');
 
     // Fetch points logs
-    const logsSnap = await window.getDocsSafe(query(collection(db, "rankingLogs"), where("matchId", "==", m.id)));
+    let logsSnap = await window.getDocsSafe(query(collection(db, "rankingLogs"), where("matchId", "==", m.id)));
+    if (logsSnap.empty && m?.resultado?.sets && m?.col) {
+        try {
+            const { processMatchResults } = await import("./ranking-service.js");
+            await processMatchResults(m.id, m.col, m.resultado.sets, {
+                mvpId: m.mvp || m.mvpId || null,
+                surface: m.superficie || m.surface || "indoor",
+            });
+            logsSnap = await window.getDocsSafe(query(collection(db, "rankingLogs"), where("matchId", "==", m.id)));
+        } catch (e) {
+            console.warn("Historial ranking auto-process failed", e);
+        }
+    }
     const logs = {};
-    logsSnap.forEach(doc => logs[doc.data().uid] = doc.data());
+    logsSnap.forEach((row) => {
+        const data = row.data() || {};
+        const uid = data.uid;
+        if (!uid) return;
+        if (!logs[uid]) logs[uid] = { ...data, diff: 0, __entries: [] };
+        logs[uid].diff = Number(logs[uid].diff || 0) + Number(data.diff || 0);
+        logs[uid].__entries.push(data);
+    });
 
     // Fetch Players
     const players = await Promise.all(m.jugadores.map(async uid => {

@@ -477,7 +477,6 @@ import { getAppBase } from './modules/path-utils.js';
 
 /**
  * UTILS & CONFIG
- */Initialization
  */
 export function initAppUI(activePageName) {
     if (typeof window !== 'undefined') {

@@ -386,12 +386,17 @@
 
 /* ===== PREMIUM HISTORY CARD V7 ===== */
 .history-card-premium {
-  background: rgba(15, 23, 42, 0.4);
+  background: linear-gradient(
+    118deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(15, 23, 42, 0.88) 48%,
+    rgba(5, 10, 18, 0.96) 100%
+  );
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 28px;
-  padding: 20px;
-  margin-bottom: 20px;
+  border-radius: 18px;
+  padding: 14px;
+  margin-bottom: 12px;
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   position: relative;
@@ -399,10 +404,15 @@
 }
 
 .history-card-premium:hover {
-  transform: translateY(-5px) scale(1.01);
-  background: rgba(15, 23, 42, 0.6);
+  transform: translateY(-2px);
+  background: linear-gradient(
+    118deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(15, 23, 42, 0.92) 50%,
+    rgba(5, 10, 18, 0.98) 100%
+  );
   border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
 }
 
 .history-card-premium.won {
@@ -423,7 +433,7 @@
 .h-card-inner {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
 }
 
 .h-card-date {
@@ -496,10 +506,10 @@
 
 .h-score {
   font-family: var(--font-display);
-  font-size: 1.8rem;
+  font-size: 1.35rem;
   font-weight: 950;
   color: #fff;
-  letter-spacing: 3px;
+  letter-spacing: 1px;
   line-height: 1;
 }
 

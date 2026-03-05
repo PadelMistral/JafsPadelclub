@@ -45,6 +45,21 @@ const rankingFilters = {
   search: "",
 };
 
+function getInitials(name = "") {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "JP";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+}
+
+function renderAvatarWithFallback(photo, name, cls = "lb-avatar-img") {
+  const initials = getInitials(name);
+  if (photo) {
+    return `<img src="${photo}" alt="${name}" class="${cls}" loading="lazy" onerror="this.outerHTML='<span class=&quot;avatar-fallback&quot;>${initials}</span>'">`;
+  }
+  return `<span class="avatar-fallback">${initials}</span>`;
+}
+
 async function getCachedUserName(uid) {
   if (!uid) return "Jugador";
   if (historyUserCache.has(uid)) return historyUserCache.get(uid);
@@ -367,7 +382,7 @@ function renderLeaderboard(
       const profileUid = u.id || u.uid || "";
       const isMe = currentUser && profileUid === currentUser.uid;
       const name = u.nombreUsuario || u.nombre || "Jugador";
-      const photo = u.fotoPerfil || u.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+      const photo = u.fotoPerfil || u.fotoURL || "";
       const ps = u.partidosJugados || 0;
       const level = Number(u.nivel || 2.5).toFixed(2);
       const points = Math.round(u.puntosRanking || 1000);
@@ -410,10 +425,7 @@ function renderLeaderboard(
                 <div class="lb-rank">#${rowRank}</div>
                 
                 <div class="lb-avatar">
-                    ${u.fotoPerfil || u.fotoURL 
-                        ? `<img src="${u.fotoPerfil || u.fotoURL}" alt="${name}" loading="lazy">`
-                        : `<img src="${photo}" alt="${name}" loading="lazy">`
-                    }
+                    ${renderAvatarWithFallback(photo, name)}
                 </div>
 
                 <div class="lb-info truncate">
@@ -906,7 +918,7 @@ window.showMatchBreakdownV3 = async (logId) => {
                 ${pc.multiplicador !== undefined ? `
                   <div class="mt-2 pt-2 border-t border-white/10 text-[10px] text-white/55">
                     <div class="mb-1">Formula con multiplicador IA:</div>
-                    <div class="font-mono text-white/80">(${vBase.toFixed(2)} + ${vDif.toFixed(2)} + ${vComp.toFixed(2)} + ${vSets.toFixed(2)}) x ${vMult.toFixed(2)} + ${vRacha.toFixed(2)} + ${vJusticia.toFixed(2)}</div>
+                    <div class="font-mono text-white/80">(${vBase.toFixed(2)} + ${vDif.toFixed(2)} + ${vRend.toFixed(2)} + ${vSets.toFixed(2)}) x ${Number(pc.multiplicador || 1).toFixed(2)} + ${Number(pc.racha || 0).toFixed(2)} + ${vJusticia.toFixed(2)}</div>
                   </div>
                 ` : ``}
               </div>
@@ -1003,7 +1015,7 @@ window.openExpedient = async (uid) => {
     const ds = u.derrotas || 0;
     const winrate = computeCompetitiveWinrate(vs, ps);
     const name = (u.nombreUsuario || u.nombre || "Jugador").toUpperCase();
-    const photo = u.fotoPerfil || u.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+    const photo = u.fotoPerfil || u.fotoURL || "";
     const level = (u.nivel || 2.5).toFixed(2);
     const pts = Math.round(u.puntosRanking || 1000);
     const division = getCoreDivisionByRating(pts);
@@ -1025,7 +1037,7 @@ window.openExpedient = async (uid) => {
           </button>
           <div class="user-top">
             <div class="user-avatar">
-              <img src="${photo}" alt="${name}">
+              ${renderAvatarWithFallback(photo, name, "user-avatar-img")}
             </div>
             <div class="user-main">
               <h3 class="user-name">${name}</h3>

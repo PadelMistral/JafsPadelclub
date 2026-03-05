@@ -22,33 +22,59 @@ function normalizeResultString(resultStr = "") {
 }
 
 export function parseMatchResult(resultStr = "") {
-  const sets = normalizeResultString(resultStr).split(" ").filter(Boolean);
-  if (sets.length < 2) throw new Error("El resultado debe tener al menos 2 sets (ej: 6-4 6-3).");
+  const normalized = normalizeResultString(resultStr);
+  const pairRegex = /(\d+)\s*-\s*(\d+)/g;
+  const sets = [];
+  let match;
+  while ((match = pairRegex.exec(normalized)) !== null) {
+    const a = Number(match[1]);
+    const b = Number(match[2]);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    if (a > 12 || b > 12) continue;
+    if (a === 0 && b === 0) continue;
+    sets.push(`${a}-${b}`);
+  }
+  if (sets.length < 1) throw new Error("Resultado inválido: no se detectaron sets (ej: 6-4 6-3).");
 
   let teamASets = 0;
   let teamBSets = 0;
   let teamAGames = 0;
   let teamBGames = 0;
+  let lastSetWinner = "";
 
   sets.forEach((setStr) => {
-    if (!setStr.includes("-")) return;
     const [aRaw, bRaw] = setStr.split("-");
     const a = Number(aRaw);
     const b = Number(bRaw);
     if (!Number.isFinite(a) || !Number.isFinite(b)) return;
     teamAGames += a;
     teamBGames += b;
-    if (a > b) teamASets += 1;
-    if (b > a) teamBSets += 1;
+    if (a > b) {
+      teamASets += 1;
+      lastSetWinner = "A";
+    }
+    if (b > a) {
+      teamBSets += 1;
+      lastSetWinner = "B";
+    }
   });
 
   if (teamASets === teamBSets) {
-    throw new Error("No se pudo determinar ganador de sets.");
+    // Fallback for legacy/incomplete inputs like one valid set + malformed extra text
+    if (teamAGames !== teamBGames) {
+      teamASets = teamAGames > teamBGames ? 1 : 0;
+      teamBSets = teamBGames > teamAGames ? 1 : 0;
+    } else if (lastSetWinner) {
+      teamASets = lastSetWinner === "A" ? 1 : 0;
+      teamBSets = lastSetWinner === "B" ? 1 : 0;
+    } else {
+      throw new Error("No se pudo determinar ganador de sets.");
+    }
   }
 
   const winnerTeam = teamASets > teamBSets ? "A" : "B";
   return {
-    normalized: normalizeResultString(resultStr),
+    normalized,
     sets,
     winnerTeam,
     teamASets,

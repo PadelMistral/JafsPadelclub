@@ -1,5 +1,5 @@
 ﻿import { db, auth, observerAuth, getDocument, updateDocument, addDocument } from "./firebase-service.js";
-import { collection, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
+import { collection, query, orderBy, limit, serverTimestamp, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { injectHeader, injectNavbar } from "./modules/ui-loader.js?v=6.5";
 import { initAppUI, showToast } from "./ui-core.js";
 import { MAX_PLAYERS } from "./config/match-constants.js";
@@ -61,6 +61,7 @@ function bindSystemActions() {
   document.getElementById("btn-recalc-levels")?.addEventListener("click", recalcGlobalLevels);
   document.getElementById("btn-cancel-stale")?.addEventListener("click", cancelStaleOpenMatches);
   document.getElementById("btn-reset-presence")?.addEventListener("click", resetPresenceState);
+  document.getElementById("btn-nuke-logs")?.addEventListener("click", clearAllLogs);
 
   document.getElementById("btn-wipe-recalc")?.addEventListener("click", async () => {
     if (!confirm("⚠️ ¿ESTÁS SEGURO? Se borrará TODO el ranking actual y se recalcularán todos los partidos con el nuevo sistema V3. Este proceso puede tardar varios minutos.")) return;
@@ -140,7 +141,13 @@ function renderUsersTable() {
             <option value="Admin" ${u.rol === "Admin" ? "selected" : ""}>Admin</option>
           </select>
         </td>
-        <td><button class="btn-mini" onclick="window.saveUserInline('${u.id}')">Guardar</button></td>
+        <td>
+          <div class="flex-row gap-1">
+            <button class="btn-mini" onclick="window.saveUserInline('${u.id}')">Guardar</button>
+            <button class="btn-mini ${u.status === "blocked" ? "" : "danger"}" onclick="window.toggleUserBlock('${u.id}')">${u.status === "blocked" ? "Desbloquear" : "Bloquear"}</button>
+            <button class="btn-mini danger" onclick="window.deleteUserAdmin('${u.id}')">Eliminar</button>
+          </div>
+        </td>
       </tr>
     `;
   }).join("");
@@ -179,7 +186,12 @@ function renderMatchesTable() {
             ${["abierto", "jugada", "jugado", "cancelado", "anulado"].map((s) => `<option value="${s}" ${String(m.estado || "").toLowerCase() === s ? "selected" : ""}>${s}</option>`).join("")}
           </select>
         </td>
-        <td><button class="btn-mini" onclick="window.saveMatchInline('${m.id}','${m.col}')">Guardar</button></td>
+        <td>
+          <div class="flex-row gap-1">
+            <button class="btn-mini" onclick="window.saveMatchInline('${m.id}','${m.col}')">Guardar</button>
+            <button class="btn-mini danger" onclick="window.deleteMatchAdmin('${m.id}','${m.col}')">Eliminar</button>
+          </div>
+        </td>
       </tr>
     `;
   }).join("");
@@ -282,6 +294,36 @@ window.saveMatchInline = async (id, col) => {
   await updateDocument(col, id, { estado });
   await addAdminLog("UPDATE_MATCH", `${col}/${id} -> estado=${estado}`);
   showToast("Guardado", "Partido actualizado", "success");
+  await refreshAll();
+};
+
+window.toggleUserBlock = async (uid) => {
+  const u = users.find((x) => x.id === uid);
+  if (!u) return;
+  const blocked = u.status === "blocked";
+  await updateDocument("usuarios", uid, {
+    status: blocked ? "approved" : "blocked",
+    bloqueado: !blocked,
+    aprobado: blocked ? true : false,
+  });
+  await addAdminLog(blocked ? "UNBLOCK_USER" : "BLOCK_USER", `${uid}`);
+  showToast("Usuarios", blocked ? "Usuario desbloqueado" : "Usuario bloqueado", "success");
+  await refreshAll();
+};
+
+window.deleteUserAdmin = async (uid) => {
+  if (!confirm("¿Eliminar usuario? Esta acción no se puede deshacer.")) return;
+  await deleteDoc(doc(db, "usuarios", uid));
+  await addAdminLog("DELETE_USER", uid);
+  showToast("Usuarios", "Usuario eliminado", "success");
+  await refreshAll();
+};
+
+window.deleteMatchAdmin = async (id, col) => {
+  if (!confirm("¿Eliminar partido? Esta acción no se puede deshacer.")) return;
+  await deleteDoc(doc(db, col, id));
+  await addAdminLog("DELETE_MATCH", `${col}/${id}`);
+  showToast("Partidos", "Partido eliminado", "success");
   await refreshAll();
 };
 
@@ -389,4 +431,16 @@ async function resetPresenceState() {
   }
   await addAdminLog("RESET_PRESENCE", `users=${users.length}`);
   showToast("Presencia", "Estado de presencia reiniciado", "success");
+}
+
+async function clearAllLogs() {
+  if (!confirm("¿Borrar todos los logs administrativos y de ranking?")) return;
+  const [adminSnap, rankSnap] = await Promise.all([
+    window.getDocsSafe(collection(db, "adminLogs")),
+    window.getDocsSafe(collection(db, "rankingLogs")),
+  ]);
+  for (const d of adminSnap.docs || []) await deleteDoc(doc(db, "adminLogs", d.id));
+  for (const d of rankSnap.docs || []) await deleteDoc(doc(db, "rankingLogs", d.id));
+  showToast("Sistema", "Logs eliminados", "success");
+  await refreshAll();
 }

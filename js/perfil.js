@@ -1,4 +1,4 @@
-import {
+﻿import {
   auth,
   db,
   subscribeDoc,

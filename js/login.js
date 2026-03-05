@@ -93,6 +93,22 @@ function notifyUser(title, msg = '', type = 'info') {
     else hideLoginNotice();
 }
 
+function showCenteredWelcomeToast(userName) {
+    const existing = document.getElementById('welcome-entry-toast');
+    if (existing) existing.remove();
+    const node = document.createElement('div');
+    node.id = 'welcome-entry-toast';
+    node.className = 'welcome-entry-toast';
+    node.innerHTML = `
+        <div class="welcome-entry-card">
+            <div class="welcome-entry-title">Bienvenido de nuevo</div>
+            <div class="welcome-entry-sub">${String(userName || 'Jugador').toUpperCase()}</div>
+        </div>
+    `;
+    document.body.appendChild(node);
+    setTimeout(() => node.remove(), 2100);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     if (window[LOGIN_BOOT_FLAG]) return;
     window[LOGIN_BOOT_FLAG] = true;
@@ -126,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isApproved = ud?.status === 'approved' || ud?.aprobado === true || ud?.rol === 'Admin';
                     if (isApproved) {
                         redirected = true;
-                        safeNavigate('home.html');
+                        startSpectacularLoading(ud?.nombreUsuario || ud?.nombre || 'JUGADOR');
                     } else {
                         // Force sign out if pending
                         auth.signOut().then(() => {
@@ -212,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const userName = userDoc?.nombreUsuario || userDoc?.nombre || 'JUGADOR';
-                notifyUser('ÉXITO', `Bienvenido de nuevo, ${userName.toUpperCase()}`, 'success');
+                showCenteredWelcomeToast(userName);
                 
                 setTimeout(() => {
                     redirected = true;
@@ -261,8 +277,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     const userName = userDoc?.nombreUsuario || userDoc?.nombre || 'LEYENDA';
+                    showCenteredWelcomeToast(userName);
                     redirected = true;
-                    startSpectacularLoading(userName);
+                    setTimeout(() => startSpectacularLoading(userName), 700);
                 }
             } catch (err) {
                 if (err.code !== 'auth/popup-closed-by-user') {
@@ -282,6 +299,8 @@ function startSpectacularLoading(userName) {
     const fill = document.getElementById('progress-fill');
     const status = document.getElementById('loader-status');
     const loginCard = document.getElementById('login-form-card');
+    const authScreen = document.querySelector('.auth-screen');
+    const percentEl = document.querySelector('.loader-percentage');
 
     if (!loader || !fill || !status) {
         localStorage.setItem('first_login_welcome', userName);
@@ -289,7 +308,10 @@ function startSpectacularLoading(userName) {
         return;
     }
 
+    document.body.classList.add('auth-transitioning');
     if (loginCard) loginCard.style.opacity = '0';
+    if (authScreen) authScreen.style.display = 'none';
+    document.body.style.overflow = 'hidden';
     loader.style.display = 'flex';
 
     let progress = 0;
@@ -298,7 +320,7 @@ function startSpectacularLoading(userName) {
         "Sincronizando con la red...",
         "Cargando estadísticas...",
         "Preparando pista central...",
-        `BIENVENIDO, ${userName.toUpperCase()}`
+        `BIENVENIDO DE NUEVO, ${userName.toUpperCase()}`
     ];
 
     const interval = setInterval(() => {
@@ -306,14 +328,17 @@ function startSpectacularLoading(userName) {
         if (progress >= 100) {
             progress = 100;
             clearInterval(interval);
+            status.textContent = `Bienvenido de nuevo ${userName}`;
             setTimeout(() => {
                 // Set flag to show welcome on home just once
                 localStorage.setItem('first_login_welcome', userName);
+                sessionStorage.setItem('home_entry_welcome', userName);
                 safeNavigate('home.html');
             }, 800);
         }
 
         fill.style.width = `${progress}%`;
+        if (percentEl) percentEl.textContent = `${progress}%`;
         
         const msgIdx = Math.min(Math.floor(progress / 20), messages.length - 1);
         status.textContent = messages[msgIdx];
@@ -348,4 +373,3 @@ function getFriendlyErrorMessage(code) {
             return { title: 'ERROR DESCONOCIDO', msg: 'No se pudo iniciar sesión. Revisa los datos.' };
     }
 }
-

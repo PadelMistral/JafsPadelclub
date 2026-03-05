@@ -1,4 +1,4 @@
-/* Home V2 — Clean & Real Player Names */
+/* Home V2 - Clean and Real Player Names */
 import { db, subscribeCol, getDocument } from "./firebase-service.js";
 import {
   collection,
@@ -43,8 +43,12 @@ let matchLoadFallbackFired = false;
 const colSignature = new Map();
 const homeBootStart = performance.now();
 let homeLoadMeasured = false;
+let nexusOnlineUsers = [];
+let nexusAllUsers = [];
+let homeEntryOverlayInterval = null;
+let homeEntryOverlayValue = 0;
 
-/* ── Player Cache (names + photos) ── */
+/* Player cache (names + photos) */
 const playerNameCache = new Map();
 const playerPhotoCache = new Map();
 
@@ -86,7 +90,16 @@ function getPlayerDisplayName(uid) {
   return playerNameCache.get(uid) || "Jugador";
 }
 
-/* ── Init ── */
+function getInitials(name = "") {
+  return String(name || "")
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0] || "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "?";
+}
+/* Init */
 document.addEventListener("DOMContentLoaded", () => {
   initAppUI("home");
   observeCoreSession({
@@ -98,6 +111,7 @@ document.addEventListener("DOMContentLoaded", () => {
       cleanup();
       currentUser = user;
       currentUserData = userDoc || {};
+      beginHomeEntryOverlay(currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador");
       await injectHeader(currentUserData);
       injectNavbar("home");
       renderWelcome();
@@ -141,6 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
           renderMatchesByFilter(
             document.querySelector(".hv2-tab.active")?.dataset.filter || "open",
           );
+          completeHomeEntryOverlay();
         }
       }, 3500);
 
@@ -177,7 +192,7 @@ function startPresence() {
   presenceTimer = startCorePresence(currentUser.uid, 2 * 60 * 1000);
 }
 
-/* ── Welcome ── */
+/* Welcome */
 function renderWelcome() {
   const d = currentUserData;
   const name = d?.nombreUsuario || d?.nombre || "Jugador";
@@ -206,26 +221,37 @@ function renderWelcome() {
   }
 
   const avatarEl = el("welcome-avatar");
-  if (avatarEl) {
-    const photo = d?.fotoPerfil || d?.fotoURL || d?.photoURL || "";
-    avatarEl.src = photo || "./imagenes/Logojafs.png";
-    avatarEl.alt = name;
-    
-    // User request: Same photo for brand logo
-    const brandImg = el("hv2-brand-image-id");
-    if (brandImg) brandImg.src = photo || "./imagenes/Logojafs.png";
-  }
   const fallback = el("welcome-avatar-fallback");
-  if (fallback) {
-    const initials = name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
-    fallback.textContent = initials || "?";
-  }
+  const brandImg = el("hv2-brand-image-id");
+  const brandFallback = el("hv2-brand-fallback");
+  const photo = d?.fotoPerfil || d?.fotoURL || d?.photoURL || "";
+  const initials = getInitials(name);
 
+  if (avatarEl) {
+    avatarEl.src = photo || "";
+    avatarEl.alt = name;
+    avatarEl.style.display = photo ? "block" : "none";
+    avatarEl.onerror = () => {
+      avatarEl.style.display = "none";
+      if (fallback) fallback.style.display = "flex";
+    };
+  }
+  if (fallback) {
+    fallback.textContent = initials;
+    fallback.style.display = photo ? "none" : "flex";
+  }
+  if (brandImg) {
+    brandImg.src = photo || "./imagenes/Logojafs.png";
+    brandImg.style.display = "block";
+    brandImg.onerror = () => {
+      brandImg.src = "./imagenes/Logojafs.png";
+      brandImg.style.display = "block";
+    };
+  }
+  if (brandFallback) {
+    brandFallback.textContent = "J";
+    brandFallback.style.display = "none";
+  }
   // Division chip based on ELO
   const divChip = el("user-division-chip");
   const welcomeCard = document.querySelector(".hv2-welcome");
@@ -275,7 +301,7 @@ function renderWelcome() {
   setTimeout(checkHomeNotices, 1000);
 }
 
-/* ── Home Notices ── */
+/* Home Notices */
 async function checkHomeNotices() {
     const d = currentUserData;
     if (!d || !d.uid) return;
@@ -323,7 +349,7 @@ async function checkHomeNotices() {
         notices.push({
             type: 'diary',
             title: 'DIARIO PENDIENTE',
-            message: 'No has apuntado tus datos en el diario del último partido. ¡No pierdas tu racha táctica!',
+            message: "No has apuntado tus datos en el diario del último partido. ¡No pierdas tu racha táctica!",
             action: () => window.location.href = 'diario.html'
         });
     }
@@ -408,7 +434,7 @@ async function refreshWelcomeRank() {
   } catch {}
 }
 
-/* ── Weather ── */
+/* Weather */
 async function initWeather() {
   try {
     weather = await getDetailedWeather();
@@ -468,7 +494,7 @@ async function initWeather() {
   }
 }
 
-/* ── System Alerts & Notifs ── */
+/* System Alerts & Notifs */
 async function checkSystemAlerts(userData) {
   if (!userData || !currentUser) return;
 
@@ -519,7 +545,7 @@ async function checkSystemAlerts(userData) {
     if (!hasDiary) {
       alerts.push({
         title: "Diario Pendiente",
-        body: `No has registrado tus sensaciones del último partido. ¡Suma puntos extra ahora!`,
+        body: "No has registrado tus sensaciones del último partido. ¡Suma puntos extra ahora!",
         icon: "fa-book",
         color: "var(--sport-yellow)",
         link: "diario.html",
@@ -539,7 +565,7 @@ async function checkSystemAlerts(userData) {
   }
 }
 
-/* ── Recomendaciones Dinámicas ── */
+/* Recomendaciones Dinámicas */
 function refreshRecommendations() {
   const recomEl = document.getElementById("recom-content");
   if (!recomEl) return;
@@ -585,37 +611,37 @@ function refreshRecommendations() {
     }
   }
 
-  // Tips Tácticos
+  // Tips tácticos
   recs.push(
-    `🔥 Mejora tu derecha: mantén la pala alta en la red y flexiona bien las piernas al defender el fondo de pista.`,
+    "🔥 Mejora tu derecha: mantén la pala alta en la red y flexiona bien las piernas al defender el fondo de pista.",
   );
   recs.push(
-    `🧠 Recuerda comunicarte constantemente con tu compañero: "Mía", "Tuya", "Corto", "Largo". La comunicación gana partidos.`,
+    '🧠 Recuerda comunicarte constantemente con tu compañero: "Mía", "Tuya", "Corto", "Largo". La comunicación gana partidos.',
   );
   recs.push(
-    `💪 Después de un buen partido, pasa por "DIARIO" y apunta tus sensaciones para sumar Puntos VIP a tu ranking.`,
+    '💪 Después de un buen partido, pasa por "DIARIO" y apunta tus sensaciones para sumar puntos VIP a tu ranking.',
   );
   recs.push(
-    `🏆 Analiza a tus posibles rivales antes de entrar a pista y crea una táctica. Piensa dónde están sus puntos débiles.`,
+    "🏆 Analiza a tus posibles rivales antes de entrar a pista y crea una táctica. Piensa dónde están sus puntos débiles.",
   );
 
   const idx = Math.floor(Math.random() * recs.length);
   recomEl.innerHTML = `<span class="animate-fade-in inline-block">${recs[idx]}</span>`;
 
-  // Cambiar recomendación cada pcoos segundos de forma cíclica
+  // Cambiar recomendación cada pocos segundos de forma cíclica
   if (!window._recomCycleInit) {
     window._recomCycleInit = true;
     setInterval(refreshRecommendations, 12000);
   }
 }
 
-/* ── Notifications ── */
+/* Notifications */
 function bindNotificationNudge() {
   // Inicializamos recomendaciones por primera vez
   refreshRecommendations();
 }
 
-/* ── Match Data ── */
+/* Match data */
 async function mergeMatches(col, list) {
   const sig = JSON.stringify(list.map((m) => m.id + m.estado));
   if (colSignature.get(col) === sig) return;
@@ -655,10 +681,44 @@ async function mergeMatches(col, list) {
   if (!homeLoadMeasured && loadedCollections.size >= 1) {
     homeLoadMeasured = true;
     analyticsTiming("home.ttv_ms", performance.now() - homeBootStart);
+    completeHomeEntryOverlay();
   }
 }
 
-/* ── Tabs ── */
+function beginHomeEntryOverlay(name = "Jugador") {
+  const overlay = document.getElementById("home-entry-overlay");
+  const title = document.getElementById("home-entry-title");
+  const fill = document.getElementById("home-entry-fill");
+  const pct = document.getElementById("home-entry-pct");
+  if (!overlay || !fill || !pct) return;
+
+  overlay.classList.remove("hidden");
+  if (title) title.textContent = `BIENVENIDO DE NUEVO ${String(name).toUpperCase()}`;
+  homeEntryOverlayValue = 0;
+  fill.style.width = "0%";
+  pct.textContent = "0%";
+  if (homeEntryOverlayInterval) clearInterval(homeEntryOverlayInterval);
+  homeEntryOverlayInterval = setInterval(() => {
+    homeEntryOverlayValue = Math.min(90, homeEntryOverlayValue + Math.max(1, Math.floor(Math.random() * 6)));
+    fill.style.width = `${homeEntryOverlayValue}%`;
+    pct.textContent = `${homeEntryOverlayValue}%`;
+  }, 90);
+}
+
+function completeHomeEntryOverlay() {
+  const overlay = document.getElementById("home-entry-overlay");
+  const fill = document.getElementById("home-entry-fill");
+  const pct = document.getElementById("home-entry-pct");
+  if (!overlay || !fill || !pct) return;
+  if (homeEntryOverlayInterval) clearInterval(homeEntryOverlayInterval);
+  homeEntryOverlayInterval = null;
+  homeEntryOverlayValue = 100;
+  fill.style.width = "100%";
+  pct.textContent = "100%";
+  setTimeout(() => overlay.classList.add("hidden"), 520);
+}
+
+/* Tabs */
 function bindTabs() {
   if (tabsBound) return;
   tabsBound = true;
@@ -673,7 +733,7 @@ function bindTabs() {
   });
 }
 
-/* ── Next Match — Sports Scoreboard ── */
+/* Next match - sports scoreboard */
 function renderNextMatch() {
   const box = document.getElementById("next-match-box");
   if (!box) return;
@@ -779,7 +839,7 @@ function renderNextMatch() {
   `;
 }
 
-/* ── Match List ── */
+/* Match list */
 function renderMatchesByFilter(filter) {
   const listEl = document.getElementById("matches-list");
   if (!listEl) return;
@@ -808,7 +868,14 @@ function renderMatchesByFilter(filter) {
         return d && d.getTime() >= now - 5 * 60 * 1000;
       });
   } else if (filter === "closed") {
-    list = list.filter((m) => isFinishedMatch(m)).reverse();
+    list = list
+      .filter((m) => !isFinishedMatch(m))
+      .filter((m) => (m.jugadores || []).filter(Boolean).length >= 4)
+      .filter((m) => {
+        const d = toDateSafe(m.fecha);
+        return d && d.getTime() > now;
+      })
+      .sort((a, b) => toDateSafe(a.fecha) - toDateSafe(b.fecha));
   }
 
   if (!list.length) {
@@ -892,20 +959,28 @@ function renderMatchCard(match, idx = 0) {
   `;
 }
 
-/* ── Match Modal ── */
+/* Match modal */
 
-/* ── Nexus Online — Connected Connected Users ── */
+/* Nexus online - connected users */
 let unsubNexus = null;
 async function initNexus() {
   const container = document.getElementById("nexus-container");
   if (!container) return;
-
-  // Real-time listener for users seen in the last 10 minutes
-  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+  container.style.cursor = "pointer";
+  container.onclick = () => window.openNexusModal?.();
+  const nexusModal = document.getElementById("modal-nexus");
+  if (nexusModal && !nexusModal.dataset.bound) {
+    nexusModal.dataset.bound = "1";
+    nexusModal.addEventListener("click", (e) => {
+      if (e.target === nexusModal) nexusModal.classList.remove("active");
+    });
+  }
 
   unsubNexus = await subscribeCol(
     "usuarios",
     (users) => {
+      nexusAllUsers = users.slice();
+      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
       const online = users
         .filter((u) => {
           if (!u.ultimoAcceso) return false;
@@ -919,7 +994,12 @@ async function initNexus() {
             (b.ultimoAcceso?.seconds || 0) - (a.ultimoAcceso?.seconds || 0),
         );
 
+      nexusOnlineUsers = online;
       renderNexus(online);
+      const modal = document.getElementById("modal-nexus");
+      if (modal?.classList.contains("active")) {
+        window.openNexusModal?.();
+      }
     },
     [],
     [["ultimoAcceso", "desc"]],
@@ -935,7 +1015,7 @@ function renderNexus(users) {
   count.textContent = `${users.length} CONECTADOS`;
 
   if (users.length === 0) {
-    list.innerHTML = `<div class="text-[9px] opacity-30 italic px-2">No hay otros iluminatis en línea ahora</div>`;
+    list.innerHTML = `<div class="text-[9px] opacity-30 italic px-2">No hay otros jugadores conectados ahora.</div>`;
     return;
   }
 
@@ -943,13 +1023,17 @@ function renderNexus(users) {
     .map((u) => {
       const isMe = u.id === currentUser?.uid;
       const name = u.nombreUsuario || u.nombre || "Jugador";
-      const photo =
-        u.fotoPerfil || u.fotoURL || u.photoURL || "./imagenes/Logojafs.png";
+      const photo = u.fotoPerfil || u.fotoURL || u.photoURL || "";
+      const initials = getInitials(name);
 
       return `
       <div class="nexus-user ${isMe ? "is-me" : ""}" onclick="window.location.href='perfil.html?uid=${u.id}'">
         <div class="nexus-avatar">
-          <img src="${photo}" alt="${name}" onerror="this.src='./imagenes/Logojafs.png'">
+          ${
+            photo
+              ? `<img src="${photo}" alt="${name}" onerror="this.outerHTML='<span class=&quot;nexus-initials&quot;>${initials}</span>'">`
+              : `<span class="nexus-initials">${initials}</span>`
+          }
         </div>
         <span class="nexus-uname">${isMe ? "TÚ" : name.split(" ")[0]}</span>
       </div>
@@ -958,6 +1042,84 @@ function renderNexus(users) {
     .join("");
 }
 
+window.openNexusModal = () => {
+  const modal = document.getElementById("modal-nexus");
+  const list = document.getElementById("nexus-modal-list");
+  const title = document.getElementById("nexus-modal-title");
+  if (!modal || !list) return;
+
+  const isAdmin = currentUserData?.rol === "Admin";
+  if (title) title.textContent = `USUARIOS CONECTADOS (${nexusOnlineUsers.length})`;
+
+  if (!nexusOnlineUsers.length) {
+    list.innerHTML = `<div class="center py-10 opacity-50">No hay usuarios conectados en este momento.</div>`;
+    modal.classList.add("active");
+    return;
+  }
+
+  const onlineHtml = nexusOnlineUsers
+    .map((u) => {
+      const isMe = u.id === currentUser?.uid;
+      const name = u.nombreUsuario || u.nombre || "Jugador";
+      const photo = u.fotoPerfil || u.fotoURL || u.photoURL || "";
+      const initials = getInitials(name);
+      const last = u.ultimoAcceso?.toDate ? u.ultimoAcceso.toDate() : new Date(u.ultimoAcceso || 0);
+      const lastTxt = Number.isNaN(last.getTime())
+        ? "Sin fecha"
+        : last.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      return `
+        <div class="nexus-modal-row" onclick="window.location.href='perfil.html?uid=${u.id}'">
+          <div class="nexus-modal-avatar">
+            ${photo ? `<img src="${photo}" alt="${name}" onerror="this.outerHTML='<span class=&quot;nexus-initials&quot;>${initials}</span>'">` : `<span class="nexus-initials">${initials}</span>`}
+          </div>
+          <div class="nexus-modal-info">
+            <span class="nexus-modal-name">${isMe ? "TÚ" : name}</span>
+            <span class="nexus-modal-meta">${isAdmin ? `Último acceso: ${lastTxt}` : "Conectado recientemente"}</span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  let offlineHtml = "";
+  if (isAdmin) {
+    const onlineIds = new Set(nexusOnlineUsers.map((u) => u.id));
+    const offlineUsers = nexusAllUsers
+      .filter((u) => !onlineIds.has(u.id))
+      .sort((a, b) => (b.ultimoAcceso?.seconds || 0) - (a.ultimoAcceso?.seconds || 0));
+    offlineHtml = `
+      <div class="nexus-modal-divider">Usuarios no conectados (${offlineUsers.length})</div>
+      ${
+        offlineUsers
+          .map((u) => {
+            const name = u.nombreUsuario || u.nombre || "Jugador";
+            const photo = u.fotoPerfil || u.fotoURL || u.photoURL || "";
+            const initials = getInitials(name);
+            const last = u.ultimoAcceso?.toDate ? u.ultimoAcceso.toDate() : new Date(u.ultimoAcceso || 0);
+            const lastTxt = Number.isNaN(last.getTime())
+              ? "Sin registro"
+              : last.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+            return `
+              <div class="nexus-modal-row is-offline" onclick="window.location.href='perfil.html?uid=${u.id}'">
+                <div class="nexus-modal-avatar">
+                  ${photo ? `<img src="${photo}" alt="${name}" onerror="this.outerHTML='<span class=&quot;nexus-initials&quot;>${initials}</span>'">` : `<span class="nexus-initials">${initials}</span>`}
+                </div>
+                <div class="nexus-modal-info">
+                  <span class="nexus-modal-name">${name}</span>
+                  <span class="nexus-modal-meta">Último acceso: ${lastTxt}</span>
+                </div>
+              </div>
+            `;
+          })
+          .join("") || '<div class="text-[10px] opacity-40 p-2">Sin usuarios offline.</div>'
+      }
+    `;
+  }
+
+  list.innerHTML = onlineHtml + offlineHtml;
+
+  modal.classList.add("active");
+};
 window.openMatch = (id, col) => {
   const modal = document.getElementById("modal-match");
   const area = document.getElementById("match-detail-area");
@@ -970,6 +1132,23 @@ window.closeHomeMatchModal = () => {
   document.getElementById("modal-match")?.classList.remove("active");
 };
 
+
+window.clearAppCache = async () => {
+  try {
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+    localStorage.removeItem("home_ai_tip_cache");
+    sessionStorage.removeItem("home_state_cache");
+    window.__appToast?.("Caché limpiada", "Recargando interfaz...", "success");
+    setTimeout(() => window.location.reload(), 450);
+  } catch (e) {
+    console.warn("clear cache failed:", e);
+    window.__appToast?.("Error", "No se pudo limpiar la caché", "error");
+  }
+};
+
 // Ensure cleanup includes Nexus
 const originalCleanup = cleanup;
 cleanup = () => {
@@ -977,3 +1156,7 @@ cleanup = () => {
   if (typeof unsubNexus === "function") unsubNexus();
   unsubNexus = null;
 };
+
+
+
+

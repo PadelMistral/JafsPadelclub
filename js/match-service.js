@@ -349,6 +349,8 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
     
     window._currentMatchId = matchId;
     window._currentMatchCol = col;
+    const viewerUid = currentUser?.uid || auth.currentUser?.uid || null;
+    const viewerData = userData || {};
 
     const render = async (m) => {
         if (!m) { 
@@ -357,9 +359,9 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         }
         m = autoMarkPlayedIfNeeded(m);
 
-        const isParticipant = m.jugadores?.includes(currentUser.uid);
-        const isAdmin = userData?.rol === 'Admin' || auth.currentUser?.email === 'Juanan221091@gmail.com';
-        const isOrganizer = m.organizerId === currentUser.uid || m.creador === currentUser.uid || isAdmin;
+        const isParticipant = !!viewerUid && m.jugadores?.includes(viewerUid);
+        const isAdmin = viewerData?.rol === 'Admin' || auth.currentUser?.email === 'Juanan221091@gmail.com';
+        const isOrganizer = !!viewerUid && (m.organizerId === viewerUid || m.creador === viewerUid || isAdmin);
         const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
         const players = await Promise.all([0, 1, 2, 3].map(i => getPlayerData(m.jugadores?.[i])));
 
@@ -457,7 +459,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     </div>
 
                     <div class="actions-grid-v7">
-                        ${renderMatchActions(m, isParticipant, isOrganizer, isAdmin, currentUser.uid, matchId, col)}
+                        ${renderMatchActions(m, isParticipant, isOrganizer, isAdmin, viewerUid || '', matchId, col)}
                     </div>
                 </div>
             `;
@@ -489,7 +491,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
             }
 
             if (detail) {
-                const myAlloc = detail.playerAllocations?.find(a => a.uid === currentUser.uid);
+                const myAlloc = detail.playerAllocations?.find(a => a.uid === viewerUid);
                 
                 const rows = (detail.pointsPerSet || []).map(s => `
                     <div class="bd-item-v7">
@@ -570,7 +572,9 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         </div>
                     </div>
 
-                    ${renderApoingLink("Comprobar reserva en Apoing", "mb-6 opacity-60")}
+                    <div class="apoing-link-wrap mb-4">
+                        ${renderApoingLink("Gestionar partida en Apoing", "text-orange-300 border-orange-400/40 bg-orange-500/10")}
+                    </div>
                     ${eloBreakdownHtml}
 
                     <div class="court-container-v7 mb-3">
@@ -602,12 +606,12 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
 
                     ${isOrganizer ? `
                         <div class="px-2 mb-2">
-                            <span class="text-[8px] font-black text-primary uppercase tracking-widest opacity-60">ACTION CENTER · ${userData?.rol === 'Admin' ? 'ADMIN ACCESS' : 'ORGANIZADOR'}</span>
+                            <span class="text-[8px] font-black text-primary uppercase tracking-widest opacity-60">ACTION CENTER · ${viewerData?.rol === 'Admin' ? 'ADMIN ACCESS' : 'ORGANIZADOR'}</span>
                         </div>
                     ` : ''}
 
                     <div class="actions-grid-v7 flex-col gap-3">
-                        ${renderMatchActions(m, isParticipant, isOrganizer, isAdmin, currentUser.uid, matchId, col)}
+                        ${renderMatchActions(m, isParticipant, isOrganizer, isAdmin, viewerUid || '', matchId, col)}
                     </div>
                     <div class="mt-3 p-2 rounded-xl border border-white/10 bg-white/5">
                         <div class="flex-row between items-center gap-2">
@@ -653,7 +657,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                 try {
                     const phase = m?.resultado?.sets ? "post" : "pre";
                     const result = await getMatchAdvice({
-                        uid: currentUser.uid,
+                        uid: viewerUid || auth.currentUser?.uid || "",
                         match: { id: m.id || matchId, col, ...m },
                         phase,
                     });
@@ -726,6 +730,10 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                             <span class="m-desc text-[9px] opacity-60">Ranked Match</span>
                         </div>
                     </div>
+                </div>
+
+                <div class="apoing-link-wrap mb-4">
+                    ${renderApoingLink("Gestionar partida en Apoing", "text-orange-300 border-orange-400/40 bg-orange-500/10")}
                 </div>
 
                 <!-- Alineación Táctica -->
@@ -824,7 +832,6 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                         <span class="t-main">DESPLEGAR MISIÓN</span>
                         <i class="fas fa-paper-plane"></i>
                     </button>
-                    ${renderApoingLink("Gestionar reserva en Apoing", "opacity-40 hover:opacity-100 transition-opacity")}
                 </div>
             </div>
         </div>

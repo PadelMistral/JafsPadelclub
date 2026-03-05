@@ -7,6 +7,80 @@
   font-family: "Inter", "Rajdhani", sans-serif;
 }
 
+.home-entry-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 22000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 40% 20%, rgba(0, 212, 255, 0.12), rgba(2, 6, 23, 0.98) 62%);
+}
+
+.home-entry-overlay.hidden {
+  display: none;
+}
+
+.home-entry-nebula {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 75% 70%, rgba(198, 255, 0, 0.1), transparent 48%);
+  filter: blur(2px);
+}
+
+.home-entry-box {
+  position: relative;
+  z-index: 2;
+  width: min(92vw, 420px);
+  text-align: center;
+  padding: 22px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(10, 18, 34, 0.72);
+  backdrop-filter: blur(14px);
+}
+
+.home-entry-title {
+  font-family: "Rajdhani", sans-serif;
+  font-size: clamp(1.4rem, 5vw, 2rem);
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.home-entry-sub {
+  margin-top: 4px;
+  margin-bottom: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.home-entry-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.home-entry-bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #00d4ff, #c6ff00);
+  box-shadow: 0 0 14px rgba(0, 212, 255, 0.6);
+  transition: width 120ms linear;
+}
+
+.home-entry-pct {
+  margin-top: 8px;
+  font-family: "Rajdhani", sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.86);
+}
+
 /* ═══════════════ WELCOME CARD — HUD STYLE ═══════════════ */
 .hv2-welcome {
   background: linear-gradient(
@@ -38,9 +112,10 @@
 
 /* HUD Bar — Live clock + weather inline */
 .hv2-hud-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 12px 18px 0;
   position: relative;
   z-index: 2;
@@ -133,7 +208,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-right: auto;
+  min-width: 0;
 }
 .hv2-brand-mini {
   width: 28px;
@@ -141,12 +216,24 @@
   border-radius: 6px;
   filter: drop-shadow(0 0 5px rgba(0, 212, 255, 0.4));
 }
+.hv2-brand-initial {
+  align-items: center;
+  justify-content: center;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  text-transform: uppercase;
+}
 .hv2-brand-text {
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 1px;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
 }
 .hv2-avatar-ring {
   position: absolute;
@@ -789,6 +876,18 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.hv2-matches-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.hv2-matches-grid::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
 }
 
 /* Match card — mini scoreboard style */
@@ -1473,15 +1572,15 @@
 
 /* ═══════════════ NEXUS ONLINE — CONNECTED USERS ═══════════════ */
 #nexus-container {
-  margin-bottom: 24px;
+  margin-bottom: 10px;
 }
 .nexus-glass {
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 24px;
-  padding: 16px 18px;
+  background: rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 13px;
+  padding: 7px 9px;
   position: relative;
   overflow: hidden;
 }
@@ -1489,11 +1588,11 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: 5px;
 }
 .nexus-pulse {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #22c55e;
   box-shadow: 0 0 10px #22c55e;
@@ -1511,23 +1610,23 @@
   }
 }
 .nexus-title {
-  font-size: 10px;
+  font-size: 7px;
   font-weight: 900;
-  letter-spacing: 2px;
-  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 1.4px;
+  color: rgba(255, 255, 255, 0.5);
   text-transform: uppercase;
 }
 .nexus-count {
-  font-size: 9px;
+  font-size: 7px;
   font-weight: 800;
-  color: #22c55e;
+  color: rgba(34, 197, 94, 0.9);
   letter-spacing: 0.5px;
 }
 .nexus-list {
   display: flex;
-  gap: 12px;
+  gap: 6px;
   overflow-x: auto;
-  padding: 4px 0 8px;
+  padding: 2px 0 4px;
   scrollbar-width: none;
 }
 .nexus-list::-webkit-scrollbar {
@@ -1538,9 +1637,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
-  width: 52px;
+  width: 36px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
@@ -1548,11 +1647,11 @@
   transform: translateY(-4px);
 }
 .nexus-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   background: rgba(255, 255, 255, 0.05);
-  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1570,9 +1669,9 @@
   object-fit: cover;
 }
 .nexus-uname {
-  font-size: 8px;
-  font-weight: 800;
-  color: rgba(255, 255, 255, 0.4);
+  font-size: 6px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
   text-transform: uppercase;
   max-width: 100%;
   overflow: hidden;
@@ -1580,10 +1679,112 @@
   white-space: nowrap;
   letter-spacing: 0.5px;
 }
+.nexus-initials {
+  font-size: 9px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.86);
+  text-transform: uppercase;
+}
 .nexus-user.is-me .nexus-avatar {
   border-color: #00d4ff;
   background: rgba(0, 212, 255, 0.1);
 }
 .nexus-user.is-me .nexus-uname {
   color: #00d4ff;
+}
+
+#modal-nexus .modal-card {
+  max-width: 460px;
+}
+
+.nexus-modal-card {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.nexus-modal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.nexus-modal-row:hover {
+  border-color: rgba(0, 212, 255, 0.35);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.nexus-modal-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nexus-modal-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nexus-modal-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nexus-modal-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nexus-modal-meta {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.nexus-modal-divider {
+  margin-top: 10px;
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.nexus-modal-row.is-offline {
+  opacity: 0.75;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 560px) {
+  .hv2-hud-bar {
+    grid-template-columns: auto 1fr auto;
+    gap: 6px;
+  }
+  .hv2-brand-text {
+    display: none;
+  }
+  .hv2-cache-btn {
+    display: none;
+  }
+  .hv2-hud-clock {
+    justify-self: center;
+  }
+  .hv2-hud-weather {
+    justify-self: end;
+  }
 }

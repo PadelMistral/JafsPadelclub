@@ -875,6 +875,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             currentJournal.push(entry);
             transaction.update(userRef, { diario: currentJournal });
         }
+      });
 
       // Feedback handled by submitTechnicalEntry mostly, but global toast here too
       showToast(
@@ -950,45 +951,47 @@ document.addEventListener("DOMContentLoaded", async () => {
         }[e.biometria?.mood || "Normal"];
 
         return `
-                <div class="journal-card-v10 animate-fade-in mb-4 cursor-pointer hover:bg-white/5 transition-all" 
-                     onclick="window.showEntryDetails('${e.id}')">
-                    <div class="card-header-v10 flex-row between items-center mb-3">
-                        <div class="flex-col">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-primary">${e.tipo || "SESIÓN"}</span>
-                            <span class="text-xs font-black text-white">${date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })}</span>
-                        </div>
-                        <div class="mood-badge ${isNote ? "text-cyan-300" : moodColor} border border-white/10 px-3 py-1 rounded-full bg-black/40">
-                            <span class="text-[10px] font-black uppercase">${isNote ? "NOTA" : e.biometria?.mood || "N/A"}</span>
-                        </div>
-                    </div>
-
-                    ${
-                      e.aiSummary
-                        ? `
-                        <div class="ai-insight-box mb-4 p-3 bg-white/5 rounded-xl border border-white/5">
-                            <i class="fas fa-brain text-purple-400 text-[10px] mr-2"></i>
-                            <span class="text-[10px] italic text-gray-300">"${e.aiSummary}"</span>
-                        </div>
-                    `
-                        : ""
-                    }
-
-                    <div class="stat-mini-grid">
-                        <div class="sm-item flex-col">
-                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">Media golpes</span>
-                            <b class="text-sport-green text-sm">${((((e.shots?.serve || 5) + (e.shots?.volley || 5) + (e.shots?.bandeja || 5) + (e.shots?.vibora || 5) + (e.shots?.smash || 5) + (e.shots?.lob || 5)) / 6).toFixed(1))}</b>
-                        </div>
-                        <div class="sm-item flex-col">
-                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">MVP elegido</span>
-                            <b class="text-sport-gold text-sm">${e.mvpId ? "SI" : "NO"}</b>
-                        </div>
-                        <div class="sm-item flex-col">
-                            <span class="text-[8px] font-black text-muted uppercase tracking-widest">Posicion</span>
-                            <b class="text-white text-sm">${(e.posicion || "-").toUpperCase()}</b>
-                        </div>
-                    </div>
+          <details class="journal-acc-item animate-fade-in" data-entry-id="${e.id}">
+            <summary class="journal-acc-head">
+              <div class="flex-col">
+                <span class="text-[9px] font-black uppercase tracking-widest text-primary">${e.tipo || "SESIÓN"}</span>
+                <span class="text-xs font-black text-white">${date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })} · ${String(e.hora || "--:--").toUpperCase()}</span>
+              </div>
+              <div class="mood-badge ${isNote ? "text-cyan-300" : moodColor} border border-white/10 px-3 py-1 rounded-full bg-black/40">
+                <span class="text-[10px] font-black uppercase">${isNote ? "NOTA" : e.biometria?.mood || "N/A"}</span>
+              </div>
+            </summary>
+            <div class="journal-acc-body">
+              ${
+                e.aiSummary
+                  ? `
+                  <div class="ai-insight-box mb-3 p-3 bg-white/5 rounded-xl border border-white/5">
+                    <i class="fas fa-brain text-purple-400 text-[10px] mr-2"></i>
+                    <span class="text-[10px] italic text-gray-300">"${e.aiSummary}"</span>
+                  </div>
+                `
+                  : ""
+              }
+              <div class="stat-mini-grid">
+                <div class="sm-item flex-col">
+                  <span class="text-[8px] font-black text-muted uppercase tracking-widest">Media golpes</span>
+                  <b class="text-sport-green text-sm">${((((e.shots?.serve || 5) + (e.shots?.volley || 5) + (e.shots?.bandeja || 5) + (e.shots?.vibora || 5) + (e.shots?.smash || 5) + (e.shots?.lob || 5)) / 6).toFixed(1))}</b>
                 </div>
-            `;
+                <div class="sm-item flex-col">
+                  <span class="text-[8px] font-black text-muted uppercase tracking-widest">MVP elegido</span>
+                  <b class="text-sport-gold text-sm">${e.mvpId ? "SI" : "NO"}</b>
+                </div>
+                <div class="sm-item flex-col">
+                  <span class="text-[8px] font-black text-muted uppercase tracking-widest">Posición</span>
+                  <b class="text-white text-sm">${(e.posicion || "-").toUpperCase()}</b>
+                </div>
+              </div>
+              <div class="text-right mt-3">
+                <button class="btn-ghost-v9 text-[10px] font-black uppercase tracking-widest" onclick="event.stopPropagation(); window.showEntryDetails('${e.id}')">Ver detalle completo</button>
+              </div>
+            </div>
+          </details>
+        `;
       })
       .join("");
   }

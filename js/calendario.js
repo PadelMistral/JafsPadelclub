@@ -1,4 +1,4 @@
-/* =====================================================
+﻿/* =====================================================
    PADELUMINATIS CALENDAR ENGINE V7.0
    Mistral-Inspired Modern Matrix Logic.
    ===================================================== */
@@ -23,6 +23,7 @@ let apoingEvents = [];
 let apoingSlotMap = new Map();
 let apoingLastSyncAt = 0;
 let apoingNextRetryAt = 0;
+let apoingMyFutureCountLast = null;
 
 const DEFAULT_APOING_ICS_URL = ""; // Empty by default now to avoid confusion
 const APOING_PROXY_LIST = [
@@ -120,58 +121,26 @@ function updateUpcomingApoingBox() {
     const container = document.getElementById("apoing-info-container");
     if (!container) return;
 
-    if (!apoingEvents.length) {
-        container.innerHTML = `
-            <div class="apoing-chip" onclick="window.showApoingGuide()">
-                <span id="apoing-sync-state" class="apoing-sync-state">Sin reservas en Apoing</span>
-                <i class="fas fa-chevron-right ml-2 opacity-50"></i>
-            </div>
-        `;
-        return;
-    }
-
     const now = new Date();
-    // Filter out club events (duration > 95) and keep only user's own reservations
-    const myNext = apoingEvents
+    const myFuture = apoingEvents
         .filter(e => e.dtStart >= now)
         .filter(e => isApoingMine(e))
-        .filter(e => (eventDurationMs(e) / 60000) <= 95)
-        .sort((a,b) => a.dtStart - b.dtStart)[0];
+        .sort((a,b) => a.dtStart - b.dtStart);
+    const myCount = myFuture.length;
+    const myNext = myFuture[0] || null;
 
-    if (!myNext) {
+    if (!myCount || !myNext) {
         container.innerHTML = `
             <div class="apoing-chip" onclick="window.showApoingGuide()">
-                <span id="apoing-sync-state" class="apoing-sync-state">Apoing OK: Sin próximas reservas tuyas</span>
+                <span id="apoing-sync-state" class="apoing-sync-state">Reservas de Apoing: 0 · Pulsa para ver días</span>
                 <i class="fas fa-chevron-right ml-2 opacity-50"></i>
             </div>
         `;
     } else {
-        const dateStr = myNext.dtStart.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
-        const timeStr = myNext.dtStart.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-        
         container.innerHTML = `
-            <div class="apoing-upcoming-box-v2 animate-scale-in" onclick="window.showApoingGuide()">
-                <div class="v2-box-glow"></div>
-                <div class="flex-row items-center gap-3 relative z-10 w-full">
-                    <div class="v2-box-icon">
-                        <i class="fas fa-calendar-star"></i>
-                        <div class="v2-icon-pulse"></div>
-                    </div>
-                    <div class="flex-col flex-1">
-                        <div class="flex-row items-center justify-between">
-                            <span class="v2-tag">PRÓXIMA RESERVA</span>
-                            <span class="v2-status">ACTIVA</span>
-                        </div>
-                        <div class="v2-datetime">
-                            <span class="v2-date">${dateStr}</span>
-                            <span class="v2-sep"></span>
-                            <span class="v2-time">${timeStr}</span>
-                        </div>
-                    </div>
-                    <div class="v2-arrow">
-                        <i class="fas fa-chevron-right"></i>
-                    </div>
-                </div>
+            <div class="apoing-chip" onclick="window.showApoingGuide()">
+                <span id="apoing-sync-state" class="apoing-sync-state">Tienes ${myCount} reserva${myCount > 1 ? 's' : ''} de Apoing · Pulsa para ver los días</span>
+                <i class="fas fa-chevron-right ml-2 opacity-50"></i>
             </div>
         `;
     }
@@ -181,6 +150,50 @@ function getApoingIcsUrl() {
     const byUser = String(userData?.apoingCalendarUrl || "").trim();
     const byStorage = String(localStorage.getItem("apoingCalendarUrl") || "").trim();
     return byUser || byStorage || DEFAULT_APOING_ICS_URL;
+}
+
+function isClubSocialEvent(ev = {}) {
+    const txt = normalizeName(`${ev.summary || ""} ${ev.description || ""}`);
+    return txt.includes("club social") || txt.includes("club mistral homes") || txt.includes("mistral homes club");
+}
+
+function isPadelMistralEvent(ev = {}) {
+    const txt = normalizeName(`${ev.summary || ""} ${ev.description || ""}`);
+    return txt.includes("padel mistral homes") || (txt.includes("padel") && txt.includes("mistral homes"));
+}
+
+function isRelevantApoingEvent(ev = {}) {
+    return isPadelMistralEvent(ev) && !isClubSocialEvent(ev);
+}
+
+async function getApoingSources() {
+    const sources = [];
+    try {
+        const usersSnap = await getDocs(collection(db, "usuarios"));
+        usersSnap.forEach((d) => {
+            const data = d.data() || {};
+            const url = String(data.apoingCalendarUrl || "").trim();
+            if (!url) return;
+            sources.push({
+                uid: d.id,
+                name: data.nombreUsuario || data.nombre || "Jugador",
+                email: data.email || "",
+                icsUrl: url,
+            });
+        });
+    } catch (_) {}
+
+    const myUrl = getApoingIcsUrl();
+    const hasMe = currentUser?.uid && sources.some((s) => s.uid === currentUser.uid);
+    if (currentUser?.uid && myUrl && !hasMe) {
+        sources.push({
+            uid: currentUser.uid,
+            name: userData?.nombreUsuario || userData?.nombre || "Tú",
+            email: currentUser.email || "",
+            icsUrl: myUrl,
+        });
+    }
+    return sources;
 }
 
 function unfoldIcsLines(raw = "") {
@@ -361,8 +374,8 @@ function extractOwnerFromApoingEvent(ev = {}) {
     const raw = `${ev.summary || ""} ${ev.description || ""}`;
     const patterns = [
         /(?:reservad[oa]\s+por|usuario|cliente|player|jugador)\s*[:\-]\s*([^\n,(]+)/i,
-        /\(([A-Za-zÀ-ÿ'`.\- ]{3,})\)/,
-        /[-|]\s*([A-Za-zÀ-ÿ ]{3,})/ // Match names after a dash or bar
+        /\(([A-Za-z\u00C0-\u024F'`.\- ]{3,})\)/,
+        /[-|]\s*([A-Za-z\u00C0-\u024F ]{3,})/ // Match names after a dash or bar
     ];
     for (const p of patterns) {
         const m = raw.match(p);
@@ -376,6 +389,7 @@ function extractOwnerFromApoingEvent(ev = {}) {
 
 function isApoingMine(ev = {}) {
     if (!currentUser) return false;
+    if (ev?.sourceUid) return ev.sourceUid === currentUser.uid;
     
     const owner = normalizeName(ev.owner || "");
     const summary = normalizeName(ev.summary || "");
@@ -413,7 +427,7 @@ function indexApoingEvents(events = []) {
     const map = new Map();
     for (const ev of events) {
         const owner = extractOwnerFromApoingEvent(ev);
-        const enriched = { ...ev, owner };
+        const enriched = { ...ev, owner: owner || ev.sourceName || "" };
         const baseDate = new Date(ev.dtStart);
         baseDate.setHours(0, 0, 0, 0);
         for (const hObj of HOURS) {
@@ -450,84 +464,99 @@ async function fetchApoingIcs(url, timeoutMs = 25000) {
     }
 }
 
+async function fetchRawApoingByUrl(icsUrl) {
+    const isLocalDev = ["127.0.0.1", "localhost"].includes(String(window.location.hostname || "").toLowerCase());
+    const candidates = isLocalDev
+        ? [
+            `${APOING_PROXY_3}${icsUrl.replace(/^https?:\/\//i, "")}`,
+            ...APOING_PROXY_LIST.map(p => `${p}${encodeURIComponent(icsUrl)}`),
+        ]
+        : [
+            `${APOING_PROXY_3}${icsUrl.replace(/^https?:\/\//i, "")}`,
+            ...APOING_PROXY_LIST.map(p => `${p}${encodeURIComponent(icsUrl)}`),
+        ];
+    let lastErr = null;
+    for (const candidate of candidates) {
+        try {
+            return await fetchApoingIcs(candidate);
+        } catch (e) {
+            lastErr = e;
+        }
+    }
+    throw lastErr || new Error("apoing_fetch_failed");
+}
 async function syncApoingReservations(force = false) {
     const now = Date.now();
     if (!force && now < apoingNextRetryAt) return;
     if (!force && now - apoingLastSyncAt < APOING_SYNC_TTL_MS && apoingEvents.length) return;
-    const icsUrl = getApoingIcsUrl();
-    if (!icsUrl) {
+
+    const sources = await getApoingSources();
+    if (!sources.length) {
         apoingEvents = [];
         apoingSlotMap = new Map();
-        updateApoingSyncBadge("Apoing desactivado", "warn");
+        updateApoingSyncBadge("Reservas de Apoing: 0", "warn");
         return;
     }
+
     try {
         updateApoingSyncBadge("Sincronizando Apoing...");
-        let raw = "";
-        const isLocalDev = ["127.0.0.1", "localhost"].includes(String(window.location.hostname || "").toLowerCase());
-        const candidates = isLocalDev
-            ? [
-                `${APOING_PROXY_3}${icsUrl.replace(/^https?:\/\//i, "")}`,
-                ...APOING_PROXY_LIST.map(p => `${p}${encodeURIComponent(icsUrl)}`),
-            ]
-            : [
-                `${APOING_PROXY_3}${icsUrl.replace(/^https?:\/\//i, "")}`,
-                ...APOING_PROXY_LIST.map(p => `${p}${encodeURIComponent(icsUrl)}`),
-            ];
-        let lastErr = null;
-        for (const candidate of candidates) {
+        const allEvents = [];
+
+        for (const source of sources) {
             try {
-                raw = await fetchApoingIcs(candidate);
-                break;
-            } catch (e) {
-                lastErr = e;
+                const icsUrl = String(source.icsUrl || "").trim();
+                if (!icsUrl) continue;
+                const cacheKey = `apoing_raw_cache_${icsUrl}`;
+                let raw = "";
+
+                try {
+                    raw = await fetchRawApoingByUrl(icsUrl);
+                    sessionStorage.setItem(cacheKey, JSON.stringify({ ts: now, data: raw }));
+                } catch (errFetch) {
+                    const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
+                    if (cached && now - Number(cached.ts || 0) < 3600000) {
+                        raw = String(cached.data || "");
+                    } else {
+                        throw errFetch;
+                    }
+                }
+
+                const parsed = parseIcsEvents(raw).filter((e) => !Number.isNaN(e.dtStart.getTime()));
+                const filtered = parsed.filter((e) => isRelevantApoingEvent(e));
+                const expanded = expandRecurringEvents(filtered).map((e) => ({
+                    ...e,
+                    sourceUid: source.uid,
+                    sourceName: source.name,
+                    sourceEmail: source.email,
+                }));
+                allEvents.push(...expanded);
+            } catch (errSource) {
+                console.warn("Apoing source sync failed", source?.uid, errSource?.message || errSource);
             }
         }
-        if (!raw) {
-            throw lastErr || new Error("apoing_fetch_failed");
-        }
-        
-        // Cache the raw ICS
-        try { sessionStorage.setItem(`apoing_raw_cache_${icsUrl}`, JSON.stringify({ ts: now, data: raw })); } catch(_) {}
 
-        const parsed = parseIcsEvents(raw).filter((e) => !Number.isNaN(e.dtStart.getTime()));
-        console.log(`[Apoing Debug] Total eventos brutos: ${parsed.length}`);
-        
-        // RELAXED FILTER: Show everything from the ICS
-        const filtered = parsed;
-        
-        console.log(`[Apoing Debug] Eventos tras filtro: ${filtered.length}`);
-        const events = expandRecurringEvents(filtered);
+        const events = allEvents.sort((a, b) => (a.dtStart?.getTime?.() || 0) - (b.dtStart?.getTime?.() || 0));
         apoingEvents = events;
         indexApoingEvents(events);
         apoingLastSyncAt = now;
         apoingNextRetryAt = 0;
-        updateApoingSyncBadge(`Apoing sincronizado (${events.length})`, "ok");
+
+        const myFutureCount = apoingEvents.filter((e) => isApoingMine(e) && e.dtStart >= new Date()).length;
+        if (apoingMyFutureCountLast !== null && myFutureCount !== apoingMyFutureCountLast) {
+            if (myFutureCount > apoingMyFutureCountLast) showToast("Apoing", "Nueva reserva detectada en tu calendario.", "success");
+            else showToast("Apoing", "Se detectó una cancelación en tu calendario.", "warning");
+        }
+        apoingMyFutureCountLast = myFutureCount;
+        updateApoingSyncBadge(`Reservas de Apoing: ${myFutureCount} tuyas · ${events.length} total`, events.length ? "ok" : "warn");
     } catch (e) {
         console.warn("Apoing sync fallback failed:", e?.message || e);
-        
-        // Try local session cache fallback
-        try {
-            const cached = JSON.parse(sessionStorage.getItem(`apoing_raw_cache_${icsUrl}`));
-            if (cached && now - cached.ts < 3600000) { // 1 hour cache
-                console.log("[Apoing] Using emergency cache fallback");
-                const parsed = parseIcsEvents(cached.data);
-                const events = expandRecurringEvents(parsed);
-                apoingEvents = events;
-                indexApoingEvents(events);
-                updateApoingSyncBadge(`Caché: ${events.length}`, "warn");
-                return;
-            }
-        } catch(_) {}
-
         apoingEvents = [];
         apoingSlotMap = new Map();
         apoingLastSyncAt = now;
         apoingNextRetryAt = now + 3 * 60 * 1000;
-        updateApoingSyncBadge("Sin datos de Apoing", "err");
+        updateApoingSyncBadge("Sin datos de reservas de Apoing", "err");
     }
 }
-
 document.addEventListener('DOMContentLoaded', () => {
     initAppUI('calendar');
     startClock();
@@ -553,8 +582,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 calendarMatchUnsubs = [];
 
-                const unsubA = await subscribeCol("partidosAmistosos", () => syncMatches());
-                const unsubR = await subscribeCol("partidosReto", () => syncMatches());
+                const unsubA = await subscribeCol('partidosAmistosos', () => syncMatches());
+                const unsubR = await subscribeCol('partidosReto', () => syncMatches());
                 if (typeof unsubA === 'function') calendarMatchUnsubs.push(unsubA);
                 if (typeof unsubR === 'function') calendarMatchUnsubs.push(unsubR);
 
@@ -566,19 +595,16 @@ document.addEventListener('DOMContentLoaded', () => {
         },
     });
 
-    // Navigation setup
     const btnPrev = document.getElementById('btn-prev');
     if (btnPrev) btnPrev.onclick = () => { currentWeekOffset--; renderGrid(); };
     const btnNext = document.getElementById('btn-next');
     if (btnNext) btnNext.onclick = () => { currentWeekOffset++; renderGrid(); };
     const apoingBadge = document.getElementById('apoing-sync-state');
     if (apoingBadge && !apoingBadge.dataset.bound) {
-        apoingBadge.dataset.bound = "1";
-        apoingBadge.style.cursor = "pointer";
-        apoingBadge.title = "Pulsa para forzar sincronización con Apoing";
-        apoingBadge.addEventListener('click', () => {
-            syncApoingReservations(true);
-        });
+        apoingBadge.dataset.bound = '1';
+        apoingBadge.style.cursor = 'pointer';
+        apoingBadge.title = 'Pulsa para forzar sincronización con Apoing';
+        apoingBadge.addEventListener('click', () => syncApoingReservations(true));
     }
 });
 
@@ -642,17 +668,17 @@ window.showApoingGuide = () => {
     let eventsHtml = apoingEvents.length > 0 
         ? apoingEvents
             .filter(e => e.dtStart >= now)
-            .slice(0, 5)
+            .slice(0, 12)
             .map(e => `
-            <div class="status-item-v7">
+            <button class="status-item-v7 w-full text-left" onclick="window.jumpToApoingReservation('${e.dtStart.toISOString()}')">
                 <i class="fas fa-calendar-check text-sport-green"></i>
                 <div class="flex-col">
                     <span class="text-[10px] font-black uppercase">${e.summary}</span>
-                    <span class="text-[8px] opacity-60">${e.dtStart.toLocaleString('es-ES', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})}</span>
+                    <span class="text-[8px] opacity-60">${e.dtStart.toLocaleString('es-ES', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})} · ${e.sourceName || 'Usuario'}</span>
                 </div>
-            </div>
+            </button>
         `).join('')
-        : '<div class="p-4 text-center opacity-40 text-[10px]">No se han detectado eventos futuros en el enlace o no se ha sincronizado correctamente.</div>';
+        : '<div class="p-4 text-center opacity-40 text-[10px]">No se han detectado reservas futuras de pádel en Apoing.</div>';
 
     area.innerHTML = `
         <div class="flex-col gap-4 p-2">
@@ -667,7 +693,7 @@ window.showApoingGuide = () => {
                     <input type="text" id="inp-apoing-url" value="${currentUrl}" placeholder="https://www.apoing.com/calendars/..." class="input" style="font-size: 10px;">
                     <button class="btn-confirm-v7" onclick="window.saveApoingUrl()" style="min-width: 80px; padding: 0 10px;">GUARDAR</button>
                 </div>
-                <p class="text-[8px] mt-2 opacity-50 uppercase font-black">Consigue tu enlace en: Perfil -> Sincronización -> Calendario Celular</p>
+                <p class="text-[8px] mt-2 opacity-50 uppercase font-black">Consigue tu enlace en: Perfil -> Sincronización -> Calendario celular</p>
             </div>
 
             <div class="status-section-v7">
@@ -675,7 +701,7 @@ window.showApoingGuide = () => {
                 <div class="status-list-v7">
                     <div class="status-item-v7">
                         <i class="fas ${apoingEvents.length > 0 ? 'fa-check-circle text-sport-green' : 'fa-circle-notch fa-spin opacity-40'}"></i>
-                        <span>Eventos detectados: <b>${apoingEvents.length}</b></span>
+                        <span>Reservas de pádel detectadas: <b>${apoingEvents.length}</b></span>
                     </div>
                     <div class="status-item-v7">
                         <i class="fas fa-link ${currentUrl ? 'text-primary' : 'text-sport-red'}"></i>
@@ -701,17 +727,55 @@ window.saveApoingUrl = async () => {
     
     // Save to Firebase profile if possible
     if (currentUser?.uid) {
-        const { updateDoc, doc, db } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
         try {
-            await updateDoc(doc(db, 'usuarios', currentUser.uid), {
+            await updateDocument('usuarios', currentUser.uid, {
                 apoingCalendarUrl: url
             });
         } catch(e) { console.warn("Failed to save URL to profile", e); }
     }
     
     document.getElementById('modal-match').classList.remove('active');
-    showToast("Enlace Apoing actualizado", "success");
+    showToast("Apoing", "Enlace de calendario actualizado.", "success");
     syncApoingReservations(true); // Force sync after saving
+};
+
+window.jumpToApoingReservation = (isoDate) => {
+    const target = new Date(isoDate);
+    if (Number.isNaN(target.getTime())) return;
+
+    const monday = new Date();
+    const day = monday.getDay() || 7;
+    monday.setDate(monday.getDate() - day + 1);
+    monday.setHours(0, 0, 0, 0);
+
+    const targetMonday = new Date(target);
+    const tDay = targetMonday.getDay() || 7;
+    targetMonday.setDate(targetMonday.getDate() - tDay + 1);
+    targetMonday.setHours(0, 0, 0, 0);
+
+    currentWeekOffset = Math.round((targetMonday.getTime() - monday.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    renderGrid();
+
+    const dStr = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(target.getDate()).padStart(2, "0")}`;
+    const slotHour = HOURS.find((h) => {
+        const [hh, mm] = h.start.split(":").map(Number);
+        const slotStart = new Date(target);
+        slotStart.setHours(hh, mm, 0, 0);
+        const slotEnd = new Date(slotStart);
+        slotEnd.setMinutes(slotEnd.getMinutes() + 90);
+        return target >= slotStart && target < slotEnd;
+    })?.start || HOURS[0].start;
+
+    setTimeout(() => {
+        const slot = document.querySelector(`.slot-v5[onclick*="${dStr}"][onclick*="${slotHour}"]`);
+        slot?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+        if (slot) {
+            slot.classList.add("ring-2");
+            setTimeout(() => slot.classList.remove("ring-2"), 1200);
+        }
+    }, 120);
+
+    document.getElementById("modal-match")?.classList.remove("active");
 };
 
 window.debugCalendarState = () => {
@@ -739,18 +803,14 @@ function renderGrid() {
     endOfWeek.setHours(23, 59, 59, 999);
 
     if (apoingEvents.length) {
-        const weekCount = apoingEvents.filter((e) => {
-            const t = e?.dtStart?.getTime?.() || 0;
-            return t >= startOfWeek.getTime() && t <= endOfWeek.getTime();
-        }).length;
-        const tone = weekCount > 0 ? "ok" : "warn";
-        updateApoingSyncBadge(`Apoing: ${weekCount} en semana · ${apoingEvents.length} total`, tone);
+        const myFutureCount = apoingEvents.filter((e) => isApoingMine(e) && e.dtStart >= new Date()).length;
+        updateApoingSyncBadge(`Reservas de Apoing: ${myFutureCount} tuyas · ${apoingEvents.length} total`, apoingEvents.length ? "ok" : "warn");
     } else {
         const icsUrl = getApoingIcsUrl();
         if (icsUrl) {
-            updateApoingSyncBadge("Apoing: Sin eventos", "warn");
+            updateApoingSyncBadge("Reservas de Apoing: 0", "warn");
         } else {
-            updateApoingSyncBadge("Apoing: No configurado", "warn");
+            updateApoingSyncBadge("Apoing no configurado", "warn");
         }
     }
 
@@ -898,30 +958,29 @@ function renderSlot(date, hour) {
     } else if (apoingEvent) {
         const mine = isApoingMine(apoingEvent);
         const totalSlotReservations = apoingForSlot.length;
-        const durationMin = eventDurationMs(apoingEvent) / 60000;
-        const isClubSocial = durationMin > 95; // Padel is usually 90
+        const isClubSocial = isClubSocialEvent(apoingEvent);
 
         state = mine ? "apoing-mine" : "apoing-other";
         
-        const ownerName = shortName(apoingEvent.owner || (mine ? userData?.nombreUsuario || "Tú" : "Club"));
+        const ownerName = shortName(apoingEvent.sourceName || apoingEvent.owner || (mine ? userData?.nombreUsuario || "Tú" : "Jugador"));
 
         if (isClubSocial) {
             label = "CLUB SOCIAL";
             sub = mine ? "TU RESERVA CLUB" : "OCUPADO (CLUB)";
             ownerSub = ownerName;
         } else {
-            label = mine ? "MI PISTA" : "OCUPADA";
+            label = mine ? "MI RESERVA" : "OCUPADA";
             sub = mine
                 ? (totalSlotReservations > 1 ? `MÍA + ${totalSlotReservations - 1} EXTERNAS` : "RESERVA APOING")
                 : (totalSlotReservations > 1 ? `${totalSlotReservations} RESERVAS CLUB` : "OCUPADA EN APOING");
-            ownerSub = ownerName;
+            ownerSub = `APOING: ${ownerName}`;
         }
             
         const apoingIconColor = mine ? 'text-orange-400' : 'text-amber-500';
         
         extraIcon = `
             <div class="apoing-slot-mini absolute top-2 right-2 flex items-center gap-1">
-                ${mine ? `<span class="text-[8px] font-black ${isClubSocial ? 'text-blue-400' : 'text-orange-400'}">${isClubSocial ? 'TUYA' : 'MÍA'}</span>` : ''}
+                ${mine ? `<span class="text-[8px] font-black ${isClubSocial ? "text-blue-400" : "text-orange-400"}">${isClubSocial ? "TUYA" : "MÍA"}</span>` : ""}
                 <i class="fas ${isClubSocial ? 'fa-house-user' : 'fa-calendar-check'} ${apoingIconColor} text-[10px]"></i>
             </div>
         `;
@@ -1025,7 +1084,7 @@ window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
                 return;
             }
 
-            if (title) title.textContent = 'DETALLES DE MISIÓN';
+            if (title) title.textContent = "DETALLES DE MISIÓN";
             await withTimeout(renderMatchDetail(area, id, col, currentUser, userData));
             
             // Add integrity check alert if it's the user's match
@@ -1038,11 +1097,17 @@ window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
             }
         } else {
             if (apoingForSlot.length) {
-                if (title) title.textContent = myApoing ? '¡RESERVA CONFIRMADA!' : 'PISTA OCUPADA (APOING)';
-                area.innerHTML = renderApoingSlotDetail(date, hour, apoingForSlot, myApoing);
-                if (myApoing) {
-                    showToast("SNC APOING", "Juega hoy o monta un partido para esta reserva.", "info");
-                }
+                if (title) title.textContent = 'NUEVO DESPLIEGUE';
+                await withTimeout(renderCreationForm(area, date, hour, currentUser, userData));
+
+                const owners = Array.from(new Set(apoingForSlot.map((e) => shortName(e.sourceName || e.owner || "Jugador"))));
+                const warningHtml = `
+                    <div class="mb-3 p-3 rounded-2xl border border-amber-400/35 bg-amber-500/10">
+                        <div class="text-[10px] font-black uppercase tracking-widest text-amber-300 mb-1">Reserva detectada en Apoing</div>
+                        <div class="text-[10px] text-white/80">${myApoing ? "Tienes esta pista reservada en Apoing." : `Reservada por: ${owners.join(", ")}.`}</div>
+                    </div>
+                `;
+                area.innerHTML = warningHtml + area.innerHTML;
             } else {
                 if (title) title.textContent = 'NUEVO DESPLIEGUE';
                 await withTimeout(renderCreationForm(area, date, hour, currentUser, userData));
@@ -1069,7 +1134,7 @@ function renderApoingSlotDetail(date, hour, events = [], myApoing = null) {
     const cards = events.map((ev) => {
         const mine = isApoingMine(ev);
         const durationMin = eventDurationMs(ev) / 60000;
-        const isClub = durationMin > 95;
+        const isClub = isClubSocialEvent(ev);
         const start = ev.dtStart?.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) || "--:--";
         const end = ev.dtEnd?.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) || "--:--";
         const owner = ev.owner || "Anonizado";
@@ -1084,7 +1149,7 @@ function renderApoingSlotDetail(date, hour, events = [], myApoing = null) {
                     <div class="flex-col overflow-hidden">
                         <span class="card-type">${isClub ? 'RESERVA CLUB SOCIAL' : 'PISTA PADEL ASIGNADA'}</span>
                         <span class="card-title truncate">${ev.summary || 'Reserva Mistral'}</span>
-                        <span class="card-owner">${mine ? 'TITULAR: TÚ MISMO' : `POSEEDOR: ${shortName(owner)}`}</span>
+                        <span class="card-owner">${mine ? "TITULAR: TÚ MISMO" : `POSEEDOR: ${shortName(owner)}`}</span>
                     </div>
                 </div>
                 <div class="card-footer-v7">
@@ -1100,13 +1165,13 @@ function renderApoingSlotDetail(date, hour, events = [], myApoing = null) {
     let actionsHtml = `<div class="p-2"></div>`;
     if (myApoing) {
         const durationMin = eventDurationMs(myApoing) / 60000;
-        const isClub = durationMin > 95;
+        const isClub = isClubSocialEvent(myApoing);
         
         if (isClub) {
             actionsHtml = `
                 <div class="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl mb-4 text-center">
                     <p class="text-[11px] text-blue-200 font-bold mb-1 uppercase">RESERVA DE CLUB SOCIAL</p>
-                    <p class="text-[10px] text-white/60">Esta reserva de más de 90 min parece ser del club o piscina. No interfiere con el ranking de Padel.</p>
+                    <p class="text-[10px] text-white/60">Esta reserva de más de 90 min parece ser del club o piscina. No interfiere con el ranking de pádel.</p>
                 </div>
             `;
         } else {
@@ -1163,13 +1228,13 @@ function focusToday() {
     }, 200);
 }
 
-window.showApoingGuide = () => {
+window.showApoingHowTo = () => {
     const modal = document.getElementById('modal-match');
     const area = document.getElementById('match-detail-area');
     const title = document.getElementById('modal-titulo');
     if (!modal || !area) return;
     
-    if (title) title.textContent = 'GUÍA DE CONEXIÓN APOING';
+    if (title) title.textContent = "GUÍA DE CONEXIÓN APOING";
     modal.classList.add('active');
     
     area.innerHTML = `
@@ -1193,4 +1258,7 @@ window.showApoingGuide = () => {
         </div>
     `;
 };
+
+
+
 

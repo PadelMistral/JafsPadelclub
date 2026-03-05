@@ -158,14 +158,14 @@ async function handleEnableNotifications() {
   showToast("Notificaciones", "Intentando reactivar...", "info");
   const currentStatus = await checkNotificationStatus().catch(() => null);
   if (currentStatus?.backgroundReady) {
-    await refreshNotificationHealth();
+    await refreshNotificationState();
     showToast("Correcto", "Las notificaciones ya estan activas.", "success");
     return;
   }
   if (currentStatus?.permission === "denied") {
     openBrowserNotificationSettings();
     showToast("Bloqueado", "Debes habilitar permisos desde ajustes del navegador.", "warning");
-    await refreshNotificationHealth();
+    await refreshNotificationState();
     return;
   }
 
@@ -177,7 +177,7 @@ async function handleEnableNotifications() {
     return;
   }
   await initPushNotifications(currentUser?.uid);
-  await refreshNotificationHealth();
+  await refreshNotificationState();
   showToast("Activo", "Notificaciones habilitadas", "success");
 }
 
