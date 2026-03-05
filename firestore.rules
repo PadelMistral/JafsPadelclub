@@ -123,7 +123,7 @@ service cloud.firestore {
              ]);
     }
 
-    // EXCEPCIÃ“N MAESTRA PARA ADMIN (Email directo o Rol en DB)
+    // EXCEPCIÓN MAESTRA PARA ADMIN (Email directo o Rol en DB)
     function isAdmin() {
       return signedIn() && (
         request.auth.token.email == 'Juanan221091@gmail.com' ||
@@ -139,7 +139,52 @@ service cloud.firestore {
               get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.aprobado == true));
     }
 
-    // --- REGLAS POR COLECCIÃ“N ---
+    function isOrganizerUser() {
+      return isAdmin() || (
+        signedIn() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.esOrganizador == true
+      );
+    }
+
+    function isEventOrganizer() {
+      return resource.data.organizadorId == currentUid();
+    }
+
+    function isEventOrganizerById(eventId) {
+      return exists(/databases/$(database)/documents/eventos/$(eventId)) &&
+        get(/databases/$(database)/documents/eventos/$(eventId)).data.organizadorId == currentUid();
+    }
+
+    function isInscriptionOnlyUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inscritos', 'updatedAt']) &&
+        resource.data.estado == 'inscripcion' &&
+        request.resource.data.inscritos is list &&
+        resource.data.inscritos is list &&
+        (
+          !(resource.data.plazasMax is int) ||
+          request.resource.data.inscritos.size() <= resource.data.plazasMax
+        ) &&
+        request.resource.data.inscritos.size() <= resource.data.inscritos.size() + 1 &&
+        request.resource.data.inscritos.size() + 1 >= resource.data.inscritos.size();
+    }
+
+    function isEventoPartidoParticipantUpdate() {
+      return resource.data.playerUids is list &&
+        resource.data.playerUids.hasAny([currentUid()]) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'resultado',
+          'ganadorTeamId',
+          'estado',
+          'updatedAt',
+          'linkedMatchId',
+          'linkedMatchCollection',
+          'fecha'
+        ]) &&
+        request.resource.data.eventoId == resource.data.eventoId;
+    }
+
+    // --- REGLAS POR COLECCIÓN ---
 
     match /usuarios/{uid} {
       allow get: if signedIn();
@@ -206,6 +251,16 @@ service cloud.firestore {
       allow update: if signedIn() && (resource.data.destinatario == currentUid() || resource.data.uid == currentUid());
     }
 
+    match /notif_sent_log/{id} {
+      allow read, list: if isAdmin();
+      allow create: if isApproved() &&
+        request.resource.data.keys().hasOnly(['key', 'uid', 'timestamp']) &&
+        request.resource.data.key is string &&
+        request.resource.data.uid is string &&
+        request.resource.data.timestamp is timestamp;
+      allow update, delete: if isAdmin();
+    }
+
     match /analytics/{id} {
       allow read, list: if isAdmin();
       allow create, update: if isApproved() &&
@@ -246,6 +301,57 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn() && (isAdmin() || request.resource.data.createdBy == currentUid());
       allow update, delete: if signedIn() && (isAdmin() || resource.data.createdBy == currentUid());
+    }
+
+    match /eventos/{eventId} {
+      allow read, list: if signedIn();
+      allow create: if signedIn() && isOrganizerUser();
+      allow update: if isAdmin() ||
+        (signedIn() && isEventOrganizer()) ||
+        (signedIn() && isInscriptionOnlyUpdate());
+      allow delete: if isAdmin() || (signedIn() && isEventOrganizer());
+    }
+
+    match /eventoPartidos/{matchId} {
+      allow read, list: if signedIn();
+      allow create: if isAdmin() || (
+        signedIn() &&
+        request.resource.data.eventoId is string &&
+        isEventOrganizerById(request.resource.data.eventoId)
+      );
+      allow update: if isAdmin() || (
+        signedIn() &&
+        request.resource.data.eventoId == resource.data.eventoId &&
+        (
+          isEventOrganizerById(resource.data.eventoId) ||
+          isEventoPartidoParticipantUpdate()
+        )
+      );
+      allow delete: if isAdmin() || (
+        signedIn() &&
+        resource.data.eventoId is string &&
+        isEventOrganizerById(resource.data.eventoId)
+      );
+    }
+
+    match /eventoClasificacion/{id} {
+      allow read, list: if signedIn();
+      allow create, update: if isAdmin() || (
+        signedIn() &&
+        request.resource.data.eventoId is string &&
+        isEventOrganizerById(request.resource.data.eventoId)
+      );
+      allow delete: if isAdmin() || (
+        signedIn() &&
+        resource.data.eventoId is string &&
+        isEventOrganizerById(resource.data.eventoId)
+      );
+    }
+
+    match /apoingCalendars/{uid} {
+      allow read, list: if isApproved();
+      allow create, update: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
     // REGLA DE SEGURIDAD GLOBAL (BLOQUEO POR DEFECTO PERO PERMISO ADMIN)
