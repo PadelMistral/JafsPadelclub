@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -114,18 +114,19 @@
             </div>
         </section>
 
-        <!-- ═══════════════ NEXUS ONLINE — CONNECTED USERS ═══════════════ -->
-        <section id="nexus-container" class="animate-up" style="animation-delay:0.04s;">
+        <!-- ═══════════════ NEXUS — Pulsa para ver conectados / desconectados ═══════════════ -->
+        <section id="nexus-container" class="animate-up nexus-tap-area" style="animation-delay:0.04s;" title="Ver usuarios conectados y última actividad">
             <div class="nexus-glass">
                 <div class="nexus-head">
                     <div class="flex-row items-center gap-2">
                         <div class="nexus-pulse"></div>
-                        <span class="nexus-title">NEXUS ONLINE</span>
+                        <span class="nexus-title">NEXUS</span>
                     </div>
-                    <span id="nexus-count" class="nexus-count">0 CONECTADOS</span>
+                    <span id="nexus-count" class="nexus-count">0</span>
+                    <span class="nexus-count-label">usuarios · Pulsa para ver</span>
                 </div>
-                <div id="nexus-list" class="nexus-list scroll-snap-x">
-                    <!-- Dynamic user avatars -->
+                <div id="nexus-list" class="nexus-list nexus-list-hidden scroll-snap-x" aria-hidden="true">
+                    <!-- Lista solo en modal -->
                 </div>
             </div>
         </section>

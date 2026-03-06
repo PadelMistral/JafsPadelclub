@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -140,7 +140,10 @@
         initGalaxyBackground();
     </script>
     <script>
-        window.closeRankingMatchModal = () => document.getElementById('modal-match')?.classList.remove('active');
+        window.closeRankingMatchModal = () => {
+            const m = document.getElementById('modal-match');
+            if (m) { m.classList.remove('active'); m.classList.remove('modal-stack-front'); }
+        };
     </script>
 </body>
 
