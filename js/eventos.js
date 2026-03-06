@@ -1,27 +1,24 @@
-// eventos.js — Events System V5.0 — Liga · Eliminatorias · Admin
-// ──────────────────────────────────────────────────────────────
+// eventos.js — Versión mejorada con creación inteligente y redirección a sorteo
 import { db, auth, observerAuth, getDocument, addDocument, updateDocument } from './firebase-service.js';
 import { initAppUI, showToast, showSidePreferenceModal } from './ui-core.js';
 import {
     collection, getDocs, doc, updateDoc, deleteDoc, addDoc,
-    query, where, orderBy, serverTimestamp, onSnapshot, writeBatch
+    query, where, orderBy, serverTimestamp, onSnapshot, writeBatch,
+    arrayUnion, arrayRemove, increment
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 
 initAppUI('events');
 
-/* ────────────────────────────────────────────────────────
-   STATE
-   ──────────────────────────────────────────────────────── */
+/* ==================== STATE ==================== */
 let currentUser = null;
 let currentUserData = null;
 let allEvents = [];
 let currentFilter = 'all';
-let activeEventId = null;   // for admin modal
+let activeEventId = null;
 let adminTabState = 'players';
+let unsubscribeEvents = null;
 
-/* ────────────────────────────────────────────────────────
-   BOOT
-   ──────────────────────────────────────────────────────── */
+/* ==================== BOOT ==================== */
 document.addEventListener('DOMContentLoaded', () => {
     observerAuth(async (user) => {
         if (!user) return;
@@ -40,9 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-/* ────────────────────────────────────────────────────────
-   FILTERS
-   ──────────────────────────────────────────────────────── */
+/* ==================== FILTERS ==================== */
 function setupFilters() {
     document.querySelectorAll('.evf-tab').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -54,27 +49,20 @@ function setupFilters() {
     });
 }
 
-/* ────────────────────────────────────────────────────────
-   REALTIME SUBSCRIPTION
-   ──────────────────────────────────────────────────────── */
+/* ==================== REALTIME ==================== */
 function subscribeEvents() {
+    if (unsubscribeEvents) unsubscribeEvents();
     const q = query(collection(db, 'eventos'), orderBy('createdAt', 'desc'));
-    onSnapshot(q, snap => {
+    unsubscribeEvents = onSnapshot(q, snap => {
         allEvents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderEvents();
     }, err => {
         console.error('Events error:', err);
-        if (String(err?.code || '').includes('permission-denied')) {
-            renderFallback('No tienes permisos de lectura para eventos. Revisa y publica firestore.rules.');
-            return;
-        }
-        renderFallback();
+        renderFallback('Error de conexión. Intenta de nuevo.');
     });
 }
 
-/* ────────────────────────────────────────────────────────
-   RENDER LIST
-   ──────────────────────────────────────────────────────── */
+/* ==================== RENDER ==================== */
 function renderEvents() {
     const container = document.getElementById('events-container');
     if (!container) return;
@@ -87,55 +75,56 @@ function renderEvents() {
     }
 
     if (!events.length) {
-        container.innerHTML = `
-          <div class="events-empty">
-            <i class="fas fa-calendar-xmark"></i>
-            <h3>Sin eventos</h3>
-            <p>No hay eventos en esta categoría. ¡Sé el primero en generar uno!</p>
-          </div>`;
+        container.innerHTML = `<div class="events-empty"><i class="fas fa-calendar-xmark"></i><h3>Sin eventos</h3><p>No hay eventos en esta categoría. ¡Sé el primero en generar uno!</p></div>`;
         return;
     }
 
     container.innerHTML = events.map((ev, i) => buildEventCard(ev, i)).join('');
+
+    // Añadir listener para clic en tarjeta (excepto botones)
+    setTimeout(() => {
+        container.querySelectorAll('.event-card-v3').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('button')) return;
+                const eventId = card.dataset.id;
+                const ev = allEvents.find(e => e.id === eventId);
+                if (!ev) return;
+                const isInscribed = Array.isArray(ev.inscritos) && ev.inscritos.some(i => i.uid === currentUser?.uid);
+                if (isInscribed || currentUserData?.rol === 'Admin' || ev.organizadorId === currentUser?.uid) {
+                    window.location.href = `evento-detalle.html?id=${eventId}`;
+                } else {
+                    window.openEventDetail(eventId);
+                }
+            });
+        });
+    }, 100);
 }
 
-function renderFallback(message = 'Comprueba tu conexión e inténtalo de nuevo.') {
+function renderFallback(msg) {
     const container = document.getElementById('events-container');
-    if (!container) return;
-    container.innerHTML = `
-      <div class="events-empty">
-        <i class="fas fa-wifi-slash"></i>
-        <h3>Sin conexión</h3>
-        <p>${message}</p>
-      </div>`;
+    if (container) container.innerHTML = `<div class="events-empty"><i class="fas fa-wifi-slash"></i><h3>Sin conexión</h3><p>${msg}</p></div>`;
 }
 
-/* ────────────────────────────────────────────────────────
-   BUILD EVENT CARD
-   ──────────────────────────────────────────────────────── */
+/* ==================== BUILD CARD ==================== */
 function buildEventCard(ev, idx) {
     const formatMap = {
-        league:          { label: 'LIGA',         icon: 'fa-table-list',  color: 'cyan'   },
-        knockout:        { label: 'ELIMINATORIA', icon: 'fa-sitemap',     color: 'magenta' },
-        league_knockout: { label: 'LIGA + ELIM.', icon: 'fa-star',        color: 'gold'   },
+        league: { label: 'LIGA', icon: 'fa-table-list', color: 'cyan' },
+        knockout: { label: 'ELIMINATORIA', icon: 'fa-sitemap', color: 'magenta' },
+        league_knockout: { label: 'LIGA + ELIM.', icon: 'fa-star', color: 'gold' },
     };
     const fmt = formatMap[ev.formato] || { label: 'EVENTO', icon: 'fa-trophy', color: 'cyan' };
 
     const stateMap = {
-        draft:       { label: 'BORRADOR',     cls: 'state-draft'    },
-        inscripcion: { label: 'INSCRIPCIONES',cls: 'state-open'     },
-        activo:      { label: 'EN CURSO',     cls: 'state-active'   },
-        finalizado:  { label: 'FINALIZADO',   cls: 'state-done'     },
-        cancelado:   { label: 'CANCELADO',    cls: 'state-cancelled'},
+        draft: { label: 'BORRADOR', cls: 'state-draft' },
+        inscripcion: { label: 'INSCRIPCIONES', cls: 'state-open' },
+        activo: { label: 'EN CURSO', cls: 'state-active' },
+        finalizado: { label: 'FINALIZADO', cls: 'state-done' },
+        cancelado: { label: 'CANCELADO', cls: 'state-cancelled' },
     };
     const st = stateMap[ev.estado] || { label: ev.estado || 'BORRADOR', cls: 'state-draft' };
 
-    const deadline = ev.fechaInscripcion?._seconds
-        ? new Date(ev.fechaInscripcion._seconds * 1000)
-        : ev.fechaInscripcion ? new Date(ev.fechaInscripcion) : null;
-    const startDate = ev.fechaInicio?._seconds
-        ? new Date(ev.fechaInicio._seconds * 1000)
-        : ev.fechaInicio ? new Date(ev.fechaInicio) : null;
+    const deadline = ev.fechaInscripcion?._seconds ? new Date(ev.fechaInscripcion._seconds * 1000) : ev.fechaInscripcion ? new Date(ev.fechaInscripcion) : null;
+    const startDate = ev.fechaInicio?._seconds ? new Date(ev.fechaInicio._seconds * 1000) : ev.fechaInicio ? new Date(ev.fechaInicio) : null;
 
     const slots = Number(ev.plazasMax || 16);
     const filled = Array.isArray(ev.inscritos) ? ev.inscritos.length : 0;
@@ -153,92 +142,133 @@ function buildEventCard(ev, idx) {
     return `
     <article class="event-card-v3 animate-up ev-card-champions" style="animation-delay:${idx * 0.06}s" data-id="${ev.id}">
         <div class="ev-card-header ${fmt.color}">
-            <div class="ev-format-badge">
-                <i class="fas ${fmt.icon}"></i> ${fmt.label}
-            </div>
+            <div class="ev-format-badge"><i class="fas ${fmt.icon}"></i> ${fmt.label}</div>
             <span class="ev-state-badge ${st.cls}">${st.label}</span>
         </div>
-
         <div class="ev-card-body">
-            ${countdown && !countdown.past ? `
-            <div class="ev-countdown ${countdown.urgent ? 'ev-countdown-urgent' : ''}" title="Inicio del evento">
-                <i class="fas fa-clock"></i>
-                <span class="ev-countdown-text">${countdown.text}</span>
-            </div>` : ''}
-
+            ${countdown && !countdown.past ? `<div class="ev-countdown ${countdown.urgent ? 'ev-countdown-urgent' : ''}"><i class="fas fa-clock"></i><span>${countdown.text}</span></div>` : ''}
             ${hasMatchStrip ? `
             <div class="ev-match-strip">
                 <span class="ev-match-team">${escapeHtml(teamALabel.substring(0, 18))}${teamALabel.length > 18 ? '…' : ''}</span>
                 <span class="ev-match-vs">VS</span>
                 <span class="ev-match-team">${escapeHtml(teamBLabel.substring(0, 18))}${teamBLabel.length > 18 ? '…' : ''}</span>
             </div>` : ''}
-
             <h3 class="ev-title">${ev.nombre || 'Sin nombre'}</h3>
             <p class="ev-desc">${ev.descripcion || ''}</p>
-
             <div class="ev-stats-grid">
-                <div class="ev-stat">
-                    <i class="fas fa-users"></i>
-                    <span><b>${filled}/${slots}</b> parejas</span>
-                </div>
+                <div class="ev-stat"><i class="fas fa-users"></i><span><b>${filled}/${slots}</b> parejas</span></div>
                 ${ev.premio ? `<div class="ev-stat"><i class="fas fa-trophy text-sport-gold"></i><span><b>${ev.premio}</b></span></div>` : ''}
                 ${deadline ? `<div class="ev-stat"><i class="fas fa-hourglass-half text-sport-red"></i><span>Inscr. hasta: <b>${fmtDate(deadline)}</b></span></div>` : ''}
                 ${startDate ? `<div class="ev-stat"><i class="fas fa-flag-checkered text-primary"></i><span>Inicio: <b>${fmtDate(startDate)}</b></span></div>` : ''}
                 ${ev.nivelMin || ev.nivelMax ? `<div class="ev-stat"><i class="fas fa-sliders text-cyan"></i><span>Nivel: <b>${ev.nivelMin || '—'}–${ev.nivelMax || '—'}</b></span></div>` : ''}
             </div>
-
             <div class="ev-progress-wrap">
-                <div class="ev-progress-bar">
-                    <div class="ev-progress-fill ${pct >= 100 ? 'full' : ''}" style="width:${pct}%"></div>
-                </div>
+                <div class="ev-progress-bar"><div class="ev-progress-fill ${pct >= 100 ? 'full' : ''}" style="width:${pct}%"></div></div>
                 <span class="ev-progress-label">${pct}% ocupado</span>
             </div>
-
             <div class="ev-card-footer">
-                <button class="btn-ev-detail" onclick="window.location.href='evento-detalle.html?id=${ev.id}'">
-                    <i class="fas fa-eye"></i> Ver
-                </button>
-                ${!isInscribed && ev.estado === 'inscripcion' ? `
-                    <button class="btn-ev-join" onclick="window.inscribirseEvento('${ev.id}')">
-                        <i class="fas fa-bolt"></i> Inscribirse
-                    </button>` : ''}
+                <button class="btn-ev-detail" onclick="window.openEventDetail('${ev.id}')"><i class="fas fa-eye"></i> Ver</button>
+                ${!isInscribed && ev.estado === 'inscripcion' ? `<button class="btn-ev-join" onclick="window.inscribirseEvento('${ev.id}')"><i class="fas fa-bolt"></i> Inscribirse</button>` : ''}
                 ${isInscribed ? `<span class="ev-enrolled-badge"><i class="fas fa-check-circle"></i> Inscrito</span>` : ''}
-                ${isOrganizer ? `
-                    <button class="btn-ev-admin" onclick="window.location.href='evento-detalle.html?id=${ev.id}&admin=1'">
-                        <i class="fas fa-shield-halved"></i>
-                    </button>` : ''}
+                ${isOrganizer ? `<button class="btn-ev-admin" onclick="window.openEventAdmin('${ev.id}')"><i class="fas fa-shield-halved"></i></button>` : ''}
             </div>
         </div>
     </article>`;
 }
 
-/* ────────────────────────────────────────────────────────
-   DETAIL MODAL
-   ──────────────────────────────────────────────────────── */
+/* ==================== FUNCIONES DE INSCRIPCIÓN ==================== */
+window.inscribirseEvento = async (eventId) => {
+    if (!currentUser) { showToast('Acceso requerido', 'Inicia sesión', 'warning'); return; }
+    const ev = allEvents.find(e => e.id === eventId);
+    if (!ev) return;
+
+    if (ev.inscritos?.some(i => i.uid === currentUser.uid)) {
+        showToast('Ya inscrito', 'Ya estás en este evento', 'info');
+        return;
+    }
+    if ((ev.inscritos?.length || 0) >= (ev.plazasMax || 16)) {
+        showToast('Completo', 'No quedan plazas', 'warning');
+        return;
+    }
+    if (ev.estado !== 'inscripcion') {
+        showToast('Inscripción cerrada', 'Este evento ya no acepta inscripciones.', 'warning');
+        return;
+    }
+
+    const myLevel = Number(currentUserData?.nivel || 2.5);
+    if (ev.nivelMin && myLevel < Number(ev.nivelMin)) {
+        showToast('Nivel insuficiente', `Necesitas nivel ${ev.nivelMin} o superior`, 'warning');
+        return;
+    }
+    if (ev.nivelMax && myLevel > Number(ev.nivelMax)) {
+        showToast('Nivel superior', `Este evento es para nivel hasta ${ev.nivelMax}`, 'warning');
+        return;
+    }
+
+    try {
+        const pref = await showSidePreferenceModal();
+        if (pref == null) return;
+
+        let pairCode = '';
+        if (ev.modalidad === 'parejas' && ev.companeroObligatorio) {
+            const code = prompt('Código de pareja (igual para ambos)', 'pareja-1');
+            if (code === null) return;
+            pairCode = code.trim().toLowerCase();
+            if (!pairCode) { showToast('Pareja', 'Debes indicar código de pareja.', 'warning'); return; }
+        }
+
+        const newInscripto = {
+            uid: currentUser.uid,
+            nombre: currentUserData?.nombreUsuario || currentUserData?.nombre || 'Jugador',
+            nivel: myLevel,
+            sidePreference: pref,
+            pairCode,
+            inscritoEn: new Date().toISOString(),
+        };
+
+        const evRef = doc(db, 'eventos', eventId);
+        await updateDoc(evRef, { inscritos: arrayUnion(newInscripto) });
+
+        showToast('¡Inscrito!', `Te has unido a "${ev.nombre}"`, 'success');
+        document.getElementById('modal-event-detail')?.classList.remove('active');
+    } catch (e) {
+        console.error(e);
+        showToast('Error', 'No se pudo completar la inscripción', 'error');
+    }
+};
+
+window.cancelInscripcion = async (eventId) => {
+    if (!confirm('¿Cancelar tu inscripción?')) return;
+    const ev = allEvents.find(e => e.id === eventId);
+    if (!ev) return;
+    const myEntry = ev.inscritos?.find(i => i.uid === currentUser?.uid);
+    if (!myEntry) return;
+    try {
+        await updateDoc(doc(db, 'eventos', eventId), { inscritos: arrayRemove(myEntry) });
+        showToast('Inscripción cancelada', '', 'info');
+        document.getElementById('modal-event-detail')?.classList.remove('active');
+    } catch (e) {
+        showToast('Error', e.message, 'error');
+    }
+};
+
+/* ==================== DETALLE MODAL ==================== */
 window.openEventDetail = async (eventId) => {
     const ev = allEvents.find(e => e.id === eventId);
     if (!ev) return;
     document.getElementById('ev-detail-title').textContent = ev.nombre || 'Evento';
-    const formatLabels = {
-        league: 'Liga', knockout: 'Eliminatoria directa', league_knockout: 'Liga + Eliminatoria'
-    };
+    const formatLabels = { league: 'Liga', knockout: 'Eliminatoria directa', league_knockout: 'Liga + Eliminatoria' };
     document.getElementById('ev-detail-format-badge').textContent = formatLabels[ev.formato] || ev.formato;
 
     const body = document.getElementById('ev-detail-body');
-
-    // Load inscriptions
     const inscritos = Array.isArray(ev.inscritos) ? ev.inscritos : [];
     const isInscribed = inscritos.some(i => i.uid === currentUser?.uid);
 
-    // Build standings if league
-    let standingHTML = '';
+    let standingHTML = '', bracketHTML = '';
     if (ev.formato === 'league' || ev.formato === 'league_knockout') {
         const standings = await loadStandings(eventId);
         standingHTML = renderStandingTable(standings);
     }
-
-    // Build bracket if knockout
-    let bracketHTML = '';
     if (ev.formato === 'knockout' || ev.formato === 'league_knockout') {
         const bracket = ev.bracket || [];
         bracketHTML = renderBracket(bracket);
@@ -251,39 +281,15 @@ window.openEventDetail = async (eventId) => {
             ${standingHTML ? `<button class="ev-dtab" data-dtab="standing" onclick="switchDetailTab('standing',this)">Clasificación</button>` : ''}
             ${bracketHTML ? `<button class="ev-dtab" data-dtab="bracket" onclick="switchDetailTab('bracket',this)">Bracket</button>` : ''}
         </div>
-
-        <div id="dtab-info" class="ev-dtab-panel active p-4 flex-col gap-3">
-            ${buildDetailInfo(ev)}
-        </div>
-
-        <div id="dtab-players" class="ev-dtab-panel hidden p-4">
-            ${buildPlayersList(inscritos)}
-        </div>
-
-        ${standingHTML ? `
-        <div id="dtab-standing" class="ev-dtab-panel hidden p-4">
-            ${standingHTML}
-        </div>` : ''}
-
-        ${bracketHTML ? `
-        <div id="dtab-bracket" class="ev-dtab-panel hidden p-4 overflow-x-auto">
-            ${bracketHTML}
-        </div>` : ''}
-
+        <div id="dtab-info" class="ev-dtab-panel active p-4 flex-col gap-3">${buildDetailInfo(ev)}</div>
+        <div id="dtab-players" class="ev-dtab-panel hidden p-4">${buildPlayersList(inscritos)}</div>
+        ${standingHTML ? `<div id="dtab-standing" class="ev-dtab-panel hidden p-4">${standingHTML}</div>` : ''}
+        ${bracketHTML ? `<div id="dtab-bracket" class="ev-dtab-panel hidden p-4 overflow-x-auto">${bracketHTML}</div>` : ''}
         <div class="p-4 border-t border-white/5">
-            ${!isInscribed && ev.estado === 'inscripcion' ? `
-                <button class="btn btn-primary w-full" onclick="window.inscribirseEvento('${ev.id}')">
-                    <i class="fas fa-bolt mr-1"></i> INSCRIBIRSE AHORA
-                </button>` : ''}
-            ${isInscribed ? `
-                <div class="flex-row items-center gap-2 p-3 rounded-xl bg-sport-green/10 border border-sport-green/20">
-                    <i class="fas fa-check-circle text-sport-green"></i>
-                    <span class="text-[11px] font-bold text-sport-green">Ya estás inscrito en este evento</span>
-                    <button class="ml-auto text-[9px] text-sport-red/80 hover:text-sport-red font-bold uppercase" onclick="window.cancelInscripcion('${ev.id}')">Cancelar</button>
-                </div>` : ''}
+            ${!isInscribed && ev.estado === 'inscripcion' ? `<button class="btn btn-primary w-full" onclick="window.inscribirseEvento('${ev.id}')"><i class="fas fa-bolt mr-1"></i> INSCRIBIRSE AHORA</button>` : ''}
+            ${isInscribed ? `<div class="flex-row items-center gap-2 p-3 rounded-xl bg-sport-green/10 border border-sport-green/20"><i class="fas fa-check-circle text-sport-green"></i><span class="text-[11px] font-bold text-sport-green">Ya estás inscrito</span><button class="ml-auto text-[9px] text-sport-red/80 hover:text-sport-red font-bold uppercase" onclick="window.cancelInscripcion('${ev.id}')">Cancelar</button></div>` : ''}
         </div>
     `;
-
     document.getElementById('modal-event-detail').classList.add('active');
 };
 
@@ -301,10 +307,9 @@ function buildDetailInfo(ev) {
             ${deadline ? `<div class="ev-info-item"><i class="fas fa-hourglass-half text-sport-red"></i><div><span class="label">Fin inscripción</span><span class="val">${fmtDate(deadline)}</span></div></div>` : ''}
             ${startDate ? `<div class="ev-info-item"><i class="fas fa-flag-checkered text-primary"></i><div><span class="label">Inicio</span><span class="val">${fmtDate(startDate)}</span></div></div>` : ''}
             ${ev.nivelMin || ev.nivelMax ? `<div class="ev-info-item"><i class="fas fa-sliders text-cyan"></i><div><span class="label">Nivel req.</span><span class="val">${ev.nivelMin||'1.0'}–${ev.nivelMax||'7.0'}</span></div></div>` : ''}
-            ${ev.modalidad === 'parejas' ? `<div class="ev-info-item"><i class="fas fa-handshake text-cyan"></i><div><span class="label">Modalidad</span><span class="val">Parejas${ev.companeroObligatorio ? ' (pareja obligatoria)' : ''}</span></div></div>` : ''}
         </div>
         <div class="ev-points-info">
-            <span class="text-[9px] font-bold text-muted uppercase tracking-widest">Sistema de puntos</span>
+            <span class="text-[9px] font-bold text-muted uppercase">Sistema de puntos</span>
             <div class="flex-row gap-3 mt-1">
                 <span class="ev-pts-badge win">✓ ${ev.puntosVictoria || 3} pts</span>
                 <span class="ev-pts-badge draw">= ${ev.puntosEmpate || 1} pts</span>
@@ -315,38 +320,29 @@ function buildDetailInfo(ev) {
 
 function buildPlayersList(inscritos) {
     if (!inscritos.length) return `<p class="text-center text-muted text-[12px] py-8">Sin inscripciones todavía.</p>`;
-    return `
-        <div class="ev-players-list">
-            ${inscritos.map((ins, i) => `
-            <div class="ev-player-row">
-                <span class="ev-player-rank">#${i+1}</span>
-                <div class="flex-col flex-1">
-                    <span class="font-bold text-[12px]">${ins.nombre || ins.uid}</span>
-                    ${ins.companero ? `<span class="text-[10px] text-muted">+ ${ins.companero}</span>` : ''}
-                </div>
-                <span class="text-[10px] text-muted">${fmtDate(ins.inscritoEn?._seconds ? new Date(ins.inscritoEn._seconds*1000) : new Date())}</span>
-            </div>`).join('')}
-        </div>`;
+    return `<div class="ev-players-list">${inscritos.map((ins, i) => `
+        <div class="ev-player-row">
+            <span class="ev-player-rank">#${i+1}</span>
+            <div class="flex-col flex-1">
+                <span class="font-bold text-[12px]">${ins.nombre || ins.uid}</span>
+                ${ins.companero ? `<span class="text-[10px] text-muted">+ ${ins.companero}</span>` : ''}
+            </div>
+            <span class="text-[10px] text-muted">${fmtDate(ins.inscritoEn?._seconds ? new Date(ins.inscritoEn._seconds*1000) : new Date())}</span>
+        </div>`).join('')}</div>`;
 }
 
 async function loadStandings(eventId) {
     try {
-        const snap = await window.getDocsSafe(query(
-            collection(db, 'eventoClasificacion'),
-            where('eventoId', '==', eventId),
-            orderBy('puntos', 'desc'), orderBy('diferencia', 'desc')
-        ));
+        const snap = await window.getDocsSafe(query(collection(db, 'eventoClasificacion'), where('eventoId', '==', eventId), orderBy('puntos', 'desc'), orderBy('diferencia', 'desc')));
         return snap.docs.map(d => d.data());
     } catch { return []; }
 }
 
 function renderStandingTable(standings) {
-    if (!standings.length) return `<p class="text-center text-muted text-[12px] py-8">La clasificación aún no está disponible.</p>`;
+    if (!standings.length) return `<p class="text-center text-muted text-[12px] py-8">Clasificación no disponible.</p>`;
     return `
       <div class="ev-standing-table">
-        <div class="ev-standing-head">
-          <span>#</span><span>Pareja</span><span>PJ</span><span>G</span><span>P</span><span>Pts</span>
-        </div>
+        <div class="ev-standing-head"><span>#</span><span>Pareja</span><span>PJ</span><span>G</span><span>P</span><span>Pts</span></div>
         ${standings.map((s, i) => `
         <div class="ev-standing-row ${i < 2 ? 'top' : i < 4 ? 'playoff' : ''}">
           <span class="ev-rank-num">${i+1}</span>
@@ -358,21 +354,18 @@ function renderStandingTable(standings) {
 }
 
 function renderBracket(rounds = []) {
-    if (!rounds.length) return `<p class="text-center text-muted text-[12px] py-8">El bracket aún no está generado.</p>`;
-    return `
-      <div class="bracket-wrap">
-        ${rounds.map((round, ri) => `
+    if (!rounds.length) return `<p class="text-center text-muted text-[12px] py-8">Bracket no generado.</p>`;
+    return `<div class="bracket-wrap">${rounds.map((round, ri) => `
         <div class="bracket-round">
           <div class="bracket-round-label">Ronda ${ri+1}</div>
-          ${round.map(match => `
-          <div class="bracket-match ${match.winner ? 'played' : ''}">
-            <div class="bracket-team ${match.winner === 'A' ? 'winner' : match.winner ? 'loser' : ''}">${match.teamA || '?'}</div>
+          ${round.map(m => `
+          <div class="bracket-match">
+            <div class="bracket-team ${m.winner === 'A' ? 'winner' : m.winner ? 'loser' : ''}">${m.teamA || '?'}</div>
             <div class="bracket-vs">VS</div>
-            <div class="bracket-team ${match.winner === 'B' ? 'winner' : match.winner ? 'loser' : ''}">${match.teamB || '?'}</div>
-            ${match.resultado ? `<div class="bracket-result">${match.resultado}</div>` : ''}
+            <div class="bracket-team ${m.winner === 'B' ? 'winner' : m.winner ? 'loser' : ''}">${m.teamB || '?'}</div>
+            ${m.resultado ? `<div class="bracket-result">${m.resultado}</div>` : ''}
           </div>`).join('')}
-        </div>`).join('')}
-      </div>`;
+        </div>`).join('')}</div>`;
 }
 
 window.switchDetailTab = (tab, btn) => {
@@ -382,119 +375,12 @@ window.switchDetailTab = (tab, btn) => {
     document.getElementById(`dtab-${tab}`)?.classList.remove('hidden');
 };
 
-async function notifyEventInbox(targetUid, title, message, data = {}) {
-    if (!targetUid || !currentUser?.uid) return;
-    try {
-        await addDoc(collection(db, 'notificaciones'), {
-            destinatario: targetUid,
-            receptorId: targetUid,
-            remitente: currentUser.uid,
-            tipo: 'evento',
-            type: 'evento',
-            titulo: title,
-            mensaje: message,
-            enlace: `eventos.html`,
-            data,
-            leido: false,
-            seen: false,
-            read: false,
-            uid: targetUid,
-            title,
-            message,
-            timestamp: serverTimestamp(),
-            createdAt: serverTimestamp(),
-        });
-    } catch (_) {}
-}
-
-/* ────────────────────────────────────────────────────────
-   INSCRIPCIÓN
-   ──────────────────────────────────────────────────────── */
-window.inscribirseEvento = async (eventId) => {
-    if (!currentUser) { showToast('Acceso requerido', 'Inicia sesión', 'warning'); return; }
-    const ev = allEvents.find(e => e.id === eventId);
-    if (!ev) return;
-
-    const isInscribed = Array.isArray(ev.inscritos) && ev.inscritos.some(i => i.uid === currentUser.uid);
-    if (isInscribed) { showToast('Ya inscrito', 'Ya estás en este evento', 'info'); return; }
-
-    const slots = Number(ev.plazasMax || 16);
-    const filled = Array.isArray(ev.inscritos) ? ev.inscritos.length : 0;
-    if (filled >= slots) { showToast('Completo', 'No quedan plazas disponibles', 'warning'); return; }
-    if (String(ev.estado || '') !== 'inscripcion') { showToast('Inscripción cerrada', 'Este evento ya no acepta inscripciones.', 'warning'); return; }
-
-    // Level check
-    const myLevel = Number(currentUserData?.nivel || 2.5);
-    if (ev.nivelMin && myLevel < Number(ev.nivelMin)) {
-        showToast('Nivel insuficiente', `Necesitas nivel ${ev.nivelMin} o superior`, 'warning'); return;
-    }
-    if (ev.nivelMax && myLevel > Number(ev.nivelMax)) {
-        showToast('Nivel superior', `Este evento es para nivel hasta ${ev.nivelMax}`, 'warning'); return;
-    }
-
-    try {
-        const pref = await showSidePreferenceModal();
-        if (pref == null) return;
-        let pairCode = '';
-        if (String(ev.modalidad || 'parejas') === 'parejas' && ev.companeroObligatorio === true) {
-            const code = prompt('Código de pareja (igual para ambos)', 'pareja-1');
-            if (code === null) return;
-            pairCode = String(code || '').trim().toLowerCase();
-            if (!pairCode) { showToast('Pareja', 'Debes indicar código de pareja.', 'warning'); return; }
-        }
-
-        const newInscripto = {
-            uid: currentUser.uid,
-            nombre: currentUserData?.nombreUsuario || currentUserData?.nombre || 'Jugador',
-            nivel: myLevel,
-            sidePreference: pref,
-            pairCode,
-            inscritoEn: new Date().toISOString(),
-        };
-
-        const evRef = doc(db, 'eventos', eventId);
-        const { arrayUnion } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
-        await updateDoc(evRef, { inscritos: arrayUnion(newInscripto) });
-
-        showToast('¡Inscrito!', `Te has unido a "${ev.nombre}"`, 'success');
-        await notifyEventInbox(
-            currentUser.uid,
-            'Inscripcion realizada',
-            `Te has unido a "${ev.nombre}".`,
-            { type: 'event_joined', eventId }
-        );
-        document.getElementById('modal-event-detail')?.classList.remove('active');
-    } catch (e) {
-        console.error(e);
-        showToast('Error', 'No se pudo completar la inscripción', 'error');
-    }
-};
-
-window.cancelInscripcion = async (eventId) => {
-    if (!confirm('¿Cancelar tu inscripción en este evento?')) return;
-    const ev = allEvents.find(e => e.id === eventId);
-    if (!ev) return;
-    const myEntry = ev.inscritos.find(i => i.uid === currentUser.uid);
-    if (!myEntry) return;
-    try {
-        const { arrayRemove } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
-        await updateDoc(doc(db, 'eventos', eventId), { inscritos: arrayRemove(myEntry) });
-        showToast('Inscripción cancelada', '', 'info');
-        document.getElementById('modal-event-detail')?.classList.remove('active');
-    } catch (e) {
-        showToast('Error', e.message, 'error');
-    }
-};
-
-/* ────────────────────────────────────────────────────────
-   CREATE EVENT MODAL
-   ──────────────────────────────────────────────────────── */
+/* ==================== CREAR EVENTO ==================== */
 function setupCreateModal() {
     document.getElementById('btn-create-event')?.addEventListener('click', () => {
         document.getElementById('modal-create-event').classList.add('active');
     });
 
-    // Format selector
     document.querySelectorAll('.ev-format-opt').forEach(opt => {
         opt.addEventListener('click', () => {
             document.querySelectorAll('.ev-format-opt .format-card').forEach(c => c.classList.remove('active'));
@@ -502,24 +388,19 @@ function setupCreateModal() {
             const fmt = opt.dataset.format;
             const leagueWrap = document.getElementById('ev-league-points-wrap');
             const groupWrap = document.getElementById('ev-group-count-wrap');
-            if (leagueWrap) {
-                leagueWrap.style.display = (fmt === 'knockout') ? 'none' : 'block';
-            }
-            if (groupWrap) {
-                groupWrap.style.display = (fmt === 'league_knockout') ? 'block' : 'none';
-            }
+            const teamsPerGroupWrap = document.getElementById('ev-teams-per-group-wrap');
+            if (leagueWrap) leagueWrap.style.display = (fmt === 'knockout') ? 'none' : 'block';
+            if (groupWrap) groupWrap.style.display = (fmt === 'league_knockout') ? 'block' : 'none';
+            if (teamsPerGroupWrap) teamsPerGroupWrap.style.display = (fmt === 'league_knockout') ? 'block' : 'none';
         });
     });
 
-    // Mode tabs
     document.querySelectorAll('.ev-mode-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.ev-mode-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const partnerWrap = document.getElementById('ev-partner-required-wrap');
-            if (partnerWrap) {
-                partnerWrap.style.display = btn.dataset.mode === 'parejas' ? 'block' : 'none';
-            }
+            if (partnerWrap) partnerWrap.style.display = btn.dataset.mode === 'parejas' ? 'block' : 'none';
         });
     });
 
@@ -528,7 +409,7 @@ function setupCreateModal() {
 
 async function saveNewEvent() {
     const nombre = document.getElementById('ev-name')?.value.trim();
-    if (!nombre) { showToast('Campo requerido', 'El nombre del evento es obligatorio', 'warning'); return; }
+    if (!nombre) { showToast('Campo requerido', 'El nombre es obligatorio', 'warning'); return; }
 
     const formato = document.querySelector('input[name="ev-format"]:checked')?.value || 'league_knockout';
     const modalidad = document.querySelector('.ev-mode-btn.active')?.dataset.mode || 'parejas';
@@ -539,6 +420,7 @@ async function saveNewEvent() {
     const plazasMax = Number(document.getElementById('ev-max-slots')?.value || 16);
     const groupCountRaw = Number(document.getElementById('ev-group-count')?.value || 2);
     const groupCount = Math.min(4, Math.max(2, groupCountRaw));
+    const equiposPorGrupo = Number(document.getElementById('ev-teams-per-group')?.value || 2);
     let premio = document.getElementById('ev-prize')?.value.trim() || '';
     const trofeoAuto = document.getElementById('ev-trofeo-auto')?.checked === true;
     if (trofeoAuto) premio = premio ? premio + ' + Trofeo' : 'Trofeo';
@@ -551,8 +433,8 @@ async function saveNewEvent() {
     const puntosDerrota = Number(document.getElementById('ev-pts-loss')?.value || 0);
     const descripcion = document.getElementById('ev-description')?.value.trim() || '';
 
-    if (Number.isFinite(Number(nivelMin)) && Number.isFinite(Number(nivelMax)) && Number(nivelMin) > Number(nivelMax)) {
-        showToast('Niveles inválidos', 'El nivel mínimo no puede ser mayor que el nivel máximo.', 'warning');
+    if (nivelMin && nivelMax && Number(nivelMin) > Number(nivelMax)) {
+        showToast('Niveles inválidos', 'El mínimo no puede ser mayor que el máximo.', 'warning');
         return;
     }
 
@@ -562,24 +444,17 @@ async function saveNewEvent() {
 
     try {
         const payload = {
-            nombre,
-            descripcion,
-            formato,
-            modalidad,
-            companeroObligatorio,
-            plazasMax,
-            premio,
+            nombre, descripcion, formato, modalidad, companeroObligatorio, plazasMax, premio,
             nivelMin: nivelMin ? Number(nivelMin) : null,
             nivelMax: nivelMax ? Number(nivelMax) : null,
-            puntosVictoria,
-            puntosEmpate,
-            puntosDerrota,
+            puntosVictoria, puntosEmpate, puntosDerrota,
             estado: 'inscripcion',
             inscritos: [],
             bracket: [],
             groups: { A: [], B: [], C: [], D: [] },
             teams: [],
             groupCount: formato === 'league_knockout' ? groupCount : 2,
+            equiposPorGrupo: formato === 'league_knockout' ? equiposPorGrupo : null,
             pairingPolicy,
             drawState: { status: 'pending', steps: [], version: 0 },
             organizadorId: currentUser.uid,
@@ -602,15 +477,10 @@ async function saveNewEvent() {
         if (startDateStr)   payload.fechaInicio      = new Date(startDateStr);
 
         const newEvRef = await addDocument('eventos', payload);
-        const newEvId = newEvRef?.id;
-        showToast('¡Evento creado!', `"${nombre}" ya está publicado`, 'success');
+        showToast('¡Evento creado!', `"${nombre}" publicado`, 'success');
         document.getElementById('modal-create-event').classList.remove('active');
-        
-        // Redirección inmediata a la nueva página del evento
-        if (newEvId) {
-            setTimeout(() => {
-                window.location.href = `evento-detalle.html?id=${newEvId}`;
-            }, 1200);
+        if (newEvRef?.id) {
+            setTimeout(() => window.location.href = `evento-detalle.html?id=${newEvRef.id}`, 1200);
         }
     } catch (e) {
         console.error(e);
@@ -621,9 +491,7 @@ async function saveNewEvent() {
     }
 }
 
-/* ────────────────────────────────────────────────────────
-   EVENT ADMIN MODAL
-   ──────────────────────────────────────────────────────── */
+/* ==================== ADMIN MODAL ==================== */
 window.openEventAdmin = async (eventId) => {
     activeEventId = eventId;
     const ev = allEvents.find(e => e.id === eventId);
@@ -632,7 +500,6 @@ window.openEventAdmin = async (eventId) => {
     document.getElementById('ev-admin-name').textContent = ev.nombre || 'Evento';
     document.getElementById('modal-event-admin').classList.add('active');
 
-    // Bind admin tabs
     document.querySelectorAll('.ev-admin-tab').forEach(btn => {
         btn.onclick = () => {
             document.querySelectorAll('.ev-admin-tab').forEach(b => b.classList.remove('active'));
@@ -672,16 +539,15 @@ async function renderAdminTab(ev, tab) {
 
 function renderAdminPlayers(ev) {
     const inscritos = Array.isArray(ev.inscritos) ? ev.inscritos : [];
-    if (!inscritos.length) {
-        return `<p class="text-center text-muted text-[12px] py-8">Sin inscripciones todavía.</p>`;
-    }
+    if (!inscritos.length) return `<p class="text-center text-muted text-[12px] py-8">Sin inscripciones todavía.</p>`;
+
     return `
     <div class="flex-col gap-2">
         <div class="flex-row between items-center mb-2">
             <span class="text-[11px] font-bold text-muted">${inscritos.length} inscrito(s)</span>
             ${ev.estado === 'inscripcion' ? `
             <button class="btn-mini" onclick="window.generarClasificacionInicial('${ev.id}')">
-                <i class="fas fa-play mr-1"></i> Iniciar Evento
+                <i class="fas fa-play mr-1"></i> CERRAR INSCRIPCIÓN Y COMENZAR
             </button>` : ''}
         </div>
         ${inscritos.map((ins, i) => `
@@ -703,17 +569,8 @@ function renderAdminPlayers(ev) {
 
 async function renderAdminMatches(ev) {
     try {
-        const snap = await window.getDocsSafe(query(
-            collection(db, 'eventoPartidos'),
-            where('eventoId', '==', ev.id)
-        ));
-        const matches = snap.docs
-            .map(d => ({ id: d.id, ...d.data() }))
-            .sort((a, b) => {
-                const pa = String(a.phase || '').localeCompare(String(b.phase || ''));
-                if (pa !== 0) return pa;
-                return Number(a.round || a.ronda || 1) - Number(b.round || b.ronda || 1);
-            });
+        const snap = await window.getDocsSafe(query(collection(db, 'eventoPartidos'), where('eventoId', '==', ev.id)));
+        const matches = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.round||1) - (b.round||1));
 
         if (!matches.length) {
             return `
@@ -744,7 +601,8 @@ async function renderAdminMatches(ev) {
                 </div>
             </div>`).join('')}
         </div>`;
-    } catch {
+    } catch (e) {
+        console.error(e);
         return `<p class="text-[12px] text-sport-red py-4">Error cargando partidos.</p>`;
     }
 }
@@ -773,9 +631,7 @@ function renderAdminSettings(ev) {
                 <input type="number" id="admin-ev-ptswin" class="input" value="${ev.puntosVictoria || 3}">
             </div>
         </div>
-        <button id="btn-admin-save-settings" class="btn btn-primary w-full">
-            <i class="fas fa-save mr-1"></i> Guardar cambios
-        </button>
+        <button id="btn-admin-save-settings" class="btn btn-primary w-full"><i class="fas fa-save mr-1"></i> Guardar cambios</button>
         <div class="mt-2 border-t border-white/5 pt-3">
             <button class="btn btn-ghost w-full text-sport-red/80 hover:text-sport-red" onclick="window.deleteEvent('${ev.id}')">
                 <i class="fas fa-trash mr-1"></i> Eliminar evento
@@ -799,200 +655,100 @@ function setupAdminSettingsListeners(ev) {
     });
 }
 
-/* ─── Admin Actions ─── */
-
-window.expulsarJugador = async (eventId, uid) => {
-    if (!confirm('¿Expulsar a este jugador del evento?')) return;
+/* ==================== ACCIONES ADMIN MEJORADAS ==================== */
+window.generarClasificacionInicial = async (eventId) => {
     const ev = allEvents.find(e => e.id === eventId);
     if (!ev) return;
-    const entry = ev.inscritos.find(i => i.uid === uid);
-    if (!entry) return;
-    try {
-        const { arrayRemove } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
-        await updateDoc(doc(db, 'eventos', eventId), { inscritos: arrayRemove(entry) });
-        showToast('Jugador expulsado', '', 'info');
-        renderAdminTab(allEvents.find(e => e.id === eventId), 'players');
-    } catch (e) { showToast('Error', e.message, 'error'); }
-};
 
-window.generarClasificacionInicial = async (eventId) => {
-    if (!confirm('¿Iniciar el evento y generar la clasificación?')) return;
+    if (ev.estado !== 'inscripcion') {
+        showToast('Acción no válida', 'El evento no está en estado de inscripción', 'warning');
+        return;
+    }
+
+    const numInscritos = ev.inscritos?.length || 0;
+    if (numInscritos < 2) {
+        showToast('Insuficientes jugadores', 'Se necesitan al menos 2 equipos para comenzar', 'warning');
+        return;
+    }
+
+    if (ev.modalidad === 'parejas' && !ev.companeroObligatorio && numInscritos % 2 !== 0) {
+        showToast('Número impar de jugadores', 'En parejas sin compañero fijo debe haber un número par de inscritos', 'warning');
+        return;
+    }
+
     try {
+        // Cambiar estado a activo
         await updateDoc(doc(db, 'eventos', eventId), { estado: 'activo' });
-        showToast('Evento iniciado', 'Estado actualizado a ACTIVO', 'success');
-    } catch (e) { showToast('Error', e.message, 'error'); }
+
+        showToast('Evento iniciado', 'Redirigiendo al sorteo...', 'success');
+        setTimeout(() => window.location.href = `evento-sorteo.html?id=${eventId}`, 500);
+    } catch (e) {
+        console.error(e);
+        showToast('Error', 'No se pudo iniciar el evento', 'error');
+    }
 };
 
 window.generarPartidos = async (eventId) => {
-    const ev = allEvents.find(e => e.id === eventId);
-    if (!ev || !Array.isArray(ev.inscritos) || ev.inscritos.length < 2) {
-        showToast('Insuficientes jugadores', 'Necesitas al menos 2 equipos inscritos', 'warning');
-        return;
-    }
-    try {
-        const teams = [...ev.inscritos];
-        const prevSnap = await window.getDocsSafe(query(
-            collection(db, 'eventoPartidos'),
-            where('eventoId', '==', eventId)
-        ));
-        await Promise.all(prevSnap.docs.map((d) => deleteDoc(doc(db, 'eventoPartidos', d.id))));
-
-        if (ev.formato === 'league' || ev.formato === 'league_knockout') {
-            await generateLeagueMatches(eventId, teams, ev);
-        } else {
-            await generateKnockoutBracket(eventId, teams, ev);
-        }
-        showToast('Partidos generados', '¡Calendario listo!', 'success');
-        renderAdminTab(ev, 'matches');
-    } catch (e) {
-        console.error(e);
-        showToast('Error', e.message, 'error');
-    }
+    showToast('Función no disponible', 'Usa el panel de sorteo', 'warning');
 };
-
-async function generateLeagueMatches(eventId, teams, ev) {
-    const batch = writeBatch(db);
-    let roundNum = 1;
-    for (let i = 0; i < teams.length; i++) {
-        for (let j = i + 1; j < teams.length; j++) {
-            const matchRef = doc(collection(db, 'eventoPartidos'));
-            const teamAId = teams[i].uid || `A_${i + 1}`;
-            const teamBId = teams[j].uid || `B_${j + 1}`;
-            batch.set(matchRef, {
-                eventoId: eventId,
-                tipo: 'evento',
-                phase: 'league',
-                round: roundNum,
-                teamAId,
-                teamBId,
-                teamAName: teams[i].nombre || teams[i].name || `Equipo ${i + 1}`,
-                teamBName: teams[j].nombre || teams[j].name || `Equipo ${j + 1}`,
-                playerUids: [teamAId, teamBId].filter(Boolean),
-                ganadorTeamId: null,
-                fecha: null,
-                // legacy compatibility fields
-                ronda: roundNum,
-                equipoA: teams[i].nombre || teams[i].name || `Equipo ${i + 1}`,
-                equipoAUid: teamAId,
-                equipoB: teams[j].nombre || teams[j].name || `Equipo ${j + 1}`,
-                equipoBUid: teamBId,
-                resultado: null,
-                ganador: null,
-                estado: 'pendiente',
-                createdAt: serverTimestamp(),
-            });
-            roundNum++;
-        }
-    }
-    await batch.commit();
-}
-
-async function generateKnockoutBracket(eventId, teams, ev) {
-    // Shuffle teams
-    const shuffled = [...teams].sort(() => Math.random() - 0.5);
-    const pairs = [];
-    for (let i = 0; i < shuffled.length; i += 2) {
-        pairs.push([shuffled[i], shuffled[i + 1] || null]);
-    }
-    const batch = writeBatch(db);
-    pairs.forEach((pair, idx) => {
-        const matchRef = doc(collection(db, 'eventoPartidos'));
-        const a = pair[0];
-        const b = pair[1];
-        const teamAId = a?.uid || `KO_A_${idx + 1}`;
-        const teamBId = b?.uid || null;
-        batch.set(matchRef, {
-            eventoId: eventId,
-            tipo: 'evento',
-            phase: 'knockout',
-            matchCode: `ADM_R1_M${idx + 1}`,
-            round: 1,
-            slot: idx + 1,
-            sourceA: null,
-            sourceB: null,
-            teamAId,
-            teamBId,
-            teamAName: a?.nombre || a?.name || `Equipo ${idx * 2 + 1}`,
-            teamBName: b?.nombre || b?.name || null,
-            playerUids: [teamAId, teamBId].filter(Boolean),
-            ganadorTeamId: null,
-            fecha: null,
-            // legacy compatibility fields
-            ronda: 1,
-            posicionBracket: idx,
-            equipoA: a?.nombre || a?.name || `Equipo ${idx * 2 + 1}`,
-            equipoAUid: teamAId,
-            equipoB: b?.nombre || b?.name || null,
-            equipoBUid: teamBId,
-            resultado: null,
-            ganador: null,
-            estado: 'pendiente',
-            createdAt: serverTimestamp(),
-        });
-    });
-    await batch.commit();
-}
 
 window.editMatchResult = async (eventId, matchId) => {
     const resultado = prompt('Introduce el resultado (ej: 6-3 6-4):');
     if (!resultado) return;
     const ganador = prompt('¿Quién ganó? (A o B):')?.toUpperCase();
     if (ganador !== 'A' && ganador !== 'B') { showToast('Ganador inválido', 'Escribe A o B', 'warning'); return; }
+
     try {
         const match = await getDocument('eventoPartidos', matchId);
-        const winnerTeamId = ganador === 'A'
-            ? (match?.teamAId || match?.equipoAUid || null)
-            : (match?.teamBId || match?.equipoBUid || null);
+        const winnerTeamId = ganador === 'A' ? (match?.teamAId || match?.equipoAUid) : (match?.teamBId || match?.equipoBUid);
         await updateDoc(doc(db, 'eventoPartidos', matchId), {
-            resultado,
-            ganador,
-            ganadorTeamId: winnerTeamId,
-            estado: 'jugado',
-            updatedAt: serverTimestamp(),
+            resultado, ganador, ganadorTeamId: winnerTeamId, estado: 'jugado', updatedAt: serverTimestamp()
         });
 
-        // Update standings if league
         const ev = allEvents.find(e => e.id === eventId);
         if (ev && (ev.formato === 'league' || ev.formato === 'league_knockout')) {
             if (match) {
-                const winnerUid = ganador === 'A'
-                    ? (match.teamAId || match.equipoAUid)
-                    : (match.teamBId || match.equipoBUid);
-                const loserUid  = ganador === 'A'
-                    ? (match.teamBId || match.equipoBUid)
-                    : (match.teamAId || match.equipoAUid);
-                if (!winnerUid || !loserUid) {
-                    showToast('Resultado guardado', 'Partido cerrado sin actualización de clasificación.', 'info');
-                } else {
-                    const winKey  = `${eventId}_${winnerUid}`;
+                const winnerUid = ganador === 'A' ? (match.teamAId || match.equipoAUid) : (match.teamBId || match.equipoBUid);
+                const loserUid  = ganador === 'A' ? (match.teamBId || match.equipoBUid) : (match.teamAId || match.equipoAUid);
+                if (winnerUid && loserUid) {
+                    const winKey = `${eventId}_${winnerUid}`;
                     const loseKey = `${eventId}_${loserUid}`;
-                    const { increment } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
-                    const b = writeBatch(db);
-                    b.set(doc(db, 'eventoClasificacion', winKey),  {
-                        eventoId: eventId,
-                        uid: winnerUid,
-                        pj: increment(1),
-                        ganados: increment(1),
-                        puntos: increment(ev.puntosVictoria || 3)
+                    const batch = writeBatch(db);
+                    batch.set(doc(db, 'eventoClasificacion', winKey), {
+                        eventoId: eventId, uid: winnerUid,
+                        pj: increment(1), ganados: increment(1), puntos: increment(ev.puntosVictoria || 3)
                     }, { merge: true });
-                    b.set(doc(db, 'eventoClasificacion', loseKey), {
-                        eventoId: eventId,
-                        uid: loserUid,
-                        pj: increment(1),
-                        perdidos: increment(1),
-                        puntos: increment(ev.puntosDerrota || 0)
+                    batch.set(doc(db, 'eventoClasificacion', loseKey), {
+                        eventoId: eventId, uid: loserUid,
+                        pj: increment(1), perdidos: increment(1), puntos: increment(ev.puntosDerrota || 0)
                     }, { merge: true });
-                    await b.commit();
+                    await batch.commit();
                 }
             }
         }
         showToast('Resultado guardado', '', 'success');
-        renderAdminTab(ev || {}, 'matches');
+        const evActual = allEvents.find(e => e.id === eventId);
+        if (evActual) await renderAdminTab(evActual, 'matches');
+    } catch (e) {
+        showToast('Error', e.message, 'error');
+    }
+};
+
+window.expulsarJugador = async (eventId, uid) => {
+    if (!confirm('¿Expulsar a este jugador?')) return;
+    const ev = allEvents.find(e => e.id === eventId);
+    if (!ev) return;
+    const entry = ev.inscritos?.find(i => i.uid === uid);
+    if (!entry) return;
+    try {
+        await updateDoc(doc(db, 'eventos', eventId), { inscritos: arrayRemove(entry) });
+        showToast('Jugador expulsado', '', 'info');
+        renderAdminTab(ev, 'players');
     } catch (e) { showToast('Error', e.message, 'error'); }
 };
 
 window.deleteEvent = async (eventId) => {
-    if (!confirm('¿Eliminar este evento permanentemente? Esta acción no se puede deshacer.')) return;
+    if (!confirm('¿Eliminar este evento permanentemente?')) return;
     try {
         await deleteDoc(doc(db, 'eventos', eventId));
         showToast('Evento eliminado', '', 'info');
@@ -1004,7 +760,6 @@ window.addManualPlayer = async (eventId) => {
     const nombre = prompt('Nombre del jugador a añadir:');
     if (!nombre) return;
     try {
-        const { arrayUnion } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
         await updateDoc(doc(db, 'eventos', eventId), {
             inscritos: arrayUnion({
                 uid: `manual_${Date.now()}`,
@@ -1034,7 +789,6 @@ window.addManualMatch = async (eventId) => {
             playerUids: [],
             ganadorTeamId: null,
             fecha: null,
-            // legacy fields
             ronda: 1,
             equipoA, equipoB,
             resultado: null, ganador: null, estado: 'pendiente',
@@ -1043,9 +797,7 @@ window.addManualMatch = async (eventId) => {
     } catch (e) { showToast('Error', e.message, 'error'); }
 };
 
-/* ────────────────────────────────────────────────────────
-   HELPERS
-   ──────────────────────────────────────────────────────── */
+/* ==================== HELPERS ==================== */
 function fmtDate(d) {
     if (!d) return '-';
     try {
@@ -1058,9 +810,9 @@ function getCountdown(startDate) {
     const start = startDate instanceof Date ? startDate : new Date(startDate);
     const diff = start - now;
     if (diff <= 0) return { text: 'Ya empezó', past: true, urgent: false };
-    const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-    const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-    const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+    const days = Math.floor(diff / (24*60*60*1000));
+    const hours = Math.floor((diff % (24*60*60*1000)) / (60*60*1000));
+    const mins = Math.floor((diff % (60*60*1000)) / (60*1000));
     if (days > 7) return { text: `Empieza en ${days} días`, past: false, urgent: false };
     if (days > 0) return { text: `${days}d ${hours}h`, past: false, urgent: true };
     if (hours > 0) return { text: `${hours}h ${mins}m`, past: false, urgent: true };
@@ -1075,13 +827,10 @@ function escapeHtml(s) {
 
 function parseInvitados(raw) {
     if (!raw.trim()) return [];
-    const lines = raw.split(/\n/).map(l => l.trim()).filter(Boolean);
-    const out = [];
-    for (const line of lines) {
-        const parts = line.split(/[,;]/).map(p => p.trim()).filter(Boolean);
+    return raw.split(/\n/).map(l => l.trim()).filter(Boolean).map(line => {
+        const parts = line.split(/[,;]/).map(p => p.trim());
         const nombre = parts[0] || '';
         const nivel = parts[1] ? Number(parts[1].replace(',', '.')) : 2.5;
-        if (nombre) out.push({ nombre, nivel: Number.isFinite(nivel) ? nivel : 2.5 });
-    }
-    return out;
+        return nombre ? { nombre, nivel: Number.isFinite(nivel) ? nivel : 2.5 } : null;
+    }).filter(Boolean);
 }

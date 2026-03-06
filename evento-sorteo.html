@@ -1,56 +1,89 @@
 ﻿<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#020617" />
-  <title>Sorteo del Evento | Padeluminatis</title>
-  <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <link rel="stylesheet" href="./css/global.css" />
-  <link rel="stylesheet" href="./css/evento-sorteo.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sorteo | Padeluminatis</title>
+    <link rel="stylesheet" href="./css/global.css">
+    <link rel="stylesheet" href="./css/evento-sorteo.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="sport-bg"></div>
+    <div class="sport-bg"></div>
+    <main class="page-content">
+        <div id="header-placeholder"></div>
 
-  <main class="page-content sorteo-page">
-    <section class="sorteo-hero animate-up">
-      <div>
-        <h1 class="sorteo-title"><i class="fas fa-wand-magic-sparkles"></i> Sorteo Champions</h1>
-        <p class="sorteo-sub" id="sorteo-subtitle">Cargando evento...</p>
-      </div>
-      <div class="sorteo-actions">
-        <a id="btn-back-event" class="btn btn-ghost" href="eventos.html"><i class="fas fa-arrow-left"></i> Evento</a>
-        <button id="btn-run-draw" class="btn btn-primary hidden"><i class="fas fa-play"></i> Ejecutar sorteo</button>
-      </div>
-    </section>
+        <!-- Botón flotante para volver a eventos -->
+        <a href="eventos.html" class="btn-back-floating" title="Volver a eventos">
+            <i class="fas fa-arrow-left"></i>
+        </a>
 
-    <section class="draw-stage animate-up" style="animation-delay:0.08s;">
-      <div class="draw-orb-wrap">
-        <div class="draw-orb" id="draw-orb"><i class="fas fa-futbol"></i></div>
-        <div class="draw-pulse"></div>
-      </div>
-      <div class="draw-live" id="draw-live">Esperando sorteo...</div>
-      <div class="draw-steps" id="draw-steps"></div>
-    </section>
+        <!-- Botón flotante para amañar (solo visible para admin) -->
+        <button id="btn-rigging" class="btn-rigging-floating hidden" title="Amañar sorteo">
+            <i class="fas fa-mask"></i>
+        </button>
 
-    <section class="groups-stage animate-up" style="animation-delay:0.12s;">
-      <div class="groups-grid">
-        <article class="group-card" id="group-A"><h3>GRUPO A</h3><div class="group-list"></div></article>
-        <article class="group-card" id="group-B"><h3>GRUPO B</h3><div class="group-list"></div></article>
-      </div>
-    </section>
+        <!-- Contenedor principal -->
+        <div class="sorteo-container">
+            <!-- Carta (sobre) con animación de entrada -->
+            <div class="card-container" id="cardContainer">
+                <div class="card" id="card">
+                    <div class="card-front">
+                        <img src="./imagenes/Logojafs.png" alt="Logo" class="card-logo">
+                    </div>
+                    <div class="card-back">
+                        <span class="player-name" id="playerNameDisplay"></span>
+                    </div>
+                </div>
+            </div>
 
-    <section class="knockout-stage animate-up" style="animation-delay:0.16s;">
-      <h3 class="k-title">Cuadro eliminatorio</h3>
-      <div id="knockout-bracket" class="k-bracket"></div>
-    </section>
-  </main>
+            <!-- Botones de control -->
+            <div class="draw-controls">
+                <button id="btn-start-draw" class="btn-draw">Iniciar sorteo</button>
+                <button id="btn-next-step" class="btn-draw hidden">Siguiente <i class="fas fa-arrow-right"></i></button>
+            </div>
 
-  <script type="module" src="./js/evento-sorteo.js"></script>
-  <script type="module">
-    import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
-    initGalaxyBackground();
-  </script>
+            <!-- Contenedor de grupos en fila -->
+            <div id="groups-container" class="groups-container"></div>
+        </div>
+    </main>
+
+    <!-- MODAL PARA AMAÑAR (solo admin) -->
+    <div id="modal-rigging" class="modal-overlay">
+        <div class="modal-card glass-strong slide-up" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Amañar sorteo</h3>
+                <button class="close-btn" onclick="document.getElementById('modal-rigging').classList.remove('active')">×</button>
+            </div>
+            <div class="modal-body p-4">
+                <p>Selecciona dos jugadores para que formen equipo (el sorteo parecerá aleatorio).</p>
+                <div class="form-group">
+                    <label class="form-label">Jugador 1</label>
+                    <select id="rig-player1" class="input">
+                        <option value="">Selecciona</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Jugador 2</label>
+                    <select id="rig-player2" class="input">
+                        <option value="">Selecciona</option>
+                    </select>
+                </div>
+                <button id="btn-add-rigged-pair" class="btn btn-secondary w-full">Añadir pareja fija</button>
+                <hr class="my-3">
+                <h4>Parejas fijadas:</h4>
+                <ul id="rigged-pairs-list" class="list-disc pl-5"></ul>
+                <button id="btn-clear-rigged" class="btn btn-ghost w-full mt-2">Limpiar todas</button>
+                <!-- No es necesario guardar en Firebase, se aplican directamente -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-rigging').classList.remove('active')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1"></script>
+    <script type="module" src="./js/evento-sorteo.js"></script>
 </body>
 </html>

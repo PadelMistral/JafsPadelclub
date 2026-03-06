@@ -27,7 +27,11 @@ body.home-booting {
   z-index: 32000;
   display: grid;
   place-items: center;
-  background: radial-gradient(circle at 40% 20%, rgba(0, 212, 255, 0.12), rgba(2, 6, 23, 0.98) 62%);
+  background: radial-gradient(
+    circle at 40% 20%,
+    rgba(0, 212, 255, 0.12),
+    rgba(2, 6, 23, 0.98) 62%
+  );
   overflow: hidden;
   isolation: isolate;
 }
@@ -39,7 +43,11 @@ body.home-booting {
 .home-entry-nebula {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 75% 70%, rgba(198, 255, 0, 0.1), transparent 48%);
+  background: radial-gradient(
+    circle at 75% 70%,
+    rgba(198, 255, 0, 0.1),
+    transparent 48%
+  );
   filter: blur(2px);
 }
 
@@ -1626,18 +1634,21 @@ body.home-booting {
   }
 }
 .nexus-title {
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 900;
-  letter-spacing: 1.4px;
-  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.65);
   text-transform: uppercase;
 }
 .nexus-count {
-  font-size: 1.1rem;
+  font-size: 9px;
   font-weight: 900;
-  color: rgba(34, 197, 94, 0.95);
+  color: #22c55e;
   letter-spacing: 0.5px;
-  min-width: 1.8ch;
+  background: rgba(34, 197, 94, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(34, 197, 94, 0.2);
 }
 .nexus-count-label {
   font-size: 9px;
@@ -1714,10 +1725,16 @@ body.home-booting {
   letter-spacing: 0.5px;
 }
 .nexus-initials {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 900;
-  color: rgba(255, 255, 255, 0.86);
+  color: #fff;
   text-transform: uppercase;
+  background: linear-gradient(135deg, #00d4ff 0%, #a855f7 100%);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .nexus-user.is-me .nexus-avatar {
   border-color: #00d4ff;
@@ -1839,7 +1856,11 @@ body.home-booting {
 
 .hv2-event-spotlight {
   border: 1px solid rgba(0, 212, 255, 0.2);
-  background: linear-gradient(140deg, rgba(2, 8, 23, 0.9), rgba(7, 17, 32, 0.85));
+  background: linear-gradient(
+    140deg,
+    rgba(2, 8, 23, 0.9),
+    rgba(7, 17, 32, 0.85)
+  );
   border-radius: 18px;
   padding: 14px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);

@@ -60,6 +60,10 @@ function bindFilters() {
   document.getElementById("logs-search")?.addEventListener("input", renderLogs);
   document.getElementById("ev-search")?.addEventListener("input", renderEventsTable);
   document.getElementById("btn-refresh-admin")?.addEventListener("click", refreshAll);
+
+  // Modal logic
+  document.getElementById("admin-player-search")?.addEventListener("input", renderModalUserList);
+  document.getElementById("btn-add-guest-admin")?.addEventListener("click", addGuestAction);
 }
 
 function bindSystemActions() {
@@ -211,11 +215,19 @@ function renderMatchesTable() {
       <tr>
         <td>${m.col === "partidosReto" ? "Reto" : "Amistoso"}</td>
         <td>${date ? date.toLocaleString("es-ES") : "-"}</td>
-        <td>${filled}/${MAX_PLAYERS}</td>
+        <td>
+          <div class="flex-row items-center gap-2">
+            <span>${filled}/${MAX_PLAYERS}</span>
+            <button class="btn-mini" title="Añadir jugador" onclick="window.openAddPlayerToMatch('${m.id}','${m.col}')"><i class="fas fa-user-plus"></i></button>
+          </div>
+        </td>
         <td>
           <select data-m="${m.id}" data-col="${m.col}" data-k="estado" class="inl">
             ${["abierto", "jugada", "jugado", "cancelado", "anulado"].map((s) => `<option value="${s}" ${String(m.estado || "").toLowerCase() === s ? "selected" : ""}>${s}</option>`).join("")}
           </select>
+        </td>
+        <td>
+          <input type="text" value="${m.resultado?.sets || ""}" placeholder="6-2 6-4" data-m="${m.id}" data-col="${m.col}" data-k="resultado" class="inl">
         </td>
         <td>
           <div class="flex-row gap-1">
@@ -242,7 +254,10 @@ function renderEventsTable() {
             <td>${(e.inscritos || []).length} / ${e.plazasMax || 16}</td>
             <td><span class="badge ${e.estado === 'activo' ? 'success' : 'warning'}">${e.estado?.toUpperCase() || 'DRAFT'}</span></td>
             <td>
-                <button class="btn-mini" onclick="window.location.href='evento-detalle.html?id=${e.id}&admin=1'"><i class="fas fa-cog"></i> GESTIONAR</button>
+                <div class="flex-row gap-1">
+                    <button class="btn-mini" onclick="window.location.href='evento-detalle.html?id=${e.id}&admin=1'"><i class="fas fa-cog"></i> GESTIONAR</button>
+                    <button class="btn-mini primary-glow" onclick="window.openAddPlayerToEvent('${e.id}')"><i class="fas fa-user-plus"></i></button>
+                </div>
             </td>
         </tr>
     `).join('') || '<tr><td colspan="5" class="text-center opacity-50 py-4">No hay eventos que coincidan</td></tr>';
@@ -320,10 +335,21 @@ window.saveUserInline = async (uid) => {
 
 window.saveMatchInline = async (id, col) => {
   const select = document.querySelector(`[data-m="${id}"][data-col="${col}"][data-k="estado"]`);
+  const resInput = document.querySelector(`[data-m="${id}"][data-col="${col}"][data-k="resultado"]`);
   if (!select) return;
-  const estado = String(select.value || "abierto").toLowerCase();
-  await updateDocument(col, id, { estado });
-  await addAdminLog("UPDATE_MATCH", `${col}/${id} -> estado=${estado}`);
+  
+  const payload = {
+    estado: String(select.value || "abierto").toLowerCase()
+  };
+  if (resInput) {
+    payload.resultado = { sets: resInput.value.trim() };
+    if (payload.resultado.sets && (payload.estado === 'abierto' || payload.estado === 'jugada')) {
+        payload.estado = 'jugado';
+    }
+  }
+
+  await updateDocument(col, id, payload);
+  await addAdminLog("UPDATE_MATCH", `${col}/${id} -> ${JSON.stringify(payload)}`);
   showToast("Guardado", "Partido actualizado", "success");
   await refreshAll();
 };
@@ -474,4 +500,137 @@ async function clearAllLogs() {
   for (const d of rankSnap.docs || []) await deleteDoc(doc(db, "rankingLogs", d.id));
   showToast("Sistema", "Logs eliminados", "success");
   await refreshAll();
+}
+
+/* ═══ ADMIN ADD PLAYER LOGIC ═══ */
+let adminAddTarget = { type: null, id: null, col: null };
+
+window.openAddPlayerToMatch = (matchId, col) => {
+  adminAddTarget = { type: 'match', id: matchId, col };
+  document.getElementById("add-player-target-title").textContent = "Añadir a Partida";
+  document.getElementById("admin-player-search").value = "";
+  document.getElementById("admin-guest-name").value = "";
+  renderModalUserList();
+  document.getElementById("modal-admin-add-player").classList.add("active");
+};
+
+window.openAddPlayerToEvent = (eventId) => {
+  adminAddTarget = { type: 'event', id: eventId };
+  document.getElementById("add-player-target-title").textContent = "Añadir a Evento";
+  document.getElementById("admin-player-search").value = "";
+  document.getElementById("admin-guest-name").value = "";
+  renderModalUserList();
+  document.getElementById("modal-admin-add-player").classList.add("active");
+};
+
+function renderModalUserList() {
+  const query = String(document.getElementById("admin-player-search")?.value || "").toLowerCase();
+  const box = document.getElementById("admin-user-list-results");
+  if (!box) return;
+
+  const filtered = users.filter(u => {
+    const name = String(u.nombreUsuario || u.nombre || "").toLowerCase();
+    const email = String(u.email || "").toLowerCase();
+    return name.includes(query) || email.includes(query);
+  }).slice(0, 20);
+
+  box.innerHTML = filtered.map(u => {
+    const name = u.nombreUsuario || u.nombre || 'Sin nombre';
+    const photo = u.fotoPerfil || u.fotoURL || u.photoURL || "";
+    const initials = (u.nombreUsuario || u.nombre || "?").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+    const avatarHtml = photo 
+        ? `<img src="${photo}" class="admin-user-avatar">` 
+        : `<span class="admin-user-avatar avatar-fallback">${initials}</span>`;
+    
+    return `
+      <div class="admin-user-item">
+        ${avatarHtml}
+        <div class="admin-user-info">
+          <span class="admin-user-name">${name}</span>
+          <span class="admin-user-email">${u.email || '-'}</span>
+        </div>
+        <button class="btn-mini" onclick="window.confirmAddPlayerAdmin('${u.id}')">ELEGIR</button>
+      </div>
+    `;
+  }).join("") || '<div class="empty-admin">No se encontraron usuarios</div>';
+}
+
+window.confirmAddPlayerAdmin = async (uid) => {
+  const user = users.find(u => u.id === uid);
+  if (!user) return;
+  
+  if (adminAddTarget.type === 'match') {
+    await executeAddPlayerToMatch(uid, user);
+  } else if (adminAddTarget.type === 'event') {
+    await executeAddPlayerToEvent(uid, user);
+  }
+};
+
+async function addGuestAction() {
+  const name = String(document.getElementById("admin-guest-name")?.value || "").trim();
+  if (!name) return showToast("Admin", "Indica un nombre para el invitado", "warning");
+
+  const guestId = `GUEST_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+  const guestUser = { id: guestId, nombreUsuario: name, nombre: name, nivel: 2.5, puntosRanking: 1000, isGuest: true };
+
+  if (adminAddTarget.type === 'match') {
+    await executeAddPlayerToMatch(guestId, guestUser);
+  } else if (adminAddTarget.type === 'event') {
+    await executeAddPlayerToEvent(guestId, guestUser);
+  }
+}
+
+async function executeAddPlayerToMatch(uid, userData) {
+  const m = matches.find(x => x.id === adminAddTarget.id && x.col === adminAddTarget.col);
+  if (!m) return;
+
+  const jugs = [...(m.jugadores || [null, null, null, null])];
+  const firstFree = jugs.indexOf(null);
+  if (firstFree === -1) return showToast("Admin", "Partido lleno", "warning");
+
+  jugs[firstFree] = uid;
+  try {
+    const payload = { jugadores: jugs };
+    // update equipoA/B if they exist
+    if (firstFree < 2) payload.equipoA = [jugs[0], jugs[1]];
+    else payload.equipoB = [jugs[2], jugs[3]];
+
+    await updateDocument(adminAddTarget.col, adminAddTarget.id, payload);
+    await addAdminLog("ADMIN_ADD_PLAYER_MATCH", `Added ${uid} to ${adminAddTarget.id}`);
+    showToast("Admin", "Jugador añadido al partido", "success");
+    document.getElementById("modal-admin-add-player").classList.remove("active");
+    await refreshAll();
+  } catch (e) {
+    showToast("Error", "No se pudo añadir al jugador", "error");
+  }
+}
+
+async function executeAddPlayerToEvent(uid, userData) {
+  const ev = events.find(x => x.id === adminAddTarget.id);
+  if (!ev) return;
+
+  const currentInscritos = ev.inscritos || [];
+  if (currentInscritos.some(i => i.uid === uid)) return showToast("Admin", "Ya está inscrito", "info");
+
+  const entry = {
+    uid,
+    nombre: userData.nombreUsuario || userData.nombre || "Jugador",
+    nivel: Number(userData.nivel || 2.5),
+    sidePreference: "flex",
+    pairCode: "",
+    inscritoEn: new Date().toISOString(),
+    adminAdded: true
+  };
+
+  try {
+    await updateDocument("eventos", adminAddTarget.id, {
+      inscritos: [...currentInscritos, entry]
+    });
+    await addAdminLog("ADMIN_ADD_PLAYER_EVENT", `Added ${uid} to event ${adminAddTarget.id}`);
+    showToast("Admin", "Jugador inscrito al evento", "success");
+    document.getElementById("modal-admin-add-player").classList.remove("active");
+    await refreshAll();
+  } catch (e) {
+    showToast("Error", "No se pudo inscribir al jugador", "error");
+  }
 }

@@ -1,84 +1,98 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#020617">
-    <title>Detalle Evento | Padeluminatis Pro</title>
-    <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Detalle del Evento | Padeluminatis</title>
     <link rel="stylesheet" href="./css/global.css">
     <link rel="stylesheet" href="./css/evento-detalle.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-
 <body>
     <div class="sport-bg"></div>
+    <main class="page-content">
+        <div id="header-placeholder"></div>
 
-    <main class="page-content event-detail-page">
-        <!-- Volver -->
-        <nav class="ed-back-bar">
-            <a href="eventos.html" class="ed-back-link"><i class="fas fa-arrow-left"></i> Volver a eventos</a>
-        </nav>
-        <!-- Hero Section -->
-        <section class="ed-hero animate-up">
-            <div id="ed-hero-content" class="ed-hero-inner">
-                <div class="ed-skeleton-hero"></div>
-            </div>
-        </section>
+        <!-- Botón flotante para volver a eventos -->
+        <a href="eventos.html" class="btn-back-to-events" title="Volver a eventos">
+            <i class="fas fa-arrow-left"></i>
+        </a>
 
-        <!-- Stats Grid -->
-        <section id="ed-stats-strip" class="ed-stats-strip animate-up" style="animation-delay: 0.1s;"></section>
-
-        <!-- Navigation Tabs -->
-        <section class="ed-nav-section animate-up" style="animation-delay: 0.15s;">
-            <div class="ed-tabs">
-                <button class="ed-tab active" data-tab="info"><i class="fas fa-info-circle"></i> INFO</button>
-                <button class="ed-tab" data-tab="bracket"><i class="fas fa-sitemap"></i> BRACKET</button>
-                <button class="ed-tab" data-tab="clasificacion"><i class="fas fa-list-ol"></i> LIGA</button>
-                <button class="ed-tab" data-tab="partidos"><i class="fas fa-table-tennis-paddle-ball"></i>
-                    PARTIDOS</button>
-                <button id="btn-ed-admin" class="ed-tab admin-only hidden" data-tab="admin"><i
-                        class="fas fa-shield-halved"></i> ADMIN</button>
-            </div>
-        </section>
-
-        <!-- Dynamic Panels -->
-        <div id="ed-panels" class="ed-panels animate-up" style="animation-delay: 0.2s;">
-            <div id="pane-info" class="ed-pane active"></div>
-            <div id="pane-bracket" class="ed-pane hidden"></div>
-            <div id="pane-clasificacion" class="ed-pane hidden"></div>
-            <div id="pane-partidos" class="ed-pane hidden"></div>
-            <div id="pane-admin" class="ed-pane hidden"></div>
+        <div class="ed-hero" id="ed-hero">
+            <div class="ed-hero-content" id="ed-hero-content"></div>
         </div>
 
-        <!-- Join Bar -->
+        <div class="ed-stats-strip" id="ed-stats-strip"></div>
+
+        <div class="ed-tabs">
+            <button class="ed-tab active" data-tab="info"><i class="fas fa-info-circle"></i> Info</button>
+            <button class="ed-tab" data-tab="clasificacion"><i class="fas fa-table"></i> Clasificación</button>
+            <button class="ed-tab" data-tab="partidos"><i class="fas fa-calendar-alt"></i> Partidos</button>
+            <button class="ed-tab" data-tab="bracket"><i class="fas fa-sitemap"></i> Bracket</button>
+            <button class="ed-tab" data-tab="organizador" id="organizador-tab" style="display:none;"><i class="fas fa-crown"></i> Organizador</button>
+        </div>
+
+        <div id="pane-info" class="ed-pane active"></div>
+        <div id="pane-clasificacion" class="ed-pane hidden"></div>
+        <div id="pane-partidos" class="ed-pane hidden"></div>
+        <div id="pane-bracket" class="ed-pane hidden"></div>
+        <div id="pane-organizador" class="ed-pane hidden"></div>
+
         <div id="ed-action-bar" class="ed-action-bar hidden">
-            <div id="ed-action-content" class="ed-action-inner"></div>
+            <div id="ed-action-content"></div>
         </div>
     </main>
 
-    <!-- Modals for Admin Actions -->
-    <div id="modal-ed-match" class="modal-overlay">
-        <div class="modal-card glass-strong">
+    <!-- MODAL: AÑADIR JUGADOR (desde organizador) -->
+    <div id="modal-add-player-detalle" class="modal-overlay">
+        <div class="modal-card glass-strong slide-up" style="max-width: 500px;">
             <div class="modal-header">
-                <h3 class="modal-title">Resultado Partido</h3>
-                <button class="close-btn"
-                    onclick="document.getElementById('modal-ed-match').classList.remove('active')">&times;</button>
+                <h3 class="modal-title">Añadir jugador al evento</h3>
+                <button class="close-btn" onclick="document.getElementById('modal-add-player-detalle').classList.remove('active')">×</button>
             </div>
-            <div class="modal-body p-4" id="ed-match-form"></div>
+            <div class="modal-body p-4">
+                <div class="form-group">
+                    <label class="form-label">Tipo de jugador</label>
+                    <select id="add-player-type-detalle" class="input">
+                        <option value="registered">Registrado</option>
+                        <option value="guest">Invitado</option>
+                    </select>
+                </div>
+                <div id="registered-player-select-detalle" class="form-group">
+                    <label class="form-label">Seleccionar usuario registrado</label>
+                    <select id="select-registered-user-detalle" class="input">
+                        <option value="">Cargando...</option>
+                    </select>
+                </div>
+                <div id="guest-player-input-detalle" class="form-group hidden">
+                    <label class="form-label">Nombre del invitado</label>
+                    <input type="text" id="guest-name-detalle" class="input" placeholder="Ej: Juan Pérez">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Preferencia de lado</label>
+                    <select id="player-preference-detalle" class="input">
+                        <option value="izquierda">Izquierda</option>
+                        <option value="derecha">Derecha</option>
+                        <option value="indiferente">Me da igual</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nivel (solo para invitados, opcional)</label>
+                    <input type="number" id="player-level-detalle" class="input" value="2.5" min="1.0" max="7.0" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Código de pareja (si es obligatorio)</label>
+                    <input type="text" id="player-pair-code-detalle" class="input" placeholder="Ej: pareja1">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-add-player-detalle').classList.remove('active')">Cancelar</button>
+                <button id="btn-confirm-add-player-detalle" class="btn btn-primary">Añadir</button>
+            </div>
         </div>
     </div>
 
     <script type="module" src="./js/evento-detalle.js"></script>
-    <script type="module">
-        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
-        initGalaxyBackground();
-    </script>
 </body>
-
 </html>

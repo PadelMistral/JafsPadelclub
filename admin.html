@@ -97,6 +97,8 @@
 
       <section id="pane-matches" class="admin-card admin-pane hidden">
         <div class="toolbar-grid toolbar-matches">
+          <button class="btn-mini" onclick="window.openCreateMatchAdmin()"><i class="fas fa-plus"></i> CREAR
+            PARTIDA</button>
           <select id="matches-filter">
             <option value="all">Todos</option>
             <option value="open">Abiertos</option>
@@ -117,6 +119,7 @@
                 <th>Fecha</th>
                 <th>Plazas</th>
                 <th>Estado</th>
+                <th>Resultado</th>
                 <th>Acción</th>
               </tr>
             </thead>
@@ -182,7 +185,8 @@
               <option value="warning">Warning</option>
               <option value="ranking_up">Ranking</option>
             </select>
-            <button id="btn-broadcast" class="btn-mini wide"><i class="fas fa-paper-plane"></i> Enviar aviso a todos</button>
+            <button id="btn-broadcast" class="btn-mini wide"><i class="fas fa-paper-plane"></i> Enviar aviso a
+              todos</button>
           </div>
 
           <div class="system-box">
@@ -195,7 +199,8 @@
 
           <div class="system-box border border-sport-red/30 bg-sport-red/5">
             <h3 class="text-sport-red"><i class="fas fa-skull-crossbones"></i> ZONA PELIGRO</h3>
-            <p class="text-[9px] opacity-60 mb-2">Borra el ranking actual y recalcula todo el historial partido a partido.</p>
+            <p class="text-[9px] opacity-60 mb-2">Borra el ranking actual y recalcula todo el historial partido a
+              partido.</p>
             <button id="btn-wipe-recalc"
               class="btn-mini wide danger bg-sport-red/10 border-sport-red/40 text-sport-red hover:bg-sport-red/20">
               <i class="fas fa-rotate"></i> Recalcular todo desde cero
@@ -213,8 +218,66 @@
     </div>
   </main>
 
-  <script type="module" src="./js/admin.js"></script>
+  <div id="modal-admin-create-match" class="modal-overlay">
+    <div class="modal-card admin-modal-card">
+      <div class="admin-modal-head">
+        <h3><i class="fas fa-plus-circle"></i> CREAR PARTIDA MANUAL</h3>
+        <button class="btn-close"
+          onclick="document.getElementById('modal-admin-create-match').classList.remove('active')">&times;</button>
+      </div>
+      <div class="admin-modal-body">
+        <div class="flex-col gap-2">
+          <div class="form-group-admin">
+            <label>Tipo de Partido</label>
+            <select id="adm-create-col">
+              <option value="partidosAmistosos">Amistoso</option>
+              <option value="partidosReto">Reto</option>
+            </select>
+          </div>
+          <div class="form-group-admin">
+            <label>Fecha y Hora</label>
+            <input type="datetime-local" id="adm-create-date">
+          </div>
+          <div class="form-group-admin">
+            <label>Estado Inicial</label>
+            <select id="adm-create-state">
+              <option value="abierto">Abierto</option>
+              <option value="jugado">Jugado</option>
+            </select>
+          </div>
+          <button class="btn-full mt-2" onclick="window.confirmCreateMatchAdmin()">CREAR PARTIDA</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/admin.js?v=6.5"></script>
   <script type="module" src="./js/admin-recalc-elo.js"></script>
+
+  <!-- Modal para añadir usuarios/invitados (Admin) -->
+  <div id="modal-admin-add-player" class="modal-overlay">
+    <div class="modal-card admin-modal-card">
+      <div class="modal-header">
+        <h3 id="add-player-target-title" class="modal-title">Añadir a la partida</h3>
+        <button class="close-btn"
+          onclick="document.getElementById('modal-admin-add-player').classList.remove('active')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="search-wrap mb-4">
+          <input type="text" id="admin-player-search" placeholder="Buscar jugador por nombre o email..."
+            class="admin-input-dark">
+        </div>
+        <div id="admin-user-list-results" class="admin-scroll-list mb-4">
+          <!-- Lista de usuarios se generará aquí -->
+        </div>
+        <div class="divider-admin mb-4"><span>O AÑADIR JUGADOR EXTERNO / INVITADO</span></div>
+        <div class="flex-col gap-2">
+          <input type="text" id="admin-guest-name" placeholder="Nombre del invitado" class="admin-input-dark">
+          <button id="btn-add-guest-admin" class="btn-mini wide primary-glow">Añadir como Invitado</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>

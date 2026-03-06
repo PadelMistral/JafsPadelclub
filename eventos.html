@@ -1,21 +1,17 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#020617">
     <title>Eventos | Padeluminatis Pro</title>
     <meta name="description" content="Torneos, ligas y competiciones — crea o únete">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./css/global.css">
     <link rel="stylesheet" href="./css/eventos.css">
 </head>
-
 <body>
     <div class="sport-bg"></div>
 
@@ -41,21 +37,11 @@
         <!-- Filter Tabs -->
         <section class="events-filter-section animate-fade-in" style="animation-delay: 0.08s;">
             <div class="events-filter-scroll">
-                <button class="evf-tab active" data-filter="all">
-                    <i class="fas fa-layer-group"></i> Todos
-                </button>
-                <button class="evf-tab" data-filter="league">
-                    <i class="fas fa-table-list"></i> Liga
-                </button>
-                <button class="evf-tab" data-filter="knockout">
-                    <i class="fas fa-sitemap"></i> Eliminatoria
-                </button>
-                <button class="evf-tab" data-filter="league_knockout">
-                    <i class="fas fa-star"></i> Liga + Elim.
-                </button>
-                <button class="evf-tab" data-filter="active">
-                    <i class="fas fa-play-circle"></i> En curso
-                </button>
+                <button class="evf-tab active" data-filter="all"><i class="fas fa-layer-group"></i> Todos</button>
+                <button class="evf-tab" data-filter="league"><i class="fas fa-table-list"></i> Liga</button>
+                <button class="evf-tab" data-filter="knockout"><i class="fas fa-sitemap"></i> Eliminatoria</button>
+                <button class="evf-tab" data-filter="league_knockout"><i class="fas fa-star"></i> Liga + Elim.</button>
+                <button class="evf-tab" data-filter="active"><i class="fas fa-play-circle"></i> En curso</button>
             </div>
         </section>
 
@@ -72,33 +58,33 @@
 
     </main>
 
-    <!-- ═══════════════════════════════════════════════════
-         MODAL: CREAR EVENTO (solo organizador/admin)
-    ═══════════════════════════════════════════════════ -->
+    <!-- MODAL: CREAR EVENTO (solo organizador/admin) -->
     <div id="modal-create-event" class="modal-overlay">
-        <div class="modal-card glass-strong slide-up" style="max-width: 520px; max-height: 92vh; overflow-y: auto;">
+        <div class="modal-card glass-strong slide-up" style="max-width: 600px; max-height: 92vh; overflow-y: auto;">
             <div class="modal-header">
                 <div class="flex-col">
                     <h3 class="modal-title text-primary font-black italic uppercase tracking-widest">Crear Evento</h3>
                     <span class="text-[10px] text-muted uppercase font-bold tracking-widest">Nueva competición</span>
                 </div>
-                <button class="close-btn"
-                    onclick="document.getElementById('modal-create-event').classList.remove('active')">×</button>
+                <button class="close-btn" onclick="document.getElementById('modal-create-event').classList.remove('active')">×</button>
             </div>
             <div class="modal-body flex-col gap-4 p-4">
-
                 <!-- Nombre -->
                 <div class="form-group">
-                    <label class="form-label"><i class="fas fa-pen-fancy mr-1 text-primary"></i> Nombre del
-                        evento</label>
+                    <label class="form-label"><i class="fas fa-pen-fancy mr-1 text-primary"></i> Nombre del evento</label>
                     <input type="text" id="ev-name" class="input" placeholder="Ej: Liga de Verano 2026" maxlength="60">
                 </div>
 
                 <!-- Descripción -->
                 <div class="form-group">
                     <label class="form-label"><i class="fas fa-align-left mr-1 text-primary"></i> Descripción</label>
-                    <textarea id="ev-description" class="input" rows="2" placeholder="Describe el evento brevemente..."
-                        maxlength="300"></textarea>
+                    <textarea id="ev-description" class="input" rows="2" placeholder="Describe el evento brevemente..." maxlength="300"></textarea>
+                </div>
+
+                <!-- Imagen del evento (URL) -->
+                <div class="form-group">
+                    <label class="form-label"><i class="fas fa-image mr-1 text-primary"></i> URL de imagen (opcional)</label>
+                    <input type="url" id="ev-image" class="input" placeholder="https://ejemplo.com/imagen.jpg">
                 </div>
 
                 <!-- Tipo de competición -->
@@ -134,19 +120,37 @@
 
                 <div class="form-row-2">
                     <div id="ev-group-count-wrap" class="form-group">
-                        <label class="form-label"><i class="fas fa-object-group mr-1 text-primary"></i> Nº grupos
-                            (Liga + Elim.)</label>
+                        <label class="form-label"><i class="fas fa-object-group mr-1 text-primary"></i> Nº grupos (Liga + Elim.)</label>
                         <select id="ev-group-count" class="input">
                             <option value="2" selected>2 grupos (A, B)</option>
                             <option value="3">3 grupos (A, B, C)</option>
                             <option value="4">4 grupos (A, B, C, D)</option>
                         </select>
                     </div>
+                    <div id="ev-teams-per-group-wrap" class="form-group" style="display:none;">
+                        <label class="form-label"><i class="fas fa-arrow-right mr-1 text-primary"></i> Equipos que pasan por grupo</label>
+                        <select id="ev-teams-per-group" class="input">
+                            <option value="1">1 (solo primero)</option>
+                            <option value="2" selected>2 (primero y segundo)</option>
+                            <option value="4">4 (todos a octavos)</option>
+                        </select>
+                        <small class="text-muted block">Número de equipos que avanzan a eliminatorias desde cada grupo.</small>
+                    </div>
+                </div>
+
+                <div class="form-row-2">
                     <div class="form-group">
                         <label class="form-label"><i class="fas fa-shuffle mr-1 text-primary"></i> Emparejamiento</label>
                         <select id="ev-pairing-policy" class="input">
                             <option value="balanced" selected>Balanceado (recomendado)</option>
                             <option value="random">Aleatorio puro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-exchange-alt mr-1 text-primary"></i> Ida y vuelta</label>
+                        <select id="ev-home-away" class="input">
+                            <option value="single" selected>Solo ida</option>
+                            <option value="double">Ida y vuelta</option>
                         </select>
                     </div>
                 </div>
@@ -168,8 +172,7 @@
                 <div id="ev-partner-required-wrap" class="form-group">
                     <label class="ev-toggle-row">
                         <div>
-                            <span class="form-label mb-0"><i class="fas fa-handshake mr-1 text-cyan"></i> Compañero
-                                obligatorio</span>
+                            <span class="form-label mb-0"><i class="fas fa-handshake mr-1 text-cyan"></i> Compañero obligatorio</span>
                             <small class="text-muted block">El jugador debe inscribirse con pareja ya elegida</small>
                         </div>
                         <input type="checkbox" id="ev-partner-required" class="ev-toggle" checked>
@@ -179,13 +182,11 @@
                 <!-- Fechas -->
                 <div class="form-row-2">
                     <div class="form-group">
-                        <label class="form-label"><i class="fas fa-calendar-plus mr-1 text-primary"></i> Inscripción
-                            hasta</label>
+                        <label class="form-label"><i class="fas fa-calendar-plus mr-1 text-primary"></i> Inscripción hasta</label>
                         <input type="datetime-local" id="ev-reg-deadline" class="input">
                     </div>
                     <div class="form-group">
-                        <label class="form-label"><i class="fas fa-flag-checkered mr-1 text-primary"></i> Inicio
-                            evento</label>
+                        <label class="form-label"><i class="fas fa-flag-checkered mr-1 text-primary"></i> Inicio evento</label>
                         <input type="datetime-local" id="ev-start-date" class="input">
                     </div>
                 </div>
@@ -193,8 +194,7 @@
                 <!-- Plazas -->
                 <div class="form-row-2">
                     <div class="form-group">
-                        <label class="form-label"><i class="fas fa-users-line mr-1 text-primary"></i> Plazas
-                            máx.</label>
+                        <label class="form-label"><i class="fas fa-users-line mr-1 text-primary"></i> Plazas máx.</label>
                         <input type="number" id="ev-max-slots" class="input" value="16" min="4" max="128" step="4">
                     </div>
                     <div class="form-group">
@@ -207,7 +207,8 @@
                     </div>
                 </div>
 
-                <!-- Invitados (nombre + nivel) -->
+                <!-- Invitados (nombre + nivel) - ya no se usa, ahora se añaden desde otro modal -->
+                <!-- pero lo dejamos por si se quiere usar -->
                 <div class="form-group">
                     <label class="form-label"><i class="fas fa-user-plus mr-1 text-primary"></i> Invitados (opcional)</label>
                     <textarea id="ev-invitados" class="input" rows="3" placeholder="Una línea por invitado: Nombre, Nivel&#10;Ej: María García, 3.0&#10;Pedro López, 2.5"></textarea>
@@ -217,8 +218,7 @@
                 <!-- Nivel mínimo / máximo -->
                 <div class="form-row-2">
                     <div class="form-group">
-                        <label class="form-label text-cyan"><i class="fas fa-level-down-alt mr-1"></i> Nivel
-                            mín.</label>
+                        <label class="form-label text-cyan"><i class="fas fa-level-down-alt mr-1"></i> Nivel mín.</label>
                         <select id="ev-level-min" class="input">
                             <option value="">Sin límite</option>
                             <option value="1.0">1.0</option>
@@ -231,8 +231,7 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label text-magenta"><i class="fas fa-level-up-alt mr-1"></i> Nivel
-                            máx.</label>
+                        <label class="form-label text-magenta"><i class="fas fa-level-up-alt mr-1"></i> Nivel máx.</label>
                         <select id="ev-level-max" class="input">
                             <option value="">Sin límite</option>
                             <option value="2.5">2.5</option>
@@ -248,8 +247,7 @@
 
                 <!-- Puntos de liga (solo visible si formato = liga o liga+elim) -->
                 <div id="ev-league-points-wrap" class="form-group">
-                    <label class="form-label"><i class="fas fa-chart-line mr-1 text-primary"></i> Puntos/victoria en
-                        liga</label>
+                    <label class="form-label"><i class="fas fa-chart-line mr-1 text-primary"></i> Puntos/victoria en liga</label>
                     <div class="form-row-3">
                         <div class="form-group">
                             <label class="form-label-sm">Victoria</label>
@@ -266,20 +264,67 @@
                     </div>
                 </div>
 
+                <!-- Co-organizadores (opcional) -->
+                <div class="form-group">
+                    <label class="form-label"><i class="fas fa-user-cog mr-1 text-primary"></i> Co-organizadores (UIDs separados por comas)</label>
+                    <input type="text" id="ev-coorganizadores" class="input" placeholder="uid1, uid2, ...">
+                    <small class="text-muted block">Estos usuarios también podrán gestionar el evento.</small>
+                </div>
+
             </div>
             <div class="modal-footer p-4">
-                <button class="btn btn-ghost"
-                    onclick="document.getElementById('modal-create-event').classList.remove('active')">Cancelar</button>
-                <button id="btn-save-event" class="btn btn-primary">
-                    <i class="fas fa-rocket mr-1"></i> Publicar Evento
-                </button>
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-create-event').classList.remove('active')">Cancelar</button>
+                <button id="btn-save-event" class="btn btn-primary"><i class="fas fa-rocket mr-1"></i> Publicar Evento</button>
             </div>
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         MODAL: DETALLE DEL EVENTO
-    ═══════════════════════════════════════════════════ -->
+    <!-- MODAL: AÑADIR JUGADOR (desde admin) -->
+    <div id="modal-add-player" class="modal-overlay">
+        <div class="modal-card glass-strong slide-up" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Añadir jugador</h3>
+                <button class="close-btn" onclick="document.getElementById('modal-add-player').classList.remove('active')">×</button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="form-group">
+                    <label class="form-label">Tipo de jugador</label>
+                    <select id="add-player-type" class="input">
+                        <option value="registered">Registrado</option>
+                        <option value="guest">Invitado</option>
+                    </select>
+                </div>
+                <div id="registered-player-select" class="form-group">
+                    <label class="form-label">Seleccionar usuario</label>
+                    <select id="select-registered-user" class="input">
+                        <option value="">Cargando...</option>
+                    </select>
+                </div>
+                <div id="guest-player-input" class="form-group hidden">
+                    <label class="form-label">Nombre del invitado</label>
+                    <input type="text" id="guest-name" class="input" placeholder="Ej: Juan Pérez">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Preferencia de lado</label>
+                    <select id="player-preference" class="input">
+                        <option value="izquierda">Izquierda</option>
+                        <option value="derecha">Derecha</option>
+                        <option value="indiferente">Me da igual</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Código de pareja (si es obligatorio)</label>
+                    <input type="text" id="player-pair-code" class="input" placeholder="Ej: pareja1">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-add-player').classList.remove('active')">Cancelar</button>
+                <button id="btn-confirm-add-player" class="btn btn-primary">Añadir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: DETALLE DEL EVENTO -->
     <div id="modal-event-detail" class="modal-overlay">
         <div class="modal-card glass-strong slide-up" style="max-width: 600px; max-height: 94vh; overflow-y: auto;">
             <div class="modal-header">
@@ -287,18 +332,13 @@
                     <h3 class="modal-title text-primary font-black italic uppercase" id="ev-detail-title">Evento</h3>
                     <span class="text-[10px] text-muted uppercase font-bold" id="ev-detail-format-badge">-</span>
                 </div>
-                <button class="close-btn"
-                    onclick="document.getElementById('modal-event-detail').classList.remove('active')">×</button>
+                <button class="close-btn" onclick="document.getElementById('modal-event-detail').classList.remove('active')">×</button>
             </div>
-            <div class="modal-body p-0" id="ev-detail-body">
-                <!-- injected by JS -->
-            </div>
+            <div class="modal-body p-0" id="ev-detail-body"></div>
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         MODAL: ADMIN DEL EVENTO (solo admin/organizador)
-    ═══════════════════════════════════════════════════ -->
+    <!-- MODAL: ADMIN DEL EVENTO (solo admin/organizador) -->
     <div id="modal-event-admin" class="modal-overlay">
         <div class="modal-card glass-strong slide-up" style="max-width: 640px; max-height: 94vh; overflow-y: auto;">
             <div class="modal-header">
@@ -306,11 +346,9 @@
                     <h3 class="modal-title text-sport-gold font-black italic uppercase">Admin Evento</h3>
                     <span class="text-[10px] text-muted uppercase font-bold" id="ev-admin-name">-</span>
                 </div>
-                <button class="close-btn"
-                    onclick="document.getElementById('modal-event-admin').classList.remove('active')">×</button>
+                <button class="close-btn" onclick="document.getElementById('modal-event-admin').classList.remove('active')">×</button>
             </div>
             <div class="modal-body p-0">
-                <!-- Admin tabs -->
                 <div class="ev-admin-tabs">
                     <button class="ev-admin-tab active" data-tab="players">Jugadores</button>
                     <button class="ev-admin-tab" data-tab="matches">Partidos</button>
@@ -318,9 +356,7 @@
                     <button class="ev-admin-tab" data-tab="bracket">Bracket</button>
                     <button class="ev-admin-tab" data-tab="settings">Config</button>
                 </div>
-                <div id="ev-admin-body" class="p-4">
-                    <!-- Dynamic content injected by eventos.js -->
-                </div>
+                <div id="ev-admin-body" class="p-4"></div>
             </div>
         </div>
     </div>
@@ -332,7 +368,5 @@
         initThemeSystem();
         initGalaxyBackground();
     </script>
-
 </body>
-
 </html>

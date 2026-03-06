@@ -270,18 +270,30 @@
   border-top: 2px solid rgba(255, 255, 255, 0.08);
 }
 .slot-v5.libre {
-  background: rgba(255, 255, 255, 0.03);
-  border-left-color: #22c55e;
-  border-top-color: rgba(34, 197, 94, 0.35);
+  background: rgba(255, 255, 255, 0.02);
+  border-left-color: rgba(255, 255, 255, 0.2);
+  border-top-color: rgba(255, 255, 255, 0.05);
 }
-.slot-v5.abierta,
-.slot-v5.propia,
-.slot-v5.apoing-mine,
-.slot-v5.apoing-other,
-.slot-v5.cerrada,
-.slot-v5.jugado,
+.slot-v5.abierta {
+  border-left-color: #00d4ff;
+}
+.slot-v5.propia {
+  border-left-color: #c6ff00;
+}
+.slot-v5.apoing-mine {
+  border-left-color: #fbbf24;
+}
+.slot-v5.apoing-other {
+  border-left-color: #f97316;
+}
+.slot-v5.cerrada {
+  border-left-color: #ef4444;
+}
+.slot-v5.jugado {
+  border-left-color: #a855f7;
+}
 .slot-v5.bloqueado {
-  border-left-color: rgba(249, 115, 22, 0.9);
+  border-left-color: #64748b;
 }
 .apoing-actions-top {
   margin-bottom: 12px;
@@ -427,20 +439,6 @@
   width: fit-content;
 }
 
-/* Break Row */
-.break-v5 {
-  grid-column: 1 / -1;
-  text-align: center;
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 4px;
-  color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.02);
-  padding: var(--space-sm);
-  margin: var(--space-sm) 0;
-  border-radius: var(--radius-sm);
-}
-
 /* ===== CALENDAR LEGEND ===== */
 .cal-legend-v5 {
   display: flex;
@@ -451,6 +449,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   margin-top: var(--space-md);
+  flex-wrap: wrap;
 }
 
 .legend-item-v5 {
@@ -462,41 +461,42 @@
 .legend-item-v5 .dot {
   width: 10px;
   height: 10px;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
 }
 
 .legend-item-v5 .dot.libre {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid var(--border-light);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .legend-item-v5 .dot.abierta {
-  background: var(--primary);
-  box-shadow: 0 0 8px var(--primary-glow);
+  background: #00d4ff;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
 }
 
 .legend-item-v5 .dot.cerrada {
-  background: var(--sport-red);
+  background: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
 }
 
 .legend-item-v5 .dot.propia {
-  background: var(--sport-green);
-  box-shadow: 0 0 8px var(--sport-green-glow);
+  background: #c6ff00;
+  box-shadow: 0 0 10px rgba(198, 255, 0, 0.5);
 }
 
 .legend-item-v5 .dot.jugado {
   background: #a855f7;
-  box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
 }
 
 .legend-item-v5 .dot.apoing-other {
   background: #f97316;
-  box-shadow: 0 0 8px rgba(249, 115, 22, 0.45);
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.5);
 }
 
 .legend-item-v5 .dot.apoing-mine {
-  background: #fb923c;
-  box-shadow: 0 0 8px rgba(251, 146, 60, 0.45);
+  background: #fbbf24;
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
 }
 
 .legend-item-v5 .label {
