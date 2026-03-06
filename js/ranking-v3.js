@@ -269,9 +269,12 @@ window.openRankUserModal = (uid) => {
 window.openRankMatchBreakdown = async (logId, matchId, col) => {
   const mainModal = document.getElementById("modal-match");
   const area = document.getElementById("match-detail-area");
+  const titleEl = document.getElementById("modal-titulo");
   if (!mainModal || !area) return;
   area.innerHTML = '<div class="center py-20"><i class="fas fa-spinner fa-spin opacity-20"></i></div>';
   mainModal.classList.add("active");
+  mainModal.classList.add("modal-stack-front");
+  if (titleEl) titleEl.textContent = "Desglose de puntuación";
 
   try {
     const logDoc = logId ? await getDocument("rankingLogs", logId) : null;
@@ -333,16 +336,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
             : ""
         }
       </div>
-      <div class="rank-break-subtitle">Detalle oficial del partido</div>
-      <div id="rank-match-detail-shell" class="rank-detail-shell"><div class="center py-8 opacity-40"><i class="fas fa-spinner fa-spin"></i></div></div>
     `;
-
-    if (!matchId) return;
-    const shell = document.getElementById("rank-match-detail-shell");
-    if (!shell) return;
-    const sessionUser = currentUser || auth.currentUser || null;
-    const userDoc = sessionUser?.uid ? await getDocument("usuarios", sessionUser.uid) : {};
-    await renderMatchDetail(shell, matchId, col, sessionUser, userDoc);
   } catch (e) {
     console.error("openRankMatchBreakdown error:", e);
     area.innerHTML = `<div class="center py-16 text-sport-red">No se pudo abrir el desglose.</div>`;

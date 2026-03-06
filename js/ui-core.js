@@ -1,4 +1,4 @@
-﻿// ui-core.js - Unified Application Guard & Portal Management (v2.0)
+// ui-core.js - Unified Application Guard & Portal Management (v2.0)
 import { observerAuth, getDocument, subscribeCol, db, getDocsSafe } from './firebase-service.js';
 import { logError, logInfo, logWarn } from './core/app-logger.js';
 
@@ -868,6 +868,63 @@ export function countUp(el, target, duration = 2000) {
         if (progress < 1) requestAnimationFrame(animation);
     }
     requestAnimationFrame(animation);
+}
+
+/**
+ * Modal de preferencia de lado (inscripción eventos).
+ * @returns {Promise<'derecha'|'reves'|'flex'|null>}
+ */
+export function showSidePreferenceModal() {
+    if (typeof document === 'undefined') return Promise.resolve(null);
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay modal-side-pref';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-labelledby', 'side-pref-title');
+        overlay.innerHTML = `
+            <div class="modal-card modal-side-pref-card">
+                <div class="modal-header">
+                    <h3 id="side-pref-title" class="modal-title"><i class="fas fa-hand-point-up"></i> Posición preferida</h3>
+                    <button type="button" class="modal-close" aria-label="Cerrar">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="side-pref-desc">Elige tu lado preferido para el emparejamiento:</p>
+                    <div class="side-pref-btns">
+                        <button type="button" class="btn-side-opt" data-value="derecha"><i class="fas fa-hand-point-right"></i> Derecha</button>
+                        <button type="button" class="btn-side-opt" data-value="reves"><i class="fas fa-hand-point-left"></i> Revés</button>
+                        <button type="button" class="btn-side-opt btn-side-opt-flex" data-value="flex"><i class="fas fa-arrows-left-right"></i> Me da igual</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        const close = (value) => {
+            overlay.classList.remove('active');
+            overlay.style.animation = 'modalFadeOut 0.25s ease forwards';
+            setTimeout(() => {
+                overlay.remove();
+                resolve(value);
+            }, 260);
+        };
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) close(null);
+        });
+        overlay.querySelector('.modal-close')?.addEventListener('click', () => close(null));
+        overlay.querySelectorAll('.btn-side-opt').forEach((btn) => {
+            btn.addEventListener('click', () => close(btn.dataset.value));
+        });
+        overlay.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') close(null);
+        });
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => overlay.classList.add('active'));
+        });
+    });
+}
+
+if (typeof window !== 'undefined') {
+    window.showSidePreferenceModal = showSidePreferenceModal;
 }
 
 

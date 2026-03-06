@@ -1,4 +1,4 @@
-﻿import { db, auth, observerAuth, getDocument, updateDocument, addDocument } from "./firebase-service.js";
+import { db, auth, observerAuth, getDocument, updateDocument, addDocument } from "./firebase-service.js";
 import { collection, query, orderBy, limit, serverTimestamp, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { injectHeader, injectNavbar } from "./modules/ui-loader.js?v=6.5";
 import { initAppUI, showToast } from "./ui-core.js";
@@ -26,6 +26,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     await injectHeader(me || {});
     injectNavbar("home");
+
+    const idBox = document.getElementById("admin-identity");
+    if (idBox && me) {
+      const alias = me.nombreUsuario || me.nombre || me.email || me.id || "ADMIN";
+      idBox.textContent = `Console · ${alias}`;
+    }
+
     bindTabs();
     bindFilters();
     bindSystemActions();
@@ -108,11 +115,15 @@ function renderDashboard() {
   const approved = users.filter((u) => u.status === "approved" || u.aprobado === true || u.rol === "Admin");
   const active = matches.filter((m) => (m.jugadores || []).filter(Boolean).length > 0 && !isPlayed(m)).length;
   const avg = approved.length ? Math.round(approved.reduce((s, u) => s + Number(u.puntosRanking || 1000), 0) / approved.length) : 0;
+  const withApoing = approved.filter((u) => String(u.apoingCalendarUrl || "").trim().length > 0).length;
+  const notifOn = approved.filter((u) => String(u.notifPermission || "").toLowerCase() === "granted").length;
 
   setText("kpi-users", String(approved.length));
   setText("kpi-matches", String(matches.length));
   setText("kpi-active", String(active));
   setText("kpi-avg", String(avg));
+  setText("kpi-apoing", String(withApoing));
+  setText("kpi-notif-on", String(notifOn));
 }
 
 function renderUsersTable() {
@@ -129,10 +140,30 @@ function renderUsersTable() {
   if (!body) return;
   body.innerHTML = data.map((u) => {
     const name = u.nombreUsuario || u.nombre || "Sin nombre";
+    const hasApoing = String(u.apoingCalendarUrl || "").trim().length > 0;
+    const notifState = String(u.notifPermission || "").toLowerCase();
+
+    const apoingHtml = hasApoing
+      ? `<span class="badge-mini badge-apoing"><i class="fa-solid fa-calendar-check"></i> ICS</span>`
+      : `<span class="badge-mini badge-apoing off">Sin ICS</span>`;
+
+    let notifLabel = "Sin dato";
+    let notifClass = "badge-notif-unknown";
+    if (notifState === "granted") {
+      notifLabel = "ON";
+      notifClass = "badge-notif-on";
+    } else if (notifState === "denied" || notifState === "blocked") {
+      notifLabel = "Bloqueado";
+      notifClass = "badge-notif-off";
+    }
+    const notifHtml = `<span class="badge-mini ${notifClass}">${notifLabel}</span>`;
+
     return `
       <tr>
         <td>${name}</td>
         <td>${u.email || "-"}</td>
+        <td>${apoingHtml}</td>
+        <td>${notifHtml}</td>
         <td><input type="number" step="0.01" value="${Number(u.nivel || 2.5).toFixed(2)}" data-u="${u.id}" data-k="nivel" class="inl"></td>
         <td><input type="number" value="${Math.round(Number(u.puntosRanking || 1000))}" data-u="${u.id}" data-k="puntosRanking" class="inl"></td>
         <td>

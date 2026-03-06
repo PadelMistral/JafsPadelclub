@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -13,31 +13,45 @@
   <link rel="stylesheet" href="./css/admin-core.css">
 </head>
 
-<body>
-  <div class="sport-bg"></div>
+<body class="admin-body-hacker">
+  <div class="sport-bg admin-bg-dark"></div>
+  <div class="admin-scanline" aria-hidden="true"></div>
   <main class="page-content admin-page">
     <div class="admin-shell">
       <section class="admin-card">
-        <div class="flex-row between items-center mb-2">
-          <h1 class="text-xl font-black">Panel de administración</h1>
-          <button id="btn-refresh-admin" class="btn-mini"><i class="fas fa-rotate"></i> Actualizar datos</button>
+        <div class="flex-row between items-center mb-2 admin-header">
+          <div class="flex-col">
+            <h1 class="text-xl font-black">Panel de administración</h1>
+            <p class="admin-subtitle" id="admin-identity">Console · espejo de Firebase</p>
+          </div>
+          <button id="btn-refresh-admin" class="btn-mini">
+            <i class="fas fa-rotate"></i> Actualizar datos
+          </button>
         </div>
         <div class="kpi-grid">
           <div class="kpi-item">
             <div class="kpi-value" id="kpi-users">0</div>
-            <div class="kpi-label">Usuarios</div>
+            <div class="kpi-label">Usuarios aprobados</div>
           </div>
           <div class="kpi-item">
             <div class="kpi-value" id="kpi-matches">0</div>
-            <div class="kpi-label">Partidos</div>
+            <div class="kpi-label">Partidos totales</div>
           </div>
           <div class="kpi-item">
             <div class="kpi-value" id="kpi-active">0</div>
-            <div class="kpi-label">Activos</div>
+            <div class="kpi-label">Partidos activos</div>
           </div>
           <div class="kpi-item">
             <div class="kpi-value" id="kpi-avg">0</div>
-            <div class="kpi-label">ELO Medio</div>
+            <div class="kpi-label">ELO medio</div>
+          </div>
+          <div class="kpi-item">
+            <div class="kpi-value" id="kpi-apoing">0</div>
+            <div class="kpi-label">Usuarios con Apoing</div>
+          </div>
+          <div class="kpi-item">
+            <div class="kpi-value" id="kpi-notif-on">0</div>
+            <div class="kpi-label">Notificaciones ON</div>
           </div>
         </div>
       </section>
@@ -68,6 +82,8 @@
               <tr>
                 <th>Nombre</th>
                 <th>Email</th>
+                <th>Apoing</th>
+                <th>Notifs</th>
                 <th>Nivel</th>
                 <th>Puntos</th>
                 <th>Rol</th>

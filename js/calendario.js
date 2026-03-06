@@ -1,4 +1,4 @@
-﻿/* =====================================================
+/* =====================================================
    PADELUMINATIS CALENDAR ENGINE V7.0
    Mistral-Inspired Modern Matrix Logic.
    ===================================================== */
@@ -213,20 +213,20 @@ async function getApoingSources() {
         });
     } catch (_) {}
 
-    if (!sources.length) {
-        try {
-            const usersSnap = await getDocs(collection(db, "usuarios"));
-            usersSnap.forEach((d) => {
-                const data = d.data() || {};
-                pushUnique({
-                    uid: d.id,
-                    name: data.nombreUsuario || data.nombre || "Jugador",
-                    email: data.email || "",
-                    icsUrl: data.apoingCalendarUrl || "",
-                });
+    try {
+        const usersSnap = await getDocs(collection(db, "usuarios"));
+        usersSnap.forEach((d) => {
+            const data = d.data() || {};
+            const url = data.apoingCalendarUrl || data.icsUrl || "";
+            if (!url) return;
+            pushUnique({
+                uid: d.id,
+                name: data.nombreUsuario || data.nombre || "Jugador",
+                email: data.email || "",
+                icsUrl: url,
             });
-        } catch (_) {}
-    }
+        });
+    } catch (_) {}
 
     const myUrl = getApoingIcsUrl();
     const hasMe = currentUser?.uid && sources.some((s) => s.uid === currentUser.uid);

@@ -1,6 +1,6 @@
-﻿import { db, observerAuth, getDocument } from './firebase-service.js';
+import { db, observerAuth, getDocument } from './firebase-service.js';
 import { initAppUI, showToast } from './ui-core.js';
-import { doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import { doc, onSnapshot, collection, query, where } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { injectHeader, injectNavbar } from './modules/ui-loader.js';
 
 initAppUI('events');
@@ -9,6 +9,8 @@ const eventId = new URLSearchParams(window.location.search).get('id');
 let currentUser = null;
 let currentUserData = null;
 let currentEvent = null;
+let eventPartidos = [];
+let unsubPartidos = null;
 let drawAnimating = false;
 
 if (!eventId) window.location.replace('eventos.html');
@@ -24,8 +26,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-back-event').href = `evento-detalle.html?id=${eventId}`;
     bindActions();
     subscribeEvent();
+    subscribePartidos();
   });
 });
+
+function subscribePartidos() {
+  if (unsubPartidos) try { unsubPartidos(); } catch (_) {}
+  const q = query(collection(db, 'eventoPartidos'), where('eventoId', '==', eventId));
+  unsubPartidos = onSnapshot(q, (snap) => {
+    eventPartidos = (snap.docs || []).map((d) => ({ id: d.id, ...d.data() }));
+    if (currentEvent) render();
+  });
+}
 
 function bindActions() {
   const runBtn = document.getElementById('btn-run-draw');
@@ -87,12 +99,12 @@ function render() {
     animateDraw(ev.drawState.steps || [], () => {
       localStorage.setItem(key, '1');
       renderGroups(ev, ev.teams || []);
-      renderBracket(ev, ev.teams || []);
+      renderBracket(ev, ev.teams || [], eventPartidos);
     });
   } else {
     renderSteps(ev.drawState.steps || []);
     renderGroups(ev, ev.teams || []);
-    renderBracket(ev, ev.teams || []);
+    renderBracket(ev, ev.teams || [], eventPartidos);
     document.getElementById('draw-live').textContent = 'Sorteo completado';
   }
 }
@@ -138,14 +150,39 @@ function renderGroups(ev, teams) {
   });
 }
 
-function renderBracket(ev, teams) {
+function renderBracket(ev, teams, partidos = []) {
   const box = document.getElementById('knockout-bracket');
-  const rounds = ev?.bracket?.rounds || [];
-  if (!rounds.length) {
-    box.innerHTML = '<div class="k-col"><h4>Semifinales</h4><div class="k-match">Pendiente de sorteo</div></div>';
+  const teamMap = new Map((teams || []).map((t) => [t.id, t]));
+
+  const semis = (partidos || []).filter((p) => p.phase === 'semi').sort((a, b) => String(a.matchCode || '').localeCompare(String(b.matchCode || '')));
+  const finales = (partidos || []).filter((p) => p.phase === 'final');
+
+  if (semis.length || finales.length) {
+    const semiHtml = semis.length
+      ? semis.map((m) => {
+          const a = m.teamAName || (m.teamAId ? teamMap.get(m.teamAId)?.name : null) || 'Por definir';
+          const b = m.teamBName || (m.teamBId ? teamMap.get(m.teamBId)?.name : null) || 'Por definir';
+          const res = m.estado === 'jugado' && m.resultado ? ` · ${m.resultado}` : '';
+          return `<div class="k-match"><div class="k-team">${escapeHtml(a)}</div><div class="k-vs">VS</div><div class="k-team">${escapeHtml(b)}</div>${res ? `<div class="k-result">${escapeHtml(m.resultado)}</div>` : ''}</div>`;
+        }).join('')
+      : '<div class="k-match">Pendiente</div>';
+    const finalHtml = finales.length
+      ? finales.map((m) => {
+          const a = m.teamAName || (m.teamAId ? teamMap.get(m.teamAId)?.name : null) || 'Ganador SF1';
+          const b = m.teamBName || (m.teamBId ? teamMap.get(m.teamBId)?.name : null) || 'Ganador SF2';
+          const res = m.estado === 'jugado' && m.resultado ? ` · ${m.resultado}` : '';
+          return `<div class="k-match k-match-final"><div class="k-team">${escapeHtml(a)}</div><div class="k-vs">VS</div><div class="k-team">${escapeHtml(b)}</div>${res ? `<div class="k-result">${escapeHtml(m.resultado)}</div>` : ''}</div>`;
+        }).join('')
+      : '<div class="k-match">Pendiente</div>';
+    box.innerHTML = `<div class="k-col"><h4>Semifinales</h4>${semiHtml}</div><div class="k-col"><h4>Final</h4>${finalHtml}</div>`;
     return;
   }
-  const teamMap = new Map((teams || []).map((t) => [t.id, t]));
+
+  const rounds = ev?.bracket?.rounds || [];
+  if (!rounds.length) {
+    box.innerHTML = '<div class="k-col"><h4>Semifinales</h4><div class="k-match">Pendiente de sorteo</div></div><div class="k-col"><h4>Final</h4><div class="k-match">Pendiente</div></div>';
+    return;
+  }
 
   box.innerHTML = rounds.map((round, idx) => `
     <div class="k-col">

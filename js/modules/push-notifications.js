@@ -60,6 +60,26 @@ function persistPushState(state = {}) {
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function persistNotifPermissionFlag(state) {
+  try {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const ref = doc(db, "usuarios", uid);
+    await setDoc(
+      ref,
+      {
+        notifPermission: state,
+        notifPermissionUpdatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (e) {
+    pushLog("warn", "notif_permission_persist_failed", {
+      error: e?.message || String(e),
+    });
+  }
+}
+
 async function retryWithBackoff(task, { attempts = SW_RETRY_ATTEMPTS, baseMs = SW_RETRY_BASE_MS } = {}) {
   let lastError = null;
   for (let i = 0; i < attempts; i += 1) {
@@ -554,6 +574,7 @@ export async function requestNotificationPermission(autoInit = true) {
   if (notifPermission === "granted") {
     analyticsSetFlag("notifications.permission", true);
     analyticsCount("notifications.enabled", 1);
+    persistNotifPermissionFlag("granted").catch(() => {});
     if (autoInit && auth.currentUser?.uid)
       initPushNotifications(auth.currentUser.uid).catch(() => {});
     return true;
@@ -563,6 +584,7 @@ export async function requestNotificationPermission(autoInit = true) {
       analyticsSetFlag("notifications.permission", false);
       analyticsCount("notifications.denied", 1);
       showDeniedGuide();
+      persistNotifPermissionFlag("denied").catch(() => {});
       return false;
   }
 
@@ -585,6 +607,7 @@ export async function requestNotificationPermission(autoInit = true) {
         "Notificaciones activadas correctamente.",
         "success",
       );
+      persistNotifPermissionFlag("granted").catch(() => {});
       if (autoInit && auth.currentUser?.uid)
         initPushNotifications(auth.currentUser.uid).catch(() => {});
       return true;
@@ -596,6 +619,7 @@ export async function requestNotificationPermission(autoInit = true) {
   if (notifPermission === "denied") {
     analyticsSetFlag("notifications.permission", false);
     analyticsCount("notifications.denied", 1);
+    persistNotifPermissionFlag("denied").catch(() => {});
   }
   return false;
 }

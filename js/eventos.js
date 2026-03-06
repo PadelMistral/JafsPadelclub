@@ -1,7 +1,7 @@
-﻿// eventos.js — Events System V5.0 — Liga · Eliminatorias · Admin
+// eventos.js — Events System V5.0 — Liga · Eliminatorias · Admin
 // ──────────────────────────────────────────────────────────────
 import { db, auth, observerAuth, getDocument, addDocument, updateDocument } from './firebase-service.js';
-import { initAppUI, showToast } from './ui-core.js';
+import { initAppUI, showToast, showSidePreferenceModal } from './ui-core.js';
 import {
     collection, getDocs, doc, updateDoc, deleteDoc, addDoc,
     query, where, orderBy, serverTimestamp, onSnapshot, writeBatch
@@ -144,8 +144,14 @@ function buildEventCard(ev, idx) {
     const isOrganizer = isAdmin || ev.organizadorId === currentUser?.uid;
     const isInscribed = Array.isArray(ev.inscritos) && ev.inscritos.some(i => i.uid === currentUser?.uid);
 
+    const countdown = startDate ? getCountdown(startDate) : null;
+    const inscritosList = Array.isArray(ev.inscritos) ? ev.inscritos : [];
+    const teamALabel = inscritosList[0] ? (inscritosList[0].nombre || 'T1') + (inscritosList[0].companero ? ' + ' + inscritosList[0].companero : '') : '';
+    const teamBLabel = inscritosList[1] ? (inscritosList[1].nombre || 'T2') + (inscritosList[1].companero ? ' + ' + inscritosList[1].companero : '') : '';
+    const hasMatchStrip = (ev.formato === 'league_knockout' || ev.formato === 'knockout' || ev.formato === 'league') && teamALabel && teamBLabel;
+
     return `
-    <article class="event-card-v3 animate-up" style="animation-delay:${idx * 0.06}s" data-id="${ev.id}">
+    <article class="event-card-v3 animate-up ev-card-champions" style="animation-delay:${idx * 0.06}s" data-id="${ev.id}">
         <div class="ev-card-header ${fmt.color}">
             <div class="ev-format-badge">
                 <i class="fas ${fmt.icon}"></i> ${fmt.label}
@@ -154,6 +160,19 @@ function buildEventCard(ev, idx) {
         </div>
 
         <div class="ev-card-body">
+            ${countdown && !countdown.past ? `
+            <div class="ev-countdown ${countdown.urgent ? 'ev-countdown-urgent' : ''}" title="Inicio del evento">
+                <i class="fas fa-clock"></i>
+                <span class="ev-countdown-text">${countdown.text}</span>
+            </div>` : ''}
+
+            ${hasMatchStrip ? `
+            <div class="ev-match-strip">
+                <span class="ev-match-team">${escapeHtml(teamALabel.substring(0, 18))}${teamALabel.length > 18 ? '…' : ''}</span>
+                <span class="ev-match-vs">VS</span>
+                <span class="ev-match-team">${escapeHtml(teamBLabel.substring(0, 18))}${teamBLabel.length > 18 ? '…' : ''}</span>
+            </div>` : ''}
+
             <h3 class="ev-title">${ev.nombre || 'Sin nombre'}</h3>
             <p class="ev-desc">${ev.descripcion || ''}</p>
 
@@ -414,8 +433,8 @@ window.inscribirseEvento = async (eventId) => {
     }
 
     try {
-        const pref = prompt('Posición preferida: derecha / reves / me da igual', 'me da igual');
-        if (pref === null) return;
+        const pref = await showSidePreferenceModal();
+        if (pref == null) return;
         let pairCode = '';
         if (String(ev.modalidad || 'parejas') === 'parejas' && ev.companeroObligatorio === true) {
             const code = prompt('Código de pareja (igual para ambos)', 'pareja-1');
@@ -428,7 +447,7 @@ window.inscribirseEvento = async (eventId) => {
             uid: currentUser.uid,
             nombre: currentUserData?.nombreUsuario || currentUserData?.nombre || 'Jugador',
             nivel: myLevel,
-            sidePreference: String(pref).toLowerCase().includes('der') ? 'derecha' : (String(pref).toLowerCase().includes('rev') ? 'reves' : 'flex'),
+            sidePreference: pref,
             pairCode,
             inscritoEn: new Date().toISOString(),
         };
@@ -520,7 +539,11 @@ async function saveNewEvent() {
     const plazasMax = Number(document.getElementById('ev-max-slots')?.value || 16);
     const groupCountRaw = Number(document.getElementById('ev-group-count')?.value || 2);
     const groupCount = Math.min(4, Math.max(2, groupCountRaw));
-    const premio = document.getElementById('ev-prize')?.value.trim() || '';
+    let premio = document.getElementById('ev-prize')?.value.trim() || '';
+    const trofeoAuto = document.getElementById('ev-trofeo-auto')?.checked === true;
+    if (trofeoAuto) premio = premio ? premio + ' + Trofeo' : 'Trofeo';
+    const invitadosRaw = document.getElementById('ev-invitados')?.value.trim() || '';
+    const invitados = parseInvitados(invitadosRaw);
     const nivelMin = document.getElementById('ev-level-min')?.value || '';
     const nivelMax = document.getElementById('ev-level-max')?.value || '';
     const puntosVictoria = Number(document.getElementById('ev-pts-win')?.value || 3);
@@ -554,15 +577,26 @@ async function saveNewEvent() {
             estado: 'inscripcion',
             inscritos: [],
             bracket: [],
-            groups: { A: [], B: [] },
+            groups: { A: [], B: [], C: [], D: [] },
             teams: [],
             groupCount: formato === 'league_knockout' ? groupCount : 2,
             pairingPolicy,
             drawState: { status: 'pending', steps: [], version: 0 },
             organizadorId: currentUser.uid,
             organizadorNombre: currentUserData?.nombreUsuario || currentUserData?.nombre || 'Admin',
+            invitados: invitados,
             createdAt: serverTimestamp(),
         };
+
+        if (invitados.length) {
+            payload.inscritos = invitados.map((inv, i) => ({
+                uid: `invitado_${Date.now()}_${i}`,
+                nombre: inv.nombre,
+                nivel: inv.nivel,
+                inscritoEn: new Date().toISOString(),
+                invitado: true,
+            }));
+        }
 
         if (regDeadlineStr) payload.fechaInscripcion = new Date(regDeadlineStr);
         if (startDateStr)   payload.fechaInicio      = new Date(startDateStr);
@@ -1017,4 +1051,37 @@ function fmtDate(d) {
     try {
         return new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }).format(d instanceof Date ? d : new Date(d));
     } catch { return '-'; }
+}
+
+function getCountdown(startDate) {
+    const now = new Date();
+    const start = startDate instanceof Date ? startDate : new Date(startDate);
+    const diff = start - now;
+    if (diff <= 0) return { text: 'Ya empezó', past: true, urgent: false };
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+    const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+    const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+    if (days > 7) return { text: `Empieza en ${days} días`, past: false, urgent: false };
+    if (days > 0) return { text: `${days}d ${hours}h`, past: false, urgent: true };
+    if (hours > 0) return { text: `${hours}h ${mins}m`, past: false, urgent: true };
+    return { text: `${mins} min`, past: false, urgent: true };
+}
+
+function escapeHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+}
+
+function parseInvitados(raw) {
+    if (!raw.trim()) return [];
+    const lines = raw.split(/\n/).map(l => l.trim()).filter(Boolean);
+    const out = [];
+    for (const line of lines) {
+        const parts = line.split(/[,;]/).map(p => p.trim()).filter(Boolean);
+        const nombre = parts[0] || '';
+        const nivel = parts[1] ? Number(parts[1].replace(',', '.')) : 2.5;
+        if (nombre) out.push({ nombre, nivel: Number.isFinite(nivel) ? nivel : 2.5 });
+    }
+    return out;
 }

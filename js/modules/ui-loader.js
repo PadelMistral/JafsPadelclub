@@ -1,4 +1,4 @@
-﻿/* js/modules/ui-loader.js - Dynamic Layout Injection v5.5 */
+/* js/modules/ui-loader.js - Dynamic Layout Injection v5.5 */
 import { getDocument, auth, db, subscribeCol, getDocsSafe, observerAuth as guardAuth } from '../firebase-service.js';
 import { initThemeSystem } from './theme-manager.js';
 import { logInfo } from '../core/app-logger.js';
@@ -76,6 +76,7 @@ function getCurrentPageMeta() {
         'perfil.html': { id: 'profile', subtitle: 'PERFIL' },
         'palas.html': { id: 'palas', subtitle: 'PALAS' },
         'eventos.html': { id: 'events', subtitle: 'EVENTOS' },
+        'evento-detalle.html': { id: 'events', subtitle: 'EVENTO' },
         'evento-sorteo.html': { id: 'events', subtitle: 'SORTEO' },
         'notificaciones.html': { id: 'notifications', subtitle: 'NOTIFICACIONES' },
         'admin.html': { id: 'admin', subtitle: 'ADMIN' },

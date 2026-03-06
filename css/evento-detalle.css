@@ -6,6 +6,25 @@
   padding-bottom: 140px;
 }
 
+/* Volver a eventos */
+.ed-back-bar {
+  padding: 12px 20px 0;
+  margin-bottom: -8px;
+}
+.ed-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.ed-back-link:hover {
+  color: #00d4ff;
+}
+
 /* Hero Section */
 .ed-hero {
   position: relative;

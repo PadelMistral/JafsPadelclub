@@ -137,8 +137,9 @@
                         <label class="form-label"><i class="fas fa-object-group mr-1 text-primary"></i> Nº grupos
                             (Liga + Elim.)</label>
                         <select id="ev-group-count" class="input">
-                            <option value="2" selected>2 grupos</option>
-                            <option value="4">4 grupos</option>
+                            <option value="2" selected>2 grupos (A, B)</option>
+                            <option value="3">3 grupos (A, B, C)</option>
+                            <option value="4">4 grupos (A, B, C, D)</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -199,7 +200,18 @@
                     <div class="form-group">
                         <label class="form-label"><i class="fas fa-trophy mr-1 text-sport-gold"></i> Premio</label>
                         <input type="text" id="ev-prize" class="input" placeholder="Ej: 200€ + Trofeo" maxlength="40">
+                        <label class="ev-toggle-row mt-2">
+                            <span class="form-label-sm mb-0"><i class="fas fa-medal text-sport-gold"></i> Trofeo automático a ganadores</span>
+                            <input type="checkbox" id="ev-trofeo-auto" class="ev-toggle">
+                        </label>
                     </div>
+                </div>
+
+                <!-- Invitados (nombre + nivel) -->
+                <div class="form-group">
+                    <label class="form-label"><i class="fas fa-user-plus mr-1 text-primary"></i> Invitados (opcional)</label>
+                    <textarea id="ev-invitados" class="input" rows="3" placeholder="Una línea por invitado: Nombre, Nivel&#10;Ej: María García, 3.0&#10;Pedro López, 2.5"></textarea>
+                    <small class="text-muted text-[10px] block mt-1">Añade jugadores fijos con nombre y nivel. Se incluirán en el evento.</small>
                 </div>
 
                 <!-- Nivel mínimo / máximo -->

@@ -1,4 +1,4 @@
-﻿/* =====================================================
+/* =====================================================
    PADELUMINATIS LAYOUT V6.0 - GALACTIC MATRIX EDITION
    Header, Navigation, Page Structure, Loaders & Toasts.
    This is the SHARED layout for ALL pages.
@@ -650,12 +650,13 @@ button,
   align-items: flex-start;
   gap: 12px;
   padding: 14px 18px;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(15px);
+  background: rgba(15, 23, 42, 0.97);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border);
   border-radius: 14px;
-  animation: toastIn 0.4s ease;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  animation: toastIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
   pointer-events: auto;
 }
 
@@ -718,45 +719,49 @@ button,
 .toast-close-btn {
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.55);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 1.1rem;
   line-height: 1;
-  padding: 2px 0 0;
+  padding: 4px;
   margin-left: 6px;
-  min-width: 20px;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 8px;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .toast-close-btn:hover {
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 @keyframes toastIn {
   from {
     opacity: 0;
-    transform: translateX(100px);
+    transform: translateX(80px) scale(0.92);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
   }
 }
 
 @keyframes toastOut {
   from {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
   }
   to {
     opacity: 0;
-    transform: translateX(100px);
+    transform: translateX(80px) scale(0.95);
   }
 }
 
 @media (max-width: 640px) {
   .toast-container {
-    left: 10px;
-    right: 10px;
+    left: max(10px, env(safe-area-inset-left, 10px));
+    right: max(10px, env(safe-area-inset-right, 10px));
     top: calc(72px + env(safe-area-inset-top, 0px));
     max-width: none;
   }

@@ -1,8 +1,9 @@
 import { db, observerAuth, getDocument } from './firebase-service.js';
-import { initAppUI, showToast } from './ui-core.js';
+import { initAppUI, showToast, showSidePreferenceModal } from './ui-core.js';
 import { doc, onSnapshot, collection, query, where, addDoc, updateDoc, deleteDoc, serverTimestamp, getDocs } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { injectHeader, injectNavbar } from './modules/ui-loader.js';
 import { runTournamentDraw, resolveTeamById, computeGroupTable, buildEventTeams, generateRoundRobin, generateKnockoutTree } from './event-tournament-engine.js';
+import { processMatchResults } from './ranking-service.js';
 
 initAppUI('event-detail');
 const eventId = new URLSearchParams(window.location.search).get('id');
@@ -134,12 +135,11 @@ function renderAdmin(p){ const ev=currentEvent; const canGen=(ev.inscritos||[]).
 
 function renderActionBar(){ const ev=currentEvent, bar=document.getElementById('ed-action-bar'), c=document.getElementById('ed-action-content'); if(!bar||!c||!ev) return; if(ev.estado==='inscripcion'&&!isInscribed()){ bar.classList.remove('hidden'); c.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn-ed-primary" style="flex:1;min-width:180px;" onclick="window.inscribirseEventoED()">INSCRIBIRSE</button><a class="btn-ev-detail" style="flex:1;min-width:180px;text-decoration:none;display:flex;align-items:center;justify-content:center;" href="evento-sorteo.html?id=${ev.id}">Ver evento</a></div>`; return; } if(isInscribed()||canAdmin()){ bar.classList.remove('hidden'); c.innerHTML=`<div class="flex-row items-center justify-center gap-3 p-3 bg-sport-green/10 border border-sport-green/20 rounded-2xl"><i class="fas fa-check-circle text-sport-green"></i><span class="text-[12px] font-black text-sport-green uppercase italic">${isInscribed()?'Inscrito':'Modo organizador'}</span><a href="evento-sorteo.html?id=${ev.id}" class="text-[10px] font-bold text-primary">Sorteo</a>${isInscribed()?'<button class="text-[10px] text-sport-red/70 hover:text-sport-red font-bold" onclick="window.cancelInscripcionED()">Darse de baja</button>':''}</div>`; return; } bar.classList.add('hidden'); }
 
-window.inscribirseEventoED = async ()=>{ const ev=currentEvent; if(!ev) return; if(String(ev.estado||'')!=='inscripcion') return showToast('Evento','La inscripción está cerrada.','warning'); if((ev.inscritos||[]).length>=Number(ev.plazasMax||16)) return showToast('Evento','No quedan plazas.','warning'); if(isInscribed()) return showToast('Evento','Ya estás inscrito.','info'); const myLevel=Number(currentUserData?.nivel||2.5); if(Number.isFinite(Number(ev.nivelMin))&&myLevel<Number(ev.nivelMin)) return showToast('Nivel insuficiente',`Necesitas nivel ${Number(ev.nivelMin).toFixed(1)} o superior.`,'warning'); if(Number.isFinite(Number(ev.nivelMax))&&myLevel>Number(ev.nivelMax)) return showToast('Nivel no válido',`Este evento admite máximo ${Number(ev.nivelMax).toFixed(1)}.`,'warning'); const pref=prompt('Posición preferida: derecha / reves / me da igual','me da igual'); if(pref===null) return; let pairCode=''; if(String(ev.modalidad||'parejas')==='parejas'&&ev.companeroObligatorio===true){ const code=prompt('Código de pareja (igual para ambos)','pareja-1'); if(code===null) return; pairCode=String(code||'').trim().toLowerCase(); if(!pairCode) return showToast('Pareja','Debes indicar código.','warning'); } const e={ uid:currentUser.uid, nombre:currentUserData?.nombreUsuario||currentUserData?.nombre||'Jugador', nivel:myLevel, sidePreference:normalizeSide(pref), pairCode, inscritoEn:new Date().toISOString() }; try{ await updateDoc(doc(db,'eventos',eventId),{ inscritos:[...(ev.inscritos||[]),e], updatedAt:serverTimestamp() }); showToast('Evento','Inscripción completada.','success'); }catch(err){ showToast('Error',err?.message||'No se pudo inscribir.','error'); } };
 window.cancelInscripcionED = async ()=>{ if(!confirm('¿Cancelar inscripción?')) return; try{ await updateDoc(doc(db,'eventos',eventId),{ inscritos:(currentEvent.inscritos||[]).filter(i=>i.uid!==currentUser.uid), updatedAt:serverTimestamp() }); showToast('Evento','Baja completada.','info'); }catch(e){ showToast('Error',e?.message||'No se pudo cancelar.','error'); } };
 window.saveBasicEdits = async ()=>{ if(!canAdmin()) return; const name=String(document.getElementById('adm-ev-name')?.value||'').trim(); const state=String(document.getElementById('adm-ev-state')?.value||'draft'); if(!name) return showToast('Evento','Nombre requerido.','warning'); try{ await updateDoc(doc(db,'eventos',eventId),{ nombre:name, estado:state, groupCount:Math.min(4,Math.max(2,Number(currentEvent?.groupCount||2))), updatedAt:serverTimestamp() }); showToast('Evento','Guardado.','success'); }catch(e){ showToast('Error',e?.message||'No se pudo guardar.','error'); } };
 
-window.finalizarInscripcionYSortear = async ()=>{ if(!canAdmin()) return; const ev=currentEvent; if(!ev) return; if(ev.drawState?.status==='completed') return showToast('Torneo','Ya generado.','info'); try{ const seed=`${Date.now()}`; const built=buildEventTeams({ modalidad:ev.modalidad||'parejas', inscritos:ev.inscritos||[], seed:`${ev.id}_${seed}` }); const teams=built.teams||[]; if(teams.length<2) return showToast('Torneo','Mínimo 2 equipos.','warning'); const prev=await getDocs(query(collection(db,'eventoPartidos'), where('eventoId','==',ev.id))); await Promise.all(prev.docs.map(d=>deleteDoc(doc(db,'eventoPartidos',d.id)))); let drawSteps=[]; const groups={}; const f=String(ev.formato||'league_knockout'); if(f==='league'){ const rr=generateRoundRobin(teams.map(t=>t.id)); for(let i=0;i<rr.length;i+=1){ const m=rr[i], ta=resolveTeamById(teams,m.teamAId), tb=resolveTeamById(teams,m.teamBId); await addDoc(collection(db,'eventoPartidos'),{ eventoId:ev.id,tipo:'evento',phase:'league',round:i+1,teamAId:m.teamAId,teamBId:m.teamBId,teamAName:ta?.name||'TBD',teamBName:tb?.name||'TBD',playerUids:[...new Set([...(ta?.playerUids||[]),...(tb?.playerUids||[])])],resultado:null,ganadorTeamId:null,estado:'pendiente',fecha:null,createdAt:serverTimestamp()}); } groups.L=teams.map(t=>t.id);} else if(f==='knockout'){ const rounds=generateKnockoutTree(teams,`${ev.id}_${seed}`); for(const r of rounds) for(const m of r){ const ta=resolveTeamById(teams,m.teamAId), tb=resolveTeamById(teams,m.teamBId); await addDoc(collection(db,'eventoPartidos'),{ eventoId:ev.id,tipo:'evento',phase:'knockout',matchCode:m.matchCode,round:m.round,slot:m.slot,sourceA:m.sourceA,sourceB:m.sourceB,teamAId:m.teamAId,teamBId:m.teamBId,teamAName:ta?.name||null,teamBName:tb?.name||null,playerUids:[...new Set([...(ta?.playerUids||[]),...(tb?.playerUids||[])])],resultado:null,ganadorTeamId:null,estado:'pendiente',fecha:null,createdAt:serverTimestamp()}); } } else { const draw=runTournamentDraw({ eventId:ev.id, modalidad:ev.modalidad||'parejas', inscritos:ev.inscritos||[], groupCount:Math.min(4,Math.max(2,Number(ev.groupCount||2))), seed }); drawSteps=draw.drawSteps||[]; Object.assign(groups,draw.groups||{}); for(const gm of draw.groupMatches){ const ta=resolveTeamById(draw.teams,gm.teamAId), tb=resolveTeamById(draw.teams,gm.teamBId); await addDoc(collection(db,'eventoPartidos'),{ eventoId:ev.id,tipo:'evento',phase:'group',group:gm.group,round:gm.round,teamAId:gm.teamAId,teamBId:gm.teamBId,teamAName:ta?.name||'TBD',teamBName:tb?.name||'TBD',playerUids:[...new Set([...(ta?.playerUids||[]),...(tb?.playerUids||[])])],resultado:null,ganadorTeamId:null,estado:'pendiente',fecha:null,createdAt:serverTimestamp()}); } for(const code of ['SF1','SF2']) await addDoc(collection(db,'eventoPartidos'),{ eventoId:ev.id,tipo:'evento',phase:'semi',matchCode:code,round:1,teamAId:null,teamBId:null,teamAName:'Por definir',teamBName:'Por definir',playerUids:[],resultado:null,ganadorTeamId:null,estado:'pendiente',fecha:null,createdAt:serverTimestamp()}); await addDoc(collection(db,'eventoPartidos'),{ eventoId:ev.id,tipo:'evento',phase:'final',matchCode:'F1',round:2,teamAId:null,teamBId:null,teamAName:'Ganador SF1',teamBName:'Ganador SF2',playerUids:[],resultado:null,ganadorTeamId:null,estado:'pendiente',fecha:null,createdAt:serverTimestamp()}); }
-await updateDoc(doc(db,'eventos',ev.id),{ estado:'activo',teams,groups,drawState:{ status:'completed',seed,steps:drawSteps,completedAt:new Date().toISOString(),executedBy:currentUser.uid,version:Date.now() },unmatched:built.unmatched||[],updatedAt:serverTimestamp() }); showToast('Torneo','Estructura generada.','success'); setTimeout(()=>window.location.href=`evento-sorteo.html?id=${ev.id}`,400);}catch(e){ showToast('Error',e?.message||'No se pudo generar.','error'); } };
+window.finalizarInscripcionYSortear = async ()=>{ if(!canAdmin()) return; const ev=currentEvent; if(!ev) return; if(ev.drawState?.status==='completed') return showToast('Torneo','Ya generado.','info'); try{ const seed=`${Date.now()}`; const built=buildEventTeams({ modalidad:ev.modalidad||'parejas', inscritos:ev.inscritos||[], seed:`${ev.id}_${seed}` }); const teams=built.teams||[]; if(teams.length<2) return showToast('Torneo','Mínimo 2 equipos.','warning'); const prev=await getDocs(query(collection(db,'eventoPartidos'), where('eventoId','==',ev.id))); await Promise.all(prev.docs.map(d=>deleteDoc(doc(db,'eventoPartidos',d.id)))); let drawSteps=[]; const groups={}; let bracket=null; const f=String(ev.formato||'league_knockout'); if(f==='league'){ const rr=generateRoundRobin(teams.map(t=>t.id)); for(let i=0;i<rr.length;i+=1){ const m=rr[i], ta=resolveTeamById(teams,m.teamAId), tb=resolveTeamById(teams,m.teamBId); await addDoc(collection(db,'eventoPartidos'),{ eventoId:ev.id,tipo:'evento',phase:'league',round:i+1,teamAId:m.teamAId,teamBId:m.teamBId,teamAName:ta?.name||'TBD',teamBName:tb?.name||'TBD',playerUids:[...new Set([...(ta?.playerUids||[]),...(tb?.playerUids||[])])],resultado:null,ganadorTeamId:null,estado:'pendiente',fecha:null,createdAt:serverTimestamp()}); } groups.L=teams.map(t=>t.id);} else if(f==='knockout'){ const rounds=generateKnockoutTree(teams,`${ev.id}_${seed}`); for(const r of rounds) for(const m of r){ const ta=resolveTeamById(teams,m.teamAId), tb=resolveTeamById(teams,m.teamBId); await addDoc(collection(db,'eventoPartidos'),{ eventoId:ev.id,tipo:'evento',phase:'knockout',matchCode:m.matchCode,round:m.round,slot:m.slot,sourceA:m.sourceA,sourceB:m.sourceB,teamAId:m.teamAId,teamBId:m.teamBId,teamAName:ta?.name||null,teamBName:tb?.name||null,playerUids:[...new Set([...(ta?.playerUids||[]),...(tb?.playerUids||[])])],resultado:null,ganadorTeamId:null,estado:'pendiente',fecha:null,createdAt:serverTimestamp()}); } } else { const draw=runTournamentDraw({ eventId:ev.id, modalidad:ev.modalidad||'parejas', inscritos:ev.inscritos||[], groupCount:Math.min(4,Math.max(2,Number(ev.groupCount||2))), seed }); drawSteps=draw.drawSteps||[]; Object.assign(groups,draw.groups||{}); bracket=draw.bracket||null; for(const gm of draw.groupMatches){ const ta=resolveTeamById(draw.teams,gm.teamAId), tb=resolveTeamById(draw.teams,gm.teamBId); await addDoc(collection(db,'eventoPartidos'),{ eventoId:ev.id,tipo:'evento',phase:'group',group:gm.group,round:gm.round,teamAId:gm.teamAId,teamBId:gm.teamBId,teamAName:ta?.name||'TBD',teamBName:tb?.name||'TBD',playerUids:[...new Set([...(ta?.playerUids||[]),...(tb?.playerUids||[])])],resultado:null,ganadorTeamId:null,estado:'pendiente',fecha:null,createdAt:serverTimestamp()}); } for(const code of ['SF1','SF2']) await addDoc(collection(db,'eventoPartidos'),{ eventoId:ev.id,tipo:'evento',phase:'semi',matchCode:code,round:1,teamAId:null,teamBId:null,teamAName:'Por definir',teamBName:'Por definir',playerUids:[],resultado:null,ganadorTeamId:null,estado:'pendiente',fecha:null,createdAt:serverTimestamp()}); await addDoc(collection(db,'eventoPartidos'),{ eventoId:ev.id,tipo:'evento',phase:'final',matchCode:'F1',round:2,teamAId:null,teamBId:null,teamAName:'Ganador SF1',teamBName:'Ganador SF2',playerUids:[],resultado:null,ganadorTeamId:null,estado:'pendiente',fecha:null,createdAt:serverTimestamp()}); }
+await updateDoc(doc(db,'eventos',ev.id),{ estado:'activo',teams,groups,drawState:{ status:'completed',seed,steps:drawSteps,completedAt:new Date().toISOString(),executedBy:currentUser.uid,version:Date.now() },...(bracket?{bracket}:{}),unmatched:built.unmatched||[],updatedAt:serverTimestamp() }); showToast('Torneo','Estructura generada.','success'); setTimeout(()=>window.location.href=`evento-sorteo.html?id=${ev.id}`,400);}catch(e){ showToast('Error',e?.message||'No se pudo generar.','error'); } };
 window.programarEventoPartido = async (matchId)=>{ const m=eventMatches.find(x=>x.id===matchId); if(!m||!canManage(m)) return; const raw=prompt('Fecha y hora (YYYY-MM-DDTHH:mm)', m.fecha?toLocalInput(m.fecha):''); if(!raw) return; const d=new Date(raw); if(!Number.isFinite(d.getTime())) return showToast('Fecha','Formato no válido.','warning'); try{ await updateDoc(doc(db,'eventoPartidos',matchId),{ fecha:d, updatedAt:serverTimestamp() }); showToast('Partido','Fecha guardada.','success'); }catch(e){ showToast('Error',e?.message||'No se pudo programar.','error'); } };
 
 window.cerrarEventoPartido = async (matchId)=>{ const m=eventMatches.find(x=>x.id===matchId); if(!m||!canManage(m)) return; const r=prompt('Resultado (ej: 6-4 7-5):', m.resultado||''); if(!r) return; const g=String(prompt('Ganador: A o B','A')||'').trim().toUpperCase(); if(!['A','B'].includes(g)) return showToast('Partido','Ganador inválido.','warning'); const winner=g==='A'?m.teamAId:m.teamBId; if(!winner) return showToast('Partido','Equipos no definidos.','warning'); try{ await updateDoc(doc(db,'eventoPartidos',matchId),{ resultado:r, ganadorTeamId:winner, estado:'jugado', updatedAt:serverTimestamp() }); await syncCompetition(); showToast('Partido','Resultado guardado.','success'); }catch(e){ showToast('Error',e?.message||'No se pudo guardar.','error'); } };
@@ -206,21 +206,21 @@ window.inscribirseEventoED = async () => {
     return showToast("Nivel no valido", `Este evento admite maximo ${Number(ev.nivelMax).toFixed(1)}.`, "warning");
   }
 
-  const pref = prompt("Posicion preferida: derecha / reves / me da igual", "me da igual");
-  if (pref === null) return;
+  const pref = await showSidePreferenceModal();
+  if (pref == null) return;
   let pairCode = "";
   if (String(ev.modalidad || "parejas") === "parejas" && ev.companeroObligatorio === true) {
-    const code = prompt("Codigo de pareja (igual para ambos)", "pareja-1");
+    const code = prompt("Código de pareja (igual para ambos)", "pareja-1");
     if (code === null) return;
     pairCode = String(code || "").trim().toLowerCase();
-    if (!pairCode) return showToast("Pareja", "Debes indicar codigo.", "warning");
+    if (!pairCode) return showToast("Pareja", "Debes indicar código.", "warning");
   }
 
   const entry = {
     uid: currentUser.uid,
     nombre: currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador",
     nivel: myLevel,
-    sidePreference: normalizeSide(pref),
+    sidePreference: pref,
     pairCode,
     inscritoEn: new Date().toISOString(),
   };
@@ -369,25 +369,24 @@ window.cerrarEventoPartido = async (matchId) => {
   const m = eventMatches.find((x) => x.id === matchId);
   if (!m || !canManage(m)) return;
   const r = prompt("Resultado (ej: 6-4 7-5):", m.resultado || "");
-  if (!r) return;
-  const g = String(prompt("Ganador: A o B", "A") || "").trim().toUpperCase();
-  if (!["A", "B"].includes(g)) return showToast("Partido", "Ganador invalido.", "warning");
-  const winner = g === "A" ? m.teamAId : m.teamBId;
-  if (!winner) return showToast("Partido", "Equipos no definidos.", "warning");
+  if (!r || !r.trim()) return;
+  if (!m.playerUids || m.playerUids.length !== 4) {
+    showToast("Partido", "Faltan jugadores en el partido para aplicar puntuación ELO.", "warning");
+    return;
+  }
   try {
-    await updateDoc(doc(db, "eventoPartidos", matchId), {
-      resultado: r,
-      ganadorTeamId: winner,
-      estado: "jugado",
-      updatedAt: serverTimestamp(),
-    });
+    const rankingSync = await processMatchResults(matchId, "eventoPartidos", r.trim(), {});
+    if (!rankingSync?.success) {
+      showToast("Partido", rankingSync?.error || "No se pudo aplicar el resultado (formato o jugadores).", "error");
+      return;
+    }
     await syncCompetitionV2();
     await notifyUsersV2(m.playerUids || [], "Resultado registrado", `${m.teamAName || "Equipo A"} vs ${m.teamBName || "Equipo B"}: ${r}.`, {
       type: "event_result",
       matchId,
       eventId,
     });
-    showToast("Partido", "Resultado guardado.", "success");
+    showToast("Partido", "Resultado guardado y puntuación ELO actualizada.", "success");
   } catch (e) {
     showToast("Error", e?.message || "No se pudo guardar.", "error");
   }

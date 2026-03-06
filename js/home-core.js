@@ -1,4 +1,4 @@
-﻿/* Home V2 - Clean and Real Player Names */
+/* Home V2 - Clean and Real Player Names */
 import { db, subscribeCol, getDocument } from "./firebase-service.js";
 import {
   collection,
@@ -1187,38 +1187,9 @@ async function initNexus() {
 }
 
 function renderNexus(users) {
-  const list = document.getElementById("nexus-list");
   const count = document.getElementById("nexus-count");
-  if (!list || !count) return;
-
-  count.textContent = `${users.length} CONECTADOS`;
-
-  if (users.length === 0) {
-    list.innerHTML = `<div class="text-[9px] opacity-30 italic px-2">No hay otros jugadores conectados ahora.</div>`;
-    return;
-  }
-
-  list.innerHTML = users
-    .map((u) => {
-      const isMe = u.id === currentUser?.uid;
-      const name = u.nombreUsuario || u.nombre || "Jugador";
-      const photo = u.fotoPerfil || u.fotoURL || u.photoURL || "";
-      const initials = getInitials(name);
-
-      return `
-      <div class="nexus-user ${isMe ? "is-me" : ""}" onclick="window.location.href='perfil.html?uid=${u.id}'">
-        <div class="nexus-avatar">
-          ${
-            photo
-              ? `<img src="${photo}" alt="${name}" onerror="this.outerHTML='<span class=&quot;nexus-initials&quot;>${initials}</span>'">`
-              : `<span class="nexus-initials">${initials}</span>`
-          }
-        </div>
-        <span class="nexus-uname">${isMe ? "TÚ" : name.split(" ")[0]}</span>
-      </div>
-    `;
-    })
-    .join("");
+  if (!count) return;
+  count.textContent = String(users.length);
 }
 
 window.openNexusModal = () => {
@@ -1227,16 +1198,14 @@ window.openNexusModal = () => {
   const title = document.getElementById("nexus-modal-title");
   if (!modal || !list) return;
 
-  const isAdmin = currentUserData?.rol === "Admin";
-  if (title) title.textContent = `USUARIOS CONECTADOS (${nexusOnlineUsers.length})`;
+  const onlineIds = new Set(nexusOnlineUsers.map((u) => u.id));
+  const offlineUsers = (nexusAllUsers || [])
+    .filter((u) => !onlineIds.has(u.id))
+    .sort((a, b) => (b.ultimoAcceso?.seconds || 0) - (a.ultimoAcceso?.seconds || 0));
+  if (title) title.textContent = `Usuarios · ${nexusOnlineUsers.length} conectados / ${offlineUsers.length + nexusOnlineUsers.length} total`;
 
-  if (!nexusOnlineUsers.length) {
-    list.innerHTML = `<div class="center py-10 opacity-50">No hay usuarios conectados en este momento.</div>`;
-    modal.classList.add("active");
-    return;
-  }
-
-  const onlineHtml = nexusOnlineUsers
+  const onlineHtml = nexusOnlineUsers.length
+    ? nexusOnlineUsers
     .map((u) => {
       const isMe = u.id === currentUser?.uid;
       const name = u.nombreUsuario || u.nombre || "Jugador";
@@ -1253,49 +1222,45 @@ window.openNexusModal = () => {
           </div>
           <div class="nexus-modal-info">
             <span class="nexus-modal-name">${isMe ? "TÚ" : name}</span>
-            <span class="nexus-modal-meta">${isAdmin ? `Último acceso: ${lastTxt}` : "Conectado recientemente"}</span>
+            <span class="nexus-modal-meta">Conectado ahora</span>
           </div>
         </div>
       `;
     })
-    .join("");
+    .join("")
+    : '<div class="nexus-modal-empty">No hay usuarios conectados ahora</div>';
 
-  let offlineHtml = "";
-  if (isAdmin) {
-    const onlineIds = new Set(nexusOnlineUsers.map((u) => u.id));
-    const offlineUsers = nexusAllUsers
-      .filter((u) => !onlineIds.has(u.id))
-      .sort((a, b) => (b.ultimoAcceso?.seconds || 0) - (a.ultimoAcceso?.seconds || 0));
-    offlineHtml = `
-      <div class="nexus-modal-divider">Usuarios no conectados (${offlineUsers.length})</div>
-      ${
-        offlineUsers
-          .map((u) => {
-            const name = u.nombreUsuario || u.nombre || "Jugador";
-            const photo = u.fotoPerfil || u.fotoURL || u.photoURL || "";
-            const initials = getInitials(name);
-            const last = u.ultimoAcceso?.toDate ? u.ultimoAcceso.toDate() : new Date(u.ultimoAcceso || 0);
-            const lastTxt = Number.isNaN(last.getTime())
-              ? "Sin registro"
-              : last.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-            return `
-              <div class="nexus-modal-row is-offline" onclick="window.location.href='perfil.html?uid=${u.id}'">
-                <div class="nexus-modal-avatar">
-                  ${photo ? `<img src="${photo}" alt="${name}" onerror="this.outerHTML='<span class=&quot;nexus-initials&quot;>${initials}</span>'">` : `<span class="nexus-initials">${initials}</span>`}
+  const offlineHtml = `
+    <div class="nexus-modal-divider">No conectados — última actividad (${offlineUsers.length})</div>
+    ${
+      offlineUsers.length
+        ? offlineUsers
+            .map((u) => {
+              const name = u.nombreUsuario || u.nombre || "Jugador";
+              const photo = u.fotoPerfil || u.fotoURL || u.photoURL || "";
+              const initials = getInitials(name);
+              const last = u.ultimoAcceso?.toDate ? u.ultimoAcceso.toDate() : new Date(u.ultimoAcceso || 0);
+              const lastTxt = Number.isNaN(last.getTime())
+                ? "Sin registro"
+                : last.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+              return `
+                <div class="nexus-modal-row is-offline" onclick="window.location.href='perfil.html?uid=${u.id}'">
+                  <div class="nexus-modal-avatar">
+                    ${photo ? `<img src="${photo}" alt="${name}" onerror="this.outerHTML='<span class=&quot;nexus-initials&quot;>${initials}</span>'">` : `<span class="nexus-initials">${initials}</span>`}
+                  </div>
+                  <div class="nexus-modal-info">
+                    <span class="nexus-modal-name">${name}</span>
+                    <span class="nexus-modal-meta">Último acceso: ${lastTxt}</span>
+                  </div>
                 </div>
-                <div class="nexus-modal-info">
-                  <span class="nexus-modal-name">${name}</span>
-                  <span class="nexus-modal-meta">Último acceso: ${lastTxt}</span>
-                </div>
-              </div>
-            `;
-          })
-          .join("") || '<div class="text-[10px] opacity-40 p-2">Sin usuarios offline.</div>'
-      }
-    `;
-  }
+              `;
+            })
+            .join("")
+        : '<div class="text-[10px] opacity-40 p-2">Todos están conectados o sin datos.</div>'
+    }
+  `;
 
-  list.innerHTML = onlineHtml + offlineHtml;
+  list.innerHTML = '<div class="nexus-modal-section-title">Conectados ahora (' + nexusOnlineUsers.length + ')</div>' + onlineHtml + offlineHtml;
 
   modal.classList.add("active");
 };

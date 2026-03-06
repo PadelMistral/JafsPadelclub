@@ -237,7 +237,12 @@ export { getBaseEloByLevel };
 export async function processMatchResults(matchId, col, resultStr, extraMatchData = {}) {
   try {
     const initial = await getDocument(col, matchId);
-    if (!initial || !Array.isArray(initial.jugadores) || initial.jugadores.filter(Boolean).length !== 4) {
+    const jugadores = Array.isArray(initial?.jugadores)
+      ? initial.jugadores
+      : col === "eventoPartidos" && Array.isArray(initial?.playerUids) && initial.playerUids.length === 4
+        ? initial.playerUids
+        : null;
+    if (!initial || !jugadores || jugadores.filter(Boolean).length !== 4) {
       return { success: false, error: "Match or players invalid" };
     }
 
@@ -246,7 +251,8 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
       const matchSnap = await transaction.get(matchRef);
       if (!matchSnap.exists()) throw new Error("Match does not exist.");
 
-      const match = matchSnap.data();
+      const matchRaw = matchSnap.data();
+      const match = { ...matchRaw, jugadores: matchRaw.jugadores || matchRaw.playerUids || jugadores };
       const normalizedResult = normalizeResultString(resultStr);
       if (match.rankingProcessedAt) {
         return {
