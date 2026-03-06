@@ -39,8 +39,10 @@
             <!-- Top row: live clock + weather ambient -->
             <div class="hv2-hud-bar">
                 <div class="hv2-hud-brand">
-                    <img id="hv2-brand-image-id" src="./imagenes/default-avatar.png" alt="Perfil" class="hv2-brand-mini">
-                    <span id="hv2-brand-fallback" class="hv2-brand-mini hv2-brand-initial" style="display:none;">J</span>
+                    <img id="hv2-brand-image-id" src="./imagenes/default-avatar.png" alt="Perfil"
+                        class="hv2-brand-mini">
+                    <span id="hv2-brand-fallback" class="hv2-brand-mini hv2-brand-initial"
+                        style="display:none;">J</span>
                     <span class="hv2-brand-text">Padel<span class="text-primary italic">Luminatis</span></span>
                 </div>
                 <div class="hv2-hud-clock">
@@ -115,15 +117,15 @@
         </section>
 
         <!-- ═══════════════ NEXUS — Pulsa para ver conectados / desconectados ═══════════════ -->
-        <section id="nexus-container" class="animate-up nexus-tap-area" style="animation-delay:0.04s;" title="Ver usuarios conectados y última actividad">
+        <section id="nexus-container" class="animate-up nexus-tap-area" style="animation-delay:0.04s;"
+            title="Ver usuarios conectados y última actividad">
             <div class="nexus-glass">
                 <div class="nexus-head">
                     <div class="flex-row items-center gap-2">
                         <div class="nexus-pulse"></div>
-                        <span class="nexus-title">NEXUS</span>
+                        <span class="nexus-title">NEXUS ONLINE AHORA</span>
                     </div>
                     <span id="nexus-count" class="nexus-count">0</span>
-                    <span class="nexus-count-label">usuarios · Pulsa para ver</span>
                 </div>
                 <div id="nexus-list" class="nexus-list nexus-list-hidden scroll-snap-x" aria-hidden="true">
                     <!-- Lista solo en modal -->
@@ -204,7 +206,8 @@
         <div class="modal-card glass-strong nexus-modal-card">
             <div class="modal-header">
                 <h3 class="modal-title" id="nexus-modal-title">USUARIOS CONECTADOS</h3>
-                <button class="close-btn" onclick="document.getElementById('modal-nexus').classList.remove('active')">&times;</button>
+                <button class="close-btn"
+                    onclick="document.getElementById('modal-nexus').classList.remove('active')">&times;</button>
             </div>
             <div class="modal-body scroll-y" id="nexus-modal-list" style="max-height: 70vh;"></div>
         </div>
