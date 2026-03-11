@@ -6,278 +6,335 @@
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#020617">
-  <title>Admin | Padeluminatis</title>
+  <title>Console v9.0 | Padeluminatis Admin</title>
   <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="./css/global.css">
   <link rel="stylesheet" href="./css/admin-core.css">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@100;400;900&display=swap" rel="stylesheet">
 </head>
 
-<body class="admin-body-hacker">
+<body class="admin-body-premium">
   <div class="sport-bg admin-bg-dark"></div>
   <div class="admin-scanline" aria-hidden="true"></div>
-  <main class="page-content admin-page">
-    <div class="admin-shell">
-      <section class="admin-card">
-        <div class="flex-row between items-center mb-2 admin-header">
-          <div class="flex-col">
-            <h1 class="text-xl font-black">Panel de administración</h1>
-            <p class="admin-subtitle" id="admin-identity">Console · espejo de Firebase</p>
-          </div>
-          <button id="btn-refresh-admin" class="btn-mini">
-            <i class="fas fa-rotate"></i> Actualizar datos
-          </button>
-        </div>
-        <div class="kpi-grid">
-          <div class="kpi-item">
-            <div class="kpi-value" id="kpi-users">0</div>
-            <div class="kpi-label">Usuarios aprobados</div>
-          </div>
-          <div class="kpi-item">
-            <div class="kpi-value" id="kpi-matches">0</div>
-            <div class="kpi-label">Partidos totales</div>
-          </div>
-          <div class="kpi-item">
-            <div class="kpi-value" id="kpi-active">0</div>
-            <div class="kpi-label">Partidos activos</div>
-          </div>
-          <div class="kpi-item">
-            <div class="kpi-value" id="kpi-avg">0</div>
-            <div class="kpi-label">ELO medio</div>
-          </div>
-          <div class="kpi-item">
-            <div class="kpi-value" id="kpi-apoing">0</div>
-            <div class="kpi-label">Usuarios con Apoing</div>
-          </div>
-          <div class="kpi-item">
-            <div class="kpi-value" id="kpi-notif-on">0</div>
-            <div class="kpi-label">Notificaciones ON</div>
-          </div>
-        </div>
-      </section>
 
-      <section class="admin-card">
-        <div class="tabs-grid">
-          <button class="admin-tab active" data-pane="users">USUARIOS</button>
-          <button class="admin-tab" data-pane="matches">PARTIDOS</button>
-          <button class="admin-tab" data-pane="eventos">EVENTOS</button>
-          <button class="admin-tab" data-pane="ranking">RANKING</button>
-          <button class="admin-tab" data-pane="logs">LOGS</button>
-          <button class="admin-tab" data-pane="system">SISTEMA</button>
+  <!-- Main App Layout -->
+  <div class="admin-layout no-sidebar">
+    
+    <main class="admin-main">
+      <header class="admin-top-bar sticky-top">
+        <div class="flex-row items-center gap-2">
+            <img src="./imagenes/Logojafs.png" class="h-8 w-auto" alt="Logo">
+            <div class="flex-col">
+                <span class="text-[10px] font-black tracking-widest text-[#00e5ff] leading-tight">CONSOLE v9.5</span>
+                <span class="text-[8px] opacity-50 uppercase tracking-tighter">Master Control Unit</span>
+            </div>
         </div>
-      </section>
 
-      <section id="pane-users" class="admin-card admin-pane">
-        <div class="toolbar-grid toolbar-users">
-          <input id="users-search" placeholder="Buscar usuario o email" />
-          <select id="users-role-filter">
-            <option value="all">Todos los roles</option>
-            <option value="Admin">Admin</option>
-            <option value="Jugador">Jugador</option>
-          </select>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Email</th>
-                <th>Apoing</th>
-                <th>Notifs</th>
-                <th>Nivel</th>
-                <th>Puntos</th>
-                <th>Rol</th>
-                <th>Acción</th>
-              </tr>
-            </thead>
-            <tbody id="users-body"></tbody>
-          </table>
-        </div>
-      </section>
+        <nav class="admin-top-tabs custom-scroll">
+            <button class="tab-btn active admin-tab" data-pane="users"><i class="fas fa-users"></i> <span>JUGADORES</span></button>
+            <button class="tab-btn admin-tab" data-pane="pending"><i class="fas fa-user-clock"></i> <span>SOLICITUDES</span> <span class="badge-dot hidden" id="dot-pending"></span></button>
+            <button class="tab-btn admin-tab" data-pane="matches"><i class="fas fa-table-tennis-paddle-ball"></i> <span>PARTIDOS</span></button>
+            <button class="tab-btn admin-tab" data-pane="eventos"><i class="fas fa-trophy"></i> <span>TORNEOS</span></button>
+            <button class="tab-btn admin-tab" data-pane="ranking"><i class="fas fa-ranking-star"></i> <span>PUNTUACIÓN</span></button>
+            <button class="tab-btn admin-tab" data-pane="system"><i class="fas fa-microchip"></i> <span>SISTEMA</span></button>
+        </nav>
 
-      <section id="pane-matches" class="admin-card admin-pane hidden">
-        <div class="toolbar-grid toolbar-matches">
-          <button class="btn-mini" onclick="window.openCreateMatchAdmin()"><i class="fas fa-plus"></i> CREAR
-            PARTIDA</button>
-          <select id="matches-filter">
-            <option value="all">Todos</option>
-            <option value="open">Abiertos</option>
-            <option value="played">Jugados/Cerrados</option>
-          </select>
-          <select id="matches-type-filter">
-            <option value="all">Todos los tipos</option>
-            <option value="partidosAmistosos">Amistosos</option>
-            <option value="partidosReto">Retos</option>
-          </select>
-          <input id="matches-search" placeholder="Buscar por fecha o estado" />
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Fecha</th>
-                <th>Plazas</th>
-                <th>Estado</th>
-                <th>Resultado</th>
-                <th>Acción</th>
-              </tr>
-            </thead>
-            <tbody id="matches-body"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="pane-eventos" class="admin-card admin-pane hidden">
-        <div class="toolbar-grid toolbar-eventos">
-          <input id="ev-search" placeholder="Buscar evento..." />
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Formato</th>
-                <th>Inscritos</th>
-                <th>Estado</th>
-                <th>Acción</th>
-              </tr>
-            </thead>
-            <tbody id="ev-body-admin"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="pane-ranking" class="admin-card admin-pane hidden">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Puesto</th>
-                <th>Jugador</th>
-                <th>Puntos</th>
-                <th>Nivel</th>
-                <th>Control manual</th>
-              </tr>
-            </thead>
-            <tbody id="ranking-body"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="pane-logs" class="admin-card admin-pane hidden">
-        <div class="toolbar-grid toolbar-logs">
-          <input id="logs-search" placeholder="Filtrar logs por acción o detalle" />
-        </div>
-        <div id="logs-list"></div>
-      </section>
-
-      <section id="pane-system" class="admin-card admin-pane hidden">
-        <h2 class="admin-pane-title"><i class="fas fa-sliders"></i> Control global</h2>
-        <div class="system-grid">
-          <div class="system-box">
-            <h3><i class="fas fa-bullhorn"></i> Broadcast</h3>
-            <input id="sys-broadcast-title" placeholder="Título de notificación" />
-            <textarea id="sys-broadcast-message" rows="3" placeholder="Mensaje global"></textarea>
-            <input id="sys-broadcast-link" placeholder="Enlace (ej: home.html)" />
-            <select id="sys-broadcast-type">
-              <option value="info">Info</option>
-              <option value="warning">Warning</option>
-              <option value="ranking_up">Ranking</option>
-            </select>
-            <button id="btn-broadcast" class="btn-mini wide"><i class="fas fa-paper-plane"></i> Enviar aviso a
-              todos</button>
-          </div>
-
-          <div class="system-box">
-            <h3><i class="fas fa-ranking-star"></i> Recalcular puntos y niveles</h3>
-            <input id="sys-elo-delta" type="number" placeholder="Delta ELO global (+/-)" />
-            <input id="sys-min-matches" type="number" placeholder="Mínimo partidos (opcional)" />
-            <button id="btn-apply-elo-delta" class="btn-mini wide">Aplicar ajuste manual de puntos</button>
-            <button id="btn-recalc-levels" class="btn-mini wide">Recalcular niveles según puntuación</button>
-          </div>
-
-          <div class="system-box border border-sport-red/30 bg-sport-red/5">
-            <h3 class="text-sport-red"><i class="fas fa-skull-crossbones"></i> ZONA PELIGRO</h3>
-            <p class="text-[9px] opacity-60 mb-2">Borra el ranking actual y recalcula todo el historial partido a
-              partido.</p>
-            <button id="btn-wipe-recalc"
-              class="btn-mini wide danger bg-sport-red/10 border-sport-red/40 text-sport-red hover:bg-sport-red/20">
-              <i class="fas fa-rotate"></i> Recalcular todo desde cero
+        <div class="flex-row items-center gap-3 ml-auto">
+            <button id="btn-refresh-admin" class="btn-circular" title="Sincronizar Datos">
+                <i class="fas fa-rotate"></i>
             </button>
-            <button id="btn-nuke-logs" class="btn-mini wide danger mt-2 opacity-50">Borrar todos los logs</button>
-          </div>
-
-          <div class="system-box">
-            <h3><i class="fas fa-shield-halved"></i> Mantenimiento</h3>
-            <button id="btn-cancel-stale" class="btn-mini wide">Cancelar partidos abiertos vencidos</button>
-            <button id="btn-reset-presence" class="btn-mini wide">Resetear presencia online</button>
-          </div>
+             <button class="btn-pill-logout" onclick="import('./js/firebase-service.js').then(m => m.auth.signOut().then(()=>window.location.reload()))">
+                <i class="fas fa-power-off"></i>
+            </button>
         </div>
-      </section>
-    </div>
-  </main>
+      </header>
 
-  <div id="modal-admin-create-match" class="modal-overlay">
-    <div class="modal-card admin-modal-card">
-      <div class="admin-modal-head">
-        <h3><i class="fas fa-plus-circle"></i> CREAR PARTIDA MANUAL</h3>
-        <button class="btn-close"
-          onclick="document.getElementById('modal-admin-create-match').classList.remove('active')">&times;</button>
+      <div class="admin-content-inner custom-scroll pb-20">
+        
+        <!-- KPI Row -->
+        <section class="kpi-container mb-8">
+            <div class="kpi-grid">
+                <div class="kpi-card shadow-premium glow-primary">
+                    <span class="kpi-label"><i class="fas fa-users"></i> JUGADORES</span>
+                    <span class="kpi-value" id="kpi-users">0</span>
+                </div>
+                <div class="kpi-card shadow-premium glow-amber">
+                    <span class="kpi-label"><i class="fas fa-bolt"></i> PARTIDOS</span>
+                    <span class="kpi-value" id="kpi-matches">0</span>
+                </div>
+                <div class="kpi-card shadow-premium glow-red">
+                    <span class="kpi-label"><i class="fas fa-fire"></i> ACTIVOS</span>
+                    <span class="kpi-value" id="kpi-active">0</span>
+                </div>
+                <div class="kpi-card shadow-premium glow-green">
+                    <span class="kpi-label"><i class="fas fa-chart-line"></i> MEDIA ELO</span>
+                    <span class="kpi-value" id="kpi-avg">0</span>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- Dynamic Panes -->
+        <div class="panes-container">
+
+          <!-- JUGADORES -->
+          <section id="pane-users" class="admin-pane active animate-fade-in">
+            <div class="pane-header flex-col md:flex-row between gap-4 mb-6">
+                <div>
+                    <h2 class="pane-title">GESTIÓN DE JUGADORES</h2>
+                    <p class="text-[10px] opacity-50 uppercase tracking-wider">Control de acceso y perfiles deportivos</p>
+                </div>
+                <div class="flex-row gap-2">
+                    <select id="users-role-filter" class="admin-select-v9 sm">
+                        <option value="all">TODOS LOS ROLES</option>
+                        <option value="Admin">ADMINISTRADORES</option>
+                        <option value="Jugador">JUGADORES</option>
+                    </select>
+                    <input id="users-search" class="admin-search-v9" placeholder="Buscar por nombre o email...">
+                </div>
+            </div>
+            <div id="users-accordion-container" class="accordion-flow">
+                <!-- Usuarios renderizados como acordeones aquí -->
+            </div>
+          </section>
+
+          <!-- SOLICITUDES -->
+          <section id="pane-pending" class="admin-pane animate-fade-in">
+            <div class="pane-header mb-6">
+                <h2 class="pane-title">SOLICITUDES DE ACCESO</h2>
+                <p class="text-[10px] opacity-50 uppercase tracking-wider">Nuevos registros pendientes de validación</p>
+            </div>
+            <div class="table-card glass-v9">
+                <div class="table-wrap">
+                    <table class="premium-table">
+                        <thead>
+                            <tr>
+                                <th>IDENTIDAD</th>
+                                <th>FECHA</th>
+                                <th>ESTADO</th>
+                                <th class="text-right">ACCIONES</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pending-body"></tbody>
+                    </table>
+                </div>
+            </div>
+          </section>
+
+          <!-- PARTIDOS -->
+          <section id="pane-matches" class="admin-pane animate-fade-in">
+            <div class="pane-header flex-col md:flex-row between gap-4 mb-6">
+                <div>
+                    <h2 class="pane-title">HISTORIAL DE PARTIDOS</h2>
+                    <p class="text-[10px] opacity-50 uppercase tracking-wider">Gestión de resultados y horarios</p>
+                </div>
+                <div class="flex-row flex-wrap gap-2">
+                    <button class="btn-glass sm primary-glow" onclick="window.openCreateMatchAdmin()"><i class="fas fa-plus"></i> NUEVO PARTIDO</button>
+                    <select id="matches-type-filter" class="admin-select-v9 sm">
+                        <option value="all">TODOS</option>
+                        <option value="partidosAmistosos">AMISTOSOS</option>
+                        <option value="partidosReto">RETOS</option>
+                        <option value="eventoPartidos">TORNEO</option>
+                    </select>
+                    <select id="matches-filter" class="admin-select-v9 sm">
+                        <option value="all">TODOS</option>
+                        <option value="open">ABIERTOS</option>
+                        <option value="played">FINALIZADOS</option>
+                    </select>
+                </div>
+            </div>
+            <div id="matches-accordion-container" class="accordion-flow">
+                <!-- Partidos renderizados como acordeones aquí -->
+            </div>
+          </section>
+
+          <!-- TORNEOS -->
+          <section id="pane-eventos" class="admin-pane animate-fade-in">
+            <div class="pane-header flex-row between items-center mb-6">
+                <div>
+                    <h2 class="pane-title">CENTRO DE TORNEOS</h2>
+                    <p class="text-[10px] opacity-50 uppercase tracking-wider">Gestión integral de eventos y cuadros</p>
+                </div>
+                <button class="btn-glass sm" onclick="window.openCreateEventWizard()"><i class="fas fa-plus"></i> CREAR TORNEO</button>
+            </div>
+            <div id="events-accordion-container" class="accordion-flow">
+                <!-- Eventos renderizados como acordeones aquí -->
+            </div>
+          </section>
+
+          <!-- PUNTUACIÓN (ELO & RANKING) -->
+          <section id="pane-ranking" class="admin-pane animate-fade-in">
+             <div class="pane-header mb-6">
+                <h2 class="pane-title">CONFIGURACIÓN DE PUNTUACIÓN</h2>
+                <p class="text-[10px] opacity-50 uppercase tracking-wider">Parámetros del sistema ELO y Ranking global</p>
+            </div>
+            
+            <div class="system-grid-modern mb-8">
+                <!-- Configuración ELO -->
+                <div class="sys-card-v9">
+                    <div class="sys-card-head"><i class="fas fa-cog"></i> PARÁMETROS ELO</div>
+                    <div class="p-4 flex-col gap-4">
+                        <div class="ua-field">
+                            <label>Puntos por Victoria</label>
+                            <input type="number" id="cfg-elo-win" class="admin-field-v9" value="25">
+                        </div>
+                        <div class="ua-field">
+                            <label>Puntos por Derrota</label>
+                            <input type="number" id="cfg-elo-loss" class="admin-field-v9" value="-15">
+                        </div>
+                        <div class="ua-field">
+                            <label>Factor K (Sensibilidad)</label>
+                            <input type="number" id="cfg-elo-k" class="admin-field-v9" value="32">
+                        </div>
+                        <button id="btn-save-elo-config" class="btn-primary-admin w-full">GUARDAR CONFIGURACIÓN</button>
+                    </div>
+                </div>
+
+                <!-- Acciones Masivas -->
+                <div class="sys-card-v9">
+                    <div class="sys-card-head"><i class="fas fa-sync-alt"></i> RECALCULAR & RESET</div>
+                    <div class="p-4 flex-col gap-3">
+                        <button id="btn-wipe-recalc" class="btn-danger-v9 w-full">
+                            <i class="fas fa-radiation"></i> RECONSTRUCCIÓN HISTÓRICA
+                        </button>
+                        <button id="btn-reset-elo-base" class="btn-glass w-full" onclick="window.resetEloToBase()">
+                            <i class="fas fa-undo"></i> RESET A PUNTOS BASE (1000)
+                        </button>
+                        <button id="btn-recalc-from-level" class="btn-glass w-full">
+                            <i class="fas fa-layer-group"></i> RECALCULAR DESDE NIVEL ACTUAL
+                        </button>
+                        <p class="text-[9px] opacity-40 text-center">Precaución: Estas acciones afectan a toda la base de datos.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-card glass-v9">
+                <div class="table-wrap">
+                    <table class="premium-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>JUGADOR</th>
+                                <th>PUNTOS</th>
+                                <th>NIVEL</th>
+                                <th class="text-right">GESTIÓN</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ranking-body"></tbody>
+                    </table>
+                </div>
+            </div>
+          </section>
+
+          <!-- SISTEMA -->
+          <section id="pane-system" class="admin-pane animate-fade-in">
+            <h2 class="pane-title mb-6"><i class="fas fa-terminal mr-2"></i> PANEL DE CONTROL DEL SISTEMA</h2>
+            <div class="system-grid-modern">
+                <!-- Notificaciones -->
+                <div class="sys-card-v9">
+                    <div class="sys-card-head"><i class="fas fa-broadcast-tower"></i> COMUNICADOS GLOBALES</div>
+                    <div class="flex-col gap-3 p-4">
+                        <input id="sys-broadcast-title" class="admin-field-v9" placeholder="Título del mensaje">
+                        <textarea id="sys-broadcast-message" class="admin-field-v9" rows="3" placeholder="Contenido del anuncio..."></textarea>
+                        <button id="btn-broadcast" class="btn-primary-admin w-full">ENVIAR NOTIFICACIÓN</button>
+                    </div>
+                </div>
+
+                <!-- Sincronización Apoing -->
+                <div class="sys-card-v9">
+                    <div class="sys-card-head"><i class="fas fa-calendar-alt"></i> SINCRONIZACIÓN APOING</div>
+                    <div class="p-4 flex-col gap-3">
+                        <div class="flex-row between items-center mb-2">
+                            <span class="text-[10px] font-bold">ESTADO DEL SERVICIO:</span>
+                            <span class="badge-mini bg-green-500/10 text-green-400">ACTIVO</span>
+                        </div>
+                        <button class="btn-glass w-full" onclick="window.syncApoingAdmin()"><i class="fas fa-sync"></i> SINCRONIZACIÓN FORZADA</button>
+                        <button class="btn-glass w-full" onclick="document.getElementById('pane-apoing-list').classList.toggle('hidden')">GESTIONAR ENLACES ICS</button>
+                    </div>
+                </div>
+
+                <!-- Mantenimiento -->
+                <div class="sys-card-v9">
+                    <div class="sys-card-head"><i class="fas fa-tools"></i> HERRAMIENTAS MANTENIMIENTO</div>
+                    <div class="p-4 flex-col gap-2">
+                        <button id="btn-cancel-stale" class="btn-glass w-full">CANCELAR PARTIDOS EXPIRADOS</button>
+                        <button id="btn-reset-presence" class="btn-glass w-full">RESETEAR ESTADO EN LÍNEA</button>
+                        <button id="btn-nuke-logs" class="btn-glass w-full text-red-400">LIMPIAR REGISTROS DE ACTIVIDAD</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="pane-apoing-list" class="hidden mt-8">
+                <h3 class="text-xs font-black mb-4">ENLACES DE CALENDARIO APOING</h3>
+                <div class="table-card glass-v9">
+                    <div class="table-wrap">
+                        <table class="premium-table">
+                            <thead>
+                                <tr>
+                                    <th>DUEÑO</th>
+                                    <th>URL ICS</th>
+                                    <th class="text-right">ACCIONES</th>
+                                </tr>
+                            </thead>
+                            <tbody id="apoing-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+          </section>
+        </div>
+
+
+        </div>
       </div>
-      <div class="admin-modal-body">
-        <div class="flex-col gap-2">
-          <div class="form-group-admin">
-            <label>Tipo de Partido</label>
-            <select id="adm-create-col">
-              <option value="partidosAmistosos">Amistoso</option>
-              <option value="partidosReto">Reto</option>
-            </select>
-          </div>
-          <div class="form-group-admin">
-            <label>Fecha y Hora</label>
-            <input type="datetime-local" id="adm-create-date">
-          </div>
-          <div class="form-group-admin">
-            <label>Estado Inicial</label>
-            <select id="adm-create-state">
-              <option value="abierto">Abierto</option>
-              <option value="jugado">Jugado</option>
-            </select>
-          </div>
-          <button class="btn-full mt-2" onclick="window.confirmCreateMatchAdmin()">CREAR PARTIDA</button>
-        </div>
+    </main>
+  </div>
+
+  <!-- Modal Crear Partida -->
+  <div id="modal-admin-create-match" class="modal-overlay">
+    <div class="modal-card admin-modal-card-v9">
+      <div class="modal-header">
+        <h3 class="modal-title font-black uppercase text-sm text-[#00e5ff]">Partida Manual</h3>
+        <button class="close-btn" onclick="document.getElementById('modal-admin-create-match').classList.remove('active')">&times;</button>
+      </div>
+      <div class="modal-body p-6 flex-col gap-4">
+          <select id="adm-create-col" class="admin-field-v9">
+             <option value="partidosAmistosos">AMISTOSO</option>
+             <option value="partidosReto">RETO</option>
+          </select>
+          <input type="datetime-local" id="adm-create-date" class="admin-field-v9">
+          <select id="adm-create-state" class="admin-field-v9">
+             <option value="abierto">ABIERTO</option>
+             <option value="jugado">JUGADO</option>
+          </select>
+          <button class="btn-primary-admin w-full mt-4" onclick="window.confirmCreateMatchAdmin()">CREAR</button>
       </div>
     </div>
   </div>
 
-  <script type="module" src="./js/admin.js?v=6.5"></script>
+  <!-- Modal Añadir Jugador -->
+  <div id="modal-admin-add-player" class="modal-overlay">
+    <div class="modal-card admin-modal-card-v9">
+      <div class="modal-header">
+        <h3 id="add-player-target-title" class="modal-title font-black text-sm text-[#00e5ff]">AÑADIR JUGADOR</h3>
+        <button class="close-btn" onclick="document.getElementById('modal-admin-add-player').classList.remove('active')">&times;</button>
+      </div>
+      <div class="modal-body p-6 custom-scroll">
+          <input type="text" id="admin-player-search" class="admin-field-v9 mb-4" placeholder="Buscar jugador...">
+          <div id="admin-user-list-results" class="admin-user-flow-v9 mb-4"></div>
+          <div class="divider-admin mb-4"><span>O INVITADO</span></div>
+          <div class="flex-row gap-2">
+              <input type="text" id="admin-guest-name" placeholder="Nombre" class="admin-field-v9 flex-1">
+              <button id="btn-add-guest-admin" class="btn-glass sm">ADD</button>
+          </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/admin.js?v=9.0"></script>
   <script type="module" src="./js/admin-recalc-elo.js"></script>
 
-  <!-- Modal para añadir usuarios/invitados (Admin) -->
-  <div id="modal-admin-add-player" class="modal-overlay">
-    <div class="modal-card admin-modal-card">
-      <div class="modal-header">
-        <h3 id="add-player-target-title" class="modal-title">Añadir a la partida</h3>
-        <button class="close-btn"
-          onclick="document.getElementById('modal-admin-add-player').classList.remove('active')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="search-wrap mb-4">
-          <input type="text" id="admin-player-search" placeholder="Buscar jugador por nombre o email..."
-            class="admin-input-dark">
-        </div>
-        <div id="admin-user-list-results" class="admin-scroll-list mb-4">
-          <!-- Lista de usuarios se generará aquí -->
-        </div>
-        <div class="divider-admin mb-4"><span>O AÑADIR JUGADOR EXTERNO / INVITADO</span></div>
-        <div class="flex-col gap-2">
-          <input type="text" id="admin-guest-name" placeholder="Nombre del invitado" class="admin-input-dark">
-          <button id="btn-add-guest-admin" class="btn-mini wide primary-glow">Añadir como Invitado</button>
-        </div>
-      </div>
-    </div>
-  </div>
 </body>
 
 </html>

@@ -1,4 +1,4 @@
-﻿/* js/modules/vecina-chat.js - Sentient AI v15.0 "Neural Core" Edition */
+/* js/modules/vecina-chat.js - Sentient AI v15.0 "Neural Core" Edition */
 import { auth, getDocument, db } from "../firebase-service.js";
 import {
   collection,
@@ -147,9 +147,13 @@ async function _syncData() {
       })),
       ...matchReto.docs.map((d) => ({ ...d.data(), id: d.id, _col: "reto" })),
     ].sort((a, b) => {
-      const dA = a.fecha?.toDate?.() || new Date(a.fecha || 0);
-      const dB = b.fecha?.toDate?.() || new Date(b.fecha || 0);
-      return dB - dA;
+      const getT = (x) => {
+        try {
+          const d = x.fecha?.toDate?.() || new Date(x.fecha || 0);
+          return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+        } catch { return 0; }
+      };
+      return getT(b) - getT(a);
     });
     DATA_CACHE.globalUsers = usersSnap.docs.map((d) => {
       const data = d.data() || {};
@@ -1199,10 +1203,12 @@ export function toggleChat(forceOpen = null) {
       document.documentElement.classList.add("ai-chat-open");
       _syncData();
       document.getElementById("ai-input-field").focus();
+      if(window.maximizeAiFab) window.maximizeAiFab();
   } else {
       panel.classList.remove("open");
       document.body.classList.remove("ai-chat-open");
       document.documentElement.classList.remove("ai-chat-open");
+      if(window.minimizeAiFab) window.minimizeAiFab();
       setTimeout(() => {
         if (!chatOpen) panel.style.setProperty("display", "none", "important");
       }, 260);
@@ -1243,8 +1249,28 @@ export function initVecinaChat() {
   fab.id = "vecina-chat-fab";
   fab.className = "ai-fab";
   fab.innerHTML = `<i class="fas fa-robot"></i>`;
-  fab.onclick = toggleChat;
+  fab.onclick = () => {
+    if (fab.classList.contains('minimized')) {
+        fab.classList.remove('minimized');
+        fab.classList.add('im-here');
+        // If it was minimized, clicking only restores it
+        return;
+    }
+    toggleChat();
+  };
   document.body.appendChild(fab);
+
+  // Behavior: Minimize when chat closes OR after inactivity
+  window.minimizeAiFab = () => {
+      fab.classList.add('minimized');
+      fab.classList.remove('im-here');
+      setTimeout(() => { if(fab.classList.contains('minimized')) fab.classList.add('im-here'); }, 2000);
+  };
+
+  window.maximizeAiFab = () => {
+      fab.classList.remove('minimized');
+      fab.classList.add('im-here');
+  };
 
   // PANEL
   const chatHTML = `
@@ -1356,6 +1382,30 @@ export function initVecinaChat() {
                 z-index: 13050 !important;
             }
             #vecina-chat-fab.ai-fab:active { transform: scale(0.9); }
+
+            #vecina-chat-fab.ai-fab.minimized {
+                transform: translateX(35px) scale(0.7) !important;
+                background: rgba(198, 255, 0, 0.1) !important;
+                border: 1px solid rgba(198, 255, 0, 0.1) !important;
+                opacity: 0.4;
+                filter: grayscale(1);
+                transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            }
+            #vecina-chat-fab.ai-fab.minimized:hover {
+                transform: translateX(10px) scale(0.9) !important;
+                background: rgba(198, 255, 0, 0.3) !important;
+                opacity: 1;
+                filter: none;
+            }
+
+            @keyframes slow-pulse {
+                0% { box-shadow: 0 0 0 0 rgba(198, 255, 0, 0.2); }
+                70% { box-shadow: 0 0 0 15px rgba(198, 255, 0, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(198, 255, 0, 0); }
+            }
+            #vecina-chat-fab.ai-fab.im-here {
+                animation: slow-pulse 4s infinite;
+            }
 
             .ai-chat-panel.v14 { 
                 border-radius: 32px 32px 0 0; 
@@ -1596,7 +1646,36 @@ export function initVecinaChat() {
     if (e.key === "Enter") sendMessage();
   };
 
+  const toggleChat = () => {
+    const p = document.getElementById("vecina-chat-panel");
+    const f = document.getElementById("vecina-chat-fab");
+    if (!p || !f) return;
+    const open = p.style.display === "none";
+    if (open) {
+      p.style.setProperty("display", "flex", "important");
+      p.classList.add("open");
+      f.classList.add("hidden");
+      f.classList.remove("minimized", "im-here");
+    } else {
+      p.style.display = "none";
+      p.classList.remove("open");
+      f.classList.remove("hidden");
+      setTimeout(() => {
+          f.classList.add("minimized", "im-here");
+      }, 1200);
+    }
+  };
+
   window.toggleAiChat = toggleChat;
+  if(fab) {
+      fab.onclick = toggleChat;
+      // Auto-minimize on load after 2 seconds
+      setTimeout(() => {
+          if (!panel || panel.style.display === "none") {
+              fab.classList.add("minimized", "im-here");
+          }
+      }, 1200);
+  }
   window.switchAiPersonality = switchAiPersonality;
   window.aiQuickCmd = window.aiQuickCmd;
 

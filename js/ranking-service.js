@@ -13,6 +13,7 @@ import {
   levelFromRating,
   getLevelBandByRating,
 } from "./config/elo-system.js";
+import { checkAchievements } from "./achievement-service.js";
 
 const BONUS_REASON_NONE = "none";
 const BONUS_REASON_MVP = "mvp";
@@ -560,6 +561,25 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         rankingProcessedAt: serverTimestamp(),
         rankingProcessedResult: normalizedResult,
         rankingProcessedBy: auth.currentUser?.uid || null,
+      });
+
+      // After success, trigger background check for achievements
+      roster.forEach((p, idx) => {
+          if (p && !p.isGuest) {
+              const allocation = allocations.find(a => a.uid === p.id);
+              if (allocation) {
+                checkAchievements(p.id, {
+                    partidosJugados: Number(p.partidosJugados || 0) + 1,
+                    victorias: Number(p.victorias || 0) + (allocation.delta > 0 ? 1 : 0),
+                    rachaActual: allocation.delta > 0 
+                        ? (Number(p.rachaActual || 0) > 0 ? Number(p.rachaActual || 0) + 1 : 1)
+                        : (Number(p.rachaActual || 0) < 0 ? Number(p.rachaActual || 0) - 1 : -1)
+                }, { 
+                    mvpId: extraMatchData?.mvpId, 
+                    fecha: match.fecha 
+                }).catch(e => console.warn("Achievement check failed for", p.id, e));
+              }
+          }
       });
 
       return {

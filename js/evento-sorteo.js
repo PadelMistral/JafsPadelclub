@@ -1,545 +1,228 @@
-// evento-sorteo.js - Versión con forzado de parejas fijas mediante composición
-import { db, observerAuth, getDocument } from './firebase-service.js';
-import { initAppUI, showToast } from './ui-core.js';
-import { doc, onSnapshot, collection, query, where, updateDoc, addDoc, deleteDoc, getDocs, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
-import { injectHeader, injectNavbar } from './modules/ui-loader.js';
-import { buildEventTeams, runTournamentDraw, resolveTeamById } from './event-tournament-engine.js';
+import { db, auth } from './firebase-service.js';
+import { collection, getDocs, updateDoc, doc, getDoc, writeBatch, serverTimestamp, addDoc, query, where } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import { 
+    buildEventTeams, 
+    allocateGroups, 
+    generateRoundRobin,
+    seededRandomFactory,
+    hashSeed
+} from './event-tournament-engine.js';
 
-initAppUI('events');
-
-const eventId = new URLSearchParams(window.location.search).get('id');
-let currentUser = null;
-let currentUserData = null;
 let currentEvent = null;
-let unsubEvent = null;
-
+let teamsForStorage = [];
+let groupsResult = {};
 let drawSteps = [];
-let currentStepIndex = 0;
-let teams = [];
-let groups = {};
-let bracket = null;
-let builtData = null;
+let stepIndex = 0;
+let isDrawing = false;
+let riggedPairs = []; // { player1, player2, group }
 
-// Elementos del DOM
-let card = document.getElementById('card');
-let playerNameDisplay = document.getElementById('playerNameDisplay');
-let startBtn = document.getElementById('btn-start-draw');
-let nextBtn = document.getElementById('btn-next-step');
-let groupsContainer = document.getElementById('groups-container');
-let cardContainer = document.getElementById('cardContainer');
-let riggingBtn = document.getElementById('btn-rigging');
-let riggingModal = document.getElementById('modal-rigging');
-let rigPlayer1 = document.getElementById('rig-player1');
-let rigPlayer2 = document.getElementById('rig-player2');
-let addRiggedBtn = document.getElementById('btn-add-rigged-pair');
-let riggedPairsList = document.getElementById('rigged-pairs-list');
-let clearRiggedBtn = document.getElementById('btn-clear-rigged');
+const card = document.getElementById('card');
+const playerNameDisplay = document.getElementById('playerNameDisplay');
+const btnStart = document.getElementById('btn-start-draw');
+const btnNext = document.getElementById('btn-next-step');
+const groupsContainer = document.getElementById('groups-container');
 
-// Almacén local de parejas fijas
-let fixedPairs = [];
-let fixedPairsMap = new Map();
+// Load Event Data
+async function init() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const eventId = urlParams.get('id');
+    if (!eventId) { alert('No event ID'); return; }
 
-if (!eventId) window.location.replace('eventos.html');
+    const evSnap = await getDoc(doc(db, 'eventos', eventId));
+    if (!evSnap.exists()) return;
+    currentEvent = { id: evSnap.id, ...evSnap.data() };
 
-document.addEventListener('DOMContentLoaded', () => {
-    observerAuth(async (user) => {
-        if (!user) return window.location.replace('index.html');
-        currentUser = user;
-        currentUserData = await getDocument('usuarios', user.uid);
-        await injectHeader(currentUserData || {});
-        injectNavbar('events');
-        subscribeEvent();
+    if (currentEvent.drawState?.status === 'completed') {
+        const msg = document.getElementById('draw-message');
+        if (msg) msg.classList.remove('hidden');
+        if (btnStart) btnStart.classList.add('hidden');
+        renderFinalGroups(currentEvent.groups);
+        return;
+    }
 
-        if (startBtn) startBtn.addEventListener('click', window.iniciarSorteo);
-        if (nextBtn) nextBtn.addEventListener('click', window.siguientePaso);
-    });
-});
-
-function subscribeEvent() {
-    unsubEvent = onSnapshot(doc(db, 'eventos', eventId), (snap) => {
-        if (!snap.exists()) {
-            showToast('Evento no encontrado', 'error');
-            setTimeout(() => window.location.href = 'eventos.html', 700);
-            return;
-        }
-        currentEvent = { id: snap.id, ...snap.data() };
-        render();
-        if (currentUserData?.rol === 'Admin') {
-            riggingBtn?.classList.remove('hidden');
-        } else {
-            riggingBtn?.classList.add('hidden');
+    // Check Admin for Rigging
+    auth.onAuthStateChanged(user => {
+        if (user && (user.email === 'admin@jafspadel.com' || currentEvent.organizadorId === user.uid)) {
+            const btnRig = document.getElementById('btn-rigging');
+            if (btnRig) btnRig.classList.remove('hidden');
+            setupRiggingModal();
         }
     });
+
+    if (btnStart) btnStart.onclick = prepareDraw;
+    if (btnNext) btnNext.onclick = nextDrawStep;
 }
 
-function render() {
-    const ev = currentEvent || {};
-    if (ev.drawState?.status === 'completed') {
-        groups = ev.groups || {};
-        teams = ev.teams || [];
-        renderGroupsFromData();
-        startBtn?.classList.add('hidden');
-        nextBtn?.classList.add('hidden');
-    } else {
-        if (groupsContainer) groupsContainer.innerHTML = '';
-        startBtn?.classList.remove('hidden');
-        nextBtn?.classList.add('hidden');
+function setupRiggingModal() {
+    const modal = document.getElementById('modal-rigging');
+    const btnRig = document.getElementById('btn-rigging');
+    const sel1 = document.getElementById('rig-player1');
+    const sel2 = document.getElementById('rig-player2');
+    if (!modal || !btnRig || !sel1 || !sel2) return;
+    
+    const inscritos = currentEvent.inscritos || [];
+
+    btnRig.onclick = () => {
+        sel1.innerHTML = inscritos.map(i => `<option value="${i.uid}">${i.nombre || i.email}</option>`).join('');
+        sel2.innerHTML = inscritos.map(i => `<option value="${i.uid}">${i.nombre || i.email}</option>`).join('');
+        modal.classList.add('active');
+    };
+
+    const btnAddRig = document.getElementById('btn-add-rigged-pair');
+    if (btnAddRig) {
+        btnAddRig.onclick = () => {
+            const p1 = inscritos.find(i => i.uid === sel1.value);
+            const p2 = inscritos.find(i => i.uid === sel2.value);
+            const group = document.getElementById('rig-group').value;
+            riggedPairs.push({ p1, p2, group });
+            renderRiggedList();
+        };
     }
 }
 
-function renderGroupsFromData() {
-    const groupNames = ['A', 'B', 'C', 'D'].slice(0, currentEvent?.groupCount || 2);
-    if (!groupsContainer) return;
-    groupsContainer.innerHTML = groupNames.map(g => `
-        <div class="group-box" data-group="${g}">
-            <h3>Grupo ${g}</h3>
-            <div class="group-teams" id="group-${g}"></div>
-        </div>
+function renderRiggedList() {
+    const list = document.getElementById('rigged-pairs-list');
+    if (!list) return;
+    list.innerHTML = riggedPairs.map((p, idx) => `
+        <li class="text-[10px] flex justify-between bg-white/05 p-1 rounded">
+            <span>${p.p1.nombre} + ${p.p2.nombre} -> ${p.group || '?'}</span>
+            <button onclick="window.removeRigged(${idx})" class="text-red-400">×</button>
+        </li>
     `).join('');
-    groupNames.forEach(g => {
-        const container = document.getElementById(`group-${g}`);
-        if (container) {
-            (groups[g] || []).forEach(teamId => {
-                const team = teams.find(t => t.id === teamId);
-                if (team) {
-                    const div = document.createElement('div');
-                    div.className = 'group-team';
-                    div.textContent = team.name;
-                    container.appendChild(div);
-                }
-            });
-        }
-    });
 }
+window.removeRigged = (idx) => { riggedPairs.splice(idx, 1); renderRiggedList(); };
 
-function loadInscritosToSelects() {
-    const inscritos = currentEvent?.inscritos || [];
-    const options = inscritos.map(ins => `<option value="${ins.uid}">${ins.nombre}</option>`).join('');
-    if (rigPlayer1) rigPlayer1.innerHTML = '<option value="">Selecciona</option>' + options;
-    if (rigPlayer2) rigPlayer2.innerHTML = '<option value="">Selecciona</option>' + options;
-}
+async function prepareDraw() {
+    if (isDrawing) return;
+    btnStart.disabled = true;
+    btnStart.textContent = 'PROCESANDO...';
 
-function updateRiggedPairsList() {
-    if (!riggedPairsList) return;
-    riggedPairsList.innerHTML = fixedPairs.map((pair, index) => {
-        const user1 = currentEvent?.inscritos?.find(i => i.uid === pair.player1);
-        const user2 = currentEvent?.inscritos?.find(i => i.uid === pair.player2);
-        return `<li>
-            <span>${user1?.nombre || pair.player1} + ${user2?.nombre || pair.player2}</span>
-            <button class="btn-micro danger" onclick="window.removeRiggedPair(${index})"><i class="fas fa-times"></i></button>
-        </li>`;
-    }).join('');
-}
-
-window.addRiggedPair = () => {
-    const p1 = rigPlayer1?.value;
-    const p2 = rigPlayer2?.value;
-    if (!p1 || !p2) {
-        showToast('Selecciona dos jugadores', 'warning');
-        return;
-    }
-    if (p1 === p2) {
-        showToast('No puedes seleccionar el mismo jugador', 'warning');
-        return;
-    }
-    const already = fixedPairs.some(p => p.player1 === p1 || p.player1 === p2 || p.player2 === p1 || p.player2 === p2);
-    if (already) {
-        showToast('Uno de los jugadores ya está en una pareja fija', 'warning');
-        return;
-    }
-    fixedPairs.push({ player1: p1, player2: p2 });
-    fixedPairsMap.set(p1, p2);
-    fixedPairsMap.set(p2, p1);
-    updateRiggedPairsList();
-    rigPlayer1.value = '';
-    rigPlayer2.value = '';
-};
-
-window.removeRiggedPair = (index) => {
-    const pair = fixedPairs[index];
-    fixedPairs.splice(index, 1);
-    fixedPairsMap.delete(pair.player1);
-    fixedPairsMap.delete(pair.player2);
-    updateRiggedPairsList();
-};
-
-window.clearRiggedPairs = () => {
-    fixedPairs = [];
-    fixedPairsMap.clear();
-    updateRiggedPairsList();
-};
-
-// Función para formar equipos manualmente respetando parejas fijas
-function formarEquiposConParejasFijas(inscritos, fixedPairs) {
-    // Copia de la lista de inscritos
-    let disponibles = [...inscritos];
-    let equipos = [];
-
-    // Mapa para saber qué jugadores están en parejas fijas
-    let enPareja = new Set();
-    fixedPairs.forEach(p => {
-        enPareja.add(p.player1);
-        enPareja.add(p.player2);
+    const { teams } = buildEventTeams({
+        modalidad: currentEvent.modalidad || 'parejas',
+        inscritos: currentEvent.inscritos.filter(i => i.aprobado),
+        seed: currentEvent.id
     });
 
-    // Primero, procesar las parejas fijas
-    fixedPairs.forEach(pair => {
-        const jug1 = disponibles.find(j => j.uid === pair.player1);
-        const jug2 = disponibles.find(j => j.uid === pair.player2);
-        if (jug1 && jug2) {
-            // Crear equipo
-            equipos.push({
-                id: `team_${pair.player1}_${pair.player2}`,
-                name: `${jug1.nombre} + ${jug2.nombre}`,
-                playerUids: [pair.player1, pair.player2],
-                playerNames: [jug1.nombre, jug2.nombre]
-            });
-            // Eliminar de disponibles
-            disponibles = disponibles.filter(j => j.uid !== pair.player1 && j.uid !== pair.player2);
-        }
-    });
+    teamsForStorage = teams;
+    const { groups, steps } = allocateGroups(teams, currentEvent.groupCount || 2, currentEvent.id);
+    groupsResult = groups;
+    drawSteps = steps;
 
-    // Mezclar los restantes
-    disponibles = disponibles.sort(() => Math.random() - 0.5);
-    // Formar parejas aleatorias con los restantes
-    for (let i = 0; i < disponibles.length; i += 2) {
-        if (i + 1 < disponibles.length) {
-            const jug1 = disponibles[i];
-            const jug2 = disponibles[i + 1];
-            equipos.push({
-                id: `team_${jug1.uid}_${jug2.uid}`,
-                name: `${jug1.nombre} + ${jug2.nombre}`,
-                playerUids: [jug1.uid, jug2.uid],
-                playerNames: [jug1.nombre, jug2.nombre]
-            });
-        } else {
-            // Jugador impar (individual) - en pádel no debería ocurrir, pero por si acaso
-            console.warn('Número impar de jugadores, el último se queda solo');
-            const jug = disponibles[i];
-            equipos.push({
-                id: `team_${jug.uid}`,
-                name: jug.nombre,
-                playerUids: [jug.uid],
-                playerNames: [jug.nombre]
-            });
-        }
+    // Render group skeletons
+    if (groupsContainer) {
+        groupsContainer.innerHTML = Object.keys(groups).map(g => `
+            <div class="group-box-draw glass-premium" id="group-draw-${g}">
+                <h3 class="group-title">GRUPO ${g}</h3>
+                <div class="group-slots" id="slots-${g}"></div>
+            </div>
+        `).join('');
     }
-    return equipos;
+
+    isDrawing = true;
+    btnStart.classList.add('hidden');
+    btnNext.classList.remove('hidden');
+    btnNext.disabled = false;
+    nextDrawStep();
 }
 
-// Iniciar sorteo
-window.iniciarSorteo = async () => {
-    const ev = currentEvent;
-    if (!ev) {
-        showToast('Evento no cargado', 'error');
+function nextDrawStep() {
+    if (stepIndex >= drawSteps.length) {
+        finishDraw();
         return;
     }
-    if (ev.drawState?.status === 'completed') {
-        showToast('Este evento ya ha sido sorteado', 'info');
-        return;
-    }
+
+    const step = drawSteps[stepIndex];
+    stepIndex++;
+
+    // Animation 
+    if (card) card.classList.add('flipping');
+    if (playerNameDisplay) playerNameDisplay.textContent = step.teamName;
+
+    setTimeout(() => {
+        const slotContainer = document.getElementById(`slots-${step.group}`);
+        if (slotContainer) {
+            const teamDiv = document.createElement('div');
+            teamDiv.className = 'draw-team-pill animate-pop-in';
+            teamDiv.innerHTML = `<span>${step.teamName}</span>`;
+            slotContainer.appendChild(teamDiv);
+        }
+        
+        setTimeout(() => { if (card) card.classList.remove('flipping'); }, 500);
+        if (stepIndex === drawSteps.length) {
+            btnNext.textContent = 'FINALIZAR';
+            btnNext.classList.add('btn-draw-success');
+        }
+    }, 600);
+}
+
+async function finishDraw() {
+    btnNext.disabled = true;
+    btnNext.textContent = 'GUARDANDO...';
 
     try {
-        showToast('Generando sorteo...', 'info');
+        const partidosRef = collection(db, 'eventoPartidos');
+        const teamMap = new Map(teamsForStorage.map(t => [t.id, t]));
 
-        const inscritos = ev.inscritos || [];
-        if (inscritos.length < 2) throw new Error('No hay suficientes jugadores');
-
-        // Formar equipos manualmente con las parejas fijas
-        teams = formarEquiposConParejasFijas(inscritos, fixedPairs);
-
-        // Ahora necesitamos generar la estructura del torneo (grupos, partidos) a partir de estos equipos
-        // Para simplificar, usaremos runTournamentDraw pero con una lista de "inscritos" modificada
-        // No podemos pasarle equipos directamente, así que vamos a simular que cada equipo es un solo jugador
-        // Eso no nos sirve. En lugar de eso, construiremos manualmente los grupos y partidos según el formato.
-
-        // Por ahora, para que funcione, haremos una simulación: crearemos grupos ficticios y partidos de liga
-        // Esto es un parche, pero al menos las parejas fijas se respetarán.
-
-        // Eliminar partidos anteriores
-        const prevSnap = await getDocs(query(collection(db, 'eventoPartidos'), where('eventoId', '==', ev.id)));
-        await Promise.all(prevSnap.docs.map(d => deleteDoc(doc(db, 'eventoPartidos', d.id))));
-
-        const f = String(ev.formato || 'league_knockout');
-        const groupCount = (f === 'league_knockout') ? Math.min(4, Math.max(2, Number(ev.groupCount || 2))) : 1;
-        const equiposPorGrupo = (f === 'league_knockout') ? Number(ev.equiposPorGrupo || 2) : teams.length;
-
-        // Asignar equipos a grupos aleatoriamente
-        groups = {};
-        for (let i = 0; i < groupCount; i++) {
-            groups[String.fromCharCode(65 + i)] = []; // A, B, C...
-        }
-
-        // Mezclar equipos y asignar a grupos
-        let shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
-        shuffledTeams.forEach((team, index) => {
-            const groupKey = String.fromCharCode(65 + (index % groupCount));
-            groups[groupKey].push(team.id);
-        });
-
-        // Generar partidos de liga si corresponde
-        if (f === 'league' || f === 'league_knockout') {
-            for (let g in groups) {
-                const teamIds = groups[g];
-                for (let i = 0; i < teamIds.length; i++) {
-                    for (let j = i + 1; j < teamIds.length; j++) {
-                        const ta = teams.find(t => t.id === teamIds[i]);
-                        const tb = teams.find(t => t.id === teamIds[j]);
-                        await addDoc(collection(db, 'eventoPartidos'), {
-                            eventoId: ev.id,
-                            tipo: 'evento',
-                            phase: 'group',
-                            group: g,
-                            round: 1,
-                            teamAId: teamIds[i],
-                            teamBId: teamIds[j],
-                            teamAName: ta?.name || 'TBD',
-                            teamBName: tb?.name || 'TBD',
-                            playerUids: [...new Set([...(ta?.playerUids || []), ...(tb?.playerUids || [])])],
-                            resultado: null,
-                            ganadorTeamId: null,
-                            estado: 'pendiente',
-                            fecha: null,
-                            createdAt: serverTimestamp()
-                        });
-                    }
-                }
-            }
-        }
-
-        // Generar eliminatorias si corresponde
-        if (f === 'knockout' || f === 'league_knockout') {
-            // Por simplicidad, no generamos bracket aquí, solo ponemos un placeholder
-            // En una implementación real, deberías generar el bracket según los resultados de grupos
-            // Pero para la animación, no es necesario tener partidos de eliminatoria aún.
-        }
-
-        // Construir pasos de animación
-        drawSteps = [];
-        teams.forEach(team => {
-            team.playerNames.forEach((player, idx) => {
-                drawSteps.push({
-                    type: 'player',
-                    playerName: player,
-                    teamId: team.id,
-                    isSecond: idx === 1
+        // Generate matches for each group
+        for (const [groupName, teamIds] of Object.entries(groupsResult)) {
+            const matches = generateRoundRobin(teamIds);
+            for (let i = 0; i < matches.length; i++) {
+                const m = matches[i];
+                const teamA = teamMap.get(m.teamAId);
+                const teamB = teamMap.get(m.teamBId);
+                
+                await addDoc(partidosRef, {
+                    eventoId: currentEvent.id,
+                    tipo: 'evento',
+                    phase: currentEvent.formato === 'league' ? 'league' : 'group',
+                    group: groupName,
+                    round: i + 1,
+                    teamAId: m.teamAId,
+                    teamBId: m.teamBId,
+                    teamAName: teamA?.name || 'TBD',
+                    teamBName: teamB?.name || 'TBD',
+                    playerUids: [...(teamA?.playerUids || []), ...(teamB?.playerUids || [])],
+                    estado: 'pendiente',
+                    resultado: null,
+                    ganadorTeamId: null,
+                    fecha: null,
+                    createdAt: serverTimestamp()
                 });
-            });
-            let grupo = '?';
-            for (let [g, ids] of Object.entries(groups)) {
-                if (ids.includes(team.id)) {
-                    grupo = g;
-                    break;
-                }
             }
-            drawSteps.push({
-                type: 'assign',
-                teamId: team.id,
-                group: grupo,
-                teamName: team.name
-            });
+        }
+
+        await updateDoc(doc(db, 'eventos', currentEvent.id), {
+            estado: 'activo',
+            teams: teamsForStorage,
+            groups: groupsResult,
+            drawState: { status: 'completed', updatedAt: new Date().toISOString() },
+            updatedAt: serverTimestamp()
         });
 
-        // Inicializar grupos vacíos
-        const groupNames = Object.keys(groups);
-        if (groupsContainer) {
-            groupsContainer.innerHTML = groupNames.map(g => `
-                <div class="group-box" data-group="${g}">
-                    <h3>Grupo ${g}</h3>
-                    <div class="group-teams" id="group-${g}"></div>
-                </div>
-            `).join('');
-        }
-
-        currentStepIndex = 0;
-        startBtn.classList.add('hidden');
-        nextBtn.classList.remove('hidden');
-        nextBtn.disabled = false;
-        procesarPaso();
+        alert('Sorteo finalizado con éxito. Partidos generados.');
+        window.location.href = `evento-detalle.html?id=${currentEvent.id}`;
     } catch (e) {
-        console.error('Error en iniciarSorteo:', e);
-        showToast('Error', e.message || 'No se pudo preparar el sorteo', 'error');
-    }
-};
-
-function procesarPaso() {
-    if (currentStepIndex >= drawSteps.length) {
-        finalizarSorteo();
-        return;
-    }
-
-    const step = drawSteps[currentStepIndex];
-    if (step.type === 'player') {
-        mostrarJugador(step.playerName, step.isSecond);
-    } else if (step.type === 'assign') {
-        asignarEquipoAGrupo(step.teamId, step.group, step.teamName);
+        console.error(e);
+        alert('Error al finalizar el sorteo: ' + e.message);
+        btnNext.disabled = false;
+        btnNext.textContent = 'REINTENTAR';
     }
 }
 
-function mostrarJugador(nombre, esSegundo) {
-    nextBtn.disabled = true;
-
-    if (card) {
-        card.style.transform = 'rotateY(0deg)';
-        card.classList.add('spinning');
-    }
-    document.body.classList.add('lightning');
-
-    setTimeout(() => {
-        if (card) {
-            card.classList.remove('spinning');
-            card.style.transform = 'rotateY(180deg)';
-        }
-        if (playerNameDisplay) playerNameDisplay.textContent = nombre;
-        confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
-    }, 4000);
-
-    setTimeout(() => {
-        document.body.classList.remove('lightning');
-        nextBtn.disabled = false;
-    }, 5000);
+function renderFinalGroups(groups) {
+    if (!groupsContainer) return;
+    groupsContainer.innerHTML = Object.keys(groups).map(g => `
+        <div class="group-box-draw glass-premium completed">
+            <h3 class="group-title">GRUPO ${g}</h3>
+            <div class="group-slots">
+                ${groups[g].map(tid => {
+                    const t = currentEvent.teams?.find(x => x.id === tid);
+                    return `<div class="draw-team-pill"><span>${t?.name || tid}</span></div>`;
+                }).join('')}
+            </div>
+        </div>
+    `).join('');
 }
 
-function asignarEquipoAGrupo(teamId, grupo, teamName) {
-    nextBtn.disabled = true;
-
-    const cardRect = cardContainer.getBoundingClientRect();
-    const groupBox = document.getElementById(`group-${grupo}`);
-    if (!groupBox) {
-        console.error('No se encontró el grupo', grupo);
-        nextBtn.disabled = false;
-        return;
-    }
-
-    const groupRect = groupBox.getBoundingClientRect();
-
-    const clone = cardContainer.cloneNode(true);
-    clone.style.position = 'fixed';
-    clone.style.top = cardRect.top + 'px';
-    clone.style.left = cardRect.left + 'px';
-    clone.style.width = cardRect.width + 'px';
-    clone.style.height = cardRect.height + 'px';
-    clone.style.zIndex = '2000';
-    clone.style.transition = 'all 2s ease-in-out';
-    clone.style.margin = '0';
-    clone.style.opacity = '1';
-    document.body.appendChild(clone);
-
-    cardContainer.style.opacity = '0';
-
-    setTimeout(() => {
-        clone.style.top = groupRect.top + 'px';
-        clone.style.left = groupRect.left + groupRect.width/2 - cardRect.width/2 + 'px';
-        clone.style.transform = 'scale(0.3)';
-        clone.style.opacity = '0';
-    }, 100);
-
-    setTimeout(() => {
-        clone.remove();
-        cardContainer.style.opacity = '1';
-        const groupTeams = document.getElementById(`group-${grupo}`);
-        if (groupTeams) {
-            const teamDiv = document.createElement('div');
-            teamDiv.className = 'group-team';
-            teamDiv.textContent = teamName;
-            groupTeams.appendChild(teamDiv);
-        }
-        confetti({ particleCount: 100, spread: 100, origin: { y: 0.5 } });
-        nextBtn.disabled = false;
-    }, 2100);
-}
-
-window.siguientePaso = () => {
-    currentStepIndex++;
-    procesarPaso();
-};
-
-async function finalizarSorteo() {
-    const ev = currentEvent;
-    if (!ev) return;
-
-    function deepSanitize(obj) {
-        if (Array.isArray(obj)) {
-            return obj.map(item => deepSanitize(item));
-        } else if (obj && typeof obj === 'object') {
-            const newObj = {};
-            for (const [key, value] of Object.entries(obj)) {
-                if (Array.isArray(value) && value.some(v => Array.isArray(v))) {
-                    const arrObj = {};
-                    value.forEach((v, idx) => {
-                        arrObj[idx] = deepSanitize(v);
-                    });
-                    newObj[key] = arrObj;
-                } else if (Array.isArray(value)) {
-                    newObj[key] = value.map(v => deepSanitize(v));
-                } else if (value && typeof value === 'object') {
-                    newObj[key] = deepSanitize(value);
-                } else {
-                    newObj[key] = value;
-                }
-            }
-            return newObj;
-        }
-        return obj;
-    }
-
-    const stepsForStorage = drawSteps.map(s => ({
-        type: s.type,
-        playerName: s.playerName,
-        group: s.group
-    }));
-
-    const teamsForStorage = teams.map(t => ({
-        id: t.id,
-        name: t.name,
-        playerUids: t.playerUids || [],
-        playerNames: t.playerNames || []
-    }));
-
-    const updateData = {
-        estado: 'activo',
-        teams: teamsForStorage,
-        groups: deepSanitize(groups),
-        drawState: {
-            status: 'completed',
-            steps: stepsForStorage,
-            completedAt: new Date().toISOString(),
-            executedBy: currentUser?.uid || 'system',
-            version: Date.now()
-        },
-        unmatched: (builtData?.unmatched || []).map(u => u.uid || u),
-        updatedAt: serverTimestamp()
-    };
-    if (bracket) updateData.bracket = deepSanitize(bracket);
-
-    await updateDoc(doc(db, 'eventos', ev.id), deepSanitize(updateData));
-
-    const version = updateData.drawState.version;
-    if (currentUser) {
-        localStorage.setItem(`drawSeen_${ev.id}_${version}_${currentUser.uid}`, 'true');
-    }
-
-    nextBtn.classList.add('hidden');
-    showToast('¡Sorteo completado!', 'Disfruta del torneo', 'success');
-    renderGroupsFromData();
-}
-
-// Event listeners para el modal de amañar
-if (riggingBtn) {
-    riggingBtn.addEventListener('click', () => {
-        loadInscritosToSelects();
-        updateRiggedPairsList();
-        riggingModal?.classList.add('active');
-    });
-}
-if (addRiggedBtn) {
-    addRiggedBtn.addEventListener('click', window.addRiggedPair);
-}
-if (clearRiggedBtn) {
-    clearRiggedBtn.addEventListener('click', window.clearRiggedPairs);
-}
-
-// Exponer funciones globales
-window.addRiggedPair = window.addRiggedPair;
-window.clearRiggedPairs = window.clearRiggedPairs;
-window.removeRiggedPair = window.removeRiggedPair;
+init();
+``

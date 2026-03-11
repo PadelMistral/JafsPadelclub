@@ -167,3 +167,136 @@ window.WIPE_AND_RECALC_ALL_MATCHES = async function () {
 
     return { success: true, processed: successCount, errors: errorCount, elapsed };
 };
+
+/**
+ * RECALC_FROM_CURRENT_LEVELS
+ *
+ * 1. Mantiene el nivel actual de cada usuario como punto de partida.
+ * 2. Calcula puntos base desde ese nivel.
+ * 3. Reprocesa todos los partidos jugados cronologicamente.
+ */
+window.RECALC_FROM_CURRENT_LEVELS = async function () {
+    const t0 = performance.now();
+    const { ratingFromLevel, levelFromRating } = await import("./config/elo-system.js");
+
+    // 1. Reset users to current level base rating
+    const usersSnap = await getDocs(collection(db, "usuarios"));
+    let batch = writeBatch(db);
+    let count = 0;
+
+    for (const d of usersSnap.docs) {
+        const u = d.data() || {};
+        const currentLevel = Number.isFinite(Number(u.nivel)) ? Number(u.nivel) : levelFromRating(u.puntosRanking || ELO_CONFIG.BASE_RATING);
+        const startRating = ratingFromLevel(currentLevel);
+
+        batch.update(d.ref, {
+            puntosRanking: startRating,
+            rating: startRating,
+            nivel: currentLevel,
+            partidosJugados: 0,
+            victorias: 0,
+            rachaActual: 0,
+            elo: {},
+            nivelProgresoPct: 50,
+            nivelRango: "Bronce",
+            lastMatchAnalysis: null,
+            eloSystemVersion: ELO_SYSTEM_VERSION,
+        });
+        count++;
+        if (count % 400 === 0) {
+            await batch.commit();
+            batch = writeBatch(db);
+        }
+    }
+    await batch.commit();
+
+    // 2. Delete old ranking logs
+    const logsSnap = await getDocs(collection(db, "rankingLogs"));
+    batch = writeBatch(db);
+    count = 0;
+    for (const d of logsSnap.docs) {
+        batch.delete(d.ref);
+        count++;
+        if (count % 400 === 0) {
+            await batch.commit();
+            batch = writeBatch(db);
+        }
+    }
+    await batch.commit();
+
+    // 3. Delete old match point details
+    const matchDetailSnap = await getDocs(collection(db, "matchPointDetails"));
+    batch = writeBatch(db);
+    count = 0;
+    for (const d of matchDetailSnap.docs) {
+        batch.delete(d.ref);
+        count++;
+        if (count % 400 === 0) {
+            await batch.commit();
+            batch = writeBatch(db);
+        }
+    }
+    await batch.commit();
+
+    // 4. Fetch all played matches (amistosos + retos)
+    const retos = await getDocs(collection(db, "partidosReto"));
+    const amistosos = await getDocs(collection(db, "partidosAmistosos"));
+    const allMatches = [];
+
+    retos.docs.forEach((d) => {
+        if (d.data().estado === "jugado") {
+            allMatches.push({ id: d.id, col: "partidosReto", data: d.data() });
+        }
+    });
+    amistosos.docs.forEach((d) => {
+        if (d.data().estado === "jugado") {
+            allMatches.push({ id: d.id, col: "partidosAmistosos", data: d.data() });
+        }
+    });
+
+    allMatches.sort((a, b) => {
+        const ta = a.data.fecha?.seconds || 0;
+        const tb = b.data.fecha?.seconds || 0;
+        return ta - tb;
+    });
+
+    // 5. Reset processed state
+    batch = writeBatch(db);
+    count = 0;
+    for (const match of allMatches) {
+        const bRef = doc(db, match.col, match.id);
+        batch.update(bRef, {
+            rankingProcessedAt: "",
+            rankingProcessedResult: "",
+            eloSummary: {},
+        });
+        count++;
+        if (count % 400 === 0) {
+            await batch.commit();
+            batch = writeBatch(db);
+        }
+    }
+    await batch.commit();
+
+    // 6. Recalculate chronologically
+    let successCount = 0;
+    let errorCount = 0;
+    for (let i = 0; i < allMatches.length; i++) {
+        const match = allMatches[i];
+        const resStr = match.data.resultado?.sets;
+        if (!resStr) continue;
+        try {
+            await processMatchResults(match.id, match.col, resStr, {
+                mvpId: match.data.mvp,
+                surface: match.data.superficie || match.data.surface,
+            });
+            successCount++;
+        } catch (e) {
+            errorCount++;
+            console.error(`recalc error: ${match.id}`, e?.message || e);
+        }
+    }
+
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    return { success: true, processed: successCount, errors: errorCount, elapsed };
+};

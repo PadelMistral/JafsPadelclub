@@ -6,11 +6,16 @@
  * Fully aligned with Premium V7 "Ultra Vibrant" aesthetics.
  */
 
-import { db, getDocument, subscribeDoc, auth } from './firebase-service.js';
+import { db, getDocument, subscribeDoc, auth, storage } from './firebase-service.js';
 import { 
     doc, getDoc, getDocs, collection, deleteDoc, onSnapshot, runTransaction,
     query, orderBy, where, limit, addDoc, updateDoc, serverTimestamp 
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import {
+    ref,
+    uploadBytes,
+    getDownloadURL
+} from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-storage.js';
 import { triggerFeedback, handleOperationError, FEEDBACK } from './modules/feedback-system.js';
 import { showToast } from './ui-core.js'; // Keep for legacy/direct use if needed
 import { processMatchResults, parseMatchResult } from './ranking-service.js';
@@ -140,15 +145,31 @@ async function showPostMatchSummaryModal(rankingSync = {}, matchId = null) {
               </div>
               <div class="pm-bar"><div id="pm-prog-bar" class="pm-bar-fill"></div></div>
             </div>
-            <div class="pm-foot">
+            <div class="pm-foot flex-wrap">
               <span class="pm-chip" style="color:${division.color};border-color:${division.color}66"><i class="fas ${division.icon}"></i> ${division.label}</span>
-              <button class="pm-btn" id="pm-continue-btn">CONTINUAR</button>
+              <div class="flex gap-2">
+                <button class="pm-btn" id="pm-share-btn" style="background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.3); color: #00d4ff;">
+                  <i class="fas fa-share-nodes"></i> ALARDEAR
+                </button>
+                <button class="pm-btn" id="pm-continue-btn">CONTINUAR</button>
+              </div>
             </div>
           </div>
         `;
         document.body.appendChild(overlay);
         const bar = overlay.querySelector("#pm-prog-bar");
         setTimeout(() => { if (bar) bar.style.width = `${prog}%`; }, 60);
+
+        overlay.querySelector("#pm-share-btn")?.addEventListener("click", async () => {
+             const btn = overlay.querySelector("#pm-share-btn");
+             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> GENERANDO...';
+             try {
+                 const { shareMatchResult } = await import('./utils/share-utils.js');
+                 await shareMatchResult(analysis, { matchId });
+             } catch(e) { console.error("Share failed", e); }
+             btn.innerHTML = '<i class="fas fa-share-nodes"></i> ALARDEAR';
+        });
+
         overlay.querySelector("#pm-continue-btn")?.addEventListener("click", () => {
             overlay.remove();
             resolve();
@@ -197,6 +218,190 @@ function autoMarkPlayedIfNeeded(matchData) {
     return { ...matchData, estado: "jugada" };
 }
 
+const MATCH_MEDIA_LIMIT = 12;
+const MATCH_MEDIA_MAX_MB = 12;
+const MATCH_MEDIA_MAX_VIDEO_SEC = 10;
+
+function getPlayerPoints(p) {
+    const raw = p?.points ?? p?.puntosRanking ?? p?.elo ?? 1000;
+    return Number.isFinite(raw) ? Number(raw) : 1000;
+}
+
+function computeBalanceSuggestion(players = []) {
+    if (!players || players.length < 4) return null;
+    if (!players[0] || !players[1] || !players[2] || !players[3]) return null;
+
+    const baseA = (getPlayerPoints(players[0]) + getPlayerPoints(players[1])) / 2;
+    const baseB = (getPlayerPoints(players[2]) + getPlayerPoints(players[3])) / 2;
+    const baseDiff = baseA - baseB;
+    const absBase = Math.abs(baseDiff);
+
+    let best = { diff: absBase, fromIdx: null, toIdx: null };
+    const swaps = [
+        [0, 2],
+        [0, 3],
+        [1, 2],
+        [1, 3],
+    ];
+    swaps.forEach(([a, b]) => {
+        const tmp = [...players];
+        const t = tmp[a]; tmp[a] = tmp[b]; tmp[b] = t;
+        const aAvg = (getPlayerPoints(tmp[0]) + getPlayerPoints(tmp[1])) / 2;
+        const bAvg = (getPlayerPoints(tmp[2]) + getPlayerPoints(tmp[3])) / 2;
+        const diff = Math.abs(aAvg - bAvg);
+        if (diff < best.diff) best = { diff, fromIdx: a, toIdx: b, newDiff: aAvg - bAvg };
+    });
+
+    if (absBase < 120) return null;
+    if (best.fromIdx === null || best.diff >= absBase - 40) return null;
+    return {
+        fromIdx: best.fromIdx,
+        toIdx: best.toIdx,
+        newDiff: best.newDiff || 0,
+    };
+}
+
+async function getMatchWatchDoc(matchId, uid) {
+    if (!matchId || !uid) return null;
+    const snap = await getDocs(query(collection(db, 'matchWatchers'), where('matchId', '==', matchId), where('uid', '==', uid), limit(1)));
+    if (snap.empty) return null;
+    const d = snap.docs[0];
+    return { id: d.id, ...d.data() };
+}
+
+async function toggleMatchWatch(matchId, col, uid) {
+    if (!matchId || !uid) return false;
+    const existing = await getMatchWatchDoc(matchId, uid);
+    if (existing?.id) {
+        await deleteDoc(doc(db, 'matchWatchers', existing.id));
+        return false;
+    }
+    await addDoc(collection(db, 'matchWatchers'), {
+        matchId,
+        matchCollection: col || '',
+        uid,
+        createdAt: serverTimestamp(),
+    });
+    return true;
+}
+
+async function notifyMatchWatchers(matchId, matchDate, col, excludeUids = []) {
+    if (!matchId) return;
+    const snap = await getDocs(query(collection(db, 'matchWatchers'), where('matchId', '==', matchId), limit(80)));
+    if (snap.empty) return;
+    const when = matchDate ? matchDate.toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'proximamente';
+    const targets = snap.docs
+        .map(d => d.data()?.uid)
+        .filter(uid => uid && !excludeUids.includes(uid));
+    if (targets.length) {
+        await createNotification(
+            targets,
+            'Plaza liberada',
+            `Se libero una plaza para el partido del ${when}.`,
+            'match_opened',
+            'calendario.html',
+            { type: 'match_opened', matchId, matchCollection: col, dedupId: `slot_open_${matchId}` }
+        );
+    }
+    await Promise.all(snap.docs.map(d => deleteDoc(d.ref).catch(() => {})));
+}
+
+async function fetchMatchMedia(matchId) {
+    if (!matchId) return [];
+    try {
+        const snap = await getDocs(
+            query(
+                collection(db, 'matchMedia'),
+                where('matchId', '==', matchId),
+                orderBy('createdAt', 'desc'),
+                limit(MATCH_MEDIA_LIMIT)
+            )
+        );
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+        const code = String(e?.code || '').toLowerCase();
+        if (!code.includes('failed-precondition') && !code.includes('missing-index')) {
+            throw e;
+        }
+        const snap = await getDocs(
+            query(
+                collection(db, 'matchMedia'),
+                where('matchId', '==', matchId),
+                limit(MATCH_MEDIA_LIMIT)
+            )
+        );
+        const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return rows.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+    }
+}
+
+async function getUserMatchMedia(matchId, uid) {
+    if (!matchId || !uid) return null;
+    const snap = await getDocs(query(collection(db, 'matchMedia'), where('matchId', '==', matchId), where('createdBy', '==', uid), limit(1)));
+    if (snap.empty) return null;
+    const d = snap.docs[0];
+    return { id: d.id, ...d.data() };
+}
+
+async function uploadMatchMediaFile({ matchId, matchCollection, uid, file }) {
+    const ext = (file?.name || '').split('.').pop() || 'bin';
+    const safeExt = ext.replace(/[^a-z0-9]/gi, '').slice(0, 6) || 'bin';
+    const path = `matches/${matchId}/${uid}/${Date.now()}.${safeExt}`;
+    const sRef = ref(storage, path);
+    await uploadBytes(sRef, file);
+    const url = await getDownloadURL(sRef);
+    const mediaType = file.type && file.type.startsWith('video') ? 'video' : 'image';
+    const docRef = await addDoc(collection(db, 'matchMedia'), {
+        matchId,
+        matchCollection: matchCollection || '',
+        url,
+        type: mediaType,
+        createdBy: uid,
+        createdAt: serverTimestamp(),
+        size: file.size || 0,
+        name: file.name || '',
+    });
+    return { id: docRef.id, url, type: mediaType };
+}
+
+async function validateMatchMediaFile(file) {
+    if (!file) return { ok: false, reason: 'Archivo invalido.' };
+    const sizeMb = (file.size || 0) / (1024 * 1024);
+    if (sizeMb > MATCH_MEDIA_MAX_MB) return { ok: false, reason: `Maximo ${MATCH_MEDIA_MAX_MB}MB.` };
+    if (file.type.startsWith('video')) {
+        const url = URL.createObjectURL(file);
+        try {
+            const duration = await new Promise((resolve) => {
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.onloadedmetadata = () => resolve(video.duration || 0);
+                video.onerror = () => resolve(0);
+                video.src = url;
+            });
+            if (duration > MATCH_MEDIA_MAX_VIDEO_SEC) return { ok: false, reason: `Maximo ${MATCH_MEDIA_MAX_VIDEO_SEC}s.` };
+        } finally {
+            URL.revokeObjectURL(url);
+        }
+    }
+    return { ok: true };
+}
+
+function renderMatchMediaItem(item) {
+    if (!item?.url) return '';
+    if (item.type === 'video') {
+        return `
+            <div class="match-media-item">
+                <video controls preload="metadata" src="${item.url}"></video>
+            </div>
+        `;
+    }
+    return `
+        <div class="match-media-item">
+            <img src="${item.url}" alt="media">
+        </div>
+    `;
+}
+
 
 
 async function safeOnSnapshot(q, onNext) {
@@ -215,40 +420,163 @@ function getEventLinkValue() {
     if (parts.length < 2) return null;
     return { eventoId: parts[0], eventMatchId: parts[1], phase: parts[2] || '' };
 }
+function resolveEventTeamMap(eventDoc) {
+    const teams = Array.isArray(eventDoc?.teams) ? eventDoc.teams : [];
+    return new Map(teams.map(t => [t.id, t]));
+}
+
+function resolveMyTeamId(eventDoc, uid) {
+    if (!eventDoc || !uid) return null;
+    const teams = Array.isArray(eventDoc?.teams) ? eventDoc.teams : [];
+    const team = teams.find(t => Array.isArray(t?.playerUids) && t.playerUids.includes(uid));
+    return team?.id || null;
+}
+
+function resolveMyGroup(eventDoc, myTeamId) {
+    if (!eventDoc || !myTeamId) return null;
+    const groups = eventDoc.groups || {};
+    const found = Object.entries(groups).find(([, ids]) => Array.isArray(ids) && ids.includes(myTeamId));
+    return found ? found[0] : null;
+}
+
+function isEventMatchPlayed(m) {
+    const state = String(m?.estado || '').toLowerCase();
+    return state === 'jugado' || !!m?.resultado || !!m?.ganadorTeamId;
+}
+
+function resolveEventPlayersForMatch(eventDoc, match) {
+    if (eventDoc && (match?.teamAId || match?.teamBId)) {
+        const map = resolveEventTeamMap(eventDoc);
+        const teamA = map.get(match.teamAId);
+        const teamB = map.get(match.teamBId);
+        const players = [
+            ...(teamA?.playerUids || []),
+            ...(teamB?.playerUids || []),
+        ];
+        if (players.length) return players;
+    }
+    return Array.isArray(match?.playerUids) ? match.playerUids : [];
+}
 
 async function loadEventLinkOptions(dateStr, hour, uid) {
     const sel = document.getElementById('inp-event-link');
     if (!sel || !uid) return;
-    sel.innerHTML = `<option value="">Sin vincular (partido normal)</option>`;
+    sel.innerHTML = `<option value="">Buscando tus partidos de evento...</option>`;
     try {
         const snap = await getDocs(query(collection(db, 'eventoPartidos'), where('playerUids', 'array-contains', uid), limit(300)));
         const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const pending = rows
-            .filter((m) => String(m.estado || '') !== 'jugado')
-            .filter((m) => !m.fecha || !Number.isFinite(new Date(m.fecha?.toDate ? m.fecha.toDate() : m.fecha).getTime()))
+        const eventIds = [...new Set(rows.map(r => r.eventoId).filter(Boolean))];
+        const eventDocs = new Map();
+        await Promise.all(eventIds.map(async (id) => {
+            const evSnap = await getDoc(doc(db, 'eventos', id));
+            if (evSnap.exists()) eventDocs.set(id, { id, ...evSnap.data() });
+        }));
+
+        const matchesByEvent = new Map();
+        rows.forEach((m) => {
+            const list = matchesByEvent.get(m.eventoId) || [];
+            list.push(m);
+            matchesByEvent.set(m.eventoId, list);
+        });
+
+        const pending = [];
+        matchesByEvent.forEach((list, eventId) => {
+            const ev = eventDocs.get(eventId);
+            const myTeamId = resolveMyTeamId(ev, uid);
+            if (!myTeamId) return;
+            const myGroup = resolveMyGroup(ev, myTeamId);
+            const faced = new Set();
+            list.forEach((m) => {
+                if (!isEventMatchPlayed(m)) return;
+                if (m.teamAId === myTeamId && m.teamBId) faced.add(m.teamBId);
+                if (m.teamBId === myTeamId && m.teamAId) faced.add(m.teamAId);
+            });
+            const seenOpponents = new Set();
+            list.forEach((m) => {
+                if (isEventMatchPlayed(m)) return;
+                if (m.linkedMatchId) return;
+                if (!m.teamAId || !m.teamBId) return;
+                if (m.teamAId !== myTeamId && m.teamBId !== myTeamId) return;
+                const opponentId = m.teamAId === myTeamId ? m.teamBId : m.teamAId;
+                if (!opponentId) return;
+                if (faced.has(opponentId)) return;
+                const phase = String(m.phase || '').toLowerCase();
+                const isGroupStage = phase === 'group' || phase === 'league';
+                if (myGroup && isGroupStage && String(m.group || '') !== String(myGroup)) return;
+                if (seenOpponents.has(opponentId)) return;
+                seenOpponents.add(opponentId);
+                pending.push({ ...m, _eventDoc: ev, _myTeamId: myTeamId, _opponentId: opponentId });
+            });
+        });
+
+        window._pendingEventMatches = pending
             .sort((a, b) => String(a.phase || '').localeCompare(String(b.phase || '')));
 
-        const options = pending.map((m) => {
+        if (window._pendingEventMatches.length === 0) {
+            sel.innerHTML = `<option value="">No tienes partidos pendientes</option>`;
+            const info = document.getElementById('event-link-help');
+            if (info) info.textContent = 'No se encontraron partidos de evento para sincronizar.';
+            return;
+        }
+
+        const options = window._pendingEventMatches.map((m) => {
             const phase = String(m.phase || 'evento').toUpperCase();
-            const label = `${phase} · ${m.teamAName || '?'} VS ${m.teamBName || '?'}`;
+            const groupTag = m.group ? ` · GRUPO ${String(m.group).toUpperCase()}` : '';
+            const label = `${phase}${groupTag} · ${m.teamAName || 'Equipo A'} VS ${m.teamBName || 'Equipo B'}`;
             return `<option value="${m.eventoId}|${m.id}|${m.phase || ''}">${label}</option>`;
         });
 
-        sel.innerHTML = `<option value="">Sin vincular (partido normal)</option>${options.join('')}`;
-        if (options.length > 0) {
-            sel.selectedIndex = 1;
-        }
+        sel.innerHTML = `<option value="">-- ELIGE PARTIDO DEL EVENTO --</option>${options.join('')}`;
+
+        sel.onchange = () => {
+            const val = sel.value;
+            if (!val) return;
+            const parts = val.split('|');
+            const emId = parts[1];
+            const em = window._pendingEventMatches.find(x => x.id === emId);
+            if (em) {
+                const players = resolveEventPlayersForMatch(em._eventDoc, em);
+                const jugs = [...players];
+                while(jugs.length < 4) jugs.push(null);
+                window._initialJugadores = jugs;
+                for(let i=0; i<4; i++) {
+                    window.renderUserInCreationSlot(i, jugs[i]);
+                }
+                showToast("Sincronizacion", "Jugadores del evento cargados en los huecos", "info");
+            }
+        };
+
         const info = document.getElementById('event-link-help');
-        if (info) {
-            info.textContent = options.length
-                ? `Partidos de evento pendientes: ${options.length}. Se selecciona automaticamente el siguiente rival.`
-                : 'No tienes partidos de evento pendientes sin fecha.';
-        }
-    } catch (_) {
+        if (info) info.textContent = `Tienes ${window._pendingEventMatches.length} partidos de evento pendientes para vincular.`;
+
+    } catch (err) {
+        console.error("Error loading event options:", err);
         const info = document.getElementById('event-link-help');
-        if (info) info.textContent = 'No se pudieron cargar partidos de evento.';
+        if (info) info.textContent = 'Error al conectar con la base de datos de eventos.';
     }
 }
+
+window.renderUserInCreationSlot = async (idx, uid) => {
+    if (!uid) {
+        window.removeUserFromNew(idx);
+        return;
+    }
+    let u = window.psUsersCache?.find(x => x.id === uid);
+    if (!u) {
+        try {
+            if (uid.startsWith('GUEST_')) {
+                const parts = uid.split('_');
+                u = { id: uid, nombreUsuario: parts[1] + ' (Inv)', nivel: parseFloat(parts[2]), fotoPerfil: './imagenes/Logojafs.png' };
+            } else {
+                const d = await getDoc(doc(db, 'usuarios', uid));
+                u = d.exists() ? { id: d.id, ...d.data() } : null;
+            }
+        } catch(e) { console.error("Error loading user for slot", e); }
+    }
+    if (u) {
+        window.selectUserForNew(uid, idx);
+    }
+};
 
 async function syncLinkedEventMatchFromRegularMatch(matchId, col, resultStr) {
     try {
@@ -275,7 +603,7 @@ async function syncLinkedEventMatchFromRegularMatch(matchId, col, resultStr) {
  * Creates match in Firestore.
  */
 window.executeCreateMatch = async (dateStr, hour) => {
-    if (!auth.currentUser) return triggerFeedback({ title: "ERROR", msg: "Debes iniciar sesión", type: "error" });
+    if (!auth.currentUser) return triggerFeedback({ title: "ERROR", msg: "Debes iniciar sesiÃ³n", type: "error" });
     const createRl = rateLimitCheck(`match_create:${auth.currentUser.uid}`, { windowMs: 60 * 60 * 1000, max: 10, minIntervalMs: 12000 });
     if (!createRl.ok) return triggerFeedback({ title: "BLOQUEADO", msg: "Demasiadas creaciones en poco tiempo", type: "warning" });
     const minInput = document.getElementById('inp-min-lvl');
@@ -295,6 +623,10 @@ window.executeCreateMatch = async (dateStr, hour) => {
     
     const matchDate = new Date(`${dateStr}T${hour}`);
     const linkedEvent = getEventLinkValue();
+
+    if (type === 'evento' && !linkedEvent) {
+        return triggerFeedback({ title: "SELECCIÃ“N REQUERIDA", msg: "Para crear un partido de evento, debes seleccionar uno de la lista.", type: "warning" });
+    }
     
     const createT0 = performance.now();
     try {
@@ -318,7 +650,7 @@ window.executeCreateMatch = async (dateStr, hour) => {
             }
             if (!linkedEventMatch) {
                 hideLoading();
-                return showToast("Evento", "El partido de evento seleccionado ya no está disponible.", "warning");
+                return showToast("Evento", "El partido de evento seleccionado ya no estÃ¡ disponible.", "warning");
             }
         }
 
@@ -405,15 +737,20 @@ window.executeCreateMatch = async (dateStr, hour) => {
         }
 
         if (targets.length > 0) {
-            const notifType = visibility === 'private' ? 'private_invite' : 'match_opened';
+            const isReto = type === 'reto';
+            const notifType = visibility === 'private'
+                ? (isReto ? 'new_challenge' : 'private_invite')
+                : (isReto ? 'new_challenge' : 'match_opened');
             const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
             const time = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-            const notifMsg = visibility === 'private'
-                ? `${creatorName} te invitó a una partida privada el ${day} a las ${time}.`
-                : `${creatorName} creó una partida para el ${day} a las ${time}.`;
+            const notifMsg = isReto
+                ? `${creatorName} te ha retado para el ${day} a las ${time}.`
+                : (visibility === 'private'
+                    ? `${creatorName} te invito a una partida privada el ${day} a las ${time}.`
+                    : `${creatorName} creo una partida para el ${day} a las ${time}.`);
             await createNotification(
                 targets,
-                "¡Padeluminatis!",
+                "Padeluminatis",
                 notifMsg,
                 notifType,
                 'calendario.html',
@@ -458,11 +795,19 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         }
         m = autoMarkPlayedIfNeeded(m);
 
-        const isParticipant = !!viewerUid && m.jugadores?.includes(viewerUid);
+        const isParticipant = !!viewerUid && (m.jugadores?.includes(viewerUid) || m.playerUids?.includes(viewerUid));
         const isAdmin = viewerData?.rol === 'Admin' || auth.currentUser?.email === 'Juanan221091@gmail.com';
         const isOrganizer = !!viewerUid && (m.organizerId === viewerUid || m.creador === viewerUid || isAdmin);
+        const matchState = String(m.estado || '').toLowerCase();
+        const isPlayed = !!m.resultado?.sets || matchState === 'cancelado' || matchState === 'anulado' || matchState === 'jugado' || matchState === 'jugada';
         const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
-        const players = await Promise.all([0, 1, 2, 3].map(i => getPlayerData(m.jugadores?.[i])));
+        const playerIds = Array.isArray(m.jugadores) && m.jugadores.length > 0 ? m.jugadores : (Array.isArray(m.playerUids) ? m.playerUids : []);
+        const players = await Promise.all([0, 1, 2, 3].map(i => getPlayerData(playerIds[i])));
+        const balanceSuggestion = computeBalanceSuggestion(players);
+        const watchDoc = viewerUid ? await getMatchWatchDoc(matchId, viewerUid) : null;
+        const isWatching = !!watchDoc;
+        const mediaItems = await fetchMatchMedia(matchId);
+        const userMedia = viewerUid ? await getUserMatchMedia(matchId, viewerUid) : null;
 
         const renderSlimPlayer = (p, rev = false) => {
             const name = p?.name || 'LIBRE';
@@ -494,7 +839,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         <i class="fas fa-droplet ${rain > 0 ? 'text-blue-400' : 'text-gray-500'} text-[10px]"></i>
                         <span class="text-[10px] font-black">${rain}</span>
                         <span class="opacity-30">|</span>
-                        <span class="text-[10px] font-black text-white">${Math.round(w.current.temperature_2m)}°C</span>
+                        <span class="text-[10px] font-black text-white">${Math.round(w.current.temperature_2m)}Â°C</span>
                     </div>
                 `;
             }
@@ -506,7 +851,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         if (!isFullView) {
             const setsStr = (m.resultado?.sets || "").trim();
             const hasResult = setsStr.length > 0;
-            const resultText = hasResult ? setsStr : "FALTA AÑADIR RESULTADO";
+            const resultText = hasResult ? setsStr : "FALTA AÃ‘ADIR RESULTADO";
             const resultColor = hasResult ? "text-sport-green shadow-glow-green" : "text-sport-red opacity-60";
 
             container.innerHTML = `
@@ -520,14 +865,14 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         <div class="scale-90">${weatherHtml}</div>
                     </div>
 
-                    <!-- ALINEACIÓN -->
+                    <!-- ALINEACIÃ“N -->
                     <div class="read-court-v7 p-4 bg-white/5 rounded-2xl border border-white/10 relative overflow-hidden">
                         <div class="flex-row between items-center mb-5 px-1 relative z-10">
                              <div class="flex-row items-center gap-2">
                                 <div class="w-1 h-3 bg-primary rounded-full"></div>
-                                <span class="text-[10px] font-black uppercase tracking-widest opacity-80">Alineación</span>
+                                <span class="text-[10px] font-black uppercase tracking-widest opacity-80">AlineaciÃ³n</span>
                              </div>
-                             ${isReto ? '<span class="text-[8px] font-black text-sport-gold border border-sport-gold/30 px-2 py-0.5 rounded-full">⚡ RANKED</span>' : '<span class="text-[8px] font-black opacity-30">AMISTOSO</span>'}
+                             ${isReto ? '<span class="text-[8px] font-black text-sport-gold border border-sport-gold/30 px-2 py-0.5 rounded-full">âš¡ RANKED</span>' : '<span class="text-[8px] font-black opacity-30">AMISTOSO</span>'}
                         </div>
                         
                         <div class="players-grid-read relative z-10">
@@ -625,6 +970,50 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
             }
         }
 
+        const realPlayerCount = playerIds.filter(Boolean).length;
+        const isFull = realPlayerCount >= MAX_PLAYERS;
+        const balanceHtml = balanceSuggestion ? `
+            <div class="balance-suggest-card">
+                <div class="balance-head">
+                    <span class="balance-title">Sugerencia de balanceo IA</span>
+                    <span class="balance-pill">JUSTO</span>
+                </div>
+                <p>Para un partido mas justo, sugerimos que <b>${players[balanceSuggestion.fromIdx]?.name}</b> cambie con <b>${players[balanceSuggestion.toIdx]?.name}</b>.</p>
+                ${isOrganizer ? `<button class="btn-balance-apply" data-from="${balanceSuggestion.fromIdx}" data-to="${balanceSuggestion.toIdx}"><i class="fas fa-exchange-alt"></i> Aplicar cambio</button>` : `<span class="balance-note">Solo el organizador puede aplicar el cambio.</span>`}
+            </div>
+        ` : '';
+        const watchHtml = (!isParticipant && isFull) ? `
+            <div class="match-watch-card">
+                <div class="watch-left">
+                    <span class="watch-title">Partido completo</span>
+                    <span class="watch-sub">Activa aviso si se libera una plaza.</span>
+                </div>
+                <button id="btn-watch-slot" class="btn-watch-slot ${isWatching ? 'active' : ''}">
+                    <i class="fas fa-bell"></i> ${isWatching ? 'Aviso activo' : 'Avisame'}
+                </button>
+            </div>
+        ` : '';
+        const mediaItemsHtml = mediaItems.length ? mediaItems.map(renderMatchMediaItem).join('') : `<div class="match-media-empty">Sin recuerdos aun.</div>`;
+        const canUploadMedia = isParticipant && isPlayed;
+        const mediaHtml = `
+            <div class="match-media-card">
+                <div class="match-media-head">
+                    <span class="match-media-title">Galeria de match</span>
+                    <span class="match-media-pill">${mediaItems.length} items</span>
+                </div>
+                <div class="match-media-grid">${mediaItemsHtml}</div>
+                ${canUploadMedia ? `
+                    <div class="match-media-upload">
+                        <input type="file" id="match-media-input" accept="image/*,video/mp4,video/webm" ${userMedia ? 'disabled' : ''} hidden>
+                        <button id="btn-match-media-upload" class="btn-match-media-upload" ${userMedia ? 'disabled' : ''}>
+                            <i class="fas fa-cloud-upload-alt"></i> ${userMedia ? 'Ya subiste tu media' : 'Subir foto o video'}
+                        </button>
+                        <span class="match-media-hint">Max ${MATCH_MEDIA_MAX_VIDEO_SEC}s video o ${MATCH_MEDIA_MAX_MB}MB.</span>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
         container.innerHTML = `
             <div class="match-detail-v7 animate-up">
                 <div class="detail-hero-v7 flex-col center">
@@ -636,7 +1025,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     <span class="hero-time-v7">${date.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})}</span>
                     <div class="hero-date-v7">
                         ${date.toLocaleDateString('es-ES', {weekday:'long', day:'numeric'}).toUpperCase()}
-                        <span class="dash">—</span>
+                        <span class="dash">â€”</span>
                         ${date.toLocaleDateString('es-ES', {month:'long'}).toUpperCase()}
                     </div>
                     <div class="mt-4 opacity-80 scale-90">${weatherHtml}</div>
@@ -670,6 +1059,8 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                             <div class="prob-fill t2" style="width: ${p2}%"></div>
                         </div>
                     </div>
+                    ${balanceHtml}
+                    ${watchHtml}
 
                     <div class="apoing-link-wrap mb-4">
                         ${renderApoingLink("Gestionar partida en Apoing", "text-orange-300 border-orange-400/40 bg-orange-500/10")}
@@ -679,6 +1070,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     <div class="court-container-v7 mb-3">
                         <div class="court-schema-v7">
                             <div class="court-net"></div>
+                            <div class="court-schema-v7-line-bottom"></div>
                             
                             <div class="players-row-v7 top mb-8">
                                 ${renderPlayerSlot(players[0], 0, { canEdit: isOrganizer, canSelfJoin: !isOrganizer && !isParticipant, mid: matchId, col })}
@@ -705,13 +1097,18 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
 
                     ${isOrganizer ? `
                         <div class="px-2 mb-2">
-                            <span class="text-[8px] font-black text-primary uppercase tracking-widest opacity-60">ACTION CENTER · ${viewerData?.rol === 'Admin' ? 'ADMIN ACCESS' : 'ORGANIZADOR'}</span>
+                            <span class="text-[8px] font-black text-primary uppercase tracking-widest opacity-60">ACTION CENTER Â· ${viewerData?.rol === 'Admin' ? 'ADMIN ACCESS' : 'ORGANIZADOR'}</span>
                         </div>
                     ` : ''}
 
                     <div class="actions-grid-v7 flex-col gap-3">
                         ${renderMatchActions(m, isParticipant, isOrganizer, isAdmin, viewerUid || '', matchId, col)}
                     </div>
+                    ${!isPlayed ? `
+                        <div class="match-social-actions">
+                            <button id="pm-share-poster-btn" class="pm-btn pm-btn-ghost"><i class="fas fa-share-nodes"></i> Compartir cartel</button>
+                        </div>
+                    ` : ''}
                     <div class="mt-3 p-2 rounded-xl border border-white/10 bg-white/5">
                         <div class="flex-row between items-center gap-2">
                             <span class="text-[9px] font-black uppercase tracking-widest text-primary">Consejo IA</span>
@@ -719,6 +1116,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         </div>
                         <p id="ai-coach-match-output" class="text-[10px] text-white/75 mt-2">Pulsa generar para obtener consejo pre/post partido.</p>
                     </div>
+                    ${mediaHtml}
                 </div>
 
                 <div id="md-tab-breakdown" class="md-tab-panel hidden">
@@ -769,6 +1167,77 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                 }
             };
         }
+        const balanceBtn = document.querySelector('.btn-balance-apply');
+        if (balanceBtn) {
+            balanceBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const fromIdx = Number(balanceBtn.dataset.from);
+                const toIdx = Number(balanceBtn.dataset.to);
+                if (Number.isFinite(fromIdx) && Number.isFinite(toIdx)) {
+                    window.executeMatchAction('swap', matchId, col, { from: fromIdx, to: toIdx });
+                }
+            });
+        }
+        const watchBtn = document.getElementById('btn-watch-slot');
+        if (watchBtn && viewerUid) {
+            watchBtn.addEventListener('click', async () => {
+                watchBtn.disabled = true;
+                try {
+                    const active = await toggleMatchWatch(matchId, col, viewerUid);
+                    watchBtn.classList.toggle('active', active);
+                    watchBtn.innerHTML = `<i class=\"fas fa-bell\"></i> ${active ? 'Aviso activo' : 'Avisame'}`;
+                } catch (_) {}
+                watchBtn.disabled = false;
+            });
+        }
+        const sharePosterBtn = document.getElementById('pm-share-poster-btn');
+        if (sharePosterBtn) {
+            sharePosterBtn.addEventListener('click', async () => {
+                sharePosterBtn.disabled = true;
+                sharePosterBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
+                try {
+                    const { shareMatchPoster } = await import('./utils/share-utils.js');
+                    const teamA = [players[0]?.name, players[1]?.name].filter(Boolean);
+                    const teamB = [players[2]?.name, players[3]?.name].filter(Boolean);
+                    const when = date.toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+                    await shareMatchPoster({ title: 'PROXIMO PARTIDO', teamA, teamB, when, club: 'PADELUMINATIS CLUB' });
+                } catch (e) {
+                    console.error('Share poster failed', e);
+                }
+                sharePosterBtn.disabled = false;
+                sharePosterBtn.innerHTML = '<i class="fas fa-share-nodes"></i> Compartir cartel';
+            });
+        }
+        const mediaBtn = document.getElementById('btn-match-media-upload');
+        const mediaInput = document.getElementById('match-media-input');
+        if (mediaBtn && mediaInput && viewerUid) {
+            mediaBtn.addEventListener('click', () => mediaInput.click());
+            mediaInput.addEventListener('change', async () => {
+                const file = mediaInput.files?.[0];
+                if (!file) return;
+                const check = await validateMatchMediaFile(file);
+                if (!check.ok) {
+                    showToast('Media', check.reason || 'Archivo no valido', 'warning');
+                    mediaInput.value = '';
+                    return;
+                }
+                mediaBtn.disabled = true;
+                mediaBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subiendo...';
+                try {
+                    await uploadMatchMediaFile({ matchId, matchCollection: col, uid: viewerUid, file });
+                    showToast('Media', 'Subida completada', 'success');
+                    const fresh = await getDocument(col, matchId);
+                    render(fresh);
+                } catch (e) {
+                    console.error('upload media failed', e);
+                    showToast('Media', 'No se pudo subir', 'error');
+                } finally {
+                    mediaBtn.disabled = false;
+                    mediaBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Subir foto o video';
+                    mediaInput.value = '';
+                }
+            });
+        }
         if (isParticipant) initMatchChat(matchId, col);
     };
 
@@ -793,19 +1262,19 @@ window.switchMatchDetailTab = (tab = 'lineup') => {
  * Renders the match creation form for a specific date and time.
  * V7 Styled.
  */
-export async function renderCreationForm(container, dateStr, hour, currentUser, userData) {
+export async function renderCreationForm(container, dateStr, hour, currentUser, userData, preFillPlayers = null) {
     if (!container) return;
     ensureApoingStyles();
     
     container.innerHTML = `
-        <div class="booking-hub-v7 animate-up p-4">
-            <div class="flex-col center mb-6 text-center">
-                <div class="type-badge-v7 amistoso mb-2 mx-auto">
-                    <i class="fas fa-calendar-plus"></i>
-                    <span>ALTA DE MISIÓN</span>
+        <div class="booking-hub-v7 animate-up p-3">
+            <div class="flex-col center mb-4 text-center">
+                <div class="type-badge-v7 evento mb-1 mx-auto">
+                    <i class="fas fa-shuttle-space"></i>
+                    <span>NUEVO PARTIDO</span>
                 </div>
-                <span class="hero-time-v7" style="font-size: 3.8rem; display: block; margin: 4px 0;">${hour}</span>
-                <div class="hero-date-v7" style="margin-bottom: 2px;">
+                <span class="hero-time-v7 txt-glow" style="display: block; margin: 0;">${hour}</span>
+                <div class="hero-date-v7 opacity-60">
                     ${dateStr.toUpperCase()}
                 </div>
                 <div id="creation-weather" class="scale-90 opacity-80 mt-1"></div>
@@ -813,112 +1282,103 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
 
             <div class="booking-config">
                 <!-- Tipo de Partido -->
-                <span class="cfg-label-v7">PROTOCOLO DE JUEGO</span>
-                <div class="mode-selector-v7 mb-5">
+                <span class="cfg-label-v7">MODO DE COMBATE</span>
+                <div class="mode-selector-v7 mb-4">
                     <div id="opt-am" class="mode-card-v7 active" onclick="setMatchType('amistoso')">
                         <div class="mode-icon"><i class="fas fa-handshake"></i></div>
-                        <div>
-                            <span class="m-name">Amistoso</span>
-                            <span class="m-desc text-[9px] opacity-60">Fogueo sin puntos</span>
-                        </div>
+                        <span class="m-name">Amistoso</span>
                     </div>
                     <div id="opt-re" class="mode-card-v7" onclick="setMatchType('reto')">
+                        <div class="mode-icon"><i class="fas fa-bolt"></i></div>
+                        <span class="m-name">Reto Pro</span>
+                    </div>
+                    <div id="opt-ev" class="mode-card-v7" onclick="setMatchType('evento')">
                         <div class="mode-icon"><i class="fas fa-trophy"></i></div>
-                        <div>
-                            <span class="m-name">Reto Pro</span>
-                            <span class="m-desc text-[9px] opacity-60">Ranked Match</span>
-                        </div>
+                        <span class="m-name">Evento</span>
                     </div>
                 </div>
 
-                <div class="apoing-link-wrap mb-4">
-                    ${renderApoingLink("Gestionar partida en Apoing", "text-orange-300 border-orange-400/40 bg-orange-500/10")}
+                <!-- Event Link Section -->
+                <div id="event-link-container" class="hidden-v5 mb-4 animate-fade-in">
+                    <div class="l-input-box p-3 bg-primary/5 rounded-xl border border-primary/20">
+                        <label class="text-[9px] font-black text-primary uppercase block mb-1">VINCULAR A EVENTO</label>
+                        <select id="inp-event-link" class="bg-transparent border-none text-white font-black text-[12px] w-full outline-none">
+                            <option value="">Cargando eventos...</option>
+                        </select>
+                        <p id="event-link-help" class="text-[10px] text-muted mt-2">Identifica tu partido en la lista superior</p>
+                    </div>
                 </div>
 
-                <!-- Alineación Táctica -->
-                <span class="cfg-label-v7">ALINEACIÓN TÁCTICA</span>
-                <div class="court-container-v7 mb-5">
-                    <div class="court-schema-v7" style="padding: 24px 12px; min-height: 240px;">
+                <!-- AlineaciÃ³n -->
+                <span class="cfg-label-v7">FORMACIÃ“N TÃCTICA</span>
+                <div class="court-container-v7 mb-4">
+                    <div class="court-schema-v7" style="padding: 20px 10px; min-height: 220px;">
                         <div class="court-net"></div>
+                        <div class="court-schema-v7-line-bottom"></div>
                         
-                        <div class="players-row-v7 top mb-10">
-                            <div class="p-slot-v7 active" id="slot-0-wrap">
-                                <div class="p-img-box" style="border-color:var(--primary)">
-                                    <img src="${userData.fotoPerfil || userData.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.nombreUsuario || userData.nombre || 'TÚ')}&background=random&color=fff`}">
-                                </div>
-                                <span class="p-badge" style="color:var(--primary); border-color:currentColor">${(userData.nivel || 2.5).toFixed(1)}</span>
-                                <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:var(--primary)">${userData.nombreUsuario || 'TÚ'}</span>
-                            </div>
-                            <div class="p-slot-v7 pointer" id="slot-1-wrap" onclick="window.handleCreationSlotClick(1)">
-                                <div class="p-img-box empty" style="border-color:var(--primary); opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
-                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:var(--primary); opacity:0.5">COMPAÑERO</span>
-                            </div>
+                        <div class="players-row-v7 top mb-8">
+                            ${await renderCreationSlot(0, preFillPlayers?.[0], currentUser, userData)}
+                            ${await renderCreationSlot(1, preFillPlayers?.[1], currentUser, userData, 'COMPAÃ‘ERO')}
                         </div>
                         
                         <div class="vs-divider-v7">
-                           <div class="vs-line" style="background:rgba(255,255,255,0.1)"></div>
-                           <div class="vs-circle" style="background:#0a0e19; border-color:rgba(255,255,255,0.2)">VS</div>
-                           <div class="vs-line" style="background:rgba(255,255,255,0.1)"></div>
+                           <div class="vs-line"></div>
+                           <div class="vs-circle">VS</div>
+                           <div class="vs-line"></div>
                         </div>
                         
-                        <div class="players-row-v7 bottom mt-10">
-                            <div class="p-slot-v7 pointer" id="slot-2-wrap" onclick="window.handleCreationSlotClick(2)">
-                                <div class="p-img-box empty" style="border-color:var(--secondary); opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
-                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:var(--secondary); opacity:0.5">RIVAL 1</span>
-                            </div>
-                            <div class="p-slot-v7 pointer" id="slot-3-wrap" onclick="window.handleCreationSlotClick(3)">
-                                <div class="p-img-box empty" style="border-color:var(--secondary); opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
-                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:var(--secondary); opacity:0.5">RIVAL 2</span>
-                            </div>
+                        <div class="players-row-v7 bottom mt-8">
+                            ${await renderCreationSlot(2, preFillPlayers?.[2], currentUser, userData, 'RIVAL 1')}
+                            ${await renderCreationSlot(3, preFillPlayers?.[3], currentUser, userData, 'RIVAL 2')}
                         </div>
                     </div>
                 </div>
 
-                <!-- Configuración Técnica -->
-                <span class="cfg-label-v7">PARÁMETROS TÁCTICOS</span>
-                <div class="flex-row gap-3 mb-5">
-                    <div class="l-input-box flex-1 p-3 bg-white/5 rounded-xl border border-white/5">
-                        <label class="text-[6px] font-black text-muted uppercase block mb-1">SUPERFICIE</label>
-                        <select id="inp-surface" class="bg-transparent border-none text-white font-black text-[10px] text-center w-full outline-none">
+                <!-- ConfiguraciÃ³n -->
+                <span class="cfg-label-v7">DETALLES DE PISTA</span>
+                <div class="flex-row gap-2 mb-4">
+                    <div class="l-input-box flex-1 p-2.5 bg-white/5 rounded-xl border border-white/10">
+                        <label class="text-[8px] font-black text-muted uppercase block mb-0.5">ESTADO</label>
+                        <select id="inp-surface" class="bg-transparent border-none text-white font-bold text-[11px] w-full outline-none">
                             <option value="indoor">INDOOR</option>
                             <option value="outdoor">OUTDOOR</option>
                         </select>
                     </div>
-                    <div class="l-input-box flex-1 p-3 bg-white/5 rounded-xl border border-white/5">
-                        <label class="text-[6px] font-black text-muted uppercase block mb-1">PISTA</label>
-                        <select id="sel-court" class="bg-transparent border-none text-white font-black text-[10px] text-center w-full outline-none" onchange="window.toggleCourtInput(this)">
+                    <div class="l-input-box flex-1 p-2.5 bg-white/5 rounded-xl border border-white/10">
+                        <label class="text-[8px] font-black text-muted uppercase block mb-0.5">UBICACIÃ“N</label>
+                        <select id="sel-court" class="bg-transparent border-none text-white font-bold text-[11px] w-full outline-none" onchange="window.toggleCourtInput(this)">
                             <option value="Mistral-Homes">MISTRAL</option>
                             <option value="custom">OTRA...</option>
                         </select>
-                        <input type="text" id="inp-court-custom" class="hidden mt-1 bg-white/10 border-none w-full text-[9px] p-1 rounded text-white font-bold uppercase" placeholder="..." oninput="document.getElementById('inp-court').value = this.value">
+                        <input type="text" id="inp-court-custom" class="hidden mt-1 bg-white/10 border-none w-full text-[10px] p-1 rounded text-white font-bold" placeholder="...">
                         <input type="hidden" id="inp-court" value="Mistral-Homes">
                     </div>
                 </div>
                 
-                <div class="range-box-v7 mb-5" style="padding: 12px 6px;">
+                <div class="range-box-v7 mb-4" style="padding: 10px 6px;">
                     <div class="val-input">
-                        <span style="font-size: 7px; margin-bottom: 2px;">LVL MIN</span>
-                        <input type="number" id="inp-min-lvl" value="2.0" step="0.1" max="7" style="font-size: 1.1rem; height: 24px;">
+                        <span style="font-size: 8px;">LVL MIN</span>
+                        <input type="number" id="inp-min-lvl" value="2.0" step="0.1" style="font-size: 1rem;">
                     </div>
                     <div class="range-sep"></div>
                      <div class="val-input">
-                        <span style="font-size: 7px; margin-bottom: 2px;">LVL MAX</span>
-                        <input type="number" id="inp-max-lvl" value="6.0" step="0.1" max="7" style="font-size: 1.1rem; height: 24px;">
+                        <span style="font-size: 8px;">LVL MAX</span>
+                        <input type="number" id="inp-max-lvl" value="6.0" step="0.1" style="font-size: 1rem;">
                     </div>
                 </div>
 
-                <div id="reto-options" class="hidden-v5 mb-5">
-                    <div class="bet-input-wrap-v7" style="padding: 10px 15px;">
-                        <i class="fas fa-coins text-sport-gold text-lg"></i>
-                        <input type="number" id="inp-bet" value="50" placeholder="Apuesta" style="font-size: 1rem;">
-                        <span class="suffix text-[8px] font-black">PUNTOS</span>
+                <div id="reto-options" class="hidden-v5 mb-4">
+                    <div class="bet-input-wrap-v7" style="padding: 8px 12px; background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.3);">
+                        <i class="fas fa-crown text-sport-gold"></i>
+                        <input type="number" id="inp-bet" value="50" style="font-size: 1rem; color: var(--sport-gold);">
+                        <span class="suffix text-[9px] font-black text-sport-gold">PUNTOS</span>
                     </div>
                 </div>
 
-                <div class="flex-row items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 mb-6">
+                <div class="flex-row items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10 mb-5">
                     <div class="flex-col">
                         <span class="text-white font-black text-[10px] tracking-widest">PARTIDA PRIVADA</span>
-                        <span class="text-[7px] text-muted uppercase">SOLO CON INVITACIÓN</span>
+                        <span class="text-[8px] text-muted uppercase">SOLO CON INVITACIÃ“N</span>
                     </div>
                     <label class="toggle-v7">
                         <input type="checkbox" id="inp-private" onchange="window._creationVisibility = this.checked ? 'private' : 'public'">
@@ -926,20 +1386,12 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                     </label>
                 </div>
 
-                <div class="l-input-box mb-5 p-3 bg-white/5 rounded-xl border border-white/5">
-                    <label class="text-[7px] font-black text-muted uppercase block mb-1">VINCULAR A EVENTO</label>
-                    <select id="inp-event-link" class="bg-transparent border-none text-white font-black text-[10px] w-full outline-none">
-                        <option value="">Sin vincular (partido normal)</option>
-                    </select>
-                    <p id="event-link-help" class="text-[9px] text-muted mt-2">Cargando partidos de evento...</p>
-                </div>
-
-                <div class="flex-col gap-2">
-                    <button class="btn-confirm-v7" onclick="executeCreateMatch('${dateStr}', '${hour}')">
-                        <span class="t-main">DESPLEGAR MISIÓN</span>
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </div>
+                <button class="btn-confirm-v7 mission-btn w-full" onclick="executeCreateMatch('${dateStr}', '${hour}')">
+                    <div class="flex-row center gap-3">
+                        <span class="t-main" style="letter-spacing: 2px;">DESPLEGAR MISIÃ“N</span>
+                        <i class="fas fa-location-arrow"></i>
+                    </div>
+                </button>
             </div>
         </div>
     `;
@@ -953,7 +1405,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                 const box = document.getElementById('creation-weather');
                 if (box) {
                     box.className = 'meta-pill';
-                    box.innerHTML = `<i class="fas fa-cloud-sun text-primary mr-1"></i><span>${Math.round(w.current.temperature_2m)}°C</span>`;
+                    box.innerHTML = `<i class="fas fa-cloud-sun text-primary mr-1"></i><span>${Math.round(w.current.temperature_2m)}Â°C</span>`;
                 }
             }
         } catch(e) {}
@@ -962,16 +1414,28 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
     // Temp state
     window._creationType = 'amistoso';
     window._creationVisibility = 'public';
-    window._initialJugadores = [currentUser.uid, null, null, null];
+    window._initialJugadores = preFillPlayers || [currentUser.uid, null, null, null];
 
     window.setMatchType = (t) => {
         window._creationType = t;
         const optAm = document.getElementById('opt-am');
         const optRe = document.getElementById('opt-re');
+        const optEv = document.getElementById('opt-ev');
         const retoOpts = document.getElementById('reto-options');
+        const evOpts = document.getElementById('event-link-container');
+
         if (optAm) optAm.classList.toggle('active', t === 'amistoso');
         if (optRe) optRe.classList.toggle('active', t === 'reto');
+        if (optEv) optEv.classList.toggle('active', t === 'evento');
+        
         if (retoOpts) retoOpts.classList.toggle('hidden-v5', t !== 'reto');
+        if (evOpts) evOpts.classList.toggle('hidden-v5', t !== 'evento');
+        
+        // Reset link value if not in evento mode
+        if (t !== 'evento') {
+            const sel = document.getElementById('inp-event-link');
+            if (sel) sel.value = "";
+        }
     };
 
     window.setMatchVisibility = (v) => {
@@ -985,20 +1449,47 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
     loadEventLinkOptions(dateStr, hour, currentUser?.uid).catch(() => {});
 }
 
+async function renderCreationSlot(idx, preUid, currentUser, userData, label = "") {
+    const uid = preUid || (idx === 0 ? currentUser.uid : null);
+    const p = uid ? await getPlayerData(uid) : null;
+    const isTeamA = idx < 2;
+    const teamColor = isTeamA ? 'var(--primary)' : 'var(--secondary)';
+    
+    if (p) {
+        const name = uid === currentUser.uid ? 'TÃš' : p.name;
+        return `
+            <div class="p-slot-v7 active" id="slot-${idx}-wrap">
+                <div class="p-img-box" style="border-color:${teamColor}">
+                    <img src="${p.photo}">
+                </div>
+                <span class="p-badge" style="color:${teamColor}; border-color:currentColor">${p.level.toFixed(1)}</span>
+                <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${teamColor}">${name}</span>
+            </div>
+        `;
+    }
+    return `
+        <div class="p-slot-v7 pointer" id="slot-${idx}-wrap" onclick="window.handleCreationSlotClick(${idx})">
+            <div class="p-img-box empty" style="border-color:${teamColor}; opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
+            <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:${teamColor}; opacity:0.5">${label || (idx < 2 ? 'COMPAÃ‘ERO' : 'RIVAL')}</span>
+        </div>
+    `;
+}
+
 /**
  * Fetches refined player data.
  * @private
  */
 async function getPlayerData(uid) {
-    if (!uid) return null;
+    if (!uid) return { name: 'VacÃ­o', photo: `https://ui-avatars.com/api/?name=V&background=random&color=fff`, level: 2.5, id: null };
     if (uid.startsWith('GUEST_')) {
         const parts = uid.split('_');
-        return { name: parts[1], level: parseFloat(parts[2]), id: uid, isGuest: true, pala: parts[3] || 'Desconocida' };
+        return { name: parts[1] || 'Invitado', level: parseFloat(parts[2] || 2.5), id: uid, isGuest: true, photo: `./imagenes/Logojafs.png`, points: 1000 };
     }
     const d = await getDocument('usuarios', uid);
-    const name = d.nombreUsuario || d.nombre;
+    if (!d) return { name: 'Desconocido', photo: `https://ui-avatars.com/api/?name=D&background=random&color=fff`, level: 2.5, id: uid, points: 1000 }; 
+    const name = d.nombreUsuario || d.nombre || 'Jugador';
     const photo = d.fotoPerfil || d.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
-    return d ? { name, photo, level: d.nivel || 2.5, id: uid } : null;
+    return { name, photo, level: d.nivel || 2.5, id: uid, points: d.puntosRanking || 1000 };
 }
 
 /**
@@ -1012,9 +1503,10 @@ function renderPlayerSlot(p, idx, options = {}) {
     
     if (p) {
         const photo = p.photo || p.fotoPerfil || p.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random&color=fff`;
+        const pid = String(p.id || "");
         return `
             <div class="p-slot-v7 pointer" 
-                 onclick="${mid && !p.id.startsWith('GUEST_') ? `window.viewProfile('${p.id}')` : ''}">
+                 onclick="${mid && pid && !pid.startsWith('GUEST_') ? `window.viewProfile('${pid}')` : ''}">
                 <div class="p-img-box" style="border-color:${teamColor}">
                     <img src="${photo}">
                 </div>
@@ -1033,7 +1525,7 @@ function renderPlayerSlot(p, idx, options = {}) {
             <div class="p-img-box empty" style="border:1.5px dashed ${teamColor}; opacity:0.3">
                 <i class="fas fa-plus text-white opacity-50"></i>
             </div>
-            <span class="text-[8px] font-black uppercase tracking-widest mt-2" style="color:${teamColor}; opacity:0.4">${canSelfJoin ? 'UNIRME' : 'VACÍO'}</span>
+            <span class="text-[8px] font-black uppercase tracking-widest mt-2" style="color:${teamColor}; opacity:0.4">${canSelfJoin ? 'UNIRME' : 'VACÃO'}</span>
         </div>
     `;
 }
@@ -1055,7 +1547,7 @@ function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col
     if (isOrganizer && !isParticipant) {
         actionsHtml = `
             <div class="flex-row gap-2 w-full mb-3">
-                <button class="flex-1 py-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-black text-cyan-400" onclick="window.startSwapMode('${id}', '${col}')">POSICIÓN</button>
+                <button class="flex-1 py-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-black text-cyan-400" onclick="window.startSwapMode('${id}', '${col}')">POSICIÃ“N</button>
                 <button class="flex-1 py-4 rounded-xl bg-red-500/10 border border-red-500/30 text-[10px] font-black text-red-500" onclick="executeMatchAction('delete', '${id}', '${col}')">BORRAR</button>
             </div>
             ${realPlayerCount === MAX_PLAYERS ? `
@@ -1095,7 +1587,7 @@ function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col
                     ABANDONAR
                 </button>
                 <button class="flex-1 py-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-black text-cyan-400 hover:bg-cyan-500/20" onclick="window.startSwapMode('${id}', '${col}')">
-                    POSICIÓN
+                    POSICIÃ“N
                 </button>
                 ${isOrganizer ? 
                     `<button class="flex-1 py-4 rounded-xl bg-red-500/10 border border-red-500/30 text-[10px] font-black text-red-500 hover:bg-red-500/20" onclick="executeMatchAction('delete', '${id}', '${col}')">CANCELAR</button>` : 
@@ -1132,11 +1624,11 @@ window.startSwapMode = async (mid, col) => {
     const isParticipant = (match.jugadores || []).includes(myUid);
     const isPlayed = !!match.resultado?.sets || String(match.estado || '').toLowerCase() === 'cancelado' || String(match.estado || '').toLowerCase() === 'anulado';
     if (isPlayed || canReportResultNow(match)) {
-        showToast("BLOQUEADO", "No se puede cambiar posición en un partido finalizado.", "warning");
+        showToast("BLOQUEADO", "No se puede cambiar posiciÃ³n en un partido finalizado.", "warning");
         return;
     }
     if (!isOrganizer && !isParticipant) {
-        showToast("SIN PERMISOS", "Solo organizador/admin o participantes pueden cambiar posición.", "error");
+        showToast("SIN PERMISOS", "Solo organizador/admin o participantes pueden cambiar posiciÃ³n.", "error");
         return;
     }
     
@@ -1145,7 +1637,7 @@ window.startSwapMode = async (mid, col) => {
 
     if (isOrganizer && !isParticipant) {
         let firstPick = null;
-        showToast("MODO POSICIÓN", "Selecciona dos plazas para intercambiar.", "info");
+        showToast("MODO POSICIÃ“N", "Selecciona dos plazas para intercambiar.", "info");
         slots.forEach((s, idx) => {
             const overlay = document.createElement('div');
             overlay.className = 'swap-overlay absolute inset-0 bg-cyan-400/20 backdrop-blur-sm rounded-2xl flex center z-20 cursor-pointer';
@@ -1154,7 +1646,7 @@ window.startSwapMode = async (mid, col) => {
                 e.stopPropagation();
                 if (firstPick === null) {
                     firstPick = idx;
-                    overlay.innerHTML = `<span class="text-[8px] font-black text-black bg-primary px-2 py-1 rounded">1ª PLAZA</span>`;
+                    overlay.innerHTML = `<span class="text-[8px] font-black text-black bg-primary px-2 py-1 rounded">1Âª PLAZA</span>`;
                     return;
                 }
                 if (firstPick === idx) return;
@@ -1167,7 +1659,7 @@ window.startSwapMode = async (mid, col) => {
         return;
     }
 
-    showToast("MODO POSICIÓN", "Selecciona una nueva plaza para intercambiarte", "info");
+    showToast("MODO POSICIÃ“N", "Selecciona una nueva plaza para intercambiarte", "info");
     
     slots.forEach((s, idx) => {
         // Check if this slot contains me
@@ -1179,7 +1671,7 @@ window.startSwapMode = async (mid, col) => {
         
         const overlay = document.createElement('div');
         overlay.className = 'swap-overlay absolute inset-0 bg-primary/20 backdrop-blur-sm rounded-2xl flex center z-20 cursor-pointer animate-pulse';
-        overlay.innerHTML = `<span class="text-[8px] font-black text-black bg-primary px-2 py-1 rounded">MOVER AQUÍ</span>`;
+        overlay.innerHTML = `<span class="text-[8px] font-black text-black bg-primary px-2 py-1 rounded">MOVER AQUÃ</span>`;
         overlay.onclick = (e) => {
             e.stopPropagation();
             window.executeMatchAction('swap', mid, col, {to: idx});
@@ -1211,7 +1703,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             if (!rl.ok) return showToast("BLOQUEADO", "Demasiadas acciones repetidas. Espera unos segundos.", "warning");
         }
         const { showLoading, hideLoading } = await import('./modules/ui-loader.js?v=6.5');
-        const labels = { 'join': 'Uniéndose...', 'leave': 'Abandonando...', 'delete': 'Cancelando...', 'remove': 'Procesando...', 'add': 'Añadiendo...' };
+        const labels = { 'join': 'UniÃ©ndose...', 'leave': 'Abandonando...', 'delete': 'Cancelando...', 'remove': 'Procesando...', 'add': 'AÃ±adiendo...' };
         showLoading(labels[action] || "Sincronizando...", true);
 
         const isAdmin = (await getDocument('usuarios', user.uid))?.rol === 'Admin' || user.email === 'Juanan221091@gmail.com';
@@ -1222,7 +1714,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
         const timeLockedActions = ['join', 'add', 'swap'];
         if (isPastKickoff && !isPlayed && timeLockedActions.includes(action)) {
             hideLoading();
-            return showToast("BLOQUEADO", "La franja ya pasó. Solo se permite consulta o reporte de resultado.", "warning");
+            return showToast("BLOQUEADO", "La franja ya pasÃ³. Solo se permite consulta o reporte de resultado.", "warning");
         }
         
         if (action === 'join') {
@@ -1266,9 +1758,9 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 if (reason === "already_in") return showToast("INFO", "Ya formas parte de este partido", "info");
                 if (reason === "full") return showToast("COMPLETO", "Sin huecos en este nodo", "warning");
                 if (reason === "level_restricted") return showToast("ACCESO DENEGADO", "Nivel incompatible con el protocolo", "warning");
-                if (reason === "private_denied") return showToast("ACCESO DENEGADO", "Requiere invitación oficial", "error");
-                if (reason === "time_locked") return showToast("BLOQUEADO", "La franja ya pasó. Solo consulta/resultado.", "warning");
-                return showToast("ERROR", "No se pudo unir por conflicto de sincronización.", "error");
+                if (reason === "private_denied") return showToast("ACCESO DENEGADO", "Requiere invitaciÃ³n oficial", "error");
+                if (reason === "time_locked") return showToast("BLOQUEADO", "La franja ya pasÃ³. Solo consulta/resultado.", "warning");
+                return showToast("ERROR", "No se pudo unir por conflicto de sincronizaciÃ³n.", "error");
             }
             jugs = joinResult.players || jugs;
             analyticsTiming("match.join_ms", performance.now() - joinT0);
@@ -1286,7 +1778,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 await createNotification(
                     others,
                     "Partido completo",
-                    `La partida del ${day} a las ${time} está cerrada: ya sois ${MAX_PLAYERS} jugadores.`,
+                    `La partida del ${day} a las ${time} estÃ¡ cerrada: ya sois ${MAX_PLAYERS} jugadores.`,
                     'match_full',
                     'home.html',
                     { type: 'match_full', matchId: id, dedupId: `match_full_${id}` }
@@ -1325,7 +1817,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 if (activeJugs.length === 0 && jugs.filter(id => id).length === 0) {
                     await deleteDoc(ref);
                     hideLoading();
-                    triggerFeedback({title: "NODO COLAPSADO", msg: "Partido eliminado por vacío", type: "info"});
+                    triggerFeedback({title: "NODO COLAPSADO", msg: "Partido eliminado por vacÃ­o", type: "info"});
                 } else {
                     await updateDoc(ref, { 
                         jugadores: jugs,
@@ -1333,6 +1825,9 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                         equipoA: [jugs[0], jugs[1]],
                         equipoB: [jugs[2], jugs[3]]
                     });
+                    if (wasFull && jugs.filter(id => id).length < MAX_PLAYERS) {
+                        await notifyMatchWatchers(id, matchDate, col, [user.uid]);
+                    }
 
                     if (wasFull) {
                         try {
@@ -1364,7 +1859,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
         else if (action === 'delete') {
             if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
             
-            if (confirm("¿Abortar misión?")) {
+            if (confirm("Â¿Abortar misiÃ³n?")) {
                 const others = jugs.filter(uid => uid !== user.uid && !uid.startsWith('GUEST_'));
                 const adminDoc = await getDocument('usuarios', user.uid);
                 const adminName = adminDoc?.nombreUsuario || adminDoc?.nombre || 'El organizador';
@@ -1385,6 +1880,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
         else if (action === 'remove') {
             if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
             
+            const wasFull = jugs.filter(id => id).length === MAX_PLAYERS;
             const removedUid = jugs[extra.idx];
             if (removedUid && !removedUid.startsWith('GUEST_')) {
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
@@ -1416,6 +1912,9 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             }
 
             await updateDoc(ref, updates);
+            if (wasFull && jugs.filter(id => id).length < MAX_PLAYERS) {
+                await notifyMatchWatchers(id, matchDate, col, [removedUid || user.uid]);
+            }
             hideLoading();
             triggerFeedback({title: "ELIMINADO", msg: "Jugador expulsado", type: "info"});
         }
@@ -1447,10 +1946,10 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
              if (!addResult?.ok) {
                 hideLoading();
                 const reason = addResult?.reason || "unknown";
-                if (reason === "already_in") return showToast("INFO", "Ese jugador ya está en el partido", "info");
+                if (reason === "already_in") return showToast("INFO", "Ese jugador ya estÃ¡ en el partido", "info");
                 if (reason === "full") return triggerFeedback(FEEDBACK.MATCH.FULL);
-                if (reason === "slot_busy") return showToast("BLOQUEADO", "Ese hueco ya está ocupado", "warning");
-                return showToast("ERROR", "No se pudo añadir por conflicto de sincronización.", "error");
+                if (reason === "slot_busy") return showToast("BLOQUEADO", "Ese hueco ya estÃ¡ ocupado", "warning");
+                return showToast("ERROR", "No se pudo aÃ±adir por conflicto de sincronizaciÃ³n.", "error");
              }
              jugs = addResult.players || jugs;
              
@@ -1459,7 +1958,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 const currentPlayers = jugs.filter(id => id).length;
                 await createNotification(
                     extra.uid,
-                    "¡Convocado!",
+                    "Â¡Convocado!",
                     `Te han unido a una partida para el ${day}. Ya sois ${currentPlayers}/${MAX_PLAYERS} jugadores.`,
                     'match_join',
                     'calendario.html',
@@ -1467,14 +1966,14 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 );
              }
              hideLoading();
-             triggerFeedback({title: "AÑADIDO", msg: "Agente reclutado", type: "success"});
+             triggerFeedback({title: "AÃ‘ADIDO", msg: "Agente reclutado", type: "success"});
         }
         else if (action === 'swap') {
             const state = String(m.estado || '').toLowerCase();
             const played = !!m.resultado?.sets || state === 'cancelado' || state === 'anulado';
             if (played) {
                 hideLoading();
-                return showToast("BLOQUEADO", "No se puede cambiar posición tras finalizar.", "warning");
+                return showToast("BLOQUEADO", "No se puede cambiar posiciÃ³n tras finalizar.", "warning");
             }
             const fromIdx = extra.from !== undefined ? Number(extra.from) : jugs.indexOf(user.uid);
             const toIdx = extra.to;
@@ -1490,7 +1989,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 equipoB: [jugs[2], jugs[3]]
             });
             hideLoading();
-            triggerFeedback({title: "POSICIÓN ACTUALIZADA", msg: "Alineación reconfigurada", type: "success"});
+            triggerFeedback({title: "POSICIÃ“N ACTUALIZADA", msg: "AlineaciÃ³n reconfigurada", type: "success"});
             if(window.closeMatchModal) window.closeMatchModal();
         }
     } catch(e) { 
@@ -1508,23 +2007,27 @@ async function initMatchChat(id, col) {
     if (!box) return;
     const q = query(collection(db, col, id, 'chat'), orderBy('timestamp', 'asc'), limit(30));
     safeOnSnapshot(q, async (snap) => {
-        const msgs = await Promise.all(snap.docs.map(async d => {
-            const data = d.data();
-            const sender = await getPlayerName(data.uid);
-            const isMe = data.uid === auth.currentUser?.uid;
-            // Use simple chat styling since comms-panel handles container
-            return `
-                <div class="flex-row items-end gap-2 mb-2 ${isMe ? 'justify-end' : ''}">
-                    <div class="px-3 py-2 rounded-xl text-[10px] ${isMe ? 'bg-primary text-black' : 'bg-white/10 text-white'}" style="max-width:80%">
-                        <div class="font-black opacity-50 text-[7px] mb-1 uppercase">${sender}</div>
-                        ${data.text}
-                    </div>
-                </div>
-            `;
-        }));
-        box.innerHTML = msgs.length > 0 ? msgs.join('') : '<div class="center opacity-20 text-[8px] py-10">CANAL LIMPIO</div>';
-        box.scrollTop = box.scrollHeight;
+        try {
+            const msgs = await Promise.all(snap.docs.map(async d => {
+                try {
+                    const data = d.data();
+                    const sender = await getPlayerName(data.uid);
+                    const isMe = data.uid === auth.currentUser?.uid;
+                    return `
+                        <div class="flex-row items-end gap-2 mb-2 ${isMe ? 'justify-end' : ''}">
+                            <div class="px-3 py-2 rounded-xl text-[10px] ${isMe ? 'bg-primary text-black' : 'bg-white/10 text-white'}" style="max-width:80%">
+                                <div class="font-black opacity-50 text-[7px] mb-1 uppercase">${sender}</div>
+                                ${data.text}
+                            </div>
+                        </div>
+                    `;
+                } catch(e) { return ''; }
+            }));
+            box.innerHTML = msgs.length > 0 ? msgs.join('') : '<div class="center opacity-20 text-[8px] py-10">CANAL LIMPIO</div>';
+            box.scrollTop = box.scrollHeight;
+        } catch(e) { console.warn("Chat render error", e); }
     });
+
 }
 
 window.sendMatchChat = async (id, col) => {
@@ -1532,7 +2035,7 @@ window.sendMatchChat = async (id, col) => {
     const text = inp.value.trim();
     if (!text || !auth.currentUser) return;
     if (text.length > 500) {
-        return showToast("MENSAJE LARGO", "Máximo 500 caracteres por mensaje.", "warning");
+        return showToast("MENSAJE LARGO", "MÃ¡ximo 500 caracteres por mensaje.", "warning");
     }
     const msgRef = await addDoc(collection(db, col, id, 'chat'), {
         uid: auth.currentUser.uid,
@@ -1609,7 +2112,7 @@ async function resolveMentionTargets(matchId, col, text, senderUid) {
 }
 
 async function getPlayerName(uid) {
-    if (!uid) return 'Anónimo';
+    if (!uid) return 'AnÃ³nimo';
     if (uid.startsWith('GUEST_')) return uid.split('_')[1];
     const d = await getDocument('usuarios', uid);
     return d?.nombreUsuario || d?.nombre || 'Jugador';
@@ -1623,9 +2126,18 @@ window.closeMatchModal = () => {
     }
 };
 
-window.openResultForm = async (id, col) => {
-    const area = document.getElementById('match-detail-area');
+export const openResultForm = async (id, col) => {
+    // Try to find a suitable area, or creating one if needed for the modal to work
+    let area = document.getElementById('match-detail-area');
+    if (!area) {
+        // Fallback for pages like event-detail that might use a different modal id
+        const parentModal = document.getElementById('modal-match') || document.getElementById('modal-match-detail-ed');
+        if (parentModal) {
+            area = parentModal.querySelector('.modal-body') || parentModal;
+        }
+    }
     if (!area) return;
+    
     ensureApoingStyles();
     const meUid = auth.currentUser?.uid;
     const matchDoc = await getDocument(col, id);
@@ -1633,7 +2145,7 @@ window.openResultForm = async (id, col) => {
         showToast("ERROR", "No se pudo cargar el partido.", "error");
         return;
     }
-    const players = Array.isArray(matchDoc?.jugadores) ? matchDoc.jugadores : [];
+    const players = Array.isArray(matchDoc?.jugadores) ? matchDoc.jugadores : (Array.isArray(matchDoc?.playerUids) ? matchDoc.playerUids : []);
     const meData = meUid ? await getDocument("usuarios", meUid) : null;
     const isAdmin = meData?.rol === "Admin" || auth.currentUser?.email === "Juanan221091@gmail.com";
     const isParticipant = !!meUid && players.includes(meUid);
@@ -1693,7 +2205,7 @@ window.openResultForm = async (id, col) => {
     }
 
     if (!isParticipant && !isAdmin) {
-        const resultRead = matchDoc?.resultado?.sets || 'Aún sin resultado';
+        const resultRead = matchDoc?.resultado?.sets || 'AÃºn sin resultado';
         area.innerHTML = `
             <div class="booking-hub-v7 animate-up p-3 max-w-sm mx-auto">
                 <h3 class="hub-title-v7 text-center mb-4">Resultado del Partido</h3>
@@ -1718,7 +2230,7 @@ window.openResultForm = async (id, col) => {
                 <div class="booking-hub-v7 animate-up p-3 max-w-sm mx-auto">
                     <h3 class="hub-title-v7 text-center mb-4">Resultado bloqueado</h3>
                     <div class="p-4 rounded-2xl border border-white/10 bg-white/5 text-center">
-                        <p class="text-[10px] text-white/65 mt-2">Aún no hay ${MAX_PLAYERS} jugadores confirmados en la partida.</p>
+                        <p class="text-[10px] text-white/65 mt-2">AÃºn no hay ${MAX_PLAYERS} jugadores confirmados en la partida.</p>
                     </div>
                     <button class="btn-confirm-v7 mt-4" onclick="window.closeMatchModal()">
                         <span class="t-main">ENTENDIDO</span>
@@ -1751,7 +2263,7 @@ window.openResultForm = async (id, col) => {
 
     // Fetch player names for MVP selection
     const playerNames = await Promise.all(players.map(async (uid) => {
-        if (!uid) return { id: null, name: 'Vacío' };
+        if (!uid) return { id: null, name: 'VacÃ­o' };
         const name = await getPlayerName(uid);
         return { id: uid, name };
     }));
@@ -1852,7 +2364,7 @@ window.openResultForm = async (id, col) => {
                 await createNotification(
                     targetUids,
                     "Resultado subido",
-                    `${meName} subió el resultado: ${resultStr}.`,
+                    `${meName} subiÃ³ el resultado: ${resultStr}.`,
                     "result_uploaded",
                     "puntosRanking.html",
                     { type: "result_uploaded", matchId: id, dedupId: `result_uploaded_${id}` },
@@ -1887,6 +2399,7 @@ window.openResultForm = async (id, col) => {
         }
     };
 };
+window.openResultForm = openResultForm;
 
 // --- DYNAMIC UI HELPERS ---
 window.toggleCourtInput = (sel) => {
@@ -1913,7 +2426,7 @@ window.openPlayerSelector = async (matchId, col, extra) => {
     overlay.innerHTML = `
         <div class="modal-card animate-up glass-strong" style="max-width:360px">
             <div class="modal-header border-b border-white/10 p-4 flex-row between items-center">
-                <span class="text-xs font-black text-white uppercase tracking-widest">AÑADIR JUGADOR</span>
+                <span class="text-xs font-black text-white uppercase tracking-widest">AÃ‘ADIR JUGADOR</span>
                 <button class="close-btn w-8 h-8 rounded-full bg-white/5 flex center" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times text-white"></i></button>
             </div>
             
@@ -1943,7 +2456,7 @@ window.openPlayerSelector = async (matchId, col, extra) => {
                 </button>
 
                 <button class="w-full py-4 mt-6 bg-white/10 rounded-xl text-white font-black text-xs tracking-widest border border-white/10 hover:bg-white/20" onclick="this.closest('.modal-overlay').remove()">
-                    FINALIZAR SELECCIÓN
+                    FINALIZAR SELECCIÃ“N
                 </button>
             </div>
         </div>
@@ -1977,11 +2490,12 @@ window.filterPsUsers = (q) => {
     
     document.getElementById('ps-list').innerHTML = filtered.map(u => {
         const isNew = mid === 'NEW';
-        const action = isNew ? `window.selectUserForNew('${u.id}')` : `window.executeMatchAction('add', '${mid}', '${col}', {uid:'${u.id}', idx:${extra.idx}})`;
-        const finalAction = `${action}; showToast('Añadido', 'Jugador seleccionado');`;
+        const action = isNew 
+            ? `window.selectUserForNew('${u.id}')` 
+            : `window.animateSelectionAndAdd('${u.id}', '${mid}', '${col}', ${extra.idx}, event)`;
         
         return `
-        <div class="flex-row items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/50 cursor-pointer transition-all hover:bg-white/10" onclick="${finalAction}">
+        <div class="flex-row items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/50 cursor-pointer transition-all hover:bg-white/10" onclick="${action}">
             <img src="${u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png'}" class="w-8 h-8 rounded-full bg-black/50 object-cover border border-white/10">
             <div class="flex-col flex-1">
                 <span class="text-xs font-bold text-white">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
@@ -1992,6 +2506,26 @@ window.filterPsUsers = (q) => {
         `;
     }).join('');
 };
+
+window.animateSelectionAndAdd = (uid, mid, col, idx, eventOrNull) => {
+    const e = eventOrNull || (typeof event !== 'undefined' ? event : null);
+    const sourceEl = e?.currentTarget;
+    const targetEl = document.getElementById(`slot-${idx}-wrap`);
+    
+    if (sourceEl && targetEl) {
+        animatePlayerSelection(sourceEl, targetEl, () => {
+             window.executeMatchAction('add', mid, col, { uid, idx });
+             showToast('AÃ±adido', 'Jugador reclutado en el squad');
+        });
+    } else {
+        window.executeMatchAction('add', mid, col, { uid, idx });
+    }
+    
+    // Auto-close modal
+    const modal = document.querySelector('.modal-overlay.active');
+    if (modal && modal.innerHTML.includes('AÃ‘ADIR JUGADOR')) modal.remove();
+};
+
 
 window.addGuest = (mid, col, extra) => {
     const name = document.getElementById('guest-name').value.trim();
@@ -2010,38 +2544,101 @@ window.addGuest = (mid, col, extra) => {
     } else {
         window.executeMatchAction('add', mid, col, { uid: guestId, idx: extra.idx });
     }
-    showToast('Invitado', 'Se ha añadido al squad');
+    showToast('Invitado', 'Se ha aÃ±adido al squad');
 };
  
 // CSS injection removed. Styles moved to css/premium-v7.css
 
-window.selectUserForNew = (uid) => {
-    const extra = window.psMatchContext.extra; 
-    window._initialJugadores[extra.idx] = uid;
-    
-    let u = window.psUsersCache.find(x => x.id === uid);
-    if (!u && uid.startsWith('GUEST_')) {
-         const parts = uid.split('_');
-         u = { nombreUsuario: parts[1] + ' (Inv)', nivel: parseFloat(parts[2]), fotoPerfil: './imagenes/Logojafs.png' };
+
+window.selectUserForNew = (uid, forceIdx = null) => {
+    let idx = forceIdx;
+    if (idx === null) {
+        if (!window.psMatchContext || !window.psMatchContext.extra) return;
+        idx = window.psMatchContext.extra.idx;
     }
     
-    const slot = document.getElementById(`slot-${extra.idx}-wrap`);
+    if (!window._initialJugadores) window._initialJugadores = [null, null, null, null];
+    
+    // Animation Trigger
+    const sourceEl = event?.currentTarget;
+    const targetEl = document.getElementById(`slot-${idx}-wrap`);
+    if (sourceEl && targetEl) {
+        animatePlayerSelection(sourceEl, targetEl, () => finalizeSelection(uid, idx));
+    } else {
+        finalizeSelection(uid, idx);
+    }
+};
+
+function finalizeSelection(uid, idx) {
+    if (!window._initialJugadores) return;
+    window._initialJugadores[idx] = uid;
+    
+    let u = (window.psUsersCache || []).find(x => x.id === uid);
+    if (!u) {
+         if (uid && uid.startsWith('GUEST_')) {
+             const parts = uid.split('_');
+             u = { id: uid, nombreUsuario: parts[1] + ' (Inv)', nivel: parseFloat(parts[2]), fotoPerfil: './imagenes/Logojafs.png' };
+         } else {
+             u = { id: uid, nombreUsuario: 'Jugador...', nivel: 2.5, fotoPerfil: './imagenes/Logojafs.png' };
+         }
+    }
+    
+    const slot = document.getElementById(`slot-${idx}-wrap`);
     if(slot && u) {
-        const isTeamA = extra.idx < 2;
+        const isTeamA = idx < 2;
         const color = isTeamA ? 'var(--primary)' : 'var(--secondary)';
         
         slot.className = "p-slot-v7 pointer";
-        slot.onclick = null; 
+        slot.onclick = () => window.removeUserFromNew(idx); 
         slot.innerHTML = `
             <div class="p-img-box" style="border-color:${color}">
                 <img src="${u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png'}">
             </div>
             <span class="p-badge" style="color:${color}; border-color:currentColor">${(Number(u.nivel)||2.5).toFixed(1)}</span>
             <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${color}">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
-            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px] shadow-lg z-10 hover:scale-110 transition-transform" onclick="event.stopPropagation(); window.removeUserFromNew(${extra.idx})"><i class="fas fa-times"></i></button>
+            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px] shadow-lg z-10 hover:scale-110 transition-transform" onclick="event.stopPropagation(); window.removeUserFromNew(${idx})"><i class="fas fa-times"></i></button>
         `;
     }
-};
+    
+    // Close selector modal after a short delay to see animation finish
+    setTimeout(() => {
+        const modal = document.querySelector('.modal-overlay.active');
+        if (modal && modal.innerHTML.includes('AÃ‘ADIR JUGADOR')) modal.remove();
+    }, 300);
+}
+
+function animatePlayerSelection(source, target, callback) {
+    const srcRect = source.getBoundingClientRect();
+    const dstRect = target.getBoundingClientRect();
+    
+    const clone = source.cloneNode(true);
+    clone.style.position = 'fixed';
+    clone.style.top = srcRect.top + 'px';
+    clone.style.left = srcRect.left + 'px';
+    clone.style.width = srcRect.width + 'px';
+    clone.style.height = srcRect.height + 'px';
+    clone.style.zIndex = '10000';
+    clone.style.transition = 'all 0.6s cubic-bezier(0.19, 1, 0.22, 1)';
+    clone.style.pointerEvents = 'none';
+    clone.classList.add('shadow-glow-primary');
+    
+    document.body.appendChild(clone);
+    
+    requestAnimationFrame(() => {
+        clone.style.top = dstRect.top + 'px';
+        clone.style.left = dstRect.left + 'px';
+        clone.style.width = dstRect.width + 'px';
+        clone.style.height = dstRect.height + 'px';
+        clone.style.opacity = '0';
+        clone.style.transform = 'scale(0.5)';
+    });
+    
+    setTimeout(() => {
+        clone.remove();
+        if (callback) callback();
+    }, 600);
+}
+
 
 window.handleCreationSlotClick = (idx) => {
     if (!Array.isArray(window._initialJugadores)) {
@@ -2055,7 +2652,7 @@ window.handleCreationSlotClick = (idx) => {
     // If user is not already in formation, fill this slot directly.
     if (meUid && !window._initialJugadores.includes(meUid)) {
         window.selectUserForNew(meUid);
-        showToast("Alineación", "Te has añadido automáticamente al hueco seleccionado", "success");
+        showToast("AlineaciÃ³n", "Te has aÃ±adido automÃ¡ticamente al hueco seleccionado", "success");
         return;
     }
     // Otherwise open selector only when needed (admin/organizer style flow).
@@ -2071,3 +2668,7 @@ window.removeUserFromNew = (idx) => {
         slot.onclick = () => window.handleCreationSlotClick(idx);
     }
 };
+
+
+
+

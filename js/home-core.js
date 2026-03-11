@@ -52,10 +52,62 @@ let nexusOnlineUsers = [];
 let nexusAllUsers = [];
 let homeEntryOverlayInterval = null;
 let homeEntryOverlayValue = 0;
+const HOME_MATCH_CACHE_KEY = "home:matches:v1";
+let showHomeWelcome = false;
 
 /* Player cache (names + photos) */
 const playerNameCache = new Map();
 const playerPhotoCache = new Map();
+
+function normalizeMatchForCache(match) {
+  const d = toDateSafe(match?.fecha);
+  return {
+    ...match,
+    fecha: d ? d.toISOString() : match?.fecha || null,
+  };
+}
+
+function saveHomeMatchCache() {
+  try {
+    const payload = {
+      updatedAt: Date.now(),
+      matches: Array.isArray(allMatches) ? allMatches.map(normalizeMatchForCache) : [],
+    };
+    localStorage.setItem(HOME_MATCH_CACHE_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+function loadHomeMatchCache() {
+  try {
+    const raw = localStorage.getItem(HOME_MATCH_CACHE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data?.matches)) return false;
+    allMatches = data.matches;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function applyHomeMatchCache({ complete = false } = {}) {
+  if (!loadHomeMatchCache()) return false;
+  const activeTab =
+    document.querySelector(".hv2-tab.active")?.dataset.filter || "open";
+  renderNextMatch();
+  renderEventSpotlight();
+  maybeCreateEventDayNotice();
+  renderMatchesByFilter(activeTab);
+  matchLoadFallbackFired = true;
+  if (complete) {
+    if (!homeLoadMeasured) {
+      homeLoadMeasured = true;
+      analyticsTiming("home.ttv_ms", performance.now() - homeBootStart);
+    }
+    completeHomeEntryOverlay();
+  }
+  return true;
+}
 
 async function resolvePlayerName(uid) {
   if (!uid) return null;
@@ -106,6 +158,12 @@ function getInitials(name = "") {
 }
 /* Init */
 document.addEventListener("DOMContentLoaded", () => {
+  showHomeWelcome = shouldShowHomeWelcome();
+  if (!showHomeWelcome) {
+    const overlay = document.getElementById("home-entry-overlay");
+    if (overlay) overlay.classList.add("hidden");
+    document.body.classList.remove("home-booting");
+  }
   initAppUI("home");
   observeCoreSession({
     onSignedOut: () => {
@@ -116,7 +174,13 @@ document.addEventListener("DOMContentLoaded", () => {
       cleanup();
       currentUser = user;
       currentUserData = userDoc || {};
-      beginHomeEntryOverlay(currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador");
+      if (showHomeWelcome) {
+        beginHomeEntryOverlay(currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador");
+      } else {
+        const overlay = document.getElementById("home-entry-overlay");
+        if (overlay) overlay.classList.add("hidden");
+        document.body.classList.remove("home-booting");
+      }
       await injectHeader(currentUserData);
       injectNavbar("home");
       renderWelcome();
@@ -127,6 +191,7 @@ document.addEventListener("DOMContentLoaded", () => {
       bindNotificationNudge();
       checkSystemAlerts(userDoc);
       checkHomeNotices(); // Added this line
+      applyHomeMatchCache({ complete: navigator.onLine === false });
 
       // Loading matches with safety fallback
       try {
@@ -166,6 +231,7 @@ document.addEventListener("DOMContentLoaded", () => {
         );
       } catch (err) {
         console.error("Match loading error:", err);
+        applyHomeMatchCache({ complete: true });
       }
 
       // Final fallback to ensure UI isn't stuck
@@ -848,12 +914,26 @@ async function mergeMatches(col, list) {
   const activeTab =
     document.querySelector(".hv2-tab.active")?.dataset.filter || "open";
   renderMatchesByFilter(activeTab);
+  saveHomeMatchCache();
 
   if (!homeLoadMeasured && loadedCollections.size >= 1) {
     homeLoadMeasured = true;
     analyticsTiming("home.ttv_ms", performance.now() - homeBootStart);
     completeHomeEntryOverlay();
   }
+}
+
+function shouldShowHomeWelcome() {
+  try {
+    const keys = ["show_home_welcome", "home_entry_welcome"];
+    for (const key of keys) {
+      if (sessionStorage.getItem(key)) {
+        sessionStorage.removeItem(key);
+        return true;
+      }
+    }
+  } catch {}
+  return false;
 }
 
 function beginHomeEntryOverlay(name = "Jugador") {

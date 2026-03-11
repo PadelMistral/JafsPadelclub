@@ -1,4 +1,4 @@
-﻿/* =====================================================
+/* =====================================================
    PADELUMINATIS PREMIUM V7.5 - ULTRA VIBRANT EDITION
    PROFESSIONAL REFINEMENT - MEJORADO CON SISTEMA DE DISEÑO
    ===================================================== */
@@ -12,25 +12,33 @@
   --neon-lime: #c6ff00;
   --neon-orange: #ff6b35;
   --sport-green: #22c55e;
-  --sport-gold: #ffd700;
+  --sport-red: #ef4444;
+  --sport-gold: #fbbf24;
+  
   --primary: var(--neon-lime);
-  --primary-glow: rgba(198, 255, 0, 0.5);
-  --secondary: var(--neon-magenta);
-  --secondary-glow: rgba(255, 0, 255, 0.5);
+  --primary-rgb: 198, 255, 0;
+  --primary-glow: rgba(198, 255, 0, 0.4);
+  --secondary: var(--neon-cyan);
+  --secondary-rgb: 0, 212, 255;
+  --secondary-glow: rgba(0, 212, 255, 0.4);
+  
   --text-primary: #ffffff;
   --text-dim: rgba(255, 255, 255, 0.6);
   --text-muted: rgba(255, 255, 255, 0.4);
+  
   --bg-dark: #02040a;
-  --bg-card: rgba(15, 23, 42, 0.8);
+  --bg-deep: #020617;
+  --bg-surface: #0f172a;
+  --bg-glass: rgba(15, 23, 42, 0.7);
+  --bg-card: rgba(15, 23, 42, 0.85);
+  
+  --border: rgba(255, 255, 255, 0.08);
   --border-light: rgba(255, 255, 255, 0.1);
   --border-medium: rgba(255, 255, 255, 0.15);
 
   /* Tipografía */
-  --font-main:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
-  --font-display:
-    "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-main: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Rajdhani", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* Espaciado consistente */
   --space-xs: 4px;
@@ -43,10 +51,11 @@
   /* Bordes */
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-2xl: 24px;
-  --radius-3xl: 32px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --radius-3xl: 40px;
+  --radius-full: 100px;
 
   /* Sombras */
   --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
@@ -1370,8 +1379,20 @@ input:checked + .slider-v7:before {
 }
 .type-badge-v7.amistoso {
   background: rgba(0, 212, 255, 0.15);
-  color: var(--primary);
+  color: var(--secondary);
   border: 1px solid rgba(0, 212, 255, 0.3);
+}
+.type-badge-v7.evento {
+  background: rgba(198, 255, 0, 0.2);
+  color: var(--primary);
+  border: 1px solid rgba(198, 255, 0, 0.4);
+}
+
+.txt-glow {
+  text-shadow: 0 0 15px var(--primary-glow);
+}
+.txt-glow-secondary {
+  text-shadow: 0 0 15px var(--secondary-glow);
 }
 
 .weather-pill-v7 {
@@ -1385,7 +1406,7 @@ input:checked + .slider-v7:before {
   padding: var(--space-lg) 0;
 }
 .hero-time-v7 {
-  font-size: 4rem;
+  font-size: clamp(3rem, 15vw, 4.5rem);
   font-weight: 950;
   font-family: var(--font-display);
   font-style: italic;
@@ -1394,7 +1415,8 @@ input:checked + .slider-v7:before {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.2));
+  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.2));
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
 }
 
 /* ELO Breakdown Stats V7 */
@@ -1508,22 +1530,72 @@ input:checked + .slider-v7:before {
 .court-schema-v7 {
   background: linear-gradient(
     135deg,
-    rgba(30, 30, 40, 0.9),
-    rgba(10, 10, 15, 0.9)
+    rgba(30, 30, 40, 0.95),
+    rgba(10, 10, 15, 0.98)
   );
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
   border-radius: 26px;
   padding: var(--space-xl) var(--space-lg);
   position: relative;
   overflow: hidden;
+  box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.8), 0 10px 30px rgba(0, 0, 0, 0.5);
 }
+
+/* Padel Court Lines */
+.court-schema-v7::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 50%;
+  width: 2px; height: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(-50%);
+  z-index: 0;
+}
+.court-schema-v7::after {
+  content: "";
+  position: absolute;
+  top: 25%; left: 0;
+  width: 100%; height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  z-index: 0;
+}
+.court-schema-v7-line-bottom {
+  position: absolute;
+  top: 75%; left: 0;
+  width: 100%; height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  z-index: 0;
+}
+
 .court-net {
   position: absolute;
   top: 50%;
   left: 0;
   width: 100%;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.2);
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(198, 255, 0, 0.5), transparent);
+  box-shadow: 0 0 15px var(--primary-glow);
   z-index: 1;
+}
+
+/* Universal Court Background for match lists */
+.match-court-bg-v7 {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(2, 6, 23, 0.95) 100%);
+  position: relative;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.match-court-bg-v7::before {
+  content: "";
+  position: absolute;
+  top: 50%; left: 0; width: 100%; height: 1px;
+  background: rgba(255,255,255,0.05);
+}
+.match-court-bg-v7::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 50%; width: 1px; height: 100%;
+  background: rgba(255,255,255,0.05);
 }
 .players-row-v7 {
   display: flex;
@@ -1721,48 +1793,67 @@ input:checked + .slider-v7:before {
 
 .mode-selector-v7 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-md);
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
 }
 .mode-card-v7 {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-xl);
-  padding: var(--space-md);
+  padding: var(--space-sm);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-md);
-  transition: 0.3s;
+  justify-content: center;
+  gap: var(--space-xs);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  cursor: pointer;
+  min-height: 80px;
 }
 .mode-card-v7.active {
-  background: rgba(0, 212, 255, 0.12);
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(198, 255, 0, 0.1));
   border-color: var(--primary);
-  box-shadow: 0 10px 20px rgba(0, 212, 255, 0.15);
+  box-shadow: 0 8px 20px rgba(198, 255, 0, 0.15);
+  transform: translateY(-2px);
 }
 .mode-card-v7 .mode-icon {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   color: var(--text-dim);
 }
 .mode-card-v7.active .mode-icon {
   color: var(--primary);
   background: rgba(0, 212, 255, 0.2);
+  transform: scale(1.1);
 }
 .mode-card-v7 .m-name {
   display: block;
-  font-size: 0.85rem;
+  font-size: 0.7rem;
   font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 .mode-card-v7 .m-desc {
-  display: block;
-  font-size: 0.65rem;
-  opacity: 0.5;
+  display: none; /* Hide description in grid for space */
+}
+
+@media (max-width: 400px) {
+  .mode-selector-v7 {
+    gap: 6px;
+  }
+  .mode-card-v7 {
+    padding: 6px;
+    border-radius: var(--radius-lg);
+  }
+  .mode-card-v7 .m-name {
+    font-size: 0.6rem;
+  }
 }
 
 .toggle-v7 {

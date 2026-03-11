@@ -1409,9 +1409,191 @@ input:focus-visible {
   }
 }
 
+/* Match Enhancements: Balance, Watchlist, Media */
+.balance-suggest-card {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.12), rgba(198, 255, 0, 0.08));
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.balance-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.balance-title {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #e0fbff;
+}
+.balance-pill {
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  background: rgba(198, 255, 0, 0.15);
+  border: 1px solid rgba(198, 255, 0, 0.35);
+  color: #c6ff00;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+.btn-balance-apply {
+  align-self: flex-start;
+  background: rgba(0, 212, 255, 0.15);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  color: #00d4ff;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 8px 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.balance-note {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.match-watch-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+.watch-title {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.watch-sub {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.btn-watch-slot {
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #fbbf24;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.btn-watch-slot.active {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #22c55e;
+}
+.match-social-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+.pm-btn-ghost {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.match-media-card {
+  background: rgba(10, 20, 40, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.match-media-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.match-media-title {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.match-media-pill {
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(0, 212, 255, 0.12);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: #00d4ff;
+}
+.match-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+.match-media-item {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.match-media-item img,
+.match-media-item video {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  display: block;
+}
+.match-media-empty {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  text-align: center;
+}
+.match-media-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.btn-match-media-upload {
+  background: rgba(0, 212, 255, 0.15);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  color: #00d4ff;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.match-media-hint {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
 /* ===== 36. STRUCTURE CONSISTENCY PATCH ===== */
 :root {
   --app-shell-max-width: 940px;
+  --bg-card: rgba(18, 28, 48, 0.72);
+  --bg-glass: rgba(12, 20, 34, 0.86);
+  --bg-elevated: rgba(24, 34, 54, 0.7);
+  --border: rgba(255, 255, 255, 0.12);
+  --border-light: rgba(255, 255, 255, 0.2);
 }
 
 .app-header {
@@ -1626,4 +1808,114 @@ main,
 #welcome-live-weather {
   color: #d8f4ff;
   border-color: rgba(0,212,255,.35);
+}
+
+/* ===== 43. LIGHT VISUAL REFRESH ===== */
+[data-theme="galactic"] body {
+  background: radial-gradient(
+      1200px 520px at 15% -10%,
+      rgba(54, 82, 150, 0.25),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 420px at 90% -5%,
+      rgba(16, 185, 129, 0.18),
+      transparent 55%
+    ),
+    linear-gradient(180deg, #0b1527 0%, #0a1222 100%);
+}
+
+[data-theme="galactic"] .modal-card {
+  background: linear-gradient(180deg, rgba(12, 18, 32, 0.98), rgba(10, 16, 28, 0.96));
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="galactic"] .card-premium-v7,
+[data-theme="galactic"] .card-premium,
+[data-theme="galactic"] .sport-card,
+[data-theme="galactic"] .premium-card,
+[data-theme="galactic"] .glass,
+[data-theme="galactic"] .glass-strong,
+[data-theme="galactic"] .panel-card,
+[data-theme="galactic"] .section-card,
+[data-theme="galactic"] .module-card,
+[data-theme="galactic"] .event-card,
+[data-theme="galactic"] .match-card,
+[data-theme="galactic"] .stat-card {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+}
+
+/* ===== 44. COURT COLOR REFRESH ===== */
+.tennis-court-v5,
+.tennis-court-v6,
+.tennis-court-v7,
+.court-schema-v7,
+.match-court-bg-v7,
+.f-court-visual,
+.nm-court-premium,
+.nm-court-simplified,
+.poster-court {
+  background: linear-gradient(180deg, rgba(24, 150, 118, 0.96) 0%, rgba(18, 110, 90, 0.95) 100%) !important;
+}
+
+.tennis-court-v5::before,
+.tennis-court-v6::before,
+.tennis-court-v7::before,
+.court-schema-v7::before,
+.match-court-bg-v7::before {
+  border-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.tennis-court-v5::after,
+.tennis-court-v6::after,
+.tennis-court-v7::after,
+.court-schema-v7::after,
+.match-court-bg-v7::after {
+  border-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.hv2-court-bg {
+  opacity: 0.18;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.5%,
+      rgba(255, 255, 255, 0.5) 49.5%,
+      rgba(255, 255, 255, 0.5) 50.5%,
+      transparent 50.5%
+    ),
+    linear-gradient(
+      0deg,
+      transparent 49%,
+      rgba(255, 255, 255, 0.5) 49%,
+      rgba(255, 255, 255, 0.5) 51%,
+      transparent 51%
+    ),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.25) 0px, rgba(255, 255, 255, 0.25) 2px, transparent 2px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.25) 0px, rgba(255, 255, 255, 0.25) 2px, transparent 2px),
+    linear-gradient(180deg, rgba(34, 197, 94, 0.22) 0%, rgba(14, 116, 144, 0.15) 100%);
+}
+
+/* ===== Match Creation UI Polish ===== */
+.booking-config .mode-selector-v7 {
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 10px;
+}
+.booking-config .mode-card-v7 {
+  min-width: 0;
+}
+
+.booking-hub-v7 .btn-confirm-v7.mission-btn {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.95), rgba(14, 116, 144, 0.95));
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  box-shadow: 0 18px 30px rgba(56, 189, 248, 0.25);
+}
+.booking-hub-v7 .btn-confirm-v7.mission-btn .t-main,
+.booking-hub-v7 .btn-confirm-v7.mission-btn i {
+  color: #04131d;
+}
+.booking-hub-v7 .btn-confirm-v7.mission-btn .t-sub {
+  color: rgba(4, 19, 29, 0.6);
 }

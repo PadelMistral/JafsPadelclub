@@ -43,6 +43,84 @@ const APOING_PROXY_LIST = [
 ];
 const APOING_PROXY_3 = "https://r.jina.ai/http://";
 const APOING_SYNC_TTL_MS = 120000;
+const CALENDAR_CACHE_KEY = "calendar:matches:v1";
+const APOING_CACHE_KEY = "calendar:apoing:v1";
+
+function toDateSafeLocal(value) {
+    if (!value) return null;
+    if (typeof value?.toDate === "function") {
+        const d = value.toDate();
+        return Number.isNaN(d?.getTime?.()) ? null : d;
+    }
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function normalizeMatchForCache(match) {
+    const d = toDateSafeLocal(match?.fecha);
+    return {
+        ...match,
+        fecha: d ? d.toISOString() : match?.fecha || null,
+    };
+}
+
+function normalizeApoingEventForCache(ev) {
+    return {
+        ...ev,
+        dtStart: ev?.dtStart instanceof Date ? ev.dtStart.toISOString() : ev?.dtStart || null,
+        dtEnd: ev?.dtEnd instanceof Date ? ev.dtEnd.toISOString() : ev?.dtEnd || null,
+    };
+}
+
+function hydrateApoingEvent(ev) {
+    const start = ev?.dtStart ? new Date(ev.dtStart) : null;
+    const end = ev?.dtEnd ? new Date(ev.dtEnd) : null;
+    if (!start || Number.isNaN(start.getTime())) return null;
+    if (!end || Number.isNaN(end.getTime())) return null;
+    return { ...ev, dtStart: start, dtEnd: end };
+}
+
+function saveCalendarCache() {
+    try {
+        const payload = {
+            updatedAt: Date.now(),
+            matches: Array.isArray(allMatches) ? allMatches.map(normalizeMatchForCache) : [],
+        };
+        localStorage.setItem(CALENDAR_CACHE_KEY, JSON.stringify(payload));
+        const apoingPayload = {
+            updatedAt: Date.now(),
+            events: Array.isArray(apoingEvents) ? apoingEvents.map(normalizeApoingEventForCache) : [],
+        };
+        localStorage.setItem(APOING_CACHE_KEY, JSON.stringify(apoingPayload));
+    } catch {}
+}
+
+function loadCalendarCache() {
+    try {
+        const raw = localStorage.getItem(CALENDAR_CACHE_KEY);
+        if (raw) {
+            const data = JSON.parse(raw);
+            if (Array.isArray(data?.matches)) allMatches = data.matches;
+        }
+        const rawA = localStorage.getItem(APOING_CACHE_KEY);
+        if (rawA) {
+            const dataA = JSON.parse(rawA);
+            if (Array.isArray(dataA?.events)) {
+                apoingEvents = dataA.events.map(hydrateApoingEvent).filter(Boolean);
+                indexApoingEvents(apoingEvents);
+            }
+        }
+        return Array.isArray(allMatches) && allMatches.length > 0;
+    } catch {
+        return false;
+    }
+}
+
+function applyCalendarCache() {
+    if (!loadCalendarCache()) return false;
+    renderGrid();
+    return true;
+}
 
 async function autoCancelExpiredMatches(matches = []) {
     const stale = matches.filter((m) => isExpiredOpenMatch(m));
@@ -656,6 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentUser = user;
                 userData = userDoc || {};
                 ensureMyApoingSourceSync().catch(() => {});
+                if (navigator.onLine === false) applyCalendarCache();
 
                 calendarMatchUnsubs.forEach((unsub) => {
                     try { if (typeof unsub === 'function') unsub(); } catch (_) {}
@@ -708,16 +787,32 @@ function startClock() {
 
 async function syncMatches() {
     try {
-        const [snapA, snapR, snapE] = await Promise.all([
+        const [snapA, snapR, snapE, snapEv] = await Promise.all([
             window.getDocsSafe(collection(db, "partidosAmistosos")),
             window.getDocsSafe(collection(db, "partidosReto")),
-            window.getDocsSafe(collection(db, "eventoPartidos"))
+            window.getDocsSafe(collection(db, "eventoPartidos")),
+            window.getDocsSafe(collection(db, "eventos"))
         ]);
         
+        const eventDocs = snapEv.docs.reduce((acc, d) => {
+            acc[d.id] = d.data();
+            return acc;
+        }, {});
+
         allMatches = [];
         snapA.forEach(d => allMatches.push({ id: d.id, col: 'partidosAmistosos', ...d.data() }));
         snapR.forEach(d => allMatches.push({ id: d.id, col: 'partidosReto', isComp: true, ...d.data() }));
-        snapE.forEach(d => allMatches.push({ id: d.id, col: 'eventoPartidos', isEvent: true, ...d.data() }));
+        snapE.forEach(d => {
+            const data = d.data();
+            // FILTER: If it's already linked to a real match, don't show the event placeholder
+            if (data.linkedMatchId) return;
+
+            const ev = eventDocs[data.eventoId];
+            if (ev) {
+                // If league/group, check teams. If knockout, we might allow it (manual)
+                allMatches.push({ id: d.id, col: 'eventoPartidos', eventMatchId: d.id, ...data });
+            }
+        });
         await autoCancelExpiredMatches(allMatches);
 
         await Promise.all([
@@ -726,8 +821,11 @@ async function syncMatches() {
             syncApoingReservations(),
         ]);
         renderGrid();
+        saveCalendarCache();
     } catch (e) {
         console.error('Calendar sync error:', e);
+        const cached = applyCalendarCache();
+        if (cached) showToast("Offline", "Mostrando tu horario guardado.", "warning");
         const status = document.getElementById('apoing-sync-state');
         if (status) {
             status.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error Sync';
@@ -952,173 +1050,184 @@ function renderGrid() {
 }
 
 function renderSlot(date, hour) {
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    const dStr = `${year}-${month}-${day}`;
+    try {
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        const dStr = `${year}-${month}-${day}`;
 
-    const [h, min] = hour.split(':').map(Number);
-    const slotTime = new Date(date);
-    slotTime.setHours(h, min, 0, 0);
-    const slotEnd = new Date(slotTime);
-    slotEnd.setMinutes(slotEnd.getMinutes() + 90);
-    const slotKey = buildSlotKey(slotTime, hour);
-    const apoingForSlot = (apoingSlotMap.get(slotKey) || []).sort((a, b) => a.dtStart - b.dtStart);
-    const apoingEvent = apoingForSlot[0] || null;
+        const [h, min] = hour.split(':').map(Number);
+        const slotTime = new Date(date);
+        slotTime.setHours(h, min, 0, 0);
+        const slotEnd = new Date(slotTime);
+        slotEnd.setMinutes(slotEnd.getMinutes() + 90);
+        const slotKey = buildSlotKey(slotTime, hour);
+        const apoingForSlot = (apoingSlotMap.get(slotKey) || []).sort((a, b) => a.dtStart - b.dtStart);
+        const apoingEvent = apoingForSlot[0] || null;
 
-    const match = allMatches.find(m => {
-        const mDate = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
-        if (Number.isNaN(mDate.getTime())) return false;
-        const mYear = mDate.getFullYear();
-        const mMonth = (mDate.getMonth() + 1).toString().padStart(2, '0');
-        const mDay = mDate.getDate().toString().padStart(2, '0');
-        const mDStr = `${mYear}-${mMonth}-${mDay}`;
-        if (mDStr !== dStr) return false;
-        const mTime = mDate.getTime();
-        return mTime >= slotTime.getTime() && mTime < slotEnd.getTime();
-    });
-    
-    const isPast = slotEnd < new Date();
-    let state = 'libre';
-    let label = 'PISTA LIBRE';
-    let sub = '';
-    let ownerSub = '';
-    let extraIcon = '';
-    let isLocked = false;
+        const match = allMatches.find(m => {
+            try {
+                const mDate = m.fecha?.toDate ? m.fecha.toDate() : (m.fecha ? new Date(m.fecha) : null);
+                if (!mDate || Number.isNaN(mDate.getTime())) return false;
+                const mYear = mDate.getFullYear();
+                const mMonth = (mDate.getMonth() + 1).toString().padStart(2, '0');
+                const mDay = mDate.getDate().toString().padStart(2, '0');
+                const mDStr = `${mYear}-${mMonth}-${mDay}`;
+                if (mDStr !== dStr) return false;
+                const mTime = mDate.getTime();
+                return mTime >= slotTime.getTime() && mTime < slotEnd.getTime();
+            } catch(e) { return false; }
+        });
+        
+        const isPast = slotEnd < new Date();
+        let state = 'libre';
 
-    if (match) {
-        if (match.col === 'eventoPartidos') {
-            const isMineEvent = !!currentUser && (match.playerUids || []).includes(currentUser.uid);
-            const isPlayedEvent = String(match.estado || '').toLowerCase() === 'jugado';
-            state = isPlayedEvent ? 'jugado' : (isMineEvent ? 'propia' : 'cerrada');
-            label = isPlayedEvent ? 'EVENTO JUGADO' : 'PARTIDO EVENTO';
-            sub = isPlayedEvent ? (match.resultado || 'VER RES') : (match.phase ? String(match.phase).toUpperCase() : 'TORNEO');
-            ownerSub = `EVENTO: ${shortName(match.teamAName || '?')} VS ${shortName(match.teamBName || '?')}`;
-        } else {
-        // Private Match Check
-        if (match.visibility === 'private' && currentUser) {
-            const uid = currentUser.uid;
-             if (match.organizerId !== uid && match.creador !== uid && !(match.invitedUsers || []).includes(uid) && !(match.jugadores || []).includes(uid)) {
-                state = 'bloqueado';
-                label = 'PRIVADA';
-                sub = 'RESERVADO';
-                extraIcon = '<i class="fas fa-lock text-white/50 absolute top-2 right-2 text-xs"></i>';
-                isLocked = true;
+        let label = 'PISTA LIBRE';
+        let sub = '';
+        let ownerSub = '';
+        let extraIcon = '';
+        let isLocked = false;
+
+        if (match) {
+            if (match.col === 'eventoPartidos') {
+                const isMineEvent = !!currentUser && (match.playerUids || []).includes(currentUser.uid);
+                const isPlayedEvent = String(match.estado || '').toLowerCase() === 'jugado';
+                state = isPlayedEvent ? 'jugado' : (isMineEvent ? 'propia' : 'cerrada');
+                label = isPlayedEvent ? 'EVENTO JUGADO' : 'PARTIDO EVENTO';
+                const resLabel = match.resultado?.sets || (typeof match.resultado === 'string' ? match.resultado : 'VER RES');
+                sub = isPlayedEvent ? resLabel : (match.phase ? String(match.phase).toUpperCase() : 'TORNEO');
+                ownerSub = `EVENTO: ${shortName(match.teamAName || '?')} VS ${shortName(match.teamBName || '?')}`;
+            } else {
+            // Private Match Check
+            if (match.visibility === 'private' && currentUser) {
+                const uid = currentUser.uid;
+                if (match.organizerId !== uid && match.creador !== uid && !(match.invitedUsers || []).includes(uid) && !(match.jugadores || []).includes(uid)) {
+                    state = 'bloqueado';
+                    label = 'PRIVADA';
+                    sub = 'RESERVADO';
+                    extraIcon = '<i class="fas fa-lock text-white/50 absolute top-2 right-2 text-xs"></i>';
+                    isLocked = true;
+                }
             }
-        }
 
-        if (!isLocked) {
-            const isMine = !!currentUser && match.jugadores?.includes(currentUser.uid);
-            const count = (match.jugadores || []).filter(id => id).length;
-            const isFull = count >= 4;
-            const isPlayed = isFinishedMatch(match);
-            const isClosed = isCancelledMatch(match) || isExpiredOpenMatch(match);
-            
-            if (isClosed) {
-                state = 'cerrada';
-                label = 'ANULADO';
-                sub = 'FUERA DE PLAZO';
-                ownerSub = `ORGANIZA: ${shortName(match.creatorName || "Sistema")}`;
-            } else if (isPlayed) {
-                state = 'jugado';
-                label = 'JUGADO';
-                sub = match.resultado?.sets || 'VER RES';
-                if (isMine) {
-                    const hasDiary = userData?.diario?.some(e => e.matchId === match.id);
-                    if (!hasDiary) {
-                        label = 'DIARIO';
-                        extraIcon = '<i class="fas fa-exclamation-triangle pulse-warning absolute top-1 right-1 text-[10px] text-yellow-400"></i>';
-                    } else {
-                        label = 'FINALIZADO';
+            if (!isLocked) {
+                const isMine = !!currentUser && match.jugadores?.includes(currentUser.uid);
+                const count = (match.jugadores || []).filter(id => id).length;
+                const isFull = count >= 4;
+                const isPlayed = isFinishedMatch(match);
+                const isClosed = isCancelledMatch(match) || isExpiredOpenMatch(match);
+                
+                if (isClosed) {
+                    state = 'cerrada';
+                    label = 'SISTEMA: OFF';
+                    sub = 'EXPIRADO';
+                    ownerSub = `REF: ${match.id.substring(0,5).toUpperCase()}`;
+                } else if (isPlayed) {
+                    state = 'jugado';
+                    label = match.eventMatchId ? 'OPERACIÓN: EVENTO' : 'MISIÓN: ÉXITO';
+                    sub = match.resultado?.sets || 'VER SCORE';
+                    if (isMine) {
+                        const hasDiary = userData?.diario?.some(e => e.matchId === match.id);
+                        if (!hasDiary) {
+                            label = 'PENDIENTE DIARIO';
+                            extraIcon = '<i class="fas fa-exclamation-triangle pulse-warning absolute top-1 right-1 text-[10px] text-yellow-400"></i>';
+                        } else {
+                            label = match.eventMatchId ? 'EVENTO FINAL' : 'COMPLETADO';
+                        }
+                    }
+                } else {
+                    if (isMine) {
+                        state = 'propia';
+                        label = match.eventMatchId ? 'TU EVENTO' : 'TU MISIÓN';
+                        sub = 'ESTADO: LISTO';
+                        ownerSub = `ORGANIZA: ${shortName(match.creatorName || "Tú")}`;
+                    }
+                    else if (isFull) {
+                        state = 'cerrada';
+                        label = match.eventMatchId ? 'EVENTO LLENO' : 'COMPLETO';
+                        sub = 'SQUAD FULL';
+                        ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
+                    }
+                    else {
+                        const plazas = 4-count;
+                        state = 'abierta';
+                        label = match.eventMatchId ? 'UNIRSE A EVENTO' : 'RECLUTANDO';
+                        sub = `${plazas} ${plazas === 1 ? 'PLAZA' : 'PLAZAS'}`;
+                        ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
                     }
                 }
-            } else {
-                if (isMine) {
-                    state = 'propia';
-                    label = 'TU PARTIDO';
-                    sub = 'VER DETALLES';
-                    ownerSub = `ORGANIZA: ${shortName(match.creatorName || "Tú")}`;
-                }
-                else if (isFull) {
-                    state = 'cerrada';
-                    label = 'COMPLETO';
-                    sub = 'SQUAD LLENO';
-                    ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
-                }
-                else {
-                    state = 'abierta';
-                    label = 'DISPONIBLE';
-                    sub = `${4 - count} PLAZAS`;
+
+                if (!ownerSub && match.creatorName) {
                     ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
                 }
             }
-
-            if (!ownerSub && match.creatorName) {
-                ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
             }
-        }
-        }
-    } else if (apoingEvent) {
-        const mine = isApoingMine(apoingEvent);
-        const totalSlotReservations = apoingForSlot.length;
-        const isClubSocial = isClubSocialEvent(apoingEvent);
+        } else if (apoingEvent) {
+            const mine = isApoingMine(apoingEvent);
+            const totalSlotReservations = apoingForSlot.length;
+            const isClubSocial = isClubSocialEvent(apoingEvent);
 
-        state = mine ? "apoing-mine" : "apoing-other";
-        
-        const ownerName = shortName(apoingEvent.sourceName || apoingEvent.owner || (mine ? userData?.nombreUsuario || "Tú" : "Jugador"));
-
-        if (isClubSocial) {
-            label = "CLUB SOCIAL";
-            sub = mine ? "TU RESERVA CLUB" : "OCUPADO (CLUB)";
-            ownerSub = ownerName;
-        } else {
-            label = mine ? "MI RESERVA" : "OCUPADA";
-            sub = mine
-                ? (totalSlotReservations > 1 ? `MÍA + ${totalSlotReservations - 1} EXTERNAS` : "RESERVA APOING")
-                : (totalSlotReservations > 1 ? `${totalSlotReservations} RESERVAS CLUB` : "OCUPADA EN APOING");
-            ownerSub = `APOING: ${ownerName}`;
-        }
+            state = mine ? "apoing-mine" : "apoing-other";
             
-        const apoingIconColor = mine ? 'text-orange-400' : 'text-amber-500';
-        
-        extraIcon = `
-            <div class="apoing-slot-mini absolute top-2 right-2 flex items-center gap-1">
-                ${mine ? `<span class="text-[8px] font-black ${isClubSocial ? "text-blue-400" : "text-orange-400"}">${isClubSocial ? "TUYA" : "MÍA"}</span>` : ""}
-                <i class="fas ${isClubSocial ? 'fa-house-user' : 'fa-calendar-check'} ${apoingIconColor} text-[10px]"></i>
+            const ownerName = shortName(apoingEvent.sourceName || apoingEvent.owner || (mine ? userData?.nombreUsuario || "Tú" : "Jugador"));
+
+            if (isClubSocial) {
+                label = "CLUB SOCIAL";
+                sub = mine ? "TU RESERVA CLUB" : "OCUPADO (CLUB)";
+                ownerSub = ownerName;
+            } else {
+                label = mine ? "MI RESERVA" : "OCUPADA";
+                sub = mine
+                    ? (totalSlotReservations > 1 ? `MÍA + ${totalSlotReservations - 1} EXTERNAS` : "RESERVA APOING")
+                    : (totalSlotReservations > 1 ? `${totalSlotReservations} RESERVAS CLUB` : "OCUPADA EN APOING");
+                ownerSub = `APOING: ${ownerName}`;
+            }
+                
+            const apoingIconColor = mine ? 'text-orange-400' : 'text-amber-500';
+            
+            extraIcon = `
+                <div class="apoing-slot-mini absolute top-2 right-2 flex items-center gap-1">
+                    ${mine ? `<span class="text-[8px] font-black ${isClubSocial ? "text-blue-400" : "text-orange-400"}">${isClubSocial ? "TUYA" : "MÍA"}</span>` : ""}
+                    <i class="fas ${isClubSocial ? 'fa-house-user' : 'fa-calendar-check'} ${apoingIconColor} text-[10px]"></i>
+                </div>
+            `;
+        }
+
+        if (match && apoingEvent) {
+            extraIcon = '<i class="fas fa-triangle-exclamation text-amber-300 absolute top-2 right-2 text-xs"></i>';
+            ownerSub = `${ownerSub ? `${ownerSub} · ` : ""}APOING DETECTADO`;
+        }
+
+        // Weather logic
+        let weatherHtml = '';
+        if (weeklyWeather && weeklyWeather.daily) {
+            const targetDate = dStr;
+            const dayIdx = weeklyWeather.daily.time.indexOf(targetDate);
+            if (dayIdx !== -1) {
+                const code = weeklyWeather.daily.weather_code[dayIdx];
+                const temp = Math.round(weeklyWeather.daily.temperature_2m_max[dayIdx]);
+                const icon = getIconFromCode(code);
+                const wx = getWeatherStateFromCode(code);
+                weatherHtml = `<div class="slot-weather ${wx}"><i class="fas ${icon}"></i> <span>${temp}°</span></div>`;
+            }
+        }
+
+        const isPastEmpty = !match && !apoingEvent && isPast;
+        return `
+            <div class="slot-v5 ${state} ${isPast ? 'past' : ''} relative" onclick="handleSlot('${dStr}', '${hour}', '${match?.id || ''}', '${match?.col || ''}', ${isPastEmpty ? 'true' : 'false'})">
+                ${extraIcon}
+                ${weatherHtml}
+                <span class="slot-chip-v5">${label}</span>
+                <span class="slot-info-v5">${sub}</span>
+                ${ownerSub ? `<span class="slot-owner-v5">${ownerSub}</span>` : ''}
             </div>
         `;
+    } catch(e) {
+        console.error("Critical error in renderSlot:", e);
+        return `<div class="slot-v5 err"><span class="text-[8px]">ERROR SLOT</span></div>`;
     }
-
-    if (match && apoingEvent) {
-        extraIcon = '<i class="fas fa-triangle-exclamation text-amber-300 absolute top-2 right-2 text-xs"></i>';
-        ownerSub = `${ownerSub ? `${ownerSub} · ` : ""}APOING DETECTADO`;
-    }
-
-    // Weather logic
-    let weatherHtml = '';
-    if (weeklyWeather && weeklyWeather.daily) {
-        const targetDate = date.toISOString().split('T')[0];
-        const dayIdx = weeklyWeather.daily.time.indexOf(targetDate);
-        if (dayIdx !== -1) {
-            const code = weeklyWeather.daily.weather_code[dayIdx];
-            const temp = Math.round(weeklyWeather.daily.temperature_2m_max[dayIdx]);
-            const icon = getIconFromCode(code);
-            const wx = getWeatherStateFromCode(code);
-            weatherHtml = `<div class="slot-weather ${wx}"><i class="fas ${icon}"></i> <span>${temp}°</span></div>`;
-        }
-    }
-
-    const isPastEmpty = !match && !apoingEvent && isPast;
-    return `
-        <div class="slot-v5 ${state} ${isPast ? 'past' : ''} relative" onclick="handleSlot('${dStr}', '${hour}', '${match?.id || ''}', '${match?.col || ''}', ${isPastEmpty ? 'true' : 'false'})">
-            ${extraIcon}
-            ${weatherHtml}
-            <span class="slot-chip-v5">${label}</span>
-            <span class="slot-info-v5">${sub}</span>
-            ${ownerSub ? `<span class="slot-owner-v5">${ownerSub}</span>` : ''}
-        </div>
-    `;
 }
+
 
 function shortName(name) {
     if (!name) return "Jugador";
@@ -1178,7 +1287,7 @@ window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
             const mData = allMatches.find(m => m.id === id);
             if (mData?.col === 'eventoPartidos') {
                 if (title) title.textContent = 'PARTIDO DE EVENTO';
-                area.innerHTML = renderEventMatchDetail(mData);
+                await withTimeout(renderMatchDetail(area, id, 'eventoPartidos', currentUser, userData));
                 slotInteractionBusy = false;
                 return;
             }
@@ -1223,37 +1332,102 @@ window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
             }
         }
     } catch(e) {
-        console.error("Render error:", e);
-        area.innerHTML = '<div class="center p-10 opacity-50">Error de carga</div>';
+        console.error("Render error in handleSlot:", e);
+        showToast("Error de carga", "No se pudo renderizar el detalle del partido.", "error");
+        area.innerHTML = `
+            <div class="center p-10 flex-col gap-4 opacity-50">
+                <i class="fas fa-exclamation-triangle text-2xl text-amber-500"></i>
+                <div class="text-xs uppercase font-black">Error de carga</div>
+                <button class="btn btn-ghost sm" onclick="window.location.reload()">REINTENTAR</button>
+            </div>
+        `;
     } finally {
         slotInteractionBusy = false;
     }
 };
 
-function renderEventMatchDetail(match) {
+
+function renderEventMatchDetail(match, dateStr = '', hourStr = '', myApoing = null) {
     const phase = String(match.phase || 'group');
-    const phaseLabel = phase === 'group' ? `Grupo ${match.group || ''}` : (phase === 'semi' ? 'Semifinal' : (phase === 'final' ? 'Final' : 'Evento'));
+    const phaseLabel = phase === 'group' ? `Grupo ${match.group || ''}` : 
+                      (phase === 'knockout' ? `Eliminatoria - R${match.round}` : 
+                      (phase === 'league' ? `Jornada ${match.round}` :
+                      (phase === 'semi' ? 'Semifinal' : 
+                      (phase === 'final' ? 'Final' : 'Evento'))));
     const dateLabel = match.fecha ? new Date(match.fecha?.toDate ? match.fecha.toDate() : match.fecha).toLocaleString('es-ES') : 'Sin fecha programada';
-    const result = match.resultado || '--';
+    const result = match.resultado?.sets || (typeof match.resultado === 'string' ? match.resultado : '--');
+    const isPlayed = match.estado === 'jugado' || !!match.resultado?.sets;
     const canManage = !!currentUser && (
         (Array.isArray(match.playerUids) && match.playerUids.includes(currentUser.uid)) ||
         userData?.rol === 'Admin'
     );
+    const canCreate = !!myApoing && !isPlayed;
+
     return `
         <div class="p-4 flex-col gap-3">
             <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
                 <div class="text-[9px] font-black uppercase tracking-widest text-primary mb-2">Evento · ${phaseLabel}</div>
                 <div class="text-sm font-black text-white mb-1">${match.teamAName || '?'} vs ${match.teamBName || '?'}</div>
                 <div class="text-[10px] text-white/70 mb-1">Fecha: ${dateLabel}</div>
-                <div class="text-[10px] text-white/70">Resultado: ${result}</div>
+                <div class="text-[10px] text-white/70">Estado: ${(match.estado || 'pendiente').toUpperCase()}</div>
+                ${isPlayed ? `<div class="text-[10px] text-white/70">Resultado: ${result}</div>` : ''}
             </div>
+            ${canCreate ? `
+                <div class="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl mb-1">
+                    <p class="text-[9px] text-emerald-400 font-bold uppercase mb-1">¡Reserva Apoing Detectada!</p>
+                    <button class="btn btn-primary w-full" onclick="window.renderEventMatchToCreation('${match.id}', '${dateStr}', '${hourStr}')">
+                        <i class="fas fa-plus-circle"></i> MONTAR PARTIDO
+                    </button>
+                </div>
+            ` : ''}
             <div class="flex-row gap-2">
                 <a class="btn btn-ghost w-full" href="evento-detalle.html?id=${match.eventoId}&tab=partidos">Abrir evento</a>
-                ${canManage ? `<button class="btn btn-primary w-full" onclick="window.location.href='evento-detalle.html?id=${match.eventoId}&tab=partidos&admin=1'">Gestionar</button>` : ''}
+                ${canManage ? `<button class="btn btn-ghost w-full" onclick="window.location.href='evento-detalle.html?id=${match.eventoId}&tab=partidos&admin=1'">Gestionar</button>` : ''}
             </div>
         </div>
     `;
 }
+
+window.renderEventMatchToCreation = async (matchId, dateStr, hour) => {
+    const area = document.getElementById('match-detail-area');
+    if (!area) return;
+    const match = matches.find(m => m.id === matchId && m.col === 'eventoPartidos');
+    if (!match) return;
+
+    // Pre-poblar los IDs de los jugadores del evento (desde equipos del evento si existen)
+    let preFill = [];
+    try {
+        const ev = await getDocument('eventos', match.eventoId);
+        const teams = Array.isArray(ev?.teams) ? ev.teams : [];
+        const teamMap = new Map(teams.map(t => [t.id, t]));
+        const teamA = teamMap.get(match.teamAId);
+        const teamB = teamMap.get(match.teamBId);
+        const players = [
+            ...(teamA?.playerUids || []),
+            ...(teamB?.playerUids || []),
+        ];
+        preFill = players.length ? players : (match.playerUids || []);
+    } catch (_) {
+        preFill = match.playerUids || [];
+    }
+
+    await withTimeout(renderCreationForm(area, dateStr, hour, currentUser, userData, preFill));
+    
+    // Auto-vincular el ID del evento en el selector
+    const evSelector = document.getElementById('inp-event-link');
+    if (evSelector) {
+        // Esperar un momento a que se carguen las opciones
+        setTimeout(() => {
+            const optVal = `${match.eventoId}|${match.id}|${match.phase || ''}`;
+            if ([...evSelector.options].some(o => o.value === optVal)) {
+                evSelector.value = optVal;
+                evSelector.dispatchEvent(new Event('change')); // Trigger event listener to pre-fill players
+                const help = document.getElementById('event-link-help');
+                if (help) help.textContent = "Vinculado automaticamente al partido del evento.";
+            }
+        }, 500);
+    }
+};
 
 function escapeHtml(raw = "") {
     return String(raw || "")

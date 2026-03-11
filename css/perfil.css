@@ -44,6 +44,32 @@
   z-index: 2;
 }
 
+/* Achievements + Rivalry */
+.achievements-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.achv-count {
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.achievements-grid-v9 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+.rival-intel-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .profile-top-row {
   display: flex;
   align-items: center;

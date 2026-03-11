@@ -351,7 +351,7 @@ textarea.input:focus {
 
 /* Modal encima de otro (ej. desglose sobre perfil en ranking) */
 .modal-overlay.modal-stack-front {
-  z-index: 10002;
+  z-index: 11050;
 }
 .modal-overlay.modal-stack-front .modal-card {
   max-height: 90vh;

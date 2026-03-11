@@ -168,27 +168,30 @@ function initGlobalFeedbackHooks() {
     window.__globalFeedbackHooksBound = true;
 
     let errorHits = 0;
-    const showFriendlyError = () => {
+    const showFriendlyError = (err) => {
         errorHits += 1;
-        showToast('Ups, algo salio mal', 'Intentalo de nuevo en unos segundos.', 'error');
-        if (errorHits >= 3) showErrorBoundary();
+        const msg = typeof err === 'string' ? err : (err?.message || 'Error desconocido');
+        console.error("[CRITICAL UI ERROR]", err);
+        showToast('Ups, algo salio mal', `Detalle: ${msg.slice(0, 50)}...`, 'error');
+        if (errorHits >= 5) showErrorBoundary();
     };
 
     window.addEventListener('unhandledrejection', (event) => {
-        logError('ui_unhandled_rejection', {
-            reason: event?.reason?.message || String(event?.reason || 'unknown'),
-        });
-        showFriendlyError();
+        const reason = event?.reason?.message || String(event?.reason || 'unknown');
+        logError('ui_unhandled_rejection', { reason });
+        showFriendlyError(reason);
     });
 
     window.addEventListener('error', (event) => {
+        const msg = event?.message || 'unknown';
         logError('ui_runtime_error', {
-            message: event?.message || 'unknown',
+            message: msg,
             source: event?.filename || 'n/a',
             line: event?.lineno || 0,
         });
-        showFriendlyError();
+        showFriendlyError(msg);
     });
+
 
     window.addEventListener('offline', () => {
         showToast('Sin conexión', 'Verifica internet para sincronizar datos.', 'warning');
@@ -617,6 +620,11 @@ export function initAppUI(activePageName) {
             // Logged in user on index/login -> Redirect to Home
             if (isPublic && !path.includes('registro.html') && !path.includes('recuperar.html') && !path.includes('terms.html')) {
                 logInfo('redirect_home_logged_in', { path });
+                try {
+                    if (path.includes('index.html') || path === '/' || path.endsWith('/')) {
+                        sessionStorage.setItem('show_home_welcome', '1');
+                    }
+                } catch (_) {}
                 safeNavigate('home.html');
                 return;
             }
@@ -628,9 +636,10 @@ export function initAppUI(activePageName) {
                 
                 // Always inject for private pages
                 if (!isPublic) {
-                    injectHeader(userData);
-                    injectNavbar(activePageName || 'home');
+                    await injectHeader(userData);
+                    await injectNavbar(activePageName || 'home');
                 }
+
 
                 if (userData) {
                     updateHeader(userData);
@@ -926,6 +935,4 @@ export function showSidePreferenceModal() {
 if (typeof window !== 'undefined') {
     window.showSidePreferenceModal = showSidePreferenceModal;
 }
-
-
 

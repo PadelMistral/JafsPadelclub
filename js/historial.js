@@ -1,4 +1,4 @@
-﻿// historial.js - Match History Logic
+// historial.js - Match History Logic
 import { auth, db, observerAuth, getDocument } from './firebase-service.js';
 import { collection, getDocs, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast } from './ui-core.js';
@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const playedEl = document.getElementById('st-played');
             const winsEl = document.getElementById('st-wins');
             const wrEl = document.getElementById('st-wr');
+
             if (playedEl) playedEl.textContent = userData.partidosJugados || 0;
             if (winsEl) winsEl.textContent = userData.victorias || 0;
             const wr = userData.partidosJugados > 0 ? Math.round((userData.victorias / userData.partidosJugados) * 100) : 0;
@@ -50,9 +51,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Load Global Data
-        const [snapA, snapR, snapU] = await Promise.all([
+        const [snapA, snapR, snapE, snapU] = await Promise.all([
             window.getDocsSafe(collection(db, "partidosAmistosos")),
             window.getDocsSafe(collection(db, "partidosReto")),
+            window.getDocsSafe(collection(db, "eventoPartidos")),
             window.getDocsSafe(collection(db, "usuarios"))
         ]);
 
@@ -66,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const list = [];
         snapA.forEach(d => list.push({ id: d.id, col: "partidosAmistosos", ...d.data(), isComp: false }));
         snapR.forEach(d => list.push({ id: d.id, col: "partidosReto", ...d.data(), isComp: true }));
+        snapE.forEach(d => list.push({ id: d.id, col: "eventoPartidos", ...d.data(), isComp: true, isEvent: true }));
 
         allMatches = list.map(m => {
             const isParticipant = m.jugadores?.includes(currentUser.uid);
@@ -190,8 +193,8 @@ async function renderMatchesFiltered(filtered) {
                 
                 <div class="h-card-content">
                     <div class="h-card-top">
-                        <span class="h-type-badge ${m.isComp ? 'reto' : 'friendly'}">
-                            ${m.isComp ? 'LIGA PRO' : 'AMISTOSO'}
+                        <span class="h-type-badge ${m.isEvent ? 'reto' : (m.isComp ? 'friendly border-primary' : 'friendly')}">
+                            ${m.isEvent ? 'TORNEO' : (m.isComp ? 'LIGA PRO' : 'AMISTOSO')}
                         </span>
                         <span class="h-host">
                              <i class="fas fa-crown text-[8px] mr-1 opacity-50"></i>
@@ -309,7 +312,7 @@ async function showMatchDetail(m) {
             <!-- Score Display -->
             <div class="match-score-display text-center py-6">
                 <span class="score-value block font-black text-4xl text-white tracking-[4px] font-display mb-2 drop-shadow-lg">${m.resultado?.sets || '0-0'}</span>
-                <span class="badge ${m.isComp ? 'badge-warning' : 'badge-primary'}">${m.isComp ? ' RETO OFICIAL' : ' AMISTOSO'}</span>
+                <span class="badge ${m.isEvent ? 'badge-danger' : (m.isComp ? 'badge-warning' : 'badge-primary')}">${m.isEvent ? ' TORNEO/EVENTO OFICIAL' : (m.isComp ? ' RETO OFICIAL' : ' AMISTOSO')}</span>
             </div>
 
             <!-- Court View -->

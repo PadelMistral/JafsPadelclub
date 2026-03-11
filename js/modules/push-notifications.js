@@ -252,12 +252,18 @@ function safeGetSubscription(OneSignal) {
     if (!user || typeof user !== "object") return { id: null, token: null, optedIn: false };
     const sub = user?.PushSubscription;
     if (!sub || typeof sub !== "object") return { id: null, token: null, optedIn: false };
+    
+    // Legacy support for some SDK versions where sub.id might be sub.playerId
+    const subId = sub.id || sub.playerId || null;
+    const isOptedIn = Boolean(sub.optedIn);
+    
     return {
-      id: sub.id ?? null,
+      id: subId,
       token: sub.token ?? null,
-      optedIn: Boolean(sub.optedIn),
+      optedIn: isOptedIn,
     };
-  } catch (_) {
+  } catch (err) {
+    console.warn("⚠️ Error accessing OneSignal subscription details:", err);
     return { id: null, token: null, optedIn: false };
   }
 }
@@ -290,7 +296,7 @@ async function ensureOneSignalInitialized() {
     const appScope = swDiag?.appShell?.scope || null;
     let initOk = false;
     let lastError = null;
-    
+
     for (const cfg of candidates) {
       try {
         await retryWithBackoff(async () => {
@@ -304,6 +310,20 @@ async function ensureOneSignalInitialized() {
               serviceWorkerUpdaterPath: cfg.updaterPath,
               allowLocalhostAsSecureOrigin: true,
             });
+
+            // Listen for state changes
+            if (OneSignal.Notifications && OneSignal.Notifications.addEventListener) {
+              OneSignal.Notifications.addEventListener("permissionChange", (permission) => {
+                console.log("🔔 [Push Event] Permission Changed:", permission);
+                checkNotificationStatus().catch(() => {});
+              });
+            }
+            if (OneSignal.User && OneSignal.User.PushSubscription && OneSignal.User.PushSubscription.addEventListener) {
+              OneSignal.User.PushSubscription.addEventListener("change", (change) => {
+                console.log("🔔 [Push Event] Subscription Changed:", change);
+                checkNotificationStatus().catch(() => {});
+              });
+            }
           });
         }, { attempts: 3 });
 

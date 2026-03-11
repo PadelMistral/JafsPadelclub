@@ -1,636 +1,611 @@
-import { db, auth, observerAuth, getDocument, updateDocument, addDocument } from "./firebase-service.js";
-import { collection, query, orderBy, limit, serverTimestamp, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
-import { injectHeader, injectNavbar } from "./modules/ui-loader.js?v=6.5";
+﻿// js/admin.js - Premium Console v9.5 Logic (Unified & Accordion-Driven)
+import { db, auth, observerAuth, getDocument, updateDocument, addDocument, getDocsSafe } from "./firebase-service.js";
+import { collection, query, orderBy, limit, serverTimestamp, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI, showToast } from "./ui-core.js";
 import { MAX_PLAYERS } from "./config/match-constants.js";
 import { levelFromRating } from "./config/elo-system.js";
 import { sendCoreNotification } from "./core/core-engine.js";
 
 let users = [];
-let matches = [];
-let logs = [];
-let events = [];
+let matchesArr = [];
+let eventsArr = [];
+let apoingRecords = [];
 let me = null;
 
 document.addEventListener("DOMContentLoaded", () => {
-  initAppUI("admin");
-  observerAuth(async (user) => {
-    if (!user) return window.location.replace("index.html");
+    initAppUI("admin");
+    observerAuth(async (user) => {
+        if (!user) return window.location.replace("index.html");
 
-    me = await getDocument("usuarios", user.uid);
-    const isAdmin = me?.rol === "Admin";
-    if (!isAdmin) {
-      showToast("Acceso denegado", "Solo admin", "error");
-      return window.location.replace("home.html");
-    }
+        me = await getDocument("usuarios", user.uid);
+        const isAdmin = me?.rol === "Admin";
+        if (!isAdmin) {
+            showToast("Acceso denegado", "No tienes permisos de administrador", "error");
+            return window.location.replace("home.html");
+        }
 
-    await injectHeader(me || {});
-    injectNavbar("home");
-
-    const idBox = document.getElementById("admin-identity");
-    if (idBox && me) {
-      const alias = me.nombreUsuario || me.nombre || me.email || me.id || "ADMIN";
-      idBox.textContent = `Console · ${alias}`;
-    }
-
-    bindTabs();
-    bindFilters();
-    bindSystemActions();
-    await refreshAll();
-  });
+        bindTabs();
+        bindFilters();
+        bindSystemActions();
+        await refreshAll();
+    });
 });
 
 function bindTabs() {
-  document.querySelectorAll(".admin-tab").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".admin-tab").forEach((b) => b.classList.remove("active"));
-      document.querySelectorAll(".admin-pane").forEach((p) => p.classList.add("hidden"));
-      btn.classList.add("active");
-      document.getElementById(`pane-${btn.dataset.pane}`)?.classList.remove("hidden");
+    const tabs = document.querySelectorAll(".admin-tab");
+    tabs.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const paneName = btn.dataset.pane;
+            
+            document.querySelectorAll(".admin-tab").forEach(x => {
+                if (x.dataset.pane === paneName) x.classList.add('active');
+                else x.classList.remove('active');
+            });
+
+            document.querySelectorAll(".admin-pane").forEach((p) => p.classList.remove("active"));
+            
+            const paneId = `pane-${paneName}`;
+            const pane = document.getElementById(paneId);
+            if (pane) pane.classList.add("active");
+            
+            // Sync scroll for tabs
+            btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        });
     });
-  });
 }
 
 function bindFilters() {
-  document.getElementById("users-search")?.addEventListener("input", renderUsersTable);
-  document.getElementById("users-role-filter")?.addEventListener("change", renderUsersTable);
-  document.getElementById("matches-filter")?.addEventListener("change", renderMatchesTable);
-  document.getElementById("matches-type-filter")?.addEventListener("change", renderMatchesTable);
-  document.getElementById("matches-search")?.addEventListener("input", renderMatchesTable);
-  document.getElementById("logs-search")?.addEventListener("input", renderLogs);
-  document.getElementById("ev-search")?.addEventListener("input", renderEventsTable);
-  document.getElementById("btn-refresh-admin")?.addEventListener("click", refreshAll);
-
-  // Modal logic
-  document.getElementById("admin-player-search")?.addEventListener("input", renderModalUserList);
-  document.getElementById("btn-add-guest-admin")?.addEventListener("click", addGuestAction);
+    document.getElementById("users-search")?.addEventListener("input", renderUsers);
+    document.getElementById("users-role-filter")?.addEventListener("change", renderUsers);
+    document.getElementById("matches-filter")?.addEventListener("change", renderMatches);
+    document.getElementById("matches-type-filter")?.addEventListener("change", renderMatches);
+    document.getElementById("pending-search")?.addEventListener("input", renderPending);
+    document.getElementById("btn-refresh-admin")?.addEventListener("click", refreshAll);
 }
 
 function bindSystemActions() {
-  document.getElementById("btn-broadcast")?.addEventListener("click", runBroadcast);
-  document.getElementById("btn-apply-elo-delta")?.addEventListener("click", applyGlobalEloDelta);
-  document.getElementById("btn-recalc-levels")?.addEventListener("click", recalcGlobalLevels);
-  document.getElementById("btn-cancel-stale")?.addEventListener("click", cancelStaleOpenMatches);
-  document.getElementById("btn-reset-presence")?.addEventListener("click", resetPresenceState);
-  document.getElementById("btn-nuke-logs")?.addEventListener("click", clearAllLogs);
+    document.getElementById("btn-broadcast")?.addEventListener("click", runBroadcast);
+    document.getElementById("btn-cancel-stale")?.addEventListener("click", cancelStaleMatches);
+    document.getElementById("btn-reset-presence")?.addEventListener("click", resetPresence);
+    document.getElementById("btn-nuke-logs")?.addEventListener("click", clearLogs);
+    document.getElementById("btn-save-elo-config")?.addEventListener("click", window.saveEloConfig);
+    
+    document.getElementById("btn-wipe-recalc")?.addEventListener("click", async () => {
+        if (!confirm("â˜¢ï¸ ATENCIÃ“N: Se va a reconstruir todo el historial de puntos ELO desde el primer partido. Â¿Continuar?")) return;
+        showToast("Procesando...", "Recalculando ranking global...", "info");
+        try {
+            const res = await window.WIPE_AND_RECALC_ALL_MATCHES();
+            if (res.success) {
+                showToast("Ã‰XITO", "SincronizaciÃ³n masiva completada.", "success");
+                await refreshAll();
+            }
+        } catch (e) {
+            showToast("Error", "Fallo en el recÃ¡lculo.", "error");
+        }
+    });
 
-  document.getElementById("btn-wipe-recalc")?.addEventListener("click", async () => {
-    if (!confirm("⚠️ ¿ESTÁS SEGURO? Se borrará TODO el ranking actual y se recalcularán todos los partidos con el nuevo sistema V3. Este proceso puede tardar varios minutos.")) return;
-    try {
-      showToast("Ranking", "Iniciando recálculo masivo...", "info");
-      const res = await window.WIPE_AND_RECALC_ALL_MATCHES();
-      if (res.success) {
-        showToast("ÉXITO", `Ranking reconstruido: ${res.processed} partidos procesados.`, "success");
-        await refreshAll();
-      }
-    } catch (e) {
-      console.error(e);
-      showToast("Error", "Fallo en el recálculo masivo.", "error");
-    }
-  });
+    document.getElementById("btn-reset-elo-base")?.addEventListener("click", async () => {
+        if (!confirm("Â¿Resetear a todos los jugadores a 1000 puntos?")) return;
+        for(let u of users) {
+            await updateDocument("usuarios", u.id, { puntosRanking: 1000, nivel: 2.5 });
+        }
+        showToast("OK", "Reset completado", "success");
+        refreshAll();
+    });
+    document.getElementById("btn-recalc-from-level")?.addEventListener("click", async () => {
+        if (!confirm("Se recalculara el ELO partiendo del nivel actual de cada usuario. Continuar?")) return;
+        showToast("Procesando...", "Recalculando desde nivel actual...", "info");
+        try {
+            const res = await window.RECALC_FROM_CURRENT_LEVELS();
+            if (res.success) {
+                showToast("OK", "Recalculo completado.", "success");
+                await refreshAll();
+            }
+        } catch (e) {
+            showToast("Error", "Fallo en el recalculo.", "error");
+        }
+    });
 }
 
+window.saveEloConfig = async () => {
+    const win = Number(document.getElementById("cfg-elo-win")?.value || 25);
+    const loss = Number(document.getElementById("cfg-elo-loss")?.value || -15);
+    const k = Number(document.getElementById("cfg-elo-k")?.value || 32);
+
+    try {
+        showToast("Guardando...", "Actualizando parÃ¡metros de puntuaciÃ³n", "info");
+        await setDoc(doc(db, "systemConfigs", "elo"), {
+            victoryPoints: win,
+            lossPoints: loss,
+            kFactor: k,
+            updatedAt: serverTimestamp(),
+            updatedBy: auth.currentUser.uid
+        }, { merge: true });
+        
+        showToast("ConfiguraciÃ³n Guardada", "Los nuevos valores se aplicarÃ¡n a futuros cÃ¡lculos.", "success");
+    } catch (e) {
+        showToast("Error", "No se pudo guardar la configuraciÃ³n", "error");
+    }
+};
+
 async function refreshAll() {
-  const [uSnap, amSnap, reSnap, lSnap, evSnap] = await Promise.all([
-    window.getDocsSafe(query(collection(db, "usuarios"), orderBy("puntosRanking", "desc"))),
-    window.getDocsSafe(collection(db, "partidosAmistosos")),
-    window.getDocsSafe(collection(db, "partidosReto")),
-    window.getDocsSafe(query(collection(db, "adminLogs"), orderBy("timestamp", "desc"), limit(100))),
-    window.getDocsSafe(collection(db, "eventos")),
-  ]);
+    const btn = document.getElementById("btn-refresh-admin");
+    if (btn) btn.classList.add("fa-spin");
 
-  users = (uSnap?.docs || []).map((d) => ({ id: d.id, ...d.data() }));
-  matches = [
-    ...(amSnap?.docs || []).map((d) => ({ id: d.id, col: "partidosAmistosos", ...d.data() })),
-    ...(reSnap?.docs || []).map((d) => ({ id: d.id, col: "partidosReto", ...d.data() })),
-  ].sort((a, b) => (toDate(b.fecha) - toDate(a.fecha)));
-  logs = (lSnap?.docs || []).map((d) => ({ id: d.id, ...d.data() }));
-  events = (evSnap?.docs || []).map((d) => ({ id: d.id, ...d.data() }));
+    try {
+        const [uSnap, amSnap, reSnap, evSnapPartidos, evSnapTorneos, apoSnap] = await Promise.all([
+            getDocsSafe(query(collection(db, "usuarios"), orderBy("puntosRanking", "desc"))),
+            getDocsSafe(collection(db, "partidosAmistosos")),
+            getDocsSafe(collection(db, "partidosReto")),
+            getDocsSafe(collection(db, "eventoPartidos")),
+            getDocsSafe(collection(db, "eventos")),
+            getDocsSafe(collection(db, "apoingCalendars")),
+        ]);
 
-  renderDashboard();
-  renderUsersTable();
-  renderMatchesTable();
-  renderEventsTable();
-  renderRankingTable();
-  renderLogs();
+        users = (uSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
+        matchesArr = [
+            ...(amSnap?.docs || []).map(d => ({ id: d.id, col: "partidosAmistosos", ...d.data() })),
+            ...(reSnap?.docs || []).map(d => ({ id: d.id, col: "partidosReto", ...d.data() })),
+            ...(evSnapPartidos?.docs || []).map(d => ({ id: d.id, col: "eventoPartidos", ...d.data() })),
+        ].sort((a, b) => toDate(b.fecha)?.getTime() - toDate(a.fecha)?.getTime());
+
+        eventsArr = (evSnapTorneos?.docs || []).map(d => ({ id: d.id, ...d.data() }));
+        apoingRecords = (apoSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
+
+        const pendingCount = users.filter(u => u.status !== 'approved' && !u.aprobado && u.rol !== 'Admin').length;
+        const dot = document.getElementById("dot-pending");
+        if (dot) dot.classList.toggle("hidden", pendingCount === 0);
+
+        renderDashboard();
+        renderUsers();
+        renderPending();
+        renderMatches();
+        renderEvents();
+        renderRanking();
+        renderApoing();
+    } catch (e) {
+        console.error("Refresh Error:", e);
+        showToast("Error", "Error al sincronizar con Firebase", "error");
+    } finally {
+        if (btn) btn.classList.remove("fa-spin");
+    }
 }
 
 function renderDashboard() {
-  const approved = users.filter((u) => u.status === "approved" || u.aprobado === true || u.rol === "Admin");
-  const active = matches.filter((m) => (m.jugadores || []).filter(Boolean).length > 0 && !isPlayed(m)).length;
-  const avg = approved.length ? Math.round(approved.reduce((s, u) => s + Number(u.puntosRanking || 1000), 0) / approved.length) : 0;
-  const withApoing = approved.filter((u) => String(u.apoingCalendarUrl || "").trim().length > 0).length;
-  const notifOn = approved.filter((u) => String(u.notifPermission || "").toLowerCase() === "granted").length;
+    const approved = users.filter((u) => u.status === "approved" || u.aprobado === true || u.rol === "Admin");
+    const active = matchesArr.filter((m) => !isPlayed(m)).length;
+    const avg = approved.length ? Math.round(approved.reduce((s, u) => s + Number(u.puntosRanking || 1000), 0) / approved.length) : 0;
 
-  setText("kpi-users", String(approved.length));
-  setText("kpi-matches", String(matches.length));
-  setText("kpi-active", String(active));
-  setText("kpi-avg", String(avg));
-  setText("kpi-apoing", String(withApoing));
-  setText("kpi-notif-on", String(notifOn));
+    setText("kpi-users", String(approved.length));
+    setText("kpi-matches", String(matchesArr.length));
+    setText("kpi-active", String(active));
+    setText("kpi-avg", String(avg));
 }
 
-function renderUsersTable() {
-  const search = String(document.getElementById("users-search")?.value || "").toLowerCase();
-  const roleFilter = String(document.getElementById("users-role-filter")?.value || "all");
-  const data = users.filter((u) => {
-    const n = String(u.nombreUsuario || u.nombre || "").toLowerCase();
-    const e = String(u.email || "").toLowerCase();
-    const roleOk = roleFilter === "all" || String(u.rol || "Jugador") === roleFilter;
-    return roleOk && (n.includes(search) || e.includes(search));
-  });
-
-  const body = document.getElementById("users-body");
-  if (!body) return;
-  body.innerHTML = data.map((u) => {
-    const name = u.nombreUsuario || u.nombre || "Sin nombre";
-    const hasApoing = String(u.apoingCalendarUrl || "").trim().length > 0;
-    const notifState = String(u.notifPermission || "").toLowerCase();
-
-    const apoingHtml = hasApoing
-      ? `<span class="badge-mini badge-apoing"><i class="fa-solid fa-calendar-check"></i> ICS</span>`
-      : `<span class="badge-mini badge-apoing off">Sin ICS</span>`;
-
-    let notifLabel = "Sin dato";
-    let notifClass = "badge-notif-unknown";
-    if (notifState === "granted") {
-      notifLabel = "ON";
-      notifClass = "badge-notif-on";
-    } else if (notifState === "denied" || notifState === "blocked") {
-      notifLabel = "Bloqueado";
-      notifClass = "badge-notif-off";
-    }
-    const notifHtml = `<span class="badge-mini ${notifClass}">${notifLabel}</span>`;
-
-    return `
-      <tr>
-        <td>${name}</td>
-        <td>${u.email || "-"}</td>
-        <td>${apoingHtml}</td>
-        <td>${notifHtml}</td>
-        <td><input type="number" step="0.01" value="${Number(u.nivel || 2.5).toFixed(2)}" data-u="${u.id}" data-k="nivel" class="inl"></td>
-        <td><input type="number" value="${Math.round(Number(u.puntosRanking || 1000))}" data-u="${u.id}" data-k="puntosRanking" class="inl"></td>
-        <td>
-          <select data-u="${u.id}" data-k="rol" class="inl">
-            <option value="Jugador" ${u.rol === "Jugador" ? "selected" : ""}>Jugador</option>
-            <option value="Admin" ${u.rol === "Admin" ? "selected" : ""}>Admin</option>
-          </select>
-        </td>
-        <td>
-          <div class="flex-row gap-1">
-            <button class="btn-mini" onclick="window.saveUserInline('${u.id}')">Guardar</button>
-            <button class="btn-mini ${u.status === "blocked" ? "" : "danger"}" onclick="window.toggleUserBlock('${u.id}')">${u.status === "blocked" ? "Desbloquear" : "Bloquear"}</button>
-            <button class="btn-mini danger" onclick="window.deleteUserAdmin('${u.id}')">Eliminar</button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join("");
-}
-
-function renderMatchesTable() {
-  const mode = document.getElementById("matches-filter")?.value || "all";
-  const typeFilter = document.getElementById("matches-type-filter")?.value || "all";
-  const search = String(document.getElementById("matches-search")?.value || "").toLowerCase();
-
-  let data = [...matches];
-  if (mode === "open") data = data.filter((m) => !isPlayed(m) && (m.jugadores || []).filter(Boolean).length < MAX_PLAYERS);
-  if (mode === "played") data = data.filter((m) => isPlayed(m));
-  if (typeFilter !== "all") data = data.filter((m) => String(m.col || "") === typeFilter);
-  if (search) {
-    data = data.filter((m) => {
-      const date = toDate(m.fecha);
-      const dateText = date ? date.toLocaleString("es-ES").toLowerCase() : "";
-      const state = String(m.estado || "").toLowerCase();
-      return dateText.includes(search) || state.includes(search);
+function renderUsers() {
+    const search = String(document.getElementById("users-search")?.value || "").toLowerCase();
+    const roleFilter = document.getElementById("users-role-filter")?.value || "all";
+    const data = users.filter((u) => {
+        const okApp = u.status === "approved" || u.aprobado === true || u.rol === "Admin";
+        if (!okApp) return false;
+        const roleOk = roleFilter === "all" || u.rol === roleFilter;
+        const matchStr = `${u.nombre} ${u.nombreUsuario} ${u.email}`.toLowerCase();
+        return roleOk && matchStr.includes(search);
     });
-  }
 
-  const body = document.getElementById("matches-body");
-  if (!body) return;
-  body.innerHTML = data.map((m) => {
-    const date = toDate(m.fecha);
-    const filled = (m.jugadores || []).filter(Boolean).length;
-    return `
-      <tr>
-        <td>${m.col === "partidosReto" ? "Reto" : "Amistoso"}</td>
-        <td>${date ? date.toLocaleString("es-ES") : "-"}</td>
-        <td>
-          <div class="flex-row items-center gap-2">
-            <span>${filled}/${MAX_PLAYERS}</span>
-            <button class="btn-mini" title="Añadir jugador" onclick="window.openAddPlayerToMatch('${m.id}','${m.col}')"><i class="fas fa-user-plus"></i></button>
-          </div>
-        </td>
-        <td>
-          <select data-m="${m.id}" data-col="${m.col}" data-k="estado" class="inl">
-            ${["abierto", "jugada", "jugado", "cancelado", "anulado"].map((s) => `<option value="${s}" ${String(m.estado || "").toLowerCase() === s ? "selected" : ""}>${s}</option>`).join("")}
-          </select>
-        </td>
-        <td>
-          <input type="text" value="${m.resultado?.sets || ""}" placeholder="6-2 6-4" data-m="${m.id}" data-col="${m.col}" data-k="resultado" class="inl">
-        </td>
-        <td>
-          <div class="flex-row gap-1">
-            <button class="btn-mini" onclick="window.saveMatchInline('${m.id}','${m.col}')">Guardar</button>
-            <button class="btn-mini danger" onclick="window.deleteMatchAdmin('${m.id}','${m.col}')">Eliminar</button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join("");
+    const container = document.getElementById("users-accordion-container");
+    if (!container) return;
+
+    container.innerHTML = data.map((u) => `
+        <div class="admin-acc-v9" id="user-acc-${u.id}">
+            <div class="acc-header" onclick="window.toggleAcc('user-acc-${u.id}')">
+                <div class="acc-icon-box">
+                    <img src="${u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png'}" onerror="this.src='./imagenes/Logojafs.png'">
+                </div>
+                <div class="acc-main">
+                    <span class="acc-title">${u.nombreUsuario || u.nombre || "SIN NOMBRE"}</span>
+                    <span class="acc-sub">${u.email}</span>
+                </div>
+                <div class="acc-badges">
+                    <span class="acc-badge">${u.puntosRanking || 1000} Pts</span>
+                    <span class="acc-badge">${u.rol || 'Jugador'}</span>
+                </div>
+                <i class="fas fa-chevron-down acc-chevron"></i>
+            </div>
+            <div class="acc-content">
+                <div class="admin-grid-v9">
+                    <div class="admin-field-group">
+                        <label>Nombre PÃºblico</label>
+                        <input type="text" class="input-v9" value="${u.nombreUsuario || ''}" id="u-nick-${u.id}">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Email (ID)</label>
+                        <input type="text" class="input-v9" value="${u.email || ''}" readonly>
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Nivel Manual</label>
+                        <input type="number" step="0.01" class="input-v9" value="${u.nivel || 2.5}" id="u-lvl-${u.id}">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Rol</label>
+                        <select class="input-v9" id="u-rol-${u.id}">
+                            <option value="Jugador" ${u.rol === 'Jugador' ? 'selected' : ''}>JUGADOR</option>
+                            <option value="Admin" ${u.rol === 'Admin' ? 'selected' : ''}>ADMIN</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex-row gap-3 mt-6">
+                    <button class="btn-v9 primary flex-1" onclick="window.saveUserAdmin('${u.id}')">ACTUALIZAR PERFIL</button>
+                    ${u.id !== auth.currentUser.uid ? `<button class="btn-v9 danger" onclick="window.deleteUserAdmin('${u.id}')"><i class="fas fa-trash"></i></button>` : ''}
+                </div>
+            </div>
+        </div>
+    `).join("");
 }
 
-function renderEventsTable() {
-    const area = document.getElementById("ev-body-admin");
-    if (!area) return;
-    const search = String(document.getElementById("ev-search")?.value || "").toLowerCase();
-    
-    const data = events.filter(e => e.nombre?.toLowerCase().includes(search));
-    
-    area.innerHTML = data.map(e => `
+function renderPending() {
+    const search = String(document.getElementById("pending-search")?.value || "").toLowerCase();
+    const data = users.filter(u => (u.status !== 'approved' && !u.aprobado && u.rol !== 'Admin') && (u.email||"").toLowerCase().includes(search));
+    const body = document.getElementById("pending-body");
+    if (!body) return;
+
+    body.innerHTML = data.map(u => `
         <tr>
-            <td class="font-bold">${e.nombre || 'Sin nombre'}</td>
-            <td><span class="badge ghost">${e.formato?.toUpperCase() || 'LIGA'}</span></td>
-            <td>${(e.inscritos || []).length} / ${e.plazasMax || 16}</td>
-            <td><span class="badge ${e.estado === 'activo' ? 'success' : 'warning'}">${e.estado?.toUpperCase() || 'DRAFT'}</span></td>
             <td>
-                <div class="flex-row gap-1">
-                    <button class="btn-mini" onclick="window.location.href='evento-detalle.html?id=${e.id}&admin=1'"><i class="fas fa-cog"></i> GESTIONAR</button>
-                    <button class="btn-mini primary-glow" onclick="window.openAddPlayerToEvent('${e.id}')"><i class="fas fa-user-plus"></i></button>
+                <div class="flex-col">
+                    <span class="font-black text-white text-xs">${u.nombre || "Nuevo Registro"}</span>
+                    <span class="text-[9px] opacity-40 uppercase">${u.email}</span>
                 </div>
             </td>
+            <td>${u.createdAt?.toDate ? u.createdAt.toDate().toLocaleDateString() : 'N/A'}</td>
+            <td><span class="acc-badge" style="background:rgba(245,158,11,0.1); color:#f59e0b">PENDIENTE</span></td>
+            <td class="text-right">
+                 <div class="flex-row gap-2 justify-end">
+                    <button class="btn-v9 ghost sm text-green-400" onclick="window.approveUserAdmin('${u.id}')"><i class="fas fa-check"></i></button>
+                    <button class="btn-v9 ghost sm text-red-400" onclick="window.deleteUserAdmin('${u.id}')"><i class="fas fa-times"></i></button>
+                 </div>
+            </td>
         </tr>
-    `).join('') || '<tr><td colspan="5" class="text-center opacity-50 py-4">No hay eventos que coincidan</td></tr>';
+    `).join("") || '<tr><td colspan="4" class="text-center opacity-30 py-8">No hay solicitudes hoy</td></tr>';
 }
 
-function renderRankingTable() {
-  const body = document.getElementById("ranking-body");
-  if (!body) return;
-  const sorted = [...users].sort((a, b) => Number(b.puntosRanking || 0) - Number(a.puntosRanking || 0)).slice(0, 100);
-  body.innerHTML = sorted.map((u, idx) => `
-    <tr>
-      <td>#${idx + 1}</td>
-      <td>${u.nombreUsuario || u.nombre || "-"}</td>
-      <td>${Math.round(Number(u.puntosRanking || 1000))}</td>
-      <td>${Number(u.nivel || 2.5).toFixed(2)}</td>
-      <td>
-        <input type="number" step="0.01" value="${Number(u.nivel || 2.5).toFixed(2)}" data-u="${u.id}" data-k="nivel" class="inl sm">
-        <input type="number" value="${Math.round(Number(u.puntosRanking || 1000))}" data-u="${u.id}" data-k="puntosRanking" class="inl sm">
-        <button class="btn-mini" onclick="window.saveUserInline('${u.id}')">Aplicar</button>
-      </td>
-    </tr>
-  `).join("");
+function renderMatches() {
+    const mode = document.getElementById("matches-filter")?.value || "all";
+    const type = document.getElementById("matches-type-filter")?.value || "all";
+    let data = [...matchesArr];
+    if (mode === 'open') data = data.filter(m => !isPlayed(m));
+    if (mode === 'played') data = data.filter(m => isPlayed(m));
+    if (type !== 'all') data = data.filter(m => m.col === type);
+
+    const container = document.getElementById("matches-accordion-container");
+    if (!container) return;
+
+    container.innerHTML = data.map(m => {
+        const date = toDate(m.fecha);
+        const dateStr = date ? date.toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : 'Sin Fecha';
+        const typeLabel = m.col === 'eventoPartidos' ? 'TORNEO' : (m.col === 'partidosReto' ? 'RETO' : 'AMISTOSO');
+        const res = m.resultado?.sets || m.resultado?.score || '--';
+
+        return `
+        <div class="admin-acc-v9" id="match-acc-${m.id}">
+            <div class="acc-header" onclick="window.toggleAcc('match-acc-${m.id}')">
+                <div class="acc-icon-box"><i class="fas fa-table-tennis-paddle-ball"></i></div>
+                <div class="acc-main">
+                    <span class="acc-title">${m.teamAName || 'TBD'} vs ${m.teamBName || 'TBD'}</span>
+                    <span class="acc-sub">${dateStr} Â· ${typeLabel}</span>
+                </div>
+                <div class="acc-badges">
+                    <span class="acc-badge">${isPlayed(m) ? res : 'ABIERTO'}</span>
+                </div>
+                <i class="fas fa-chevron-down acc-chevron"></i>
+            </div>
+            <div class="acc-content">
+                <div class="admin-grid-v9">
+                    <div class="admin-field-group col-span-2">
+                        <label>Resultado del Partido</label>
+                        <input type="text" class="input-v9" value="${res === '--' ? '' : res}" id="m-res-${m.id}" placeholder="Ej: 6-4 6-2">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Fecha y Hora</label>
+                        <input type="datetime-local" class="input-v9" value="${date ? date.toISOString().slice(0, 16) : ''}" id="m-date-${m.id}">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Estado</label>
+                        <select class="input-v9" id="m-state-${m.id}">
+                            <option value="abierto" ${m.estado === 'abierto' ? 'selected' : ''}>Abierto</option>
+                            <option value="jugado" ${m.estado === 'jugado' ? 'selected' : ''}>Finalizado</option>
+                            <option value="cancelado" ${m.estado === 'cancelado' ? 'selected' : ''}>Cancelado</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex-row gap-3 mt-6">
+                    <button class="btn-v9 primary flex-1" onclick="window.saveMatchAdmin('${m.id}','${m.col}')">GUARDAR CAMBIOS</button>
+                    <button class="btn-v9 danger" onclick="window.deleteMatchAdmin('${m.id}','${m.col}')">ELIMINAR</button>
+                </div>
+            </div>
+        </div>
+        `;
+    }).join("");
 }
 
-function renderLogs() {
-  const box = document.getElementById("logs-list");
-  if (!box) return;
+function renderEvents() {
+    const container = document.getElementById("events-accordion-container");
+    if (!container) return;
 
-  const search = String(document.getElementById("logs-search")?.value || "").toLowerCase();
-  const filtered = !search
-    ? logs
-    : logs.filter((l) => {
-      const action = String(l.action || "").toLowerCase();
-      const detail = String(l.detail || "").toLowerCase();
-      return action.includes(search) || detail.includes(search);
-    });
-
-  if (!filtered.length) {
-    box.innerHTML = '<div class="empty-admin">Sin logs administrativos.</div>';
-    return;
-  }
-
-  box.innerHTML = filtered.map((l) => {
-    const d = l.timestamp?.toDate ? l.timestamp.toDate() : new Date();
-    return `<div class="log-row"><b>${l.action || "ACTION"}</b> · ${l.detail || "-"} <span>${d.toLocaleString("es-ES")}</span></div>`;
-  }).join("");
+    container.innerHTML = eventsArr.map(e => `
+        <div class="admin-acc-v9" id="ev-acc-${e.id}">
+            <div class="acc-header" onclick="window.toggleAcc('ev-acc-${e.id}')">
+                <div class="acc-icon-box"><i class="fas fa-trophy"></i></div>
+                <div class="acc-main">
+                    <span class="acc-title">${e.nombre}</span>
+                    <span class="acc-sub">${e.formato?.toUpperCase()} Â· ${e.estado?.toUpperCase()}</span>
+                </div>
+                <div class="acc-badges">
+                    <span class="acc-badge">${(e.inscritos||[]).length} INSCRITOS</span>
+                </div>
+                <i class="fas fa-chevron-down acc-chevron"></i>
+            </div>
+            <div class="acc-content">
+                <div class="admin-grid-v9">
+                    <div class="admin-field-group">
+                        <label>Estado del Torneo</label>
+                        <select class="input-v9" id="ev-state-${e.id}">
+                            <option value="inscripcion" ${e.estado === 'inscripcion' ? 'selected' : ''}>Inscripciones</option>
+                            <option value="activo" ${e.estado === 'activo' ? 'selected' : ''}>Activo (En Juego)</option>
+                            <option value="finalizado" ${e.estado === 'finalizado' ? 'selected' : ''}>Cerrado</option>
+                        </select>
+                    </div>
+                    <div class="admin-field-group">
+                        <label>MÃ¡ximo de Plazas</label>
+                        <input type="number" class="input-v9" value="${e.plazasMax || 16}" id="ev-plazas-${e.id}">
+                    </div>
+                </div>
+                <div class="flex-row gap-3 mt-6">
+                    <button class="btn-v9 primary flex-1" onclick="window.saveEventAdmin('${e.id}')">ACTUALIZAR CONFIGURACIÃ“N</button>
+                    <button class="btn-v9 ghost" onclick="window.location.href='evento-detalle.html?id=${e.id}&admin=1'">MODIFICAR EQUIPOS / BRACKET</button>
+                </div>
+            </div>
+        </div>
+    `).join("");
 }
 
-async function addAdminLog(action, detail) {
-  try {
-    await addDocument("adminLogs", {
-      action,
-      detail,
-      actorUid: auth.currentUser?.uid || null,
-      actorEmail: auth.currentUser?.email || null,
-      timestamp: serverTimestamp(),
-    });
-  } catch (_) {}
+function renderRanking() {
+    const body = document.getElementById("ranking-body");
+    if (!body) return;
+    const data = [...users].sort((a,b) => (b.puntosRanking||1000) - (a.puntosRanking||1000)).slice(0, 50);
+    
+    body.innerHTML = data.map((u, i) => `
+        <tr>
+            <td>#${i+1}</td>
+            <td class="font-black text-white">${u.nombreUsuario || u.nombre}</td>
+            <td><input type="number" class="inl w-20" value="${u.puntosRanking||1000}" id="r-points-${u.id}"></td>
+            <td>${(u.nivel||2.5).toFixed(1)}</td>
+            <td class="text-right">
+                <button class="btn-v9 ghost sm" onclick="window.saveUserRanking('${u.id}')"><i class="fas fa-save"></i></button>
+            </td>
+        </tr>
+    `).join("");
 }
 
-window.saveUserInline = async (uid) => {
-  const inputs = Array.from(document.querySelectorAll(`[data-u="${uid}"]`));
-  const payload = {};
-  inputs.forEach((el) => {
-    const k = el.dataset.k;
-    if (!k) return;
-    payload[k] = el.type === "number" ? Number(el.value) : el.value;
-  });
+function renderApoing() {
+    const body = document.getElementById("apoing-body");
+    if (!body) return;
+    body.innerHTML = apoingRecords.map(a => `
+        <tr>
+            <td>${a.nombre || a.id}</td>
+            <td><input type="text" class="inl w-full text-[10px]" value="${a.icsUrl}" id="ap-url-${a.id}"></td>
+            <td class="text-right">
+                <button class="btn-v9 ghost sm" onclick="window.saveApoingAdmin('${a.id}')"><i class="fas fa-save"></i></button>
+            </td>
+        </tr>
+    `).join("");
+}
 
-  await updateDocument("usuarios", uid, payload);
-  await addAdminLog("UPDATE_USER", `${uid} -> ${JSON.stringify(payload)}`);
-  showToast("Guardado", "Usuario actualizado", "success");
-  await refreshAll();
+/* API ACTIONS */
+window.toggleAcc = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const isActive = el.classList.contains('active');
+    document.querySelectorAll('.admin-acc-v9').forEach(x => x.classList.remove('active'));
+    if (!isActive) el.classList.add('active');
 };
 
-window.saveMatchInline = async (id, col) => {
-  const select = document.querySelector(`[data-m="${id}"][data-col="${col}"][data-k="estado"]`);
-  const resInput = document.querySelector(`[data-m="${id}"][data-col="${col}"][data-k="resultado"]`);
-  if (!select) return;
-  
-  const payload = {
-    estado: String(select.value || "abierto").toLowerCase()
-  };
-  if (resInput) {
-    payload.resultado = { sets: resInput.value.trim() };
-    if (payload.resultado.sets && (payload.estado === 'abierto' || payload.estado === 'jugada')) {
-        payload.estado = 'jugado';
-    }
-  }
-
-  await updateDocument(col, id, payload);
-  await addAdminLog("UPDATE_MATCH", `${col}/${id} -> ${JSON.stringify(payload)}`);
-  showToast("Guardado", "Partido actualizado", "success");
-  await refreshAll();
+window.saveUserAdmin = async (uid) => {
+    const data = {
+        nombreUsuario: document.getElementById(`u-nick-${uid}`).value,
+        nivel: parseFloat(document.getElementById(`u-lvl-${uid}`).value),
+        rol: document.getElementById(`u-rol-${uid}`).value
+    };
+    await updateDocument("usuarios", uid, data);
+    showToast("SISTEMA", "Perfil actualizado", "success");
+    refreshAll();
 };
 
-window.toggleUserBlock = async (uid) => {
-  const u = users.find((x) => x.id === uid);
-  if (!u) return;
-  const blocked = u.status === "blocked";
-  await updateDocument("usuarios", uid, {
-    status: blocked ? "approved" : "blocked",
-    bloqueado: !blocked,
-    aprobado: blocked ? true : false,
-  });
-  await addAdminLog(blocked ? "UNBLOCK_USER" : "BLOCK_USER", `${uid}`);
-  showToast("Usuarios", blocked ? "Usuario desbloqueado" : "Usuario bloqueado", "success");
-  await refreshAll();
+window.saveMatchAdmin = async (id, col) => {
+    const data = {
+        estado: document.getElementById(`m-state-${id}`).value,
+        fecha: document.getElementById(`m-date-${id}`).value,
+        resultado: { sets: document.getElementById(`m-res-${id}`).value }
+    };
+    if (data.resultado.sets && data.estado === 'abierto') data.estado = 'jugado';
+    await updateDocument(col, id, data);
+    showToast("SISTEMA", "Partido guardado", "success");
+    refreshAll();
+};
+
+window.saveEventAdmin = async (id) => {
+    const data = {
+        estado: document.getElementById(`ev-state-${id}`).value,
+        plazasMax: parseInt(document.getElementById(`ev-plazas-${id}`).value)
+    };
+    await updateDocument("eventos", id, data);
+    showToast("SISTEMA", "Torneo actualizado", "success");
+    refreshAll();
+};
+
+window.approveUserAdmin = async (uid) => {
+    await updateDocument("usuarios", uid, { status: "approved", aprobado: true });
+    showToast("SISTEMA", "Acceso aprobado", "success");
+    refreshAll();
 };
 
 window.deleteUserAdmin = async (uid) => {
-  if (!confirm("¿Eliminar usuario? Esta acción no se puede deshacer.")) return;
-  await deleteDoc(doc(db, "usuarios", uid));
-  await addAdminLog("DELETE_USER", uid);
-  showToast("Usuarios", "Usuario eliminado", "success");
-  await refreshAll();
+    if (!confirm("Â¿Eliminar usuario?")) return;
+    await deleteDoc(doc(db, "usuarios", uid));
+    showToast("SISTEMA", "Usuario borrado", "warn");
+    refreshAll();
 };
 
 window.deleteMatchAdmin = async (id, col) => {
-  if (!confirm("¿Eliminar partido? Esta acción no se puede deshacer.")) return;
-  await deleteDoc(doc(db, col, id));
-  await addAdminLog("DELETE_MATCH", `${col}/${id}`);
-  showToast("Partidos", "Partido eliminado", "success");
-  await refreshAll();
+    if (!confirm("Â¿Borrar partido?")) return;
+    await deleteDoc(doc(db, col, id));
+    refreshAll();
 };
 
-function setText(id, val) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = val;
-}
+window.saveUserRanking = async (uid) => {
+    const pts = parseInt(document.getElementById(`r-points-${uid}`).value);
+    await updateDocument("usuarios", uid, { puntosRanking: pts, nivel: levelFromRating(pts) });
+    showToast("SISTEMA", "Puntos sincronizados", "success");
+    refreshAll();
+};
 
-function toDate(value) {
-  if (!value) return null;
-  if (typeof value?.toDate === "function") return value.toDate();
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
+/* HELPERS */
+function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+function toDate(v) { 
+    if (!v) return null; 
+    if (v.toDate) return v.toDate(); 
+    if (v instanceof Date) return v;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
 }
-
-function isPlayed(m) {
-  const s = String(m.estado || "").toLowerCase();
-  return s === "jugado" || s === "jugada" || s === "cancelado" || s === "anulado" || !!m.resultado?.sets;
-}
-
-function getTargetUserUids() {
-  return users
-    .filter((u) => (u.status === "approved" || u.aprobado === true || u.rol === "Admin"))
-    .map((u) => u.id)
-    .filter(Boolean);
+function isPlayed(m) { 
+    const s = String(m.estado || "").toLowerCase(); 
+    return s === 'jugado' || !!m.resultado?.sets || !!m.resultado?.score; 
 }
 
 async function runBroadcast() {
-  const title = String(document.getElementById("sys-broadcast-title")?.value || "").trim();
-  const message = String(document.getElementById("sys-broadcast-message")?.value || "").trim();
-  const link = String(document.getElementById("sys-broadcast-link")?.value || "home.html").trim();
-  const type = String(document.getElementById("sys-broadcast-type")?.value || "info");
-  if (!title || !message) {
-    showToast("Campos incompletos", "Título y mensaje son obligatorios", "warning");
-    return;
-  }
-  const uids = getTargetUserUids();
-  if (!uids.length) {
-    showToast("Sin destinatarios", "No hay usuarios aprobados", "warning");
-    return;
-  }
-  const ok = await sendCoreNotification(uids, title, message, type, link, { source: "admin_broadcast" });
-  if (!ok) {
-    showToast("Error", "No se pudo enviar el broadcast", "error");
-    return;
-  }
-  await addAdminLog("BROADCAST", `${title} -> ${uids.length} usuarios`);
-  showToast("Enviado", `Broadcast enviado a ${uids.length} usuarios`, "success");
+    const title = document.getElementById("sys-broadcast-title").value;
+    const msg = document.getElementById("sys-broadcast-message").value;
+    if (!title || !msg) return;
+    const uids = users.map(u => u.id);
+    await sendCoreNotification(uids, title, msg, "info", "home.html");
+    showToast("ANUNCIO", "Enviado con Ã©xito", "success");
 }
 
-async function applyGlobalEloDelta() {
-  const delta = Number(document.getElementById("sys-elo-delta")?.value || 0);
-  const minMatches = Number(document.getElementById("sys-min-matches")?.value || 0);
-  if (!Number.isFinite(delta) || delta === 0) {
-    showToast("Delta inválido", "Introduce un valor distinto de 0", "warning");
-    return;
-  }
-  const target = users.filter((u) => Number(u.partidosJugados || 0) >= Math.max(0, minMatches));
-  for (const u of target) {
-    const nextPts = Math.round(Number(u.puntosRanking || 1000) + delta);
-    await updateDocument("usuarios", u.id, { puntosRanking: nextPts });
-  }
-  await addAdminLog("GLOBAL_ELO_DELTA", `delta=${delta}, minMatches=${minMatches}, users=${target.length}`);
-  showToast("Aplicado", `Delta aplicado a ${target.length} usuarios`, "success");
-  await refreshAll();
+async function cancelStaleMatches() {
+    const now = Date.now();
+    const stale = matchesArr.filter(m => !isPlayed(m) && toDate(m.fecha)?.getTime() < now - (2 * 3600 * 1000));
+    for (const m of stale) await updateDocument(m.col, m.id, { estado: "anulado" });
+    showToast("OK", "Mantenimiento realizado");
+    refreshAll();
 }
 
-async function recalcGlobalLevels() {
-  for (const u of users) {
-    const pts = Number(u.puntosRanking || 1000);
-    const lvl = Number(levelFromRating(pts).toFixed(2));
-    await updateDocument("usuarios", u.id, { nivel: lvl });
-  }
-  await addAdminLog("RECALC_LEVELS", `users=${users.length}`);
-  showToast("Recalculado", "Niveles sincronizados con ELO", "success");
-  await refreshAll();
+async function resetPresence() {
+    for (const u of users) await updateDocument("usuarios", u.id, { enLinea: false });
+    showToast("OK", "Presencia reseteada");
 }
 
-async function cancelStaleOpenMatches() {
-  const now = Date.now();
-  const stale = matches.filter((m) => {
-    if (isPlayed(m)) return false;
-    const d = toDate(m.fecha);
-    if (!d) return false;
-    return d.getTime() < now - (2 * 60 * 60 * 1000);
-  });
-  for (const m of stale) {
-    await updateDocument(m.col, m.id, {
-      estado: "anulado",
-      cancelReason: "admin_cleanup",
-      updatedAt: serverTimestamp(),
-    });
-  }
-  await addAdminLog("CANCEL_STALE_OPEN", `matches=${stale.length}`);
-  showToast("Mantenimiento", `${stale.length} partidos anulados`, "success");
-  await refreshAll();
+async function clearLogs() {
+    showToast("SISTEMA", "FunciÃ³n no disponible en esta build", "info");
 }
 
-async function resetPresenceState() {
-  for (const u of users) {
-    await updateDocument("usuarios", u.id, {
-      enLinea: false,
-      ultimaActividad: serverTimestamp(),
-    });
-  }
-  await addAdminLog("RESET_PRESENCE", `users=${users.length}`);
-  showToast("Presencia", "Estado de presencia reiniciado", "success");
-}
 
-async function clearAllLogs() {
-  if (!confirm("¿Borrar todos los logs administrativos y de ranking?")) return;
-  const [adminSnap, rankSnap] = await Promise.all([
-    window.getDocsSafe(collection(db, "adminLogs")),
-    window.getDocsSafe(collection(db, "rankingLogs")),
-  ]);
-  for (const d of adminSnap.docs || []) await deleteDoc(doc(db, "adminLogs", d.id));
-  for (const d of rankSnap.docs || []) await deleteDoc(doc(db, "rankingLogs", d.id));
-  showToast("Sistema", "Logs eliminados", "success");
-  await refreshAll();
-}
-
-/* ═══ ADMIN ADD PLAYER LOGIC ═══ */
-let adminAddTarget = { type: null, id: null, col: null };
-
-window.openAddPlayerToMatch = (matchId, col) => {
-  adminAddTarget = { type: 'match', id: matchId, col };
-  document.getElementById("add-player-target-title").textContent = "Añadir a Partida";
-  document.getElementById("admin-player-search").value = "";
-  document.getElementById("admin-guest-name").value = "";
-  renderModalUserList();
-  document.getElementById("modal-admin-add-player").classList.add("active");
+/* --- MODAL & WIZARD ACTIONS --- */
+window.openCreateMatchAdmin = () => {
+    const modal = document.getElementById('modal-admin-create-match');
+    if (modal) modal.classList.add('active');
 };
 
-window.openAddPlayerToEvent = (eventId) => {
-  adminAddTarget = { type: 'event', id: eventId };
-  document.getElementById("add-player-target-title").textContent = "Añadir a Evento";
-  document.getElementById("admin-player-search").value = "";
-  document.getElementById("admin-guest-name").value = "";
-  renderModalUserList();
-  document.getElementById("modal-admin-add-player").classList.add("active");
+window.confirmCreateMatchAdmin = async () => {
+    const col = document.getElementById('adm-create-col').value;
+    const dateInput = document.getElementById('adm-create-date').value;
+    const state = document.getElementById('adm-create-state').value;
+
+    if (!dateInput) return showToast("ERROR", "Selecciona una fecha vÃ¡lida", "error");
+
+    const matchData = {
+        fecha: new Date(dateInput),
+        estado: state,
+        jugadores: [null, null, null, null],
+        equipoA: [null, null],
+        equipoB: [null, null],
+        creador: auth.currentUser?.uid,
+        organizerId: auth.currentUser?.uid,
+        createdAt: serverTimestamp(),
+        visibilidad: 'public'
+    };
+
+    try {
+        await addDocument(col, matchData);
+        showToast("Ã‰XITO", "Partido creado manualmente", "success");
+        document.getElementById('modal-admin-create-match').classList.remove('active');
+        refreshAll();
+    } catch (e) {
+        showToast("ERROR", "No se pudo crear el partido", "error");
+    }
 };
 
-function renderModalUserList() {
-  const query = String(document.getElementById("admin-player-search")?.value || "").toLowerCase();
-  const box = document.getElementById("admin-user-list-results");
-  if (!box) return;
+window.openCreateEventWizard = () => {
+    // Redirect to event creation or open a simplified modal
+    showToast("EVENTOS", "Redirigiendo al creador de eventos...", "info");
+    setTimeout(() => window.location.href = 'eventos.html?create=1', 800);
+};
 
-  const filtered = users.filter(u => {
-    const name = String(u.nombreUsuario || u.nombre || "").toLowerCase();
-    const email = String(u.email || "").toLowerCase();
-    return name.includes(query) || email.includes(query);
-  }).slice(0, 20);
+window.syncApoingAdmin = async () => {
+    showToast("APOING", "Iniciando sincronizaciÃ³n forzada...", "info");
+    try {
+        const { syncApoingReservations } = await import('./calendario.js');
+        await syncApoingReservations(true);
+        showToast("APOING", "SincronizaciÃ³n completada", "success");
+        refreshAll();
+    } catch (e) {
+        showToast("ERROR", "Fallo al sincronizar Apoing", "error");
+    }
+};
 
-  box.innerHTML = filtered.map(u => {
-    const name = u.nombreUsuario || u.nombre || 'Sin nombre';
-    const photo = u.fotoPerfil || u.fotoURL || u.photoURL || "";
-    const initials = (u.nombreUsuario || u.nombre || "?").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
-    const avatarHtml = photo 
-        ? `<img src="${photo}" class="admin-user-avatar">` 
-        : `<span class="admin-user-avatar avatar-fallback">${initials}</span>`;
+window.saveEloConfig = async () => {
+    const win = parseInt(document.getElementById('cfg-elo-win').value);
+    const loss = parseInt(document.getElementById('cfg-elo-loss').value);
+    const k = parseInt(document.getElementById('cfg-elo-k').value);
+
+    // Guardar en una colecciÃ³n de configuraciÃ³n global si existe, o localmente para esta sesiÃ³n
+    // Por ahora, simulamos persistencia en una colecciÃ³n 'config'
+    try {
+        await setDoc(doc(db, "config", "elo"), { win, loss, k, updatedAt: serverTimestamp() });
+        showToast("SISTEMA", "ConfiguraciÃ³n ELO guardada globalmente", "success");
+    } catch (e) {
+        showToast("ERROR", "No tienes permisos para cambiar la config global", "error");
+    }
+};
+
+window.resetEloToBase = async () => {
+    if (!confirm("Â¿Resetear a todos los jugadores a 1000 puntos? Esta acciÃ³n es irreversible.")) return;
+    showToast("PROCESANDO", "Reseteando ranking global...", "info");
     
-    return `
-      <div class="admin-user-item">
-        ${avatarHtml}
-        <div class="admin-user-info">
-          <span class="admin-user-name">${name}</span>
-          <span class="admin-user-email">${u.email || '-'}</span>
-        </div>
-        <button class="btn-mini" onclick="window.confirmAddPlayerAdmin('${u.id}')">ELEGIR</button>
-      </div>
-    `;
-  }).join("") || '<div class="empty-admin">No se encontraron usuarios</div>';
-}
+    const { ELO_CONFIG } = await import("./config/elo-system.js");
+    const base = ELO_CONFIG.BASE_RATING || 1000;
 
-window.confirmAddPlayerAdmin = async (uid) => {
-  const user = users.find(u => u.id === uid);
-  if (!user) return;
-  
-  if (adminAddTarget.type === 'match') {
-    await executeAddPlayerToMatch(uid, user);
-  } else if (adminAddTarget.type === 'event') {
-    await executeAddPlayerToEvent(uid, user);
-  }
+    let count = 0;
+    for (let u of users) {
+        await updateDocument("usuarios", u.id, { 
+            puntosRanking: base, 
+            nivel: 2.5,
+            victorias: 0,
+            partidosJugados: 0
+        });
+        count++;
+    }
+    showToast("COMPLETO", `${count} jugadores reseteados a ${base} pts`, "success");
+    refreshAll();
 };
 
-async function addGuestAction() {
-  const name = String(document.getElementById("admin-guest-name")?.value || "").trim();
-  if (!name) return showToast("Admin", "Indica un nombre para el invitado", "warning");
+window.saveApoingAdmin = async (id) => {
+    const url = document.getElementById(`ap-url-${id}`).value;
+    if (!url.includes('.ics')) return showToast("ERROR", "URL ICS no vÃ¡lida", "error");
+    
+    await updateDocument("apoingCalendars", id, { icsUrl: url });
+    showToast("SISTEMA", "Enlace Apoing actualizado", "success");
+    refreshAll();
+};
 
-  const guestId = `GUEST_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-  const guestUser = { id: guestId, nombreUsuario: name, nombre: name, nivel: 2.5, puntosRanking: 1000, isGuest: true };
 
-  if (adminAddTarget.type === 'match') {
-    await executeAddPlayerToMatch(guestId, guestUser);
-  } else if (adminAddTarget.type === 'event') {
-    await executeAddPlayerToEvent(guestId, guestUser);
-  }
-}
-
-async function executeAddPlayerToMatch(uid, userData) {
-  const m = matches.find(x => x.id === adminAddTarget.id && x.col === adminAddTarget.col);
-  if (!m) return;
-
-  const jugs = [...(m.jugadores || [null, null, null, null])];
-  const firstFree = jugs.indexOf(null);
-  if (firstFree === -1) return showToast("Admin", "Partido lleno", "warning");
-
-  jugs[firstFree] = uid;
-  try {
-    const payload = { jugadores: jugs };
-    // update equipoA/B if they exist
-    if (firstFree < 2) payload.equipoA = [jugs[0], jugs[1]];
-    else payload.equipoB = [jugs[2], jugs[3]];
-
-    await updateDocument(adminAddTarget.col, adminAddTarget.id, payload);
-    await addAdminLog("ADMIN_ADD_PLAYER_MATCH", `Added ${uid} to ${adminAddTarget.id}`);
-    showToast("Admin", "Jugador añadido al partido", "success");
-    document.getElementById("modal-admin-add-player").classList.remove("active");
-    await refreshAll();
-  } catch (e) {
-    showToast("Error", "No se pudo añadir al jugador", "error");
-  }
-}
-
-async function executeAddPlayerToEvent(uid, userData) {
-  const ev = events.find(x => x.id === adminAddTarget.id);
-  if (!ev) return;
-
-  const currentInscritos = ev.inscritos || [];
-  if (currentInscritos.some(i => i.uid === uid)) return showToast("Admin", "Ya está inscrito", "info");
-
-  const entry = {
-    uid,
-    nombre: userData.nombreUsuario || userData.nombre || "Jugador",
-    nivel: Number(userData.nivel || 2.5),
-    sidePreference: "flex",
-    pairCode: "",
-    inscritoEn: new Date().toISOString(),
-    adminAdded: true
-  };
-
-  try {
-    await updateDocument("eventos", adminAddTarget.id, {
-      inscritos: [...currentInscritos, entry]
-    });
-    await addAdminLog("ADMIN_ADD_PLAYER_EVENT", `Added ${uid} to event ${adminAddTarget.id}`);
-    showToast("Admin", "Jugador inscrito al evento", "success");
-    document.getElementById("modal-admin-add-player").classList.remove("active");
-    await refreshAll();
-  } catch (e) {
-    showToast("Error", "No se pudo inscribir al jugador", "error");
-  }
-}
