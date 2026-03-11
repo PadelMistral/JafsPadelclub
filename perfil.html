@@ -105,10 +105,7 @@
             </div>
         </section>
 
-        <!-- ELO se visualiza ahora en mi-elo.html para mayor detalle -->
-
-
-        <!-- Stats Cards Grid -->
+        <!-- Metric Cards Grid -->
         <section class="profile-section animate-fade-in" style="animation-delay: 0.14s;">
             <div class="section-header">
                 <h2 class="section-title">Métricas de Rendimiento</h2>
@@ -137,7 +134,47 @@
             </div>
         </section>
 
-        <!-- Más datos: Chat IA -->
+                <!-- Achievements -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.15s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-medal text-sport-gold mr-2"></i>Logros</h2>
+            </div>
+            <div class="achievements-header">
+                <span id="achv-count-label" class="achv-count">0 / 0 DESBLOQUEADOS</span>
+            </div>
+            <div id="achievements-grid" class="achievements-grid-v9"></div>
+        </section>
+
+        <!-- Rivalry Intelligence -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.16s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-crosshairs text-primary mr-2"></i>Rivalidad y Alianzas</h2>
+            </div>
+            <div class="nexus-grid-v9">
+                <div class="nexus-item-v9 cyan">
+                    <div class="n-icon"><i class="fas fa-handshake"></i></div>
+                    <div class="n-info">
+                        <span class="n-lbl">Mejor aliado</span>
+                        <span id="profile-partner" class="n-val">---</span>
+                    </div>
+                </div>
+                <div class="nexus-item-v9 magenta">
+                    <div class="n-icon"><i class="fas fa-skull"></i></div>
+                    <div class="n-info">
+                        <span class="n-lbl">Nemesis</span>
+                        <span id="profile-nemesis" class="n-val">---</span>
+                    </div>
+                </div>
+                <div class="nexus-item-v9 gold">
+                    <div class="n-icon"><i class="fas fa-crown"></i></div>
+                    <div class="n-info">
+                        <span class="n-lbl">Victima favorita</span>
+                        <span id="profile-victim" class="n-val">---</span>
+                    </div>
+                </div>
+            </div>
+            <div id="rival-intel-dashboard" class="rival-intel-panel"></div>
+        </section>\n<!-- AI Chat CTA -->
         <section class="profile-section animate-fade-in" style="animation-delay: 0.16s;">
             <div id="profile-chat-ia-cta"
                 class="card card-premium-v7 p-4 border-glow-cyan cursor-pointer hover:bg-cyan/10 transition-colors"
@@ -231,10 +268,10 @@
                     </div>
                     <i class="fas fa-chevron-right setting-arrow"></i>
                 </a>
-                <a href="historial.html" class="setting-item link">
+                <a href="eventos.html" class="setting-item link">
                     <div class="setting-left">
-                        <i class="fas fa-history"></i>
-                        <span>Historial Partidos</span>
+                        <i class="fas fa-trophy"></i>
+                        <span>Mis Eventos / Torneos</span>
                     </div>
                     <i class="fas fa-chevron-right setting-arrow"></i>
                 </a>
@@ -244,8 +281,7 @@
         <!-- Apoing Calendar Preview -->
         <section class="profile-section animate-fade-in" style="animation-delay: 0.28s;">
             <div class="section-header">
-                <h2 class="section-title"><i class="fas fa-calendar-check text-primary mr-2"></i>Mis Reservas Apoing
-                </h2>
+                <h2 class="section-title"><i class="fas fa-calendar-check text-primary mr-2"></i>Mis Reservas Apoing</h2>
             </div>
             <div id="apoing-preview" class="card card-premium-v7 p-4">
                 <div class="flex-col gap-2 items-center py-4 opacity-40">
@@ -256,7 +292,7 @@
             </div>
         </section>
 
-        <!-- Address Section (Accordion - hidden by default) -->
+        <!-- Address Section -->
         <section class="profile-section animate-fade-in" style="animation-delay: 0.3s;">
             <details class="profile-accordion">
                 <summary class="profile-accordion-trigger">
@@ -420,3 +456,4 @@
 </body>
 
 </html>
+

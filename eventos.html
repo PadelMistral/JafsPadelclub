@@ -56,6 +56,111 @@
             </div>
         </section>
 
+        <!-- Roadmap: Liderazgo del sector -->
+        <section class="leader-roadmap animate-fade-in" style="animation-delay: 0.16s;">
+            <div class="leader-header">
+                <div>
+                    <h2 class="leader-title">
+                        <i class="fas fa-crown"></i>
+                        Roadmap Lider
+                    </h2>
+                    <p class="leader-subtitle">Acciones de alto impacto para pasar de excelente a dominante.</p>
+                </div>
+                <div class="leader-pill">
+                    <i class="fas fa-bolt"></i>
+                    Objetivo: Retencion + Experiencia
+                </div>
+            </div>
+            <div class="leader-grid">
+                <article class="leader-card">
+                    <div class="leader-card-header">
+                        <span class="leader-icon"><i class="fas fa-medal"></i></span>
+                        <div>
+                            <h3>Gamificacion y logros</h3>
+                            <span class="leader-tag">Retencion</span>
+                        </div>
+                    </div>
+                    <p class="leader-desc">Sistema de insignias automaticas por hitos reales de juego.</p>
+                    <ul class="leader-list">
+                        <li>Rey de la Red: mas partidos ganados en la red</li>
+                        <li>Invicto: 5 victorias seguidas</li>
+                        <li>MVP del Mes: rendimiento top en el club</li>
+                    </ul>
+                </article>
+                <article class="leader-card">
+                    <div class="leader-card-header">
+                        <span class="leader-icon"><i class="fas fa-robot"></i></span>
+                        <div>
+                            <h3>IA estrategica</h3>
+                            <span class="leader-tag">Equidad</span>
+                        </div>
+                    </div>
+                    <p class="leader-desc">Recomendaciones inteligentes antes y despues del partido.</p>
+                    <ul class="leader-list">
+                        <li>Sugerencia de balanceo de parejas si el ELO es dispar</li>
+                        <li>Rivalidad: tu nemesis y tu mejor aliado</li>
+                        <li>Resumen tactico del rendimiento</li>
+                    </ul>
+                </article>
+                <article class="leader-card">
+                    <div class="leader-card-header">
+                        <span class="leader-icon"><i class="fas fa-share-nodes"></i></span>
+                        <div>
+                            <h3>Integracion social y PWA</h3>
+                            <span class="leader-tag">Viral</span>
+                        </div>
+                    </div>
+                    <p class="leader-desc">Expande el alcance con contenidos listos para compartir.</p>
+                    <ul class="leader-list">
+                        <li>Boton compartir con imagen del partido en canvas</li>
+                        <li>Notificaciones push: 1h antes, retos y plazas libres</li>
+                    </ul>
+                </article>
+                <article class="leader-card">
+                    <div class="leader-card-header">
+                        <span class="leader-icon"><i class="fas fa-camera-retro"></i></span>
+                        <div>
+                            <h3>Multimedia y recuerdos</h3>
+                            <span class="leader-tag">Comunidad</span>
+                        </div>
+                    </div>
+                    <p class="leader-desc">Humaniza la experiencia con memoria visual del partido.</p>
+                    <ul class="leader-list">
+                        <li>Subida de 1 foto o video corto post-partido</li>
+                        <li>Galeria de match con etiqueta de jugadores</li>
+                    </ul>
+                </article>
+                <article class="leader-card">
+                    <div class="leader-card-header">
+                        <span class="leader-icon"><i class="fas fa-wifi"></i></span>
+                        <div>
+                            <h3>Rendimiento y offline</h3>
+                            <span class="leader-tag">Confiable</span>
+                        </div>
+                    </div>
+                    <p class="leader-desc">Acceso seguro a horarios aunque haya mala cobertura.</p>
+                    <ul class="leader-list">
+                        <li>Cache proactivo con ultimos eventos y pistas</li>
+                        <li>Vistas clave disponibles sin conexion</li>
+                    </ul>
+                </article>
+                <article class="leader-card">
+                    <div class="leader-card-header">
+                        <span class="leader-icon"><i class="fas fa-clipboard-check"></i></span>
+                        <div>
+                            <h3>Feedback tactico</h3>
+                            <span class="leader-tag">Mejora</span>
+                        </div>
+                    </div>
+                    <p class="leader-desc">Notas del coach automaticas tras cada partido.</p>
+                    <ul class="leader-list">
+                        <li>Comentarios sobre sets y cierres</li>
+                        <li>Recomendaciones de entrenamiento</li>
+                    </ul>
+                </article>
+            </div>
+        </section>
+
     </main>
 
     <!-- MODAL: CREAR EVENTO (solo organizador/admin) -->
@@ -207,12 +312,10 @@
                     </div>
                 </div>
 
-                <!-- Invitados (nombre + nivel) - ya no se usa, ahora se añaden desde otro modal -->
-                <!-- pero lo dejamos por si se quiere usar -->
+                <!-- Invitados (opcional) -->
                 <div class="form-group">
                     <label class="form-label"><i class="fas fa-user-plus mr-1 text-primary"></i> Invitados (opcional)</label>
                     <textarea id="ev-invitados" class="input" rows="3" placeholder="Una línea por invitado: Nombre, Nivel&#10;Ej: María García, 3.0&#10;Pedro López, 2.5"></textarea>
-                    <small class="text-muted text-[10px] block mt-1">Añade jugadores fijos con nombre y nivel. Se incluirán en el evento.</small>
                 </div>
 
                 <!-- Nivel mínimo / máximo -->
@@ -245,7 +348,7 @@
                     </div>
                 </div>
 
-                <!-- Puntos de liga (solo visible si formato = liga o liga+elim) -->
+                <!-- Puntos de liga -->
                 <div id="ev-league-points-wrap" class="form-group">
                     <label class="form-label"><i class="fas fa-chart-line mr-1 text-primary"></i> Puntos/victoria en liga</label>
                     <div class="form-row-3">
@@ -268,7 +371,6 @@
                 <div class="form-group">
                     <label class="form-label"><i class="fas fa-user-cog mr-1 text-primary"></i> Co-organizadores (UIDs separados por comas)</label>
                     <input type="text" id="ev-coorganizadores" class="input" placeholder="uid1, uid2, ...">
-                    <small class="text-muted block">Estos usuarios también podrán gestionar el evento.</small>
                 </div>
 
             </div>
@@ -279,52 +381,7 @@
         </div>
     </div>
 
-    <!-- MODAL: AÑADIR JUGADOR (desde admin) -->
-    <div id="modal-add-player" class="modal-overlay">
-        <div class="modal-card glass-strong slide-up" style="max-width: 500px;">
-            <div class="modal-header">
-                <h3 class="modal-title">Añadir jugador</h3>
-                <button class="close-btn" onclick="document.getElementById('modal-add-player').classList.remove('active')">×</button>
-            </div>
-            <div class="modal-body p-4">
-                <div class="form-group">
-                    <label class="form-label">Tipo de jugador</label>
-                    <select id="add-player-type" class="input">
-                        <option value="registered">Registrado</option>
-                        <option value="guest">Invitado</option>
-                    </select>
-                </div>
-                <div id="registered-player-select" class="form-group">
-                    <label class="form-label">Seleccionar usuario</label>
-                    <select id="select-registered-user" class="input">
-                        <option value="">Cargando...</option>
-                    </select>
-                </div>
-                <div id="guest-player-input" class="form-group hidden">
-                    <label class="form-label">Nombre del invitado</label>
-                    <input type="text" id="guest-name" class="input" placeholder="Ej: Juan Pérez">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Preferencia de lado</label>
-                    <select id="player-preference" class="input">
-                        <option value="izquierda">Izquierda</option>
-                        <option value="derecha">Derecha</option>
-                        <option value="indiferente">Me da igual</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Código de pareja (si es obligatorio)</label>
-                    <input type="text" id="player-pair-code" class="input" placeholder="Ej: pareja1">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-ghost" onclick="document.getElementById('modal-add-player').classList.remove('active')">Cancelar</button>
-                <button id="btn-confirm-add-player" class="btn btn-primary">Añadir</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL: DETALLE DEL EVENTO -->
+    <!-- MODAL: DETALLE DEL EVENTO (rápido) -->
     <div id="modal-event-detail" class="modal-overlay">
         <div class="modal-card glass-strong slide-up" style="max-width: 600px; max-height: 94vh; overflow-y: auto;">
             <div class="modal-header">
@@ -338,7 +395,7 @@
         </div>
     </div>
 
-    <!-- MODAL: ADMIN DEL EVENTO (solo admin/organizador) -->
+    <!-- MODAL: ADMIN DEL EVENTO (solo organizador) -->
     <div id="modal-event-admin" class="modal-overlay">
         <div class="modal-card glass-strong slide-up" style="max-width: 640px; max-height: 94vh; overflow-y: auto;">
             <div class="modal-header">

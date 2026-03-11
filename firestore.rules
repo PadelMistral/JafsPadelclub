@@ -348,6 +348,28 @@ service cloud.firestore {
       );
     }
 
+    match /matchWatchers/{id} {
+      allow read, list: if signedIn();
+      allow create: if signedIn() &&
+        request.resource.data.keys().hasOnly(['matchId', 'matchCollection', 'uid', 'createdAt']) &&
+        request.resource.data.matchId is string &&
+        request.resource.data.uid == currentUid();
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == currentUid());
+      allow update: if isAdmin();
+    }
+
+    match /matchMedia/{id} {
+      allow read, list: if signedIn();
+      allow create: if signedIn() &&
+        request.resource.data.keys().hasOnly(['matchId', 'matchCollection', 'url', 'type', 'createdBy', 'createdAt', 'size', 'name']) &&
+        request.resource.data.matchId is string &&
+        request.resource.data.url is string &&
+        request.resource.data.type is string &&
+        request.resource.data.createdBy == currentUid();
+      allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == currentUid());
+      allow update: if isAdmin();
+    }
+
     match /apoingCalendars/{uid} {
       allow read, list: if isApproved();
       allow create, update: if isAdmin() || (signedIn() && request.auth.uid == uid);
