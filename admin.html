@@ -35,6 +35,7 @@
             <button class="tab-btn active admin-tab" data-pane="users"><i class="fas fa-users"></i> <span>JUGADORES</span></button>
             <button class="tab-btn admin-tab" data-pane="pending"><i class="fas fa-user-clock"></i> <span>SOLICITUDES</span> <span class="badge-dot hidden" id="dot-pending"></span></button>
             <button class="tab-btn admin-tab" data-pane="matches"><i class="fas fa-table-tennis-paddle-ball"></i> <span>PARTIDOS</span></button>
+            <button class="tab-btn admin-tab" data-pane="propuestas"><i class="fas fa-comments"></i> <span>CHATS PROPUESTAS</span></button>
             <button class="tab-btn admin-tab" data-pane="eventos"><i class="fas fa-trophy"></i> <span>TORNEOS</span></button>
             <button class="tab-btn admin-tab" data-pane="ranking"><i class="fas fa-ranking-star"></i> <span>PUNTUACIÓN</span></button>
             <button class="tab-btn admin-tab" data-pane="system"><i class="fas fa-microchip"></i> <span>SISTEMA</span></button>
@@ -131,6 +132,16 @@
                 </div>
                 <div class="flex-row flex-wrap gap-2">
                     <button class="btn-glass sm primary-glow" onclick="window.openCreateMatchAdmin()"><i class="fas fa-plus"></i> NUEVO PARTIDO</button>
+                    <div class="flex-row items-center gap-2 mt-2 md:mt-0">
+                        <select id="matches-delete-action" class="admin-select-v9 sm text-red-400 border-red-900/50">
+                            <option value="none">Opciones de borrado...</option>
+                            <option value="all">Borrar TODO</option>
+                            <option value="played">Borrar Jugados</option>
+                            <option value="open">Borrar Pendientes</option>
+                            <option value="orphan">Borrar Huérfanos</option>
+                        </select>
+                        <button id="btn-execute-delete-matches" class="btn-danger-v9 sm px-4"><i class="fas fa-trash"></i> EJECUTAR</button>
+                    </div>
                     <select id="matches-type-filter" class="admin-select-v9 sm">
                         <option value="all">TODOS</option>
                         <option value="partidosAmistosos">AMISTOSOS</option>
@@ -141,12 +152,28 @@
                         <option value="all">TODOS</option>
                         <option value="open">ABIERTOS</option>
                         <option value="played">FINALIZADOS</option>
+                        <option value="upcoming">PRÓXIMOS</option>
+                        <option value="orphan">HUÉRFANOS</option>
                     </select>
                 </div>
             </div>
             <div id="matches-accordion-container" class="accordion-flow">
                 <!-- Partidos renderizados como acordeones aquí -->
             </div>
+          </section>
+
+          <!-- CHATS PROPUESTAS -->
+          <section id="pane-propuestas" class="admin-pane animate-fade-in">
+            <div class="pane-header flex-col md:flex-row between gap-4 mb-6">
+                <div>
+                    <h2 class="pane-title">CHATS DE PROPUESTAS</h2>
+                    <p class="text-[10px] opacity-50 uppercase tracking-wider">Visión admin de chats privados</p>
+                </div>
+                <div class="flex-row gap-2">
+                    <button class="btn-glass sm primary-glow" id="btn-refresh-proposals"><i class="fas fa-rotate"></i> RECARGAR</button>
+                </div>
+            </div>
+            <div id="proposals-admin-list" class="accordion-flow"></div>
           </section>
 
           <!-- TORNEOS -->
@@ -187,22 +214,27 @@
                             <label>Factor K (Sensibilidad)</label>
                             <input type="number" id="cfg-elo-k" class="admin-field-v9" value="32">
                         </div>
-                        <button id="btn-save-elo-config" class="btn-primary-admin w-full">GUARDAR CONFIGURACIÓN</button>
+                        <div class="flex-row gap-2 mt-4">
+                            <button id="btn-save-elo-config" class="btn-primary-admin flex-1">GUARDAR CONFIGURACIÓN</button>
+                            <button id="btn-emergency-recover" class="btn-glass text-blue-400" title="Recuperar ELO desde Logs"><i class="fas fa-undo-alt"></i> ELO</button>
+                            <button id="btn-recover-matches" class="btn-glass text-sport-green" title="Reconstruir Partidos desde Logs"><i class="fas fa-history"></i> PARTIDOS</button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Acciones Masivas -->
                 <div class="sys-card-v9">
-                    <div class="sys-card-head"><i class="fas fa-sync-alt"></i> RECALCULAR & RESET</div>
+                    <div class="sys-card-head"><i class="fas fa-sync-alt"></i> GESTIÓN ELO & RANKING</div>
                     <div class="p-4 flex-col gap-3">
-                        <button id="btn-wipe-recalc" class="btn-danger-v9 w-full">
-                            <i class="fas fa-radiation"></i> RECONSTRUCCIÓN HISTÓRICA
-                        </button>
-                        <button id="btn-reset-elo-base" class="btn-glass w-full" onclick="window.resetEloToBase()">
-                            <i class="fas fa-undo"></i> RESET A PUNTOS BASE (1000)
-                        </button>
-                        <button id="btn-recalc-from-level" class="btn-glass w-full">
-                            <i class="fas fa-layer-group"></i> RECALCULAR DESDE NIVEL ACTUAL
+                        <select id="elo-action-select" class="admin-select-v9 w-full">
+                            <option value="none">Seleccionar acción...</option>
+                            <option value="reset_base">Reset a Puntos Base (1000)</option>
+                            <option value="recalc_points">Recalcular desde Puntos Actuales</option>
+                            <option value="recalc_level">Recalcular desde Nivel Actual</option>
+                            <option value="historical">Reconstrucción Histórica</option>
+                        </select>
+                        <button id="btn-execute-elo-action" class="btn-danger-v9 w-full">
+                            <i class="fas fa-bolt"></i> EJECUTAR ACCIÓN
                         </button>
                         <p class="text-[9px] opacity-40 text-center">Precaución: Estas acciones afectan a toda la base de datos.</p>
                     </div>
@@ -241,26 +273,33 @@
                     </div>
                 </div>
 
-                <!-- Sincronización Apoing -->
+                <!-- Mantenimiento Global -->
                 <div class="sys-card-v9">
-                    <div class="sys-card-head"><i class="fas fa-calendar-alt"></i> SINCRONIZACIÓN APOING</div>
+                    <div class="sys-card-head"><i class="fas fa-tools"></i> MANTENIMIENTO GLOBAL</div>
                     <div class="p-4 flex-col gap-3">
-                        <div class="flex-row between items-center mb-2">
-                            <span class="text-[10px] font-bold">ESTADO DEL SERVICIO:</span>
-                            <span class="badge-mini bg-green-500/10 text-green-400">ACTIVO</span>
-                        </div>
-                        <button class="btn-glass w-full" onclick="window.syncApoingAdmin()"><i class="fas fa-sync"></i> SINCRONIZACIÓN FORZADA</button>
-                        <button class="btn-glass w-full" onclick="document.getElementById('pane-apoing-list').classList.toggle('hidden')">GESTIONAR ENLACES ICS</button>
+                        <select id="sys-maint-action" class="admin-select-v9 w-full">
+                            <option value="none">Seleccionar tarea...</option>
+                            <option value="cancel_stale">Cancelar Partidos Expirados</option>
+                            <option value="reset_presence">Resetear Estado en Línea</option>
+                            <option value="clean_event_dupes">Limpiar Duplicados Evento (TBD)</option>
+                            <option value="clean_old_events">Borrar Partidos de Eventos Antiguos</option>
+                            <option value="nuke_logs">Limpiar Registros de Actividad</option>
+                            <option value="sync_apoing">Sincronización Apoing Forzada</option>
+                        </select>
+                        <button id="btn-execute-maint" class="btn-primary-admin w-full">
+                            <i class="fas fa-play"></i> EJECUTAR TAREA
+                        </button>
                     </div>
                 </div>
 
-                <!-- Mantenimiento -->
+                <!-- ICS Manager -->
                 <div class="sys-card-v9">
-                    <div class="sys-card-head"><i class="fas fa-tools"></i> HERRAMIENTAS MANTENIMIENTO</div>
+                    <div class="sys-card-head"><i class="fas fa-link"></i> CALENDARIOS EXTERNOS</div>
                     <div class="p-4 flex-col gap-2">
-                        <button id="btn-cancel-stale" class="btn-glass w-full">CANCELAR PARTIDOS EXPIRADOS</button>
-                        <button id="btn-reset-presence" class="btn-glass w-full">RESETEAR ESTADO EN LÍNEA</button>
-                        <button id="btn-nuke-logs" class="btn-glass w-full text-red-400">LIMPIAR REGISTROS DE ACTIVIDAD</button>
+                        <button class="btn-glass w-full" onclick="document.getElementById('pane-apoing-list').classList.toggle('hidden')">
+                            GESTIONAR ENLACES ICS
+                        </button>
+                        <p class="text-[9px] opacity-40 text-center">Gestiona la vinculación con perfiles de Apoing externos.</p>
                     </div>
                 </div>
             </div>
@@ -338,3 +377,5 @@
 </body>
 
 </html>
+
+

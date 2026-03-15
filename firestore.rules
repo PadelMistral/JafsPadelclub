@@ -1,4 +1,4 @@
-﻿rules_version = '2';
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
@@ -24,7 +24,9 @@ service cloud.firestore {
     }
 
     function playersListIsValid(data) {
-      return data.jugadores is list && data.jugadores.size() == maxPlayers();
+      return (data.jugadores is list && data.jugadores.size() == maxPlayers()) ||
+             (data.playerUids is list && data.playerUids.size() == maxPlayers()) ||
+             (data.equipoA is list && data.equipoB is list && data.equipoA.size() == 2 && data.equipoB.size() == 2);
     }
 
     function hasMax4Players(data) {
@@ -32,11 +34,24 @@ service cloud.firestore {
     }
 
     function fullRoster(data) {
-      return playersListIsValid(data) &&
-             data.jugadores[0] != null &&
-             data.jugadores[1] != null &&
-             data.jugadores[2] != null &&
-             data.jugadores[3] != null;
+      return (
+        (data.jugadores is list &&
+          data.jugadores.size() == maxPlayers() &&
+          data.jugadores[0] != null &&
+          data.jugadores[1] != null &&
+          data.jugadores[2] != null &&
+          data.jugadores[3] != null) ||
+        (data.playerUids is list &&
+          data.playerUids.size() == maxPlayers() &&
+          data.playerUids[0] != null &&
+          data.playerUids[1] != null &&
+          data.playerUids[2] != null &&
+          data.playerUids[3] != null) ||
+        (data.equipoA is list && data.equipoB is list &&
+          data.equipoA.size() == 2 && data.equipoB.size() == 2 &&
+          data.equipoA[0] != null && data.equipoA[1] != null &&
+          data.equipoB[0] != null && data.equipoB[1] != null)
+      );
     }
 
     function canReportResultNow(data) {
@@ -56,11 +71,15 @@ service cloud.firestore {
              canReportResultNow(data);
     }
 
+    function isParticipant(data) {
+      return (data.jugadores is list && data.jugadores.hasAny([currentUid()])) ||
+             (data.playerUids is list && data.playerUids.hasAny([currentUid()])) ||
+             (data.equipoA is list && data.equipoA.hasAny([currentUid()])) ||
+             (data.equipoB is list && data.equipoB.hasAny([currentUid()]));
+    }
+
     function participantInBeforeAndAfter() {
-      return resource.data.jugadores is list &&
-             request.resource.data.jugadores is list &&
-             resource.data.jugadores.hasAny([currentUid()]) &&
-             request.resource.data.jugadores.hasAny([currentUid()]);
+      return isParticipant(resource.data) && isParticipant(request.resource.data);
     }
 
     function isParticipantResultUpdate() {
@@ -182,6 +201,17 @@ service cloud.firestore {
           'fecha'
         ]) &&
         request.resource.data.eventoId == resource.data.eventoId;
+    }
+
+    function isProposalParticipant(data) {
+      return signedIn() &&
+        data.participantUids is list &&
+        data.participantUids.hasAny([currentUid()]);
+    }
+
+    function isProposalParticipantById(proposalId) {
+      return exists(/databases/$(database)/documents/propuestasPartido/$(proposalId)) &&
+        isProposalParticipant(get(/databases/$(database)/documents/propuestasPartido/$(proposalId)).data);
     }
 
     // --- REGLAS POR COLECCIÓN ---
@@ -336,7 +366,7 @@ service cloud.firestore {
 
     match /eventoClasificacion/{id} {
       allow read, list: if signedIn();
-      allow create, update: if isAdmin() || (
+      allow create, update: if isAdmin() || isApproved() || (
         signedIn() &&
         request.resource.data.eventoId is string &&
         isEventOrganizerById(request.resource.data.eventoId)
@@ -376,9 +406,28 @@ service cloud.firestore {
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
+    match /propuestasPartido/{proposalId} {
+      allow read: if isAdmin() || isProposalParticipant(resource.data);
+      allow create: if signedIn() &&
+        request.resource.data.createdBy == currentUid() &&
+        request.resource.data.participantUids is list &&
+        request.resource.data.participantUids.hasAny([currentUid()]);
+      allow update, delete: if isAdmin() || isProposalParticipant(resource.data);
+
+      match /chat/{msgId} {
+        allow read: if isAdmin() || isProposalParticipantById(proposalId);
+        allow create: if signedIn() &&
+          request.resource.data.uid == currentUid() &&
+          isProposalParticipantById(proposalId);
+        allow update, delete: if isAdmin() || isProposalParticipantById(proposalId);
+      }
+    }
+
     // REGLA DE SEGURIDAD GLOBAL (BLOQUEO POR DEFECTO PERO PERMISO ADMIN)
     match /{document=**} {
       allow read, write: if isAdmin();
     }
   }
 }
+
+
