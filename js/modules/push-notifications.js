@@ -302,7 +302,7 @@ async function ensureOneSignalInitialized() {
         await retryWithBackoff(async () => {
           await oneSignalExec(async (OneSignal) => {
             await OneSignal.init({
-              appId: "ce289ac1-60a6-4277-94d0-4d3765e197c3",
+              appId: appId,
               safari_web_id: "web.onesignal.auto.10a9c80d-13fc-463d-9d41-3838ae45a6c3",
               notifyButton: { enable: false },
               serviceWorkerParam: { scope: cfg.scope },
@@ -1100,3 +1100,4 @@ export async function runPushDiagnostics() {
     console.groupEnd();
     return status;
 }
+

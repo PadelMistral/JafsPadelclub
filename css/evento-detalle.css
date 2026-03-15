@@ -423,6 +423,64 @@
   flex-direction: column;
   gap: 16px;
 }
+.org-header-v9 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+}
+.org-grid-v9 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+.org-card-v9 {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.org-card-v9 label {
+  font-size: 10px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.org-actions-v9 {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.org-section-v9 {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px;
+}
+.org-section-v9 h4 {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.org-danger-zone-v9 {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+.org-danger-zone-v9 .btn {
+  flex: 1;
+}
 .btn-ed-primary {
   background: linear-gradient(135deg, var(--primary), #0066ff);
   color: #fff;
@@ -487,6 +545,17 @@
   }
   .bracket-round {
     min-width: 140px;
+  }
+  .ed-pane {
+    padding: 14px;
+    border-radius: 20px;
+  }
+  .ed-info-card {
+    padding: 14px;
+    border-radius: 18px;
+  }
+  .ed-tabs {
+    gap: 8px;
   }
 }
 
@@ -612,4 +681,49 @@
 
 .mf-btn:active {
   transform: scale(0.95);
+}
+
+/* Group Editor */
+.group-editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.group-edit-box {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px;
+}
+.group-edit-box h5 {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.group-team-edit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+.group-team-edit select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 10px;
+  padding: 4px 6px;
+}
+.btn-micro.danger {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.35);
 }

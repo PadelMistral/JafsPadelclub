@@ -6,40 +6,42 @@
 //  - Demotion Shield: 3 partidos de protección al subir de división
 //  - Bandas más amplias = usuarios permanecen más tiempo en su nivel real
 
-export const ELO_SYSTEM_VERSION = "elo2v2_v3";
+export const ELO_SYSTEM_VERSION = "elo2v5_v1_pro";
 
 export const ELO_CONFIG = {
   BASE_RATING: 1000,
   MIN_RATING: 300,
-  MAX_RATING: 4000,
+  MAX_RATING: 5000,
   LEVEL_MIN: 1.0,
   LEVEL_MAX: 7.0,
-  LEVEL_STEP: 0.01, // Cambios de nivel mucho más lentos (0.01 por tramo)
-  BONUS_CAP_RATIO: 0.20, 
-  // Puntos por nivel: 1000 -> Estabilidad máxima. 
-  // Con K=10 y 1000pts/nivel, ganar +10pts sube exactamente 0.01 de nivel.
+  LEVEL_STEP: 0.001, 
+  BONUS_CAP_RATIO: 0.25, 
   RATING_PER_LEVEL: 1000,
 
   K: {
-    PROVISIONAL: 15, 
-    DEVELOPING: 10, 
-    STABLE: 8, 
-    ELITE: 5, 
-    LEGEND: 4, 
+    PROVISIONAL: 40, 
+    DEVELOPING: 32, 
+    STABLE: 22, 
+    ELITE: 16, 
+    LEGEND: 12, 
   },
 
   CAPS: {
-    COMPETITIVE_ABS: 15, // Máx pts por partido competitivo
-    FRIENDLY_ABS: 8,     // Máx pts por partido amistoso
+    COMPETITIVE_ABS: 60, 
+    FRIENDLY_ABS: 30,     
   },
 
-  // Protección de descenso de división: mínimo de partidos al ascender
-  // antes de poder bajar de división. No acumulable entre saltos.
   DEMOTION_SHIELD_MATCHES: 3,
+  DEMOTION_BUFFER_PTS: 5,
 
-  // Margen de puntos extra dentro del tramo que actúa como colchón
-  // antes del verdadero threshold para descender de nivel decimal.
-  DEMOTION_BUFFER_PTS: 15,
+  // Sistema de Multiplicadores de Alta Precisión
+  DYNAMIC: {
+    STREAK_M: 0.12,     // Multiplicador base por racha
+    UPSET_M: 1.45,      // Factor sorpresa
+    DOMINANCE_M: 1.25,  // Factor por sets/juegos
+    CLUTCH_M: 0.05,     // Plus por tie-break o 7-5
+    ACTIVITY_M: 1.15,   // Plus para jugadores activos
+  }
 };
 
 export function clampNumber(value, min, max) {

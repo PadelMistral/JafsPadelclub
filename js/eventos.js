@@ -1,8 +1,9 @@
 // eventos.js — Versión mejorada con aprobación de inscritos y campo repesca
 import { db, auth, observerAuth, getDocument, addDocument, updateDocument, getDocsSafe } from './firebase-service.js';
 import { initAppUI, showToast, showSidePreferenceModal } from './ui-core.js';
+import { openResultForm } from './match-service.js';
 import {
-    collection, getDocs, doc, updateDoc, deleteDoc, addDoc,
+    collection, getDocs, doc, getDoc, updateDoc, deleteDoc, addDoc,
     query, where, orderBy, serverTimestamp, onSnapshot, writeBatch,
     arrayUnion, arrayRemove, increment
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
@@ -17,6 +18,7 @@ let currentFilter = 'all';
 let activeEventId = null;
 let adminTabState = 'players';
 let unsubscribeEvents = null;
+let usersById = new Map();
 
 /* ==================== BOOT ==================== */
 document.addEventListener('DOMContentLoaded', () => {
@@ -31,11 +33,33 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('btn-create-event')?.classList.remove('hidden');
         }
 
+        await preloadUsersForEvents();
         setupFilters();
         setupCreateModal();
         subscribeEvents();
     });
 });
+
+async function preloadUsersForEvents() {
+    try {
+        const snap = await getDocsSafe(collection(db, 'usuarios'));
+        const rows = (snap?.docs || []).map(d => ({ uid: d.id, ...d.data() }));
+        usersById = new Map(rows.map(u => [u.uid, u]));
+    } catch (e) {
+        console.error('Error cargando usuarios eventos:', e);
+    }
+}
+
+function resolveInscritoLabel(ins) {
+    if (!ins) return 'Jugador';
+    const uid = ins.uid || '';
+    const isGuest = ins.invitado === true || String(uid).startsWith('invitado_') || String(uid).startsWith('manual_') || ins.manual === true;
+    if (!isGuest && usersById.has(uid)) {
+        const u = usersById.get(uid);
+        return u.nombreUsuario || u.nombre || u.email || uid;
+    }
+    return ins.nombre || ins.nombreUsuario || uid || 'Invitado';
+}
 
 /* ==================== FILTERS ==================== */
 function setupFilters() {
@@ -340,7 +364,7 @@ function buildPlayersList(inscritos) {
         <div class="ev-player-row">
             <span class="ev-player-rank">#${i+1}</span>
             <div class="flex-col flex-1">
-                <span class="font-bold text-[12px]">${ins.nombre || ins.uid}</span>
+                <span class="font-bold text-[12px]">${resolveInscritoLabel(ins)}</span>
                 ${ins.aprobado ? '<span class="text-[10px] text-sport-green">✓ Aprobado</span>' : '<span class="text-[10px] text-warning">⏳ Pendiente</span>'}
             </div>
             <span class="text-[10px] text-muted">${fmtDate(ins.inscritoEn?._seconds ? new Date(ins.inscritoEn._seconds*1000) : new Date())}</span>
@@ -358,12 +382,14 @@ function renderStandingTable(standings) {
     if (!standings.length) return `<p class="text-center text-muted text-[12px] py-8">Clasificación no disponible.</p>`;
     return `
       <div class="ev-standing-table">
-        <div class="ev-standing-head"><span>#</span><span>Pareja</span><span>PJ</span><span>G</span><span>P</span><span>Pts</span></div>
+        <div class="ev-standing-head"><span>#</span><span>Pareja</span><span>PJ</span><span>G</span><span>P</span><span>PF</span><span>PC</span><span>DIF</span><span>Pts</span></div>
         ${standings.map((s, i) => `
         <div class="ev-standing-row ${i < 2 ? 'top' : i < 4 ? 'playoff' : ''}">
           <span class="ev-rank-num">${i+1}</span>
           <span class="ev-team-name">${s.nombre || '-'}</span>
           <span>${s.pj||0}</span><span>${s.ganados||0}</span><span>${s.perdidos||0}</span>
+          <span>${s.puntosGanados||0}</span><span>${s.puntosPerdidos||0}</span>
+          <span>${s.diferencia||0}</span>
           <span class="font-black text-primary">${s.puntos||0}</span>
         </div>`).join('')}
       </div>`;
@@ -572,7 +598,7 @@ function renderAdminPlayers(ev) {
         <div class="ev-admin-player-row">
             <span class="ev-player-rank">#${i+1}</span>
             <div class="flex-col flex-1">
-                <span class="font-bold text-[12px]">${ins.nombre || ins.uid}</span>
+                <span class="font-bold text-[12px]">${resolveInscritoLabel(ins)}</span>
             </div>
             <div class="flex-row gap-1">
                 <button class="btn-micro success" onclick="window.aprobarJugador('${ev.id}','${ins.uid}')"><i class="fas fa-check"></i></button>
@@ -592,7 +618,7 @@ function renderAdminPlayers(ev) {
             <div class="ev-admin-player-row">
                 <span class="ev-player-rank">#${i+1}</span>
                 <div class="flex-col flex-1">
-                    <span class="font-bold text-[12px]">${ins.nombre || ins.uid}</span>
+                    <span class="font-bold text-[12px]">${resolveInscritoLabel(ins)}</span>
                 </div>
                 <button class="btn-micro danger" onclick="window.expulsarJugador('${ev.id}','${ins.uid}')"><i class="fas fa-user-minus"></i></button>
             </div>`).join('') : '<p class="text-muted text-[12px]">No hay aprobados</p>'}
@@ -604,6 +630,10 @@ async function renderAdminMatches(ev) {
     try {
         const snap = await getDocsSafe(query(collection(db, 'eventoPartidos'), where('eventoId', '==', ev.id)));
         const matches = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.round||1) - (b.round||1));
+        const uniqueMatches = Array.from(new Map(matches.map(m => {
+            const key = m.id || m.matchCode || `${m.teamAId || ''}_${m.teamBId || ''}_${m.group || ''}_${m.round || ''}`;
+            return [key, m];
+        })).values());
 
         if (!matches.length) {
             return `
@@ -620,7 +650,7 @@ async function renderAdminMatches(ev) {
             <button class="btn-mini mb-2" onclick="window.addManualMatch('${ev.id}')">
                 <i class="fas fa-plus mr-1"></i> Añadir partido
             </button>
-            ${matches.map(m => `
+            ${uniqueMatches.map(m => `
             <div class="ev-admin-match-row">
                 <div class="flex-col flex-1">
                     <span class="font-bold text-[12px]">${m.teamAName || m.equipoA || '?'} vs ${m.teamBName || m.equipoB || '?'}</span>
@@ -630,6 +660,9 @@ async function renderAdminMatches(ev) {
                     ${m.resultado ? `<span class="text-[11px] font-black text-primary">${m.resultado}</span>` : ''}
                     <button class="btn-micro" onclick="window.editMatchResult('${ev.id}','${m.id}')">
                         <i class="fas fa-pen"></i>
+                    </button>
+                    <button class="btn-micro danger" onclick="window.deleteEventMatch('${ev.id}','${m.id}')">
+                        <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>`).join('')}
@@ -770,45 +803,21 @@ window.addManualMatch = async (eventId) => {
     } catch (e) { showToast('Error', e.message, 'error'); }
 };
 
-window.editMatchResult = async (eventId, matchId) => {
-    const resultado = prompt('Introduce el resultado (ej: 6-3 6-4):');
-    if (!resultado) return;
-    const ganador = prompt('¿Quién ganó? (A o B):')?.toUpperCase();
-    if (ganador !== 'A' && ganador !== 'B') { showToast('Ganador inválido', 'Escribe A o B', 'warning'); return; }
+window.editMatchResult = async (_eventId, matchId) => {
+    if (!matchId) return;
+    openResultForm(matchId, 'eventoPartidos');
+};
 
+window.deleteEventMatch = async (_eventId, matchId) => {
+    if (!confirm('¿Eliminar este partido del evento?')) return;
     try {
-        const match = await getDocument('eventoPartidos', matchId);
-        const winnerTeamId = ganador === 'A' ? (match?.teamAId || match?.equipoAUid) : (match?.teamBId || match?.equipoBUid);
-        await updateDoc(doc(db, 'eventoPartidos', matchId), {
-            resultado, ganador, ganadorTeamId: winnerTeamId, estado: 'jugado', updatedAt: serverTimestamp()
-        });
-
-        const ev = allEvents.find(e => e.id === eventId);
-        if (ev && (ev.formato === 'league' || ev.formato === 'league_knockout')) {
-            if (match) {
-                const winnerId = ganador === 'A' ? (match.teamAId || match.equipoAUid) : (match.teamBId || match.equipoBUid);
-                const loserId  = ganador === 'A' ? (match.teamBId || match.equipoBUid) : (match.teamAId || match.equipoAUid);
-                const winnerName = ganador === 'A' ? (match.teamAName || match.equipoA) : (match.teamBName || match.equipoB);
-                const loserName = ganador === 'A' ? (match.teamBName || match.equipoB) : (match.teamAName || match.equipoA);
-                if (winnerId && loserId) {
-                    const winKey = `${eventId}_${winnerId}`;
-                    const loseKey = `${eventId}_${loserId}`;
-                    const batch = writeBatch(db);
-                    batch.set(doc(db, 'eventoClasificacion', winKey), {
-                        eventoId: eventId, uid: winnerId, nombre: winnerName || winnerId,
-                        pj: increment(1), ganados: increment(1), puntos: increment(ev.puntosVictoria || 3)
-                    }, { merge: true });
-                    batch.set(doc(db, 'eventoClasificacion', loseKey), {
-                        eventoId: eventId, uid: loserId, nombre: loserName || loserId,
-                        pj: increment(1), perdidos: increment(1), puntos: increment(ev.puntosDerrota || 0)
-                    }, { merge: true });
-                    await batch.commit();
-                }
-            }
+        const snap = await getDoc(doc(db, 'eventoPartidos', matchId));
+        const data = snap.exists() ? snap.data() : null;
+        if (data?.linkedMatchId && data?.linkedMatchCollection) {
+            await deleteDoc(doc(db, data.linkedMatchCollection, data.linkedMatchId));
         }
-        showToast('Resultado guardado', '', 'success');
-        const evActual = allEvents.find(e => e.id === eventId);
-        if (evActual) await renderAdminTab(evActual, 'matches');
+        await deleteDoc(doc(db, 'eventoPartidos', matchId));
+        showToast('Partido eliminado', '', 'success');
     } catch (e) {
         showToast('Error', e.message, 'error');
     }

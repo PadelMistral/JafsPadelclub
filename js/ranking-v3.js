@@ -340,6 +340,8 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
       ["Base", detail.base],
       ["Dificultad", detail.dificultad],
       ["Racha", detail.racha],
+      ["Sorpresa", detail.sorpresa],
+      ["Skill", detail.skill],
       ["Sets", detail.sets],
       ["Rendimiento", detail.rendimientoBonus],
       ["Diario", detail.diarioCoach],

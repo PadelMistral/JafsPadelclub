@@ -7,7 +7,7 @@ import { db, auth, subscribeDoc, subscribeCol, updateDocument, getDocument } fro
 import { collection, getDocs, query, orderBy, limit, where, addDoc, doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast, countUp } from './ui-core.js';
 import { renderMatchDetail, renderCreationForm } from './match-service.js';
-import { isExpiredOpenMatch, isFinishedMatch, isCancelledMatch } from "./utils/match-utils.js";
+import { isExpiredOpenMatch, isFinishedMatch, isCancelledMatch, getMatchPlayers } from "./utils/match-utils.js";
 import { observeCoreSession } from "./core/core-engine.js";
 
 let currentUser = null;
@@ -25,6 +25,31 @@ let apoingLastSyncAt = 0;
 let apoingNextRetryAt = 0;
 let apoingMyFutureCountLast = null;
 const APOING_DEBUG = true;
+
+function getEventUserNameMap() {
+    if (!window.__eventUserNameMap) window.__eventUserNameMap = new Map();
+    return window.__eventUserNameMap;
+}
+
+function indexEventUserNames(eventDoc) {
+    if (!eventDoc) return;
+    const map = getEventUserNameMap();
+    const inscritos = Array.isArray(eventDoc.inscritos) ? eventDoc.inscritos : [];
+    inscritos.forEach((i) => {
+        const uid = i?.uid;
+        const name = i?.nombre || i?.nombreUsuario;
+        if (uid && name) map.set(String(uid), String(name));
+    });
+    const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
+    teams.forEach((t) => {
+        const players = Array.isArray(t?.players) ? t.players : [];
+        players.forEach((p) => {
+            const uid = p?.uid || p?.id;
+            const name = p?.nombre || p?.nombreUsuario;
+            if (uid && name) map.set(String(uid), String(name));
+        });
+    });
+}
 
 function apoingLog(step, data = null) {
     if (!APOING_DEBUG) return;
@@ -54,6 +79,83 @@ function toDateSafeLocal(value) {
     }
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function buildEventSlotKey(match) {
+    const d = toDateSafeLocal(match?.fecha);
+    if (!d) return null;
+    const when = `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}-${d.getHours()}-${d.getMinutes()}`;
+    const court = String(match?.courtType || match?.pista || match?.court || "unknown").toLowerCase();
+    const eventId = String(match?.eventoId || match?.eventId || match?.eventLink?.eventoId || "");
+    return `${eventId}|${court}|${when}`;
+}
+
+function getRealPlayerCount(match) {
+    const players = getMatchPlayers(match).filter(Boolean);
+    return players.filter((p) => !String(p).startsWith("GUEST_")).length;
+}
+
+function normalizeTeamName(value) {
+    return String(value || "").trim().toLowerCase();
+}
+
+function isUnknownTeamName(value) {
+    const n = normalizeTeamName(value);
+    if (!n) return true;
+    const compact = n.replace(/\s+/g, "");
+    if (["tbd", "tbd.", "tbd?", "tdb", "?", "unknown"].includes(n)) return true;
+    if (["tbd", "tbd.", "tbd?", "tdb", "tbdvs", "tbdvstbd", "tbdtbd", "unknown"].includes(compact)) return true;
+    if (["desconocido", "desconocidos", "por confirmar", "por definir", "pendiente"].includes(n)) return true;
+    return false;
+}
+
+function isTbdMatch(match) {
+    const noPlayers = getRealPlayerCount(match) === 0;
+    const hasTeamIds = Boolean(match?.teamAId || match?.teamBId);
+    if (hasTeamIds) return false;
+    const isTbd =
+        isUnknownTeamName(match?.teamAName || match?.equipoA) &&
+        isUnknownTeamName(match?.teamBName || match?.equipoB);
+    return noPlayers && isTbd;
+}
+
+function pickBestMatch(a, b) {
+    const aCount = getRealPlayerCount(a);
+    const bCount = getRealPlayerCount(b);
+    if (aCount !== bCount) return aCount > bCount ? a : b;
+
+    const aIsEvent = String(a?.col || "") === "eventoPartidos";
+    const bIsEvent = String(b?.col || "") === "eventoPartidos";
+    if (aIsEvent !== bIsEvent) return aIsEvent ? b : a;
+
+    const aTbd = isTbdMatch(a);
+    const bTbd = isTbdMatch(b);
+    if (aTbd !== bTbd) return aTbd ? b : a;
+
+    const aPlayed = !!a?.resultado?.sets || String(a?.estado || "").toLowerCase() === "jugado";
+    const bPlayed = !!b?.resultado?.sets || String(b?.estado || "").toLowerCase() === "jugado";
+    if (aPlayed !== bPlayed) return aPlayed ? a : b;
+
+    return a;
+}
+
+function dedupeEventSlots(list = []) {
+    const map = new Map();
+    list.forEach((m) => {
+        const key = buildEventSlotKey(m);
+        if (!key) {
+            const fallbackKey = `${m?.col || ""}:${m?.id || ""}`;
+            map.set(fallbackKey, m);
+            return;
+        }
+        if (!map.has(key)) {
+            map.set(key, m);
+            return;
+        }
+        const prev = map.get(key);
+        map.set(key, pickBestMatch(prev, m));
+    });
+    return Array.from(map.values());
 }
 
 function normalizeMatchForCache(match) {
@@ -257,7 +359,9 @@ function isPadelMistralEvent(ev = {}) {
 function isRelevantApoingEvent(ev = {}) {
     const txt = normalizeName(`${ev.summary || ""} ${ev.description || ""}`);
     const looksPadel = isPadelMistralEvent(ev) || txt.includes("partido") || txt.includes("court");
-    return looksPadel && !isClubSocialEvent(ev);
+    if (isClubSocialEvent(ev)) return false;
+    if (txt.includes("club") && !txt.includes("padel")) return false;
+    return looksPadel;
 }
 
 async function getApoingSources() {
@@ -717,6 +821,7 @@ async function syncApoingReservations(force = false) {
 document.addEventListener('DOMContentLoaded', () => {
     initAppUI('calendar');
     startClock();
+    try { renderGrid(); } catch (_) {}
     
     observeCoreSession({
         onSignedOut: () => {
@@ -734,6 +839,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentUser = user;
                 userData = userDoc || {};
                 ensureMyApoingSourceSync().catch(() => {});
+                handleUrlParams();
                 if (navigator.onLine === false) applyCalendarCache();
 
                 calendarMatchUnsubs.forEach((unsub) => {
@@ -748,7 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof unsubR === 'function') calendarMatchUnsubs.push(unsubR);
                 if (typeof unsubE === 'function') calendarMatchUnsubs.push(unsubE);
 
-                syncMatches();
+                syncMatches(); handleUrlParams();
             } catch (e) {
                 console.error('Calendar init error:', e);
                 renderGrid();
@@ -798,6 +904,7 @@ async function syncMatches() {
             acc[d.id] = d.data();
             return acc;
         }, {});
+        Object.values(eventDocs).forEach((ev) => indexEventUserNames(ev));
 
         allMatches = [];
         snapA.forEach(d => allMatches.push({ id: d.id, col: 'partidosAmistosos', ...d.data() }));
@@ -806,6 +913,8 @@ async function syncMatches() {
             const data = d.data();
             // FILTER: If it's already linked to a real match, don't show the event placeholder
             if (data.linkedMatchId) return;
+            if (isTbdMatch(data)) return;
+            if (!data.fecha) return;
 
             const ev = eventDocs[data.eventoId];
             if (ev) {
@@ -813,6 +922,7 @@ async function syncMatches() {
                 allMatches.push({ id: d.id, col: 'eventoPartidos', eventMatchId: d.id, ...data });
             }
         });
+        allMatches = dedupeEventSlots(allMatches);
         await autoCancelExpiredMatches(allMatches);
 
         await Promise.all([
@@ -879,7 +989,7 @@ window.showApoingGuide = () => {
             </div>
 
             <div class="status-section-v7">
-                <label class="cfg-label-v7">ESTADO DE SINCRONIZACIÓN</label>
+                <label class="cfg-label-v7">ESTADO DE SINCRONIZACIÓN
                 <div class="status-list-v7">
                     <div class="status-item-v7">
                         <i class="fas ${apoingEvents.length > 0 ? 'fa-check-circle text-sport-green' : 'fa-circle-notch fa-spin opacity-40'}"></i>
@@ -893,7 +1003,7 @@ window.showApoingGuide = () => {
                 </div>
             </div>
 
-            <button class="btn-mini wide" onclick="window.location.reload()"><i class="fas fa-rotate"></i> REFORZAR SINCRONIZACIÓN</button>
+            <button class="btn-mini wide" onclick="window.location.reload()"><i class="fas fa-rotate"></i> REFORZAR SINCRONIZACIÓN
         </div>
     `;
 
@@ -1101,7 +1211,8 @@ function renderSlot(date, hour) {
             // Private Match Check
             if (match.visibility === 'private' && currentUser) {
                 const uid = currentUser.uid;
-                if (match.organizerId !== uid && match.creador !== uid && !(match.invitedUsers || []).includes(uid) && !(match.jugadores || []).includes(uid)) {
+                const matchPlayers = getMatchPlayers(match);
+                if (match.organizerId !== uid && match.creador !== uid && !(match.invitedUsers || []).includes(uid) && !matchPlayers.includes(uid)) {
                     state = 'bloqueado';
                     label = 'PRIVADA';
                     sub = 'RESERVADO';
@@ -1111,8 +1222,9 @@ function renderSlot(date, hour) {
             }
 
             if (!isLocked) {
-                const isMine = !!currentUser && match.jugadores?.includes(currentUser.uid);
-                const count = (match.jugadores || []).filter(id => id).length;
+                const matchPlayers = getMatchPlayers(match);
+                const isMine = !!currentUser && matchPlayers.includes(currentUser.uid);
+                const count = matchPlayers.filter(id => id).length;
                 const isFull = count >= 4;
                 const isPlayed = isFinishedMatch(match);
                 const isClosed = isCancelledMatch(match) || isExpiredOpenMatch(match);
@@ -1259,6 +1371,23 @@ window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
     if (slotInteractionBusy) return;
     slotInteractionBusy = true;
 
+    if (window._vincularMatchId && !id) {
+        const matchId = window._vincularMatchId;
+        window._vincularMatchId = null;
+        try {
+            const slotDate = new Date(`${date}T${hour}:00`);
+            const { createLinkedMatchFromEvent } = await import('./match-service.js');
+            await createLinkedMatchFromEvent(matchId, slotDate);
+            showToast("ÉXITO", "Partido vinculado correctamente", "success");
+            window.location.search = ""; 
+        } catch(e) {
+            console.error("Linking error", e);
+            showToast("ERROR", "No se pudo vincular el partido", "error");
+        }
+        slotInteractionBusy = false;
+        return;
+    }
+
     if (isPastFreeSlot && !id) {
         slotInteractionBusy = false;
         showToast('BLOQUEADO', 'No se puede reservar en franjas horarias ya pasadas.', 'warning');
@@ -1291,9 +1420,11 @@ window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
                 slotInteractionBusy = false;
                 return;
             }
-            const finished = mData && (mData.resultado?.sets || ['jugado','jugada','finalizado'].includes(String(mData.estado || '').toLowerCase()));
+            const mState = String(mData?.estado || '').toLowerCase();
+            const finished = mData && (mData.resultado?.sets || ['cancelado', 'anulado'].includes(mState));
+            const isAdmin = userData?.rol === 'Admin';
             
-            if (finished) {
+            if (finished && !isAdmin) {
                 if (title) title.textContent = 'RESUMEN DE PARTIDO';
                 // Direct read mode by passing an impersonated guest user for played matches
                 // so match-service defaults to non-participant read mode.
@@ -1361,7 +1492,7 @@ function renderEventMatchDetail(match, dateStr = '', hourStr = '', myApoing = nu
         (Array.isArray(match.playerUids) && match.playerUids.includes(currentUser.uid)) ||
         userData?.rol === 'Admin'
     );
-    const canCreate = !!myApoing && !isPlayed;
+    const canCreate = canManage && !isPlayed;
 
     return `
         <div class="p-4 flex-col gap-3">
@@ -1374,7 +1505,7 @@ function renderEventMatchDetail(match, dateStr = '', hourStr = '', myApoing = nu
             </div>
             ${canCreate ? `
                 <div class="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl mb-1">
-                    <p class="text-[9px] text-emerald-400 font-bold uppercase mb-1">¡Reserva Apoing Detectada!</p>
+                    <p class="text-[9px] text-emerald-400 font-bold uppercase mb-1">¡Listo para vincular!</p>
                     <button class="btn btn-primary w-full" onclick="window.renderEventMatchToCreation('${match.id}', '${dateStr}', '${hourStr}')">
                         <i class="fas fa-plus-circle"></i> MONTAR PARTIDO
                     </button>
@@ -1485,7 +1616,7 @@ function renderApoingSlotDetail(date, hour, events = [], myApoing = null) {
         } else {
             actionsHtml = `
                 <div class="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl mb-4 text-center">
-                    <p class="text-[11px] text-emerald-400 font-black mb-1 uppercase italic">VALIDEZ CONFIRMADA ✅</p>
+                    <p class="text-[11px] text-emerald-400 font-black mb-1 uppercase italic">VALIDEZ CONFIRMADA âœ…</p>
                     <p class="text-[10px] text-white/80 leading-snug">Esta reserva es tuya en Apoing. ¡Juega hoy o monta un partido ahora!</p>
                 </div>
                 <div class="grid grid-cols-2 gap-3 mb-4">
@@ -1570,3 +1701,16 @@ window.showApoingHowTo = () => {
 
 
 
+
+
+
+
+
+async function handleUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    const vincularId = params.get('vincularMatchId');
+    if (vincularId) {
+        showToast("MODO VINCULAR", "Selecciona una franja horaria para este partido de torneo", "info");
+        window._vincularMatchId = vincularId;
+    }
+}

@@ -1509,6 +1509,17 @@ input:focus-visible {
   text-transform: uppercase;
   letter-spacing: 1px;
 }
+.btn-report-result {
+  background: linear-gradient(135deg, rgba(198, 255, 0, 0.2), rgba(0, 212, 255, 0.25));
+  border: 1px solid rgba(198, 255, 0, 0.45);
+  color: #e9ff8a;
+  box-shadow: 0 0 24px rgba(198, 255, 0, 0.18), inset 0 0 18px rgba(0, 212, 255, 0.12);
+  transform: translateZ(0);
+}
+.btn-report-result:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 28px rgba(0, 212, 255, 0.35), 0 0 18px rgba(198, 255, 0, 0.35);
+}
 .match-media-card {
   background: rgba(10, 20, 40, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.08);

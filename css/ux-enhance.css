@@ -1752,3 +1752,157 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+  margin: 0;
+  font-size: clamp(1rem, 4.5vw, 1.35rem);
+  font-weight: 900;
+  letter-spacing: 0.9px;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+#modal-user .user-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+#modal-user .u-tag {
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+#modal-user .u-tag.rank {
+  color: #c6ff00;
+  border-color: rgba(198, 255, 0, 0.35);
+}
+
+#modal-user .user-pala {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+#modal-user .user-body {
+  padding: 14px;
+  max-height: calc(88vh - 130px);
+  overflow: auto;
+}
+
+#modal-user .user-progress-box {
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+#modal-user .user-stats-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#modal-user .u-stat {
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.04);
+  text-align: center;
+}
+
+#modal-user .u-stat b {
+  display: block;
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+}
+
+#modal-user .u-stat span {
+  display: block;
+  margin-top: 4px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+#modal-user .user-contact {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+#modal-user .user-history-title {
+  margin-top: 12px;
+  margin-bottom: 7px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  color: #c6ff00;
+  text-transform: uppercase;
+}
+
+#modal-user #exp-history-list {
+  max-height: min(44vh, 360px);
+  padding-right: 2px;
+}
+
+#modal-user .exp-history-list .sport-card {
+  border-radius: 18px !important;
+  border-width: 1px !important;
+}
+
+#modal-user .exp-history-list .sport-card.match-positive {
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.12),
+    rgba(255, 255, 255, 0.03)
+  ) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+#modal-user .exp-history-list .sport-card.match-negative {
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.12),
+    rgba(255, 255, 255, 0.03)
+  ) !important;
+  border-color: rgba(239, 68, 68, 0.32) !important;
+}
+
+#modal-user .exp-history-list .sport-card .text-xs.font-black.text-sport-green {
+  color: #4ade80 !important;
+}
+
+#modal-user .exp-history-list .sport-card .text-xs.font-black.text-sport-red {
+  color: #f87171 !important;
+}
+
+#modal-user .exp-history-list .sport-card .text-\[9px\].font-black.text-white {
+  color: #c6ff00 !important;
+}
+
+#modal-user .user-main,
+#modal-user .user-top,
+#modal-user .user-body,
+#modal-user .exp-history-list {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 540px) {
+  #modal-user .user-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

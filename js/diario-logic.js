@@ -592,6 +592,9 @@ document.addEventListener("DOMContentLoaded", async () => {
           clave: document.getElementById("inp-key-moment").value,
           notas: document.getElementById("entry-notes").value,
         },
+        memoryNote: document.getElementById("entry-memory")?.value || "",
+        lesson: document.getElementById("entry-lesson")?.value || "",
+        nextGoal: document.getElementById("inp-next-goal")?.value || "",
       };
 
       entry.aiSummary = generateSmartSummary(entry);

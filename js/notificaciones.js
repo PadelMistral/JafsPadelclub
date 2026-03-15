@@ -24,6 +24,11 @@ let notifUnsub = null;
 let notifBootUid = null;
 let trackedPermissionState = null;
 
+function isStandalonePwa() {
+  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+    window.navigator.standalone === true;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initAppUI("notifications");
   bindInboxActions();
@@ -73,6 +78,20 @@ async function refreshNotificationState() {
   const status = await checkNotificationStatus().catch(() => null);
   if (!status) return;
   renderPermissionState(status);
+  try {
+    const key = `push_help_shown_${currentUser?.uid || "anon"}`;
+    const shouldShow =
+      !status.backgroundReady &&
+      (status.permission === "default" ||
+        status.issues?.includes("onesignal_not_subscribed") ||
+        status.issues?.includes("sw_inactive") ||
+        status.issues?.includes("onesignal_not_initialized") ||
+        status.issues?.includes("onesignal_sdk_missing"));
+    if (shouldShow && !sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, "1");
+      showNotificationHelpModal(status);
+    }
+  } catch (_) {}
 }
 
 function bindInboxActions() {
@@ -233,6 +252,11 @@ async function hardResetNotifications() {
 }
 
 function openBrowserNotificationSettings() {
+  if (isStandalonePwa()) {
+    showToast("Ajustes", "En modo app, abre la web en el navegador para cambiar permisos de notificaciones.", "info");
+    showNotificationHelpModal();
+    return;
+  }
   const ua = navigator.userAgent || "";
   if (/Edg\//.test(ua)) {
     window.open("edge://settings/content/notifications", "_blank");
@@ -256,8 +280,19 @@ function getPlatformGuide(health) {
   const isAndroid = /Android/i.test(ua);
   const isChrome = /Chrome\//.test(ua) && !/Edg\//.test(ua);
   const isDesktop = !isIOS && !isAndroid;
+  const isStandalone = isStandalonePwa();
+
+  if (health.issues && health.issues.includes("sw_scope_conflict")) {
+    return "Conflicto entre versiones: cierra pestañas del navegador y usa solo la app instalada.";
+  }
+  if (health.issues && health.issues.includes("sw_inactive")) {
+    return "Instala la app o actualízala para que funcione el aviso en segundo plano.";
+  }
 
   if (health.permission === "denied") {
+    if (isStandalone) {
+      return "Modo app: abre la web en el navegador, permite notificaciones y vuelve a la app.";
+    }
     if (isIOS && isSafari) {
       return "iOS Safari: Ajustes del sitio > Notificaciones > Permitir. Si es PWA, revisa permiso desde Safari.";
     }
@@ -265,16 +300,19 @@ function getPlatformGuide(health) {
       return "Android Chrome: candado en la barra URL > Permisos > Notificaciones > Permitir.";
     }
     if (isDesktop) {
-      return "Desktop: pulsa el icono del candado en la barra de direcciones > Notificaciones > Permitir, y recarga la pÃ¡gina.";
+      return "Desktop: pulsa el icono del candado en la barra de direcciones > Notificaciones > Permitir, y recarga la página.";
     }
     return "Permiso bloqueado. Abre ajustes del navegador y habilita notificaciones para este sitio.";
   }
 
   if (health.permission === "default") {
-    return "Permiso pendiente. Pulsa el botÃ³n de arriba para solicitar acceso.";
+    if (isStandalone) {
+      return "Permiso pendiente. Pulsa activar o abre la web en el navegador si no aparece el aviso.";
+    }
+    return "Permiso pendiente. Pulsa el botón de arriba para solicitar acceso.";
   }
   if (health.backgroundReady) return "Push en segundo plano activo y sincronizado.";
-  return "ConfiguraciÃ³n pendiente. Pulsa el botÃ³n para sincronizar con OneSignal.";
+  return "Configuración pendiente. Pulsa el botón para sincronizar con OneSignal.";
 }
 
 function renderPermissionState(health) {
@@ -325,6 +363,12 @@ function renderPermissionState(health) {
     } else if (health.permission === "denied") {
       banner.classList.add("error");
       bannerText.textContent = "BLOQUEADO POR NAVEGADOR";
+    } else if (health.issues && health.issues.includes("sw_scope_conflict")) {
+      banner.classList.add("error");
+      bannerText.textContent = "CONFLICTO DE VERSIÃ“N";
+    } else if (health.issues && health.issues.includes("sw_inactive")) {
+      banner.classList.add("warn");
+      bannerText.textContent = "SW INACTIVO";
     } else if (health.issues && health.issues.includes("onesignal_not_subscribed")) {
       banner.classList.add("warn");
       bannerText.textContent = "PENDIENTE DE REGISTRO";
@@ -487,3 +531,7 @@ window.showPushHelpGuide = () => {
     `;
     document.body.appendChild(overlay);
 };
+
+
+
+

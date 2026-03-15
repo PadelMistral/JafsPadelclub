@@ -1,4 +1,4 @@
-﻿// ranking.js - Leaderboard & Points History V5.0 (con desglose detallado CORREGIDO)
+// ranking.js - Leaderboard & Points History V5.0 (con desglose detallado CORREGIDO)
 import { db, auth, getDocument } from "./firebase-service.js";
 import {
   collection,
@@ -453,7 +453,7 @@ function renderLeaderboard(
       const photo = u.fotoPerfil || u.fotoURL || "";
       const ps = u.partidosJugados || 0;
       const level = Number(u.nivel || 2.5).toFixed(2);
-      const points = Math.round(u.puntosRanking || 1000);
+      const points = Number(u.puntosRanking || 1000).toFixed(1);
       const movement = Number(movementMap.get(u.id) || 0);
       const division = getCoreDivisionByRating(points);
       const rowRank = Number(u.visualRank || u.rank || i + 1);
@@ -681,7 +681,7 @@ window.loadPointsHistory = async (mode = 'mine') => {
               <span class="history-title">${title} ${matchInfo ? `<span class="history-score">${matchInfo}</span>` : ""} ${levelIcon}</span>
               <span class="history-date">${date || "N/A"} ${isDiary ? `<span class="text-[9px] opacity-60 ml-1">(${log.reason || 'Bonus'})</span>` : ''}</span>
             </div>
-            <span class="history-value">${isWin ? "+" : ""}${Number(log.diff || 0)}</span>
+            <span class="history-value">${isWin ? "+" : ""}${Number(log.diff || 0).toFixed(1)}</span>
           </div>
         `;
       }

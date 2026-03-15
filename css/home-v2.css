@@ -223,6 +223,19 @@ body.home-booting {
   box-shadow: 0 0 25px rgba(0, 212, 255, 0.2);
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
+.avatar-initial {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 3px solid rgba(0, 212, 255, 0.35);
+  background: rgba(0, 212, 255, 0.08);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  text-transform: uppercase;
+}
 .hv2-avatar-wrap:hover .hv2-avatar-img {
   border-color: rgba(0, 212, 255, 0.9);
   box-shadow: 0 0 40px rgba(0, 212, 255, 0.4);
@@ -405,6 +418,13 @@ body.home-booting {
   line-height: 1.5;
   font-style: italic;
   font-weight: 500;
+}
+.hv2-tr-line {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.45;
+  margin-top: 6px;
+  font-style: normal;
 }
 .hv2-xp-stat::before {
   content: "";
@@ -935,6 +955,14 @@ body.home-booting {
   border-color: rgba(0, 212, 255, 0.25);
   transform: translateX(3px);
 }
+.hv2-match-card.apoing-card {
+  border-color: rgba(249, 115, 22, 0.15);
+  background: linear-gradient(
+    135deg,
+    rgba(8, 14, 28, 0.92),
+    rgba(249, 115, 22, 0.03)
+  );
+}
 .hv2-match-card.mine-card {
   border-left: 3px solid rgba(0, 212, 255, 0.5);
 }
@@ -1025,9 +1053,14 @@ body.home-booting {
   border: 1px solid rgba(250, 204, 21, 0.25);
 }
 .hv2-mc-badge.pending-badge {
-  background: rgba(251, 191, 36, 0.08);
-  color: rgba(251, 191, 36, 0.7);
-  border: 1px solid rgba(251, 191, 36, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.4);
+}
+.hv2-mc-badge.apoing-badge {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.35);
+  color: #fb923c;
 }
 
 /* Skeleton */
@@ -1563,6 +1596,84 @@ body.home-booting {
   }
 }
 
+/* ═══════════════ PROPOSE MATCH CARD ═══════════════ */
+.hv2-propose-card {
+  position: relative;
+  margin-top: 12px;
+  background: linear-gradient(135deg, rgba(129, 140, 248, 0.12), rgba(99, 102, 241, 0.05));
+  border: 1px solid rgba(129, 140, 248, 0.2);
+  border-radius: 20px;
+  padding: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.hv2-propose-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(129, 140, 248, 0.5);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
+}
+.hv2-propose-glow {
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.15), transparent 70%);
+  pointer-events: none;
+}
+.hv2-propose-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  z-index: 2;
+}
+.hv2-propose-icon {
+  width: 42px;
+  height: 42px;
+  background: rgba(129, 140, 248, 0.15);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #818cf8;
+  font-size: 18px;
+  box-shadow: inset 0 0 10px rgba(129, 140, 248, 0.2);
+}
+.hv2-propose-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.hv2-propose-title {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #fff;
+  text-transform: uppercase;
+}
+.hv2-propose-sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.3;
+  margin-top: 2px;
+}
+.hv2-propose-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #818cf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  font-size: 10px;
+  box-shadow: 0 0 12px rgba(129, 140, 248, 0.4);
+}
+
 /* ═══════════════ PAGE TITLE — LIME ACCENT ═══════════════ */
 .text-lime {
   color: #c6ff00 !important;
@@ -1907,6 +2018,168 @@ body.home-booting {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.7);
 }
+.hv2-event-meta {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.hv2-meta-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+.hv2-meta-value {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+}
+.hv2-event-progress {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hv2-progress-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hv2-progress-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+.hv2-progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.hv2-progress-bar span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.85), rgba(0, 255, 157, 0.85));
+}
+.hv2-progress-bar.alt span {
+  background: linear-gradient(90deg, rgba(198, 255, 0, 0.85), rgba(0, 212, 255, 0.85));
+}
+.hv2-event-standings {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hv2-event-standings-title {
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(198, 255, 0, 0.9);
+}
+.hv2-event-standings-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.8);
+}
+.hv2-event-standings-row .pos {
+  width: 26px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.hv2-event-standings-row .name {
+  flex: 1;
+  font-weight: 700;
+}
+.hv2-event-standings-row .pts {
+  color: rgba(0, 212, 255, 0.85);
+  font-weight: 800;
+}
+.hv2-event-standings-row .hv2-qual {
+  font-size: 8px;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 999px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.hv2-event-standings-row .hv2-qual.ok {
+  color: #c6ff00;
+  border-color: rgba(198, 255, 0, 0.35);
+  background: rgba(198, 255, 0, 0.12);
+}
+.hv2-event-standings-row .hv2-qual.out {
+  color: rgba(255, 90, 90, 0.9);
+  border-color: rgba(255, 90, 90, 0.35);
+  background: rgba(255, 90, 90, 0.12);
+}
+.hv2-event-standings-row.mine .pos,
+.hv2-event-standings-row.mine .name,
+.hv2-event-standings-row.mine .pts {
+  color: #c6ff00;
+}
+.hv2-event-standings-empty {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Proposal Chat */
+.proposal-chat-list {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.proposal-msg {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.proposal-msg.me {
+  background: rgba(0,212,255,0.12);
+  border-color: rgba(0,212,255,0.2);
+}
+.proposal-msg-meta {
+  font-size: 9px;
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
+.proposal-msg-text {
+  font-size: 11px;
+}
+.proposal-chat-input {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.proposal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.proposal-confirm-area {
+  margin-top: 8px;
+}
 
 @media (max-width: 640px) {
   .hv2-event-spotlight {
@@ -1923,4 +2196,46 @@ body.home-booting {
     font-size: 10px;
     line-height: 1.35;
   }
+}
+/* Visual Polish Enhancements */
+.hv2-event-chip {
+    border-left: 4px solid #c6ff00 !important;
+    background: linear-gradient(90deg, rgba(198, 255, 0, 0.08), rgba(2, 6, 23, 0.4)) !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.hv2-event-chip::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 60px; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(198, 255, 0, 0.05));
+    pointer-events: none;
+}
+
+.finished-card.reconstructed-card {
+    border-style: dashed !important;
+    opacity: 0.85;
+}
+
+.reconstructed-badge {
+    background: rgba(255, 191, 0, 0.1) !important;
+    color: #ffbf00 !important;
+    border: 1px solid rgba(255, 191, 0, 0.3) !important;
+}
+
+.hv2-section-title i {
+    color: var(--primary, #00d4ff);
+    filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.4));
+}
+
+.hv2-event-head .hv2-section-title i {
+    color: #c6ff00;
+    filter: drop-shadow(0 0 8px rgba(198, 255, 0, 0.4));
+}
+
+.hv2-mc-player.is-me {
+    color: #c6ff00 !important;
+    font-weight: 800;
 }

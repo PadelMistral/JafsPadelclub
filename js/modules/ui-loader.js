@@ -202,7 +202,7 @@ export async function injectNavbar(activePage) {
         ranking: `<i class="fa-solid fa-ranking-star"></i>`,
         calendar: `<i class="fa-solid fa-calendar-day"></i>`,
         events: `<i class="fa-solid fa-book-open-reader"></i>`,
-        history: `<i class="fa-solid fa-clock-rotate-left"></i>`
+        history: `<i class="fa-solid fa-medal"></i>`
     };
 
     const currentFromPath = getCurrentPageMeta().id;
@@ -382,3 +382,4 @@ window.toggleAdminSidebar = () => {
     const sb = document.querySelector('.admin-sidebar');
     if (sb) sb.classList.toggle('active');
 };
+

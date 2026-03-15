@@ -55,7 +55,7 @@ export function hasValidResult(match) {
 
 export function isFinishedMatch(match) {
   const state = String(match?.estado || "").toLowerCase();
-  if (state === "jugado" || state === "jugada" || state === "finalizado") return true;
+  if (state === "jugado" || state === "finalizado") return true;
   return hasValidResult(match);
 }
 
@@ -75,4 +75,32 @@ export function isExpiredOpenMatch(match, nowMs = Date.now(), graceMinutes = RES
 
   const cutoff = date.getTime() + graceMinutes * 60 * 1000;
   return nowMs >= cutoff;
+}
+
+export function normalizePlayerIds(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((p) => {
+      if (typeof p === "string") return p;
+      if (typeof p === "number") return String(p);
+      return p?.uid || p?.id || p?.userId || null;
+    })
+    .filter(Boolean);
+}
+
+export function getMatchPlayers(match) {
+  if (!match) return [];
+  const jugs = normalizePlayerIds(match.jugadores);
+  if (jugs.length) return jugs;
+  const uids = normalizePlayerIds(match.playerUids);
+  if (uids.length) return uids;
+  const teamA = normalizePlayerIds(match.equipoA);
+  const teamB = normalizePlayerIds(match.equipoB);
+  const merged = [...teamA, ...teamB].filter(Boolean);
+  if (merged.length) return merged;
+  const players = normalizePlayerIds(match.players);
+  if (players.length) return players;
+  const ids = normalizePlayerIds(match.playerIds);
+  if (ids.length) return ids;
+  return [];
 }

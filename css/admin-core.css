@@ -224,6 +224,7 @@ h1, h2, h3, h4, .pane-title, .kpi-value, .ua-name {
 }
 
 .admin-field-group { display: flex; flex-direction: column; gap: 8px; }
+.col-span-2 { grid-column: span 2; }
 .admin-field-group label {
     font-size: 10px;
     font-weight: 800;
@@ -367,6 +368,7 @@ h1, h2, h3, h4, .pane-title, .kpi-value, .ua-name {
     .acc-title { font-size: 13px; }
     .admin-content-inner { padding: 15px; }
     .admin-scanner { display: none; }
+    .col-span-2 { grid-column: span 1; }
 }
 
 

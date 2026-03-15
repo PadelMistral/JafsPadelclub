@@ -201,7 +201,7 @@ export function computeGroupTable(matches = [], teams = [], cfg = {}) {
   const draw = cfg.draw ?? 1;
   const loss = cfg.loss ?? 0;
 
-  const table = new Map(teams.map(t => [t.id, { teamId: t.id, teamName: t.name, pj:0, g:0, e:0, p:0, pts:0 }]));
+  const table = new Map(teams.map(t => [t.id, { teamId: t.id, teamName: t.name, pj:0, g:0, e:0, p:0, pts:0, pf:0, pc:0, dif:0 }]));
 
   matches.filter(m => m.estado === 'jugado').forEach(m => {
     const a = table.get(m.teamAId);
@@ -209,13 +209,39 @@ export function computeGroupTable(matches = [], teams = [], cfg = {}) {
     if (!a || !b) return;
 
     a.pj++; b.pj++;
-    if (m.ganadorTeamId === m.teamAId) {
+
+    const rawResult = typeof m.resultado === 'string' ? m.resultado : (m.resultado?.sets || '');
+    const pairs = String(rawResult || '').match(/\d+\s*-\s*\d+/g) || [];
+    let gamesA = 0;
+    let gamesB = 0;
+    let setsA = 0;
+    let setsB = 0;
+    pairs.forEach((s) => {
+      const parts = s.split('-').map(Number);
+      if (parts.length !== 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return;
+      gamesA += parts[0];
+      gamesB += parts[1];
+      if (parts[0] > parts[1]) setsA += 1;
+      if (parts[1] > parts[0]) setsB += 1;
+    });
+    let winnerTeamId = m.ganadorTeamId;
+    if (!winnerTeamId && setsA !== setsB) {
+      winnerTeamId = setsA > setsB ? m.teamAId : m.teamBId;
+    }
+
+    if (winnerTeamId === m.teamAId) {
         a.g++; b.p++; a.pts += win; b.pts += loss;
-    } else if (m.ganadorTeamId === m.teamBId) {
+    } else if (winnerTeamId === m.teamBId) {
         b.g++; a.p++; b.pts += win; a.pts += loss;
     } else {
         a.e++; b.e++; a.pts += draw; b.pts += draw;
     }
+    a.pf += gamesA;
+    a.pc += gamesB;
+    b.pf += gamesB;
+    b.pc += gamesA;
+    a.dif = a.pf - a.pc;
+    b.dif = b.pf - b.pc;
   });
 
   return [...table.values()].sort((x, y) => (y.pts - x.pts) || (y.g - x.g) || (x.p - y.p));
