@@ -110,6 +110,10 @@
     </div>
 
     <script type="module" src="./js/evento-detalle.js"></script>
+    <script type="module">
+        import { initVecinaChat } from './js/modules/vecina-chat.js?v=6.5';
+        try { initVecinaChat(); } catch (e) { console.warn('Vecina chat init failed', e); }
+    </script>
 </body>
 
 </html>

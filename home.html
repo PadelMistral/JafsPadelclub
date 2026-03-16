@@ -173,6 +173,7 @@
                 </div>
             </div>
         </section>
+        <section id="proposal-inline-section" class="hv2-proposal-inline hidden"></section>
 
         <!-- ═══════════════ PARTIDOS — TABS ═══════════════ -->
         <section class="hv2-matches-section animate-up" style="animation-delay:0.12s;">
@@ -245,7 +246,7 @@
         </div>
     </div>
 
-    <!-- ELIMINADO: AI CHAT FLOATING BUTTON Y MODAL (Manejado globalmente por vecina-chat.js) -->
+    <!-- AI CHAT FLOATING BUTTON (fallback init for home) -->
 
     <script type="module" src="./js/home-core.js"></script>
     <script type="module">
@@ -253,6 +254,10 @@
         import { initThemeSystem } from './js/modules/theme-manager.js';
         initThemeSystem();
         initGalaxyBackground();
+    </script>
+    <script type="module">
+        import { initVecinaChat } from './js/modules/vecina-chat.js?v=6.5';
+        try { initVecinaChat(); } catch (e) { console.warn('Vecina chat init failed', e); }
     </script>
 </body>
 
