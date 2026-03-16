@@ -2106,6 +2106,16 @@ body.home-booting {
 .hv2-event-standings-row .pts {
   color: rgba(0, 212, 255, 0.85);
   font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.hv2-event-standings-row .pts .stat {
+  color: rgba(255, 255, 255, 0.85);
+}
+.hv2-event-standings-row .pts .sep {
+  color: rgba(255, 255, 255, 0.25);
 }
 .hv2-event-standings-row .hv2-qual {
   font-size: 8px;

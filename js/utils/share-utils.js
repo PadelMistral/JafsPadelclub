@@ -111,13 +111,22 @@ export async function generateMatchPosterImage(matchData = {}) {
     ctx.fillRect(0, 0, 1080, 1350);
 
     // === 2. PADEL COURT BACKGROUND (realistic) ===
-    drawCourtLines(ctx, 1080, 1350, 0.04);
+    drawCourtLines(ctx, 1080, 1350, 0.07);
     // Extra court center circle
     ctx.strokeStyle = 'rgba(255,255,255,0.03)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(540, 650, 180, 0, Math.PI * 2);
     ctx.stroke();
+    // Net line
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(120, 675);
+    ctx.lineTo(960, 675);
+    ctx.stroke();
+    ctx.restore();
 
     // === 3. DIAGONAL SPORT STRIPES ===
     ctx.save();
@@ -159,14 +168,21 @@ export async function generateMatchPosterImage(matchData = {}) {
 
     // === 6. DATE/TIME BAR ===
     const meta = matchData.when || 'HORA POR CONFIRMAR';
-    roundRect(ctx, 60, 290, 960, 60, 14, 'rgba(0,180,255,0.08)');
-    ctx.strokeStyle = 'rgba(0,180,255,0.15)';
-    ctx.lineWidth = 1;
+    roundRect(ctx, 60, 260, 960, 110, 20, 'rgba(0,180,255,0.14)');
+    ctx.strokeStyle = 'rgba(0,180,255,0.22)';
+    ctx.lineWidth = 1.2;
     ctx.stroke();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 24px Rajdhani';
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = '900 16px Rajdhani';
     ctx.textAlign = 'center';
-    ctx.fillText('📅  ' + meta.toUpperCase(), 540, 330);
+    ctx.fillText('FECHA Y HORA', 540, 296);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 40px Rajdhani';
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,212,255,0.35)';
+    ctx.shadowBlur = 12;
+    ctx.fillText('📅  ' + meta.toUpperCase(), 540, 345);
+    ctx.restore();
 
     // === 7. TEAMS LAYOUT ===
     const teamA = Array.isArray(matchData.teamA) ? matchData.teamA : [];
@@ -192,20 +208,24 @@ export async function generateMatchPosterImage(matchData = {}) {
 
     const nameA1 = trim(teamA[0] || 'JUGADOR 1');
     const nameA2 = trim(teamA[1] || '');
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 42px Rajdhani';
+    ctx.fillStyle = '#e6fbff';
+    ctx.font = '900 50px Rajdhani';
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,212,255,0.25)';
+    ctx.shadowBlur = 10;
     ctx.fillText(nameA1.toUpperCase(), 280, 500);
+    ctx.restore();
     if (nameA2) {
-        ctx.font = '700 32px Rajdhani';
-        ctx.fillText(nameA2.toUpperCase(), 280, 545);
+        ctx.font = '700 38px Rajdhani';
+        ctx.fillText(nameA2.toUpperCase(), 280, 548);
     }
 
     // Levels A
     if (levelA.length) {
         ctx.fillStyle = '#b8ff00';
-        ctx.font = '900 20px Rajdhani';
+        ctx.font = '900 24px Rajdhani';
         const lvlTextA = levelA.map((l, i) => `NV ${Number(l || 0).toFixed(1)}`).join('  ·  ');
-        ctx.fillText(lvlTextA, 280, 595);
+        ctx.fillText(lvlTextA, 280, 600);
     }
 
     // Team B panel
@@ -224,41 +244,45 @@ export async function generateMatchPosterImage(matchData = {}) {
 
     const nameB1 = trim(teamB[0] || 'JUGADOR 3');
     const nameB2 = trim(teamB[1] || '');
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 42px Rajdhani';
+    ctx.fillStyle = '#fff2e0';
+    ctx.font = '900 50px Rajdhani';
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,140,0,0.25)';
+    ctx.shadowBlur = 10;
     ctx.fillText(nameB1.toUpperCase(), 800, 500);
+    ctx.restore();
     if (nameB2) {
-        ctx.font = '700 32px Rajdhani';
-        ctx.fillText(nameB2.toUpperCase(), 800, 545);
+        ctx.font = '700 38px Rajdhani';
+        ctx.fillText(nameB2.toUpperCase(), 800, 548);
     }
 
     // Levels B
     if (levelB.length) {
-        ctx.fillStyle = '#ff8c00';
-        ctx.font = '900 20px Rajdhani';
+        ctx.fillStyle = '#ffb347';
+        ctx.font = '900 24px Rajdhani';
         const lvlTextB = levelB.map((l, i) => `NV ${Number(l || 0).toFixed(1)}`).join('  ·  ');
-        ctx.fillText(lvlTextB, 800, 595);
+        ctx.fillText(lvlTextB, 800, 600);
     }
 
     // === 8. VS BADGE — Premium circular ===
     // Outer glow
-    const vsGrad = ctx.createRadialGradient(540, 540, 0, 540, 540, 70);
-    vsGrad.addColorStop(0, 'rgba(0,212,255,0.2)');
+    const vsGrad = ctx.createRadialGradient(540, 540, 0, 540, 540, 90);
+    vsGrad.addColorStop(0, 'rgba(0,212,255,0.25)');
     vsGrad.addColorStop(1, 'rgba(0,212,255,0)');
     ctx.fillStyle = vsGrad;
     ctx.beginPath();
-    ctx.arc(540, 540, 70, 0, Math.PI * 2);
+    ctx.arc(540, 540, 90, 0, Math.PI * 2);
     ctx.fill();
     // Circle
     ctx.fillStyle = '#00d4ff';
     ctx.beginPath();
-    ctx.arc(540, 540, 48, 0, Math.PI * 2);
+    ctx.arc(540, 540, 58, 0, Math.PI * 2);
     ctx.fill();
     // Text
     ctx.fillStyle = '#040c1e';
-    ctx.font = '900 36px Rajdhani';
+    ctx.font = '900 44px Rajdhani';
     ctx.textAlign = 'center';
-    ctx.fillText('VS', 540, 554);
+    ctx.fillText('VS', 540, 556);
 
     // === 9. BETTING ODDS / WIN PROBABILITY ===
     const avgA = levelA.length ? levelA.reduce((a, b) => a + Number(b || 0), 0) / levelA.length : 2.5;
@@ -355,20 +379,9 @@ export async function generateMatchPosterImage(matchData = {}) {
 
 export async function shareMatchPoster(matchData = {}) {
     const dataUrl = await generateMatchPosterImage(matchData);
-    if (navigator.share) {
-        const blob = await (await fetch(dataUrl)).blob();
-        const file = new File([blob], 'cartel_partido.png', { type: 'image/png' });
-        try {
-            await navigator.share({ title: 'Próximo Partido Padeluminatis', text: 'Ya está listo el cartel del partido.', files: [file] });
-            return true;
-        } catch (e) {
-            console.warn('Sharing failed', e);
-            downloadDataUrl(dataUrl, 'cartel_partido.png');
-        }
-    } else {
-        downloadDataUrl(dataUrl, 'cartel_partido.png');
-    }
-    return false;
+    // Siempre descarga para ver el cartel sin forzar el modal de compartir.
+    downloadDataUrl(dataUrl, 'cartel_partido.png');
+    return true;
 }
 
 // ─── HELPERS ───
@@ -447,3 +460,6 @@ function loadImage(src) {
         img.src = src;
     });
 }
+
+
+

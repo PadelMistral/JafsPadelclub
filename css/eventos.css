@@ -1279,3 +1279,76 @@ textarea.input {
     padding: 1rem;
   }
 }
+
+.ev-card-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0.6rem 0.8rem;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  margin-bottom: 0.8rem;
+}
+
+.ev-card-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  box-shadow: 0 8px 18px rgba(0, 212, 255, 0.25);
+  flex-shrink: 0;
+}
+
+.ev-card-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ev-brand-sub {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255,255,255,0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 480px) {
+  .ev-card-brand { padding: 0.5rem 0.6rem; }
+  .ev-card-logo { width: 48px; height: 48px; border-radius: 12px; }
+}
+
+
+.guest-level-edit {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+.input-guest-level {
+  width: 64px;
+  padding: 4px 6px;
+  font-size: 10px;
+  border-radius: 8px;
+}
+.btn-guest-save {
+  padding: 4px 8px;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  border-radius: 8px;
+  background: rgba(0, 212, 255, 0.2);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  color: #fff;
+  cursor: pointer;
+}
+.btn-guest-save:hover {
+  background: rgba(0, 212, 255, 0.35);
+}
+

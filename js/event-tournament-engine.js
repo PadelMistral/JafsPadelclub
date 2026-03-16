@@ -163,8 +163,9 @@ export function generateRoundRobin(teamIds = []) {
   return matches;
 }
 
-export function generateKnockoutTree(teams = [], seed = "") {
-  const shuffled = shuffleSeeded(teams, `${seed}_ko`);
+export function generateKnockoutTree(teams = [], seed = "", opts = {}) {
+  const doShuffle = opts?.shuffle !== false;
+  const shuffled = doShuffle ? shuffleSeeded(teams, `${seed}_ko`) : [...teams];
   const size = Math.pow(2, Math.ceil(Math.log2(Math.max(2, shuffled.length))));
   const padded = [...shuffled];
   while (padded.length < size) padded.push(null);

@@ -365,3 +365,64 @@
 .btn-secondary:hover {
   background: rgba(255, 255, 255, 0.15);
 }
+
+.draw-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.draw-header .page-title-pro {
+  font-size: clamp(1.6rem, 5vw, 2.4rem);
+}
+
+.card-front::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 20%, rgba(0,212,255,0.2), transparent 55%),
+              linear-gradient(150deg, rgba(0,212,255,0.12), rgba(0,0,0,0));
+  opacity: 0.9;
+  border-radius: 20px;
+}
+
+.card-front::after {
+  content: 'PADELUMINATIS';
+  position: absolute;
+  bottom: 18px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-weight: 900;
+  letter-spacing: 3px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  text-transform: uppercase;
+}
+
+.card-logo {
+  width: 76%;
+  max-height: 72%;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.card-back {
+  background: linear-gradient(145deg, #091a2a, #020617);
+}
+
+.player-name {
+  font-size: 1.6rem;
+  padding: 14px 18px;
+}
+
+@media (max-width: 700px) {
+  .draw-header { justify-content: center; text-align: center; }
+}
+
+
+.card-front { position: relative; overflow: hidden; }
+

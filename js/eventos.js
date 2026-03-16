@@ -146,6 +146,7 @@ function buildEventCard(ev, idx) {
         cancelado: { label: 'CANCELADO', cls: 'state-cancelled' },
     };
     const st = stateMap[ev.estado] || { label: ev.estado || 'BORRADOR', cls: 'state-draft' };
+    const logoUrl = ev.imagen || ev.imageUrl || ev.logoUrl || './imagenes/Logojafs.png';
 
     const deadline = ev.fechaInscripcion?._seconds ? new Date(ev.fechaInscripcion._seconds * 1000) : ev.fechaInscripcion ? new Date(ev.fechaInscripcion) : null;
     const startDate = ev.fechaInicio?._seconds ? new Date(ev.fechaInicio._seconds * 1000) : ev.fechaInicio ? new Date(ev.fechaInicio) : null;
@@ -187,7 +188,13 @@ function buildEventCard(ev, idx) {
         <div class="ev-card-body">
             ${countdown && !countdown.past ? `<div class="ev-countdown ${countdown.urgent ? 'ev-countdown-urgent' : ''}"><i class="fas fa-clock"></i><span>${countdown.text}</span></div>` : ''}
             ${newsStrip}
-            <h3 class="ev-title">${ev.nombre || 'Sin nombre'}</h3>
+                        <div class="ev-card-brand">
+                <div class="ev-card-logo" style="background-image:url('${logoUrl}')"></div>
+                <div class="ev-card-brand-text">
+                    <h3 class="ev-title">${ev.nombre || 'Sin nombre'}</h3>
+                    <div class="ev-brand-sub">Organiza: ${ev.organizadorNombre || 'Club'}</div>
+                </div>
+            </div>
             <p class="ev-desc">${ev.descripcion || ''}</p>
             <div class="ev-stats-grid">
                 <div class="ev-stat"><i class="fas fa-users"></i><span><b>${filled}/${slots}</b> equipos</span></div>
@@ -477,6 +484,7 @@ async function saveNewEvent() {
     const puntosEmpate = Number(document.getElementById('ev-pts-draw')?.value || 1);
     const puntosDerrota = Number(document.getElementById('ev-pts-loss')?.value || 0);
     const descripcion = document.getElementById('ev-description')?.value.trim() || '';
+    const imagen = document.getElementById('ev-image')?.value.trim() || '';
 
     if (nivelMin && nivelMax && Number(nivelMin) > Number(nivelMax)) {
         showToast('Niveles inválidos', 'El mínimo no puede ser mayor que el máximo.', 'warning');
@@ -489,7 +497,7 @@ async function saveNewEvent() {
 
     try {
         const payload = {
-            nombre, descripcion, formato, modalidad, companeroObligatorio, plazasMax, premio,
+            nombre, descripcion, imagen: imagen || null, formato, modalidad, companeroObligatorio, plazasMax, premio,
             nivelMin: nivelMin ? Number(nivelMin) : null,
             nivelMax: nivelMax ? Number(nivelMax) : null,
             puntosVictoria, puntosEmpate, puntosDerrota,
@@ -864,3 +872,11 @@ function parseInvitados(raw) {
         return nombre ? { nombre, nivel: Number.isFinite(nivel) ? nivel : 2.5 } : null;
     }).filter(Boolean);
 }
+
+
+
+
+
+
+
+

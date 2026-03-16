@@ -1224,7 +1224,7 @@ async function renderEventStandings(eventDoc) {
 
 function renderStandingsRows(rowsIn, eventDoc, myTeamId, myGroup, slot) {
   let rows = Array.isArray(rowsIn) ? rowsIn.slice() : [];
-  rows.sort((a,b) => (b.puntos || 0) - (a.puntos || 0) || (b.diferencia || 0) - (a.diferencia || 0));
+    rows.sort((a,b) => (b.puntos || 0) - (a.puntos || 0) || (b.diferencia || 0) - (a.diferencia || 0));
   slot.innerHTML = `<div class="hv2-event-standings-title">Clasificación${myGroup ? ` · Grupo ${String(myGroup).toUpperCase()}` : ""}</div>`;
     const teamToGroup = new Map();
     if (eventDoc.groups) {
@@ -1233,26 +1233,29 @@ function renderStandingsRows(rowsIn, eventDoc, myTeamId, myGroup, slot) {
       });
     }
 
-    if (myGroup) {
-      rows = rows.filter((r) => teamToGroup.get(r.uid || r.teamId) === myGroup);
-    }
-
-    // Fallback: If no classification data found for my group, show members with 0 pts
-    if (rows.length === 0 && myGroup && eventDoc.groups?.[myGroup]) {
+    if (myGroup && eventDoc.groups?.[myGroup]) {
       const memberIds = eventDoc.groups[myGroup];
+      const byId = new Map(rows.map(r => [r.uid || r.teamId, r]));
       rows = memberIds.map(tid => {
+        const base = byId.get(tid) || {};
         const teamObj = (eventDoc.teams || []).find(t => t.id === tid);
         return {
           uid: tid,
           teamId: tid,
-          nombre: teamObj?.nombre || teamObj?.name || "Equipo",
-          puntos: 0,
-          diferencia: 0
+          nombre: teamObj?.nombre || teamObj?.name || base.nombre || base.teamName || "Equipo",
+          puntos: Number(base.puntos || 0),
+          diferencia: Number(base.diferencia || 0),
+          puntosGanados: Number(base.puntosGanados || 0),
+          puntosPerdidos: Number(base.puntosPerdidos || 0),
+          pj: Number(base.pj || 0),
         };
       });
+      rows.sort((a,b) => (b.puntos || 0) - (a.puntos || 0) || (b.diferencia || 0) - (a.diferencia || 0));
+    } else if (myGroup) {
+      rows = rows.filter((r) => teamToGroup.get(r.uid || r.teamId) === myGroup);
     }
 
-    const top = rows.slice(0, 10);
+    const top = rows;
     if (!top.length) {
       slot.innerHTML += `<div class="hv2-event-standings-empty">Sin clasificación aún</div>`;
       return;
@@ -1261,11 +1264,20 @@ function renderStandingsRows(rowsIn, eventDoc, myTeamId, myGroup, slot) {
       .map((r, i) => {
         const isMine = myTeamId && (r.uid === myTeamId || r.teamId === myTeamId);
         const status = i < 4 ? "CLASIFICA" : "ELIM.";
+        const pj = Number(r.pj || 0);
+        const dif = Number(r.diferencia || 0);
+        const pts = Number(r.puntos || 0);
         return `
           <div class="hv2-event-standings-row ${isMine ? "mine" : ""}">
             <span class="pos">#${i + 1}</span>
             <span class="name">${(r.nombre || r.teamName || r.uid || "Equipo").toUpperCase()}</span>
-            <span class="pts">${Number(r.puntosGanados || 0)}-${Number(r.puntosPerdidos || 0)} (${Number(r.diferencia || 0)}) · ${Number(r.puntos || 0)} pts</span>
+            <span class="pts">
+              <span class="stat">PJ ${pj}</span>
+              <span class="sep">·</span>
+              <span class="stat">DIF ${dif}</span>
+              <span class="sep">·</span>
+              <span class="stat">PTS ${pts}</span>
+            </span>
             <span class="hv2-qual ${i < 4 ? "ok" : "out"}">${status}</span>
           </div>
         `;
@@ -1850,27 +1862,18 @@ window.openNexusModal = () => {
   modal.classList.add("active");
 };
 window.openMatch = (id, col) => {
-  if (String(col || "") === "eventoPartidos") {
-    const row = allMatches.find(
-      (m) => m.id === id && String(m.col || "") === "eventoPartidos",
-    );
-    if (row?.eventoId) {
-      window.location.href = `evento-detalle.html?id=${row.eventoId}&tab=partidos`;
-      return;
-    }
-  }
-  const evLinked = allMatches.find(
-    (m) => m.id === id && m.eventoId,
-  );
-  if (evLinked?.eventoId) {
-    window.location.href = `evento-detalle.html?id=${evLinked.eventoId}&tab=partidos`;
-    return;
-  }
   const modal = document.getElementById("modal-match");
   const area = document.getElementById("match-detail-area");
-  if (!modal || !area) return;
+  if (!modal || !area) {
+    console.warn("[Home] modal-match not found", { id, col });
+    return;
+  }
+  const row = allMatches.find((m) => m.id === id || m.eventMatchId === id) || null;
+  const resolvedCol = (col || row?.col || (row?.eventoId ? "eventoPartidos" : "partidosAmistosos")) || "partidosAmistosos";
+  const resolvedId = row?.id || id;
+  console.log("[Home] openMatch modal", { id, col, resolvedId, resolvedCol });
   modal.classList.add("active");
-  renderMatchDetail(area, id, col, currentUser, currentUserData || {});
+  renderMatchDetail(area, resolvedId, resolvedCol, currentUser, currentUserData || {});
 };
 
 window.closeHomeMatchModal = () => {
@@ -2102,9 +2105,19 @@ function ensureProposalModal() {
 }
 
 function openProposalModal() {
+    console.log('[Proposal] open modal');
     const modal = document.getElementById("proposal-modal");
     if (!modal) return;
     modal.classList.add("active");
+    if (!currentUser?.uid) {
+        showToast("Cargando usuario", "Espera un segundo y vuelve a abrir la propuesta.", "info");
+        setTimeout(() => {
+            if (document.getElementById("proposal-modal")?.classList.contains("active")) {
+                renderProposalList();
+            }
+        }, 600);
+        return;
+    }
     renderProposalList();
 }
 
@@ -2117,8 +2130,13 @@ function setProposalView(view) {
 }
 
 async function renderProposalList() {
+    console.log('[Proposal] render list', { uid: currentUser?.uid });
     const listEl = document.getElementById("proposal-view-list");
-    if (!listEl || !currentUser?.uid) return;
+    if (!listEl) return;
+    if (!currentUser?.uid) {
+        listEl.innerHTML = `<div class="text-xs opacity-60">Esperando usuario...</div>`;
+        return;
+    }
     setProposalView("proposal-view-list");
     listEl.innerHTML = `<div class="text-xs opacity-60">Cargando propuestas...</div>`;
 
@@ -2127,11 +2145,16 @@ async function renderProposalList() {
         query(
             collection(db, "propuestasPartido"),
             where("participantUids", "array-contains", currentUser.uid),
-            orderBy("createdAt", "desc"),
         ),
         (snap) => {
-            const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-                .filter((p) => p.status !== "closed");
+            const rows = snap.docs
+                .map((d) => ({ id: d.id, ...d.data() }))
+                .filter((p) => p.status !== "closed")
+                .sort((a, b) => {
+                    const ta = a?.createdAt?.toMillis?.() || 0;
+                    const tb = b?.createdAt?.toMillis?.() || 0;
+                    return tb - ta;
+                });
             listEl.innerHTML = `
                 <div class="flex-row between items-center">
                     <div class="text-[10px] uppercase tracking-widest font-black text-primary">Mis propuestas</div>
@@ -2151,6 +2174,12 @@ async function renderProposalList() {
                 });
             });
         },
+        (err) => {
+            console.warn("[Proposal] snapshot error", err);
+            listEl.innerHTML = `<div class="p-4 rounded-xl border border-white/10 bg-white/5 text-center text-[10px] opacity-70">
+                No se pudieron cargar las propuestas. Reintenta en unos segundos.
+            </div>`;
+        }
     );
 }
 
@@ -2255,6 +2284,15 @@ function cleanupProposalChat() {
 }
 
 async function openProposalChat(proposalId) {
+    console.log("[Proposal] open chat", { proposalId });
+    if (!proposalUsersCache.length) {
+        try {
+            const snap = await getDocs(query(collection(db, "usuarios"), orderBy("nombreUsuario"), limit(200)));
+            proposalUsersCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        } catch (e) {
+            console.warn("[Proposal] user cache load failed", e);
+        }
+    }
     const chatEl = document.getElementById("proposal-view-chat");
     if (!chatEl || !proposalId) return;
     setProposalView("proposal-view-chat");
@@ -2367,6 +2405,7 @@ function toggleProposalConfirm(propSnap) {
 }
 
 function renderProposalConfirmForm(propSnap) {
+    console.log('[Proposal] render confirm', { proposalId: propSnap?.id, participants: propSnap?.participantUids });
     const area = document.getElementById("proposal-confirm-area");
     if (!area) return;
     const participants = Array.isArray(propSnap.participantUids) ? propSnap.participantUids : [];
@@ -2457,6 +2496,7 @@ function updateProposalPreview(propSnap) {
 }
 
 async function finalizeProposal(propSnap) {
+    console.log('[Proposal] finalize', { proposalId: propSnap?.id });
     const date = document.getElementById("proposal-date")?.value;
     const time = document.getElementById("proposal-time")?.value || "19:00";
     if (!date) return showToast("Fecha requerida", "Indica el día del partido.", "warning");
@@ -2525,3 +2565,11 @@ function escapeHtml(raw = "") {
     div.textContent = String(raw || "");
     return div.innerHTML;
 }
+
+
+
+
+
+
+
+

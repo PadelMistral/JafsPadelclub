@@ -65,7 +65,7 @@ async function loadRegisteredUsers() {
 }
 
 function resolveParticipantData(p) {
-    if (!p) return { uid: '', name: 'Jugador', level: 2.5, photo: '' };
+    if (!p) return { uid: '', name: 'Jugador', level: 2.5, photo: '', isGuest: false };
     
     // Normalize p if it is a string
     const uid = (typeof p === 'string') ? p : (p.uid || '');
@@ -87,7 +87,8 @@ function resolveParticipantData(p) {
             uid: sUid,
             name: name || sUid || 'Invitado',
             level: Number(data.nivel || sUid.split('_')[2] || 2.5),
-            photo: data.fotoPerfil || data.fotoURL || './imagenes/Logojafs.png'
+            photo: data.fotoPerfil || data.fotoURL || './imagenes/Logojafs.png',
+            isGuest: true
         };
     }
 
@@ -97,7 +98,8 @@ function resolveParticipantData(p) {
             uid,
             name: u.nombreUsuario || u.nombre || u.email || uid,
             level: Number(u.nivel || 2.5),
-            photo: u.fotoPerfil || u.fotoURL || u.photoURL || ''
+            photo: u.fotoPerfil || u.fotoURL || u.photoURL || '',
+            isGuest: false
         };
     }
 
@@ -105,7 +107,8 @@ function resolveParticipantData(p) {
         uid,
         name: data.nombre || data.nombreUsuario || uid || 'Jugador',
         level: Number(data.nivel || 2.5),
-        photo: data.fotoPerfil || data.fotoURL || ''
+        photo: data.fotoPerfil || data.fotoURL || '',
+        isGuest: false
     };
 }
 
@@ -329,12 +332,20 @@ function bindTabs() {
 
 function renderPage() {
     const ev = currentEvent || {};
+        const heroImg = ev.imagen || ev.imageUrl || ev.logoUrl || './imagenes/Logojafs.png';
+    const heroBg = document.getElementById('ed-hero-bg');
+    if (heroBg) heroBg.style.backgroundImage = `url('${heroImg}')`;
     document.getElementById('ed-hero-content').innerHTML = `
-        <div class="ed-badge ${ev.formato === 'knockout' ? 'knockout' : 'league'}">
-            <i class="fas fa-trophy"></i> ${formatLabels[ev.formato] || 'Evento'}
+        <div class="ed-hero-top">
+            <div class="ed-hero-logo" style="background-image:url('${heroImg}')"></div>
+            <div class="ed-hero-title-wrap">
+                <div class="ed-badge ${ev.formato === 'knockout' ? 'knockout' : 'league'}">
+                    <i class="fas fa-trophy"></i> ${formatLabels[ev.formato] || 'Evento'}
+                </div>
+                <h1 class="ed-title">${ev.nombre || 'Evento'}</h1>
+                <div class="ed-organizer">Organiza: ${ev.organizadorNombre || 'Club'}</div>
+            </div>
         </div>
-        <h1 class="ed-title">${ev.nombre || 'Evento'}</h1>
-        <div class="ed-organizer">Organiza: ${ev.organizadorNombre || 'Club'}</div>
     `;
 
     const aprobados = (ev.inscritos || []).filter(i => i.aprobado === true).length;
@@ -468,6 +479,12 @@ function renderParticipantes(pane) {
                 </div>
                 <span class="p-card-name">${escapeHtml(info.name)}</span>
                 <span class="p-card-level">LVL ${Number(info.level || 2.5).toFixed(1)}</span>
+                ${canOrganizar() && info.isGuest ? `
+                    <div class="guest-level-edit">
+                        <input type="number" step="0.5" min="1" max="7" value="${Number(info.level || 2.5).toFixed(1)}" id="guest-level-${uid}" class="input input-guest-level">
+                        <button class="btn-guest-save" onclick="window.editarNivelInvitado('${eventId}','${uid}')">Guardar</button>
+                    </div>
+                ` : ''}
                 ${canOrganizar() ? `
                     <div class="flex-row gap-2 mt-2">
                         ${isPending ? `<button class="btn-aprobar-v9" onclick="window.aprobarJugador('${eventId}','${uid}')"><i class="fas fa-check"></i></button>` : ''}
@@ -555,9 +572,9 @@ function tableHtml(title, rows, teamMap, myTeam) {
                                     ${elimStn}
                                 </td>
                                 <td>${r.pj}</td>
-                                <td class="text-green-400/80">${r.g}</td>
+                                <td class="win-cell">${r.g}</td>
                                 <td class="text-white/40">${r.e}</td>
-                                <td class="text-red-400/80">${r.p}</td>
+                                <td class="loss-cell">${r.p}</td>
                                 <td>${r.pf || 0}</td>
                                 <td>${r.pc || 0}</td>
                                 <td>${r.dif || 0}</td>
@@ -878,6 +895,26 @@ function renderOrganizador(pane) {
                     <label><i class="fas fa-star"></i> Pts/Victoria</label>
                     <input type="number" id="org-pts-win" class="input" value="${ev.puntosVictoria || 3}">
                 </div>
+                <div class="org-card-v9">
+                    <label><i class="fas fa-handshake"></i> Pts/Empate</label>
+                    <input type="number" id="org-pts-draw" class="input" value="${Number(ev.puntosEmpate || 1)}">
+                </div>
+                <div class="org-card-v9">
+                    <label><i class="fas fa-xmark"></i> Pts/Derrota</label>
+                    <input type="number" id="org-pts-loss" class="input" value="${Number(ev.puntosDerrota || 0)}">
+                </div>
+                <div class="org-card-v9">
+                    <label><i class="fas fa-arrow-right-to-bracket"></i> Clasifican por grupo</label>
+                    <input type="number" id="org-adv-per-group" class="input" value="${Number(ev.equiposPorGrupo || 2)}" min="1" max="8">
+                </div>
+                <div class="org-card-v9">
+                    <label><i class="fas fa-sitemap"></i> Sembrado bracket</label>
+                    <select id="org-bracket-seeding" class="input">
+                        <option value="random" ${ev.bracketSeeding === 'random' ? 'selected' : ''}>Sorteo</option>
+                        <option value="cross" ${ev.bracketSeeding === 'cross' ? 'selected' : ''}>A1 vs B4, A2 vs B3</option>
+                        <option value="rank" ${ev.bracketSeeding === 'rank' ? 'selected' : ''}>Ranking global</option>
+                    </select>
+                </div>
             </div>
 
             <div class="org-actions-v9">
@@ -1166,9 +1203,20 @@ window.abrirEvento = async () => {
 window.guardarConfigOrganizador = async () => {
     const estado = document.getElementById('org-ev-state').value;
     const ptsWin = Number(document.getElementById('org-pts-win').value);
+    const ptsDraw = Number(document.getElementById('org-pts-draw').value);
+    const ptsLoss = Number(document.getElementById('org-pts-loss').value);
+    const advPerGroup = Number(document.getElementById('org-adv-per-group').value || 2);
+    const bracketSeeding = document.getElementById('org-bracket-seeding')?.value || 'random';
     try {
-        await updateDoc(doc(db, 'eventos', eventId), { estado: estado, puntosVictoria: ptsWin });
-        showToast('ConfiguraciÃ³n guardada', '', 'success');
+        await updateDoc(doc(db, 'eventos', eventId), { 
+            estado: estado, 
+            puntosVictoria: ptsWin,
+            puntosEmpate: ptsDraw,
+            puntosDerrota: ptsLoss,
+            equiposPorGrupo: advPerGroup,
+            bracketSeeding
+        });
+        showToast('Configuraci�n guardada', '', 'success');
     } catch (e) {
         showToast('Error', e.message, 'error');
     }
@@ -1652,11 +1700,45 @@ window.generarFaseEliminatoria = async (opts = {}) => {
                  batch.delete(doc(db, 'eventoPartidos', m.id));
              });
              await batch.commit();
+        }        const seedingMode = ev.bracketSeeding || 'random';
+        let seededTeams = clasificados.filter(Boolean);
+
+        if (!manualIds || !manualIds.length) {
+            if (seedingMode === 'cross' && groupsKeys.length === 2) {
+                const gA = groupsKeys[0];
+                const gB = groupsKeys[1];
+                const teamsA = (ev.groups[gA] || []).map(id => teamMap.get(id)).filter(Boolean);
+                const teamsB = (ev.groups[gB] || []).map(id => teamMap.get(id)).filter(Boolean);
+                const matchesA = eventMatches.filter(m => m.phase === 'group' && m.group === gA);
+                const matchesB = eventMatches.filter(m => m.phase === 'group' && m.group === gB);
+                const tablaA = computeGroupTable(matchesA, teamsA, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+                const tablaB = computeGroupTable(matchesB, teamsB, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+                const aTop = tablaA.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
+                const bTop = tablaB.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
+                const order = [];
+                for (let i = 0; i < nPasan; i++) {
+                    const a = aTop[i];
+                    const b = bTop[nPasan - 1 - i];
+                    if (a && b) order.push(a, b);
+                }
+                for (let i = 0; i < nPasan; i++) {
+                    const b = bTop[i];
+                    const a = aTop[nPasan - 1 - i];
+                    if (a && b) order.push(b, a);
+                }
+                seededTeams = order.filter(Boolean);
+            } else if (seedingMode === 'rank') {
+                const groupMatches = eventMatches.filter(m => m.phase === 'group');
+                const tabla = computeGroupTable(groupMatches, seededTeams, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+                seededTeams = tabla.map(r => teamMap.get(r.teamId)).filter(Boolean);
+            }
         }
 
-        const bracketRounds = generateKnockoutTree(clasificados, ev.id + '_fase2_new');
-        
-        const partidosRef = collection(db, 'eventoPartidos');
+        const bracketRounds = generateKnockoutTree(
+            seededTeams,
+            ev.id + '_fase2_new',
+            { shuffle: seedingMode === 'random' && !(manualIds && manualIds.length) }
+        );const partidosRef = collection(db, 'eventoPartidos');
         for (let r = 0; r < bracketRounds.length; r++) {
             const round = bracketRounds[r];
             for (let s = 0; s < round.length; s++) {
@@ -1840,6 +1922,29 @@ window.expulsarJugador = async (eventId, uid) => {
     }
 };
 
+window.editarNivelInvitado = async (eventId, uid) => {
+    const ev = currentEvent;
+    if (!ev || !uid) return;
+    const input = document.getElementById(`guest-level-${uid}`);
+    const raw = input?.value;
+    const nivel = Number(raw);
+    if (!Number.isFinite(nivel) || nivel < 1 || nivel > 7) {
+        return showToast('Nivel inválido', 'Introduce un nivel entre 1.0 y 7.0', 'warning');
+    }
+    const inscritos = ev.inscritos || [];
+    const index = inscritos.findIndex(i => i.uid === uid);
+    if (index === -1) return;
+    const updated = [...inscritos];
+    updated[index] = { ...updated[index], nivel };
+    try {
+        await updateDoc(doc(db, 'eventos', eventId), { inscritos: updated });
+        showToast('Nivel actualizado', `Invitado ahora en nivel ${nivel.toFixed(1)}`, 'success');
+    } catch (e) {
+        console.error(e);
+        showToast('Error', e.message || 'No se pudo actualizar el nivel', 'error');
+    }
+};
+
 function renderActionBar() {
     const bar = document.getElementById('ed-action-bar');
     const content = document.getElementById('ed-action-content');
@@ -1982,3 +2087,6 @@ window.proponerFechaEvento = async (matchId) => {
 window.vincularPartidoCalendario = (matchId) => {
     window.location.href = `calendario.html?vincularMatchId=${matchId}`;
 };
+
+
+
