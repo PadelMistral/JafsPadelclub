@@ -9,7 +9,7 @@
 import { db, getDocument, subscribeDoc, auth, storage } from './firebase-service.js';
 import { 
     doc, getDoc, getDocs, collection, deleteDoc, onSnapshot, runTransaction,
-    query, orderBy, where, limit, addDoc, updateDoc, setDoc, serverTimestamp 
+    query, orderBy, where, limit, addDoc, updateDoc, setDoc, serverTimestamp, Timestamp 
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import {
     ref,
@@ -37,6 +37,13 @@ import { getDivisionByRating } from "./config/elo-system.js";
 */
 
 let apoingStyleInjected = false;
+const eventDocCache = new Map();
+async function getEventDocCached(eventId) {
+    if (!eventId) return null;
+    const ev = await getDocument("eventos", eventId);
+    if (ev) eventDocCache.set(eventId, ev);
+    return ev || eventDocCache.get(eventId) || null;
+}
 function ensureApoingStyles() {
     if (apoingStyleInjected || document.getElementById('apoing-link-style')) return;
     const style = document.createElement('style');
@@ -72,19 +79,49 @@ function ensureApoingStyles() {
     apoingStyleInjected = true;
 }
 
+function parseGuestMeta(uid) {
+    if (!uid) return null;
+    const s = String(uid);
+    if (!s.startsWith('GUEST_') && !s.startsWith('invitado_') && !s.startsWith('manual_')) return null;
+    const parts = s.split('_');
+    if (parts.length >= 4) {
+        const levelRaw = parts[parts.length - 2];
+        const level = parseFloat(levelRaw);
+        const nameRaw = parts.slice(1, parts.length - 2).join(' ');
+        const name = nameRaw.replace(/_/g, ' ').trim() || 'Invitado';
+        return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+    }
+    const name = (parts[1] || 'Invitado').replace(/_/g, ' ').trim() || 'Invitado';
+    const level = parseFloat(parts[2]);
+    return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+}
+
 function getEventUserNameMap() {
     if (!window.__eventUserNameMap) window.__eventUserNameMap = new Map();
     return window.__eventUserNameMap;
 }
 
+function getEventUserMetaMap() {
+    if (!window.__eventUserMetaMap) window.__eventUserMetaMap = new Map();
+    return window.__eventUserMetaMap;
+}
+
 export function indexEventUserNames(eventDoc) {
     if (!eventDoc) return;
     const map = getEventUserNameMap();
+    const metaMap = getEventUserMetaMap();
     const inscritos = Array.isArray(eventDoc.inscritos) ? eventDoc.inscritos : [];
     inscritos.forEach((i) => {
         const uid = i?.uid;
         const name = i?.nombre || i?.nombreUsuario;
         if (uid && name) map.set(String(uid), String(name));
+        if (uid) {
+            metaMap.set(String(uid), {
+                name: name || String(uid),
+                level: Number(i?.nivel || 2.5),
+                photo: i?.fotoPerfil || i?.fotoURL || "",
+            });
+        }
     });
     const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
     teams.forEach((t) => {
@@ -93,6 +130,13 @@ export function indexEventUserNames(eventDoc) {
             const uid = p?.uid || p?.id;
             const name = p?.nombre || p?.nombreUsuario;
             if (uid && name) map.set(String(uid), String(name));
+            if (uid) {
+                metaMap.set(String(uid), {
+                    name: name || String(uid),
+                    level: Number(p?.nivel || 2.5),
+                    photo: p?.fotoPerfil || p?.fotoURL || "",
+                });
+            }
         });
     });
 }
@@ -101,6 +145,15 @@ function getEventUserName(uid) {
     if (!uid) return null;
     try {
         return getEventUserNameMap().get(String(uid)) || null;
+    } catch {
+        return null;
+    }
+}
+
+function getEventUserMeta(uid) {
+    if (!uid) return null;
+    try {
+        return getEventUserMetaMap().get(String(uid)) || null;
     } catch {
         return null;
     }
@@ -649,9 +702,9 @@ window.renderUserInCreationSlot = async (idx, uid) => {
     let u = window.psUsersCache?.find(x => x.id === uid);
     if (!u) {
         try {
-            if (uid.startsWith('GUEST_')) {
-                const parts = uid.split('_');
-                u = { id: uid, nombreUsuario: parts[1] + ' (Inv)', nivel: parseFloat(parts[2]), fotoPerfil: './imagenes/Logojafs.png' };
+            const guest = parseGuestMeta(uid);
+            if (guest) {
+                u = { id: uid, nombreUsuario: `${guest.name} (Inv)`, nivel: guest.level, fotoPerfil: './imagenes/Logojafs.png' };
             } else {
                 const d = await getDoc(doc(db, 'usuarios', uid));
                 u = d.exists() ? { id: d.id, ...d.data() } : null;
@@ -852,9 +905,9 @@ window.executeCreateMatch = async (dateStr, hour) => {
         if (validPlayers.length === MAX_PLAYERS) {
             try {
                 const profiles = await Promise.all(jugs.map(async uid => {
-                    if (uid.startsWith('GUEST_')) {
-                        const parts = uid.split('_');
-                        return { id: uid, puntosRanking: 1000, nivel: parseFloat(parts[2]) || 2.5 }; 
+                    const guest = parseGuestMeta(uid);
+                    if (guest) {
+                        return { id: uid, puntosRanking: 1000, nivel: guest.level || 2.5 }; 
                     }
                     const d = await getDoc(doc(db, 'usuarios', uid));
                     return d.exists() ? d.data() : { puntosRanking: 1000, nivel: 2.5 };
@@ -969,7 +1022,15 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         const matchState = String(m.estado || '').toLowerCase();
         const isPlayed = hasMatchResult(m) || matchState === 'cancelado' || matchState === 'anulado';
         const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
-        const playerIds = Array.isArray(m.jugadores) && m.jugadores.length > 0 ? m.jugadores : (Array.isArray(m.playerUids) ? m.playerUids : []);
+        let playerIds = Array.isArray(m.jugadores) && m.jugadores.length > 0 ? m.jugadores : (Array.isArray(m.playerUids) ? m.playerUids : []);
+        if (isEventType && m.eventoId) {
+            const ev = await getEventDocCached(m.eventoId);
+            if (ev) {
+                indexEventUserNames(ev);
+                const eventPlayers = resolveEventPlayersForMatch(ev, m);
+                if (eventPlayers && eventPlayers.length) playerIds = eventPlayers;
+            }
+        }
         const matchForActions = { ...m, jugadores: playerIds };
         const players = await Promise.all([0, 1, 2, 3].map(i => getPlayerData(playerIds[i])));
         const balanceSuggestion = computeBalanceSuggestion(players);
@@ -1043,7 +1104,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                                 <div class="w-1 h-3 bg-primary rounded-full"></div>
                                 <span class="text-[10px] font-black uppercase tracking-widest opacity-80">Alineación</span>
                              </div>
-                             ${isReto ? '<span class="text-[8px] font-black text-sport-gold border border-sport-gold/30 px-2 py-0.5 rounded-full">âš¡ RANKED</span>' : '<span class="text-[8px] font-black opacity-30">AMISTOSO</span>'}
+                             ${isReto ? '<span class="text-[8px] font-black text-sport-gold border border-sport-gold/30 px-2 py-0.5 rounded-full">ES RANKED</span>' : '<span class="text-[8px] font-black opacity-30">AMISTOSO</span>'}
                         </div>
                         
                         <div class="players-grid-read relative z-10">
@@ -1090,8 +1151,18 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         const p1 = Math.min(Math.max(50 + (diff * 20), 10), 90);
         const p2 = 100 - p1;
 
-        const creatorSnap = await getDoc(doc(db, "usuarios", m.creador));
-        const cName = creatorSnap.exists() ? (creatorSnap.data().nombreUsuario || creatorSnap.data().nombre) : 'Jugador';
+        let cName = "Jugador";
+        if (m.creador) {
+            const creatorSnap = await getDoc(doc(db, "usuarios", m.creador));
+            if (creatorSnap.exists()) {
+                cName = creatorSnap.data().nombreUsuario || creatorSnap.data().nombre || cName;
+            }
+        } else if (m.organizerId) {
+            const orgSnap = await getDoc(doc(db, "usuarios", m.organizerId));
+            if (orgSnap.exists()) {
+                cName = orgSnap.data().nombreUsuario || orgSnap.data().nombre || cName;
+            }
+        }
 
         let eloBreakdownHtml = '';
         if (m.resultado?.sets) {
@@ -1197,7 +1268,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     <span class="hero-time-v7">${date.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})}</span>
                     <div class="hero-date-v7">
                         ${date.toLocaleDateString('es-ES', {weekday:'long', day:'numeric'}).toUpperCase()}
-                        <span class="dash">â€”</span>
+                        <span class="dash">—"</span>
                         ${date.toLocaleDateString('es-ES', {month:'long'}).toUpperCase()}
                     </div>
                     <div class="mt-4 opacity-80 scale-90">${weatherHtml}</div>
@@ -1492,7 +1563,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                 </div>
 
                 <!-- Alineación -->
-                <span class="cfg-label-v7">FORMACIÓN TÁCTICA</span>
+                <span class="cfg-label-v7">FORMACIÓN TúCTICA</span>
                 <div class="court-container-v7 mb-4">
                     <div class="court-schema-v7" style="padding: 20px 10px; min-height: 220px;">
                         <div class="court-net"></div>
@@ -1638,7 +1709,7 @@ async function renderCreationSlot(idx, preUid, currentUser, userData, label = ""
     const teamColor = isTeamA ? 'var(--primary)' : 'var(--secondary)';
     
     if (p) {
-        const name = uid === currentUser.uid ? 'TÚ' : p.name;
+        const name = uid === currentUser.uid ? 'Tú' : p.name;
         return `
             <div class="p-slot-v7 active" id="slot-${idx}-wrap">
                 <div class="p-img-box" style="border-color:${teamColor}">
@@ -1668,13 +1739,15 @@ async function getPlayerData(uid) {
     // Normalize UID to string just in case
     const sUid = String(uid);
     const eventName = getEventUserName(sUid);
+    const eventMeta = getEventUserMeta(sUid);
     
     // Robust Guest Detection
-    if (sUid.startsWith('GUEST_') || sUid.startsWith('invitado_') || sUid.startsWith('manual_')) {
-        const parts = sUid.split('_');
-        const name = eventName || parts[1] || (sUid.startsWith('GUEST_') ? 'Invitado' : sUid);
-        const level = parseFloat(parts[2] || 2.5);
-        return { name, level, id: sUid, isGuest: true, photo: `./imagenes/Logojafs.png`, points: 1000 };
+    const guestMeta = parseGuestMeta(sUid);
+    if (guestMeta) {
+        const name = eventMeta?.name || eventName || guestMeta.name || 'Invitado';
+        const level = Number.isFinite(eventMeta?.level) ? eventMeta.level : (Number.isFinite(guestMeta.level) ? guestMeta.level : 2.5);
+        const photo = eventMeta?.photo || `./imagenes/Logojafs.png`;
+        return { name, level, id: sUid, isGuest: true, photo, points: 1000 };
     }
 
     const cached = Array.isArray(window.psUsersCache) ? window.psUsersCache.find(x => x && x.id === sUid) : null;
@@ -1686,12 +1759,24 @@ async function getPlayerData(uid) {
 
     try {
         const d = await getDocument('usuarios', sUid);
-        if (!d) return { ...fallback, name: eventName || 'Jugador', id: sUid };
+        if (!d) {
+            if (eventMeta) {
+                const name = eventMeta.name || eventName || 'Jugador';
+                const photo = eventMeta.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+                return { name, photo, level: eventMeta.level || 2.5, id: sUid, points: 1000 };
+            }
+            return { ...fallback, name: eventName || 'Jugador', id: sUid };
+        }
         const name = d.nombreUsuario || d.nombre || 'Jugador';
         const photo = d.fotoPerfil || d.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
         return { name, photo, level: d.nivel || 2.5, id: sUid, points: d.puntosRanking || 1000 };
     } catch(e) {
         console.warn("getPlayerData failed for", sUid, e);
+        if (eventMeta) {
+            const name = eventMeta.name || eventName || 'Jugador';
+            const photo = eventMeta.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+            return { name, photo, level: eventMeta.level || 2.5, id: sUid, points: 1000 };
+        }
         return { ...fallback, name: eventName || 'Jugador', id: sUid };
     }
 }
@@ -2022,7 +2107,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 } catch(err) {}
                 
                 // Match Filled Notification
-                const others = jugs.filter(uid => uid !== user.uid && !uid.startsWith('GUEST_'));
+                const others = jugs.filter(uid => uid && uid !== user.uid && !(typeof uid === 'string' && uid.startsWith('GUEST_')));
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
                 const time = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
                 await createNotification(
@@ -2062,7 +2147,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 }
 
                 jugs[idx] = null;
-                const activeJugs = jugs.filter(id => id && !id.startsWith('GUEST_'));
+                const activeJugs = jugs.filter(id => id && !(typeof id === 'string' && id.startsWith('GUEST_')));
                 
                 if (activeJugs.length === 0 && jugs.filter(id => id).length === 0) {
                     await deleteDoc(ref);
@@ -2088,7 +2173,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                     
                     const meDoc = await getDocument('usuarios', user.uid);
                     const leaveName = meDoc?.nombreUsuario || meDoc?.nombre || 'Un jugador';
-                    const stillInMatch = jugs.filter(id => id && id !== user.uid && !id.startsWith('GUEST_'));
+                    const stillInMatch = jugs.filter(id => id && id !== user.uid && !(typeof id === 'string' && id.startsWith('GUEST_')));
                     if (stillInMatch.length > 0) {
                         const leaveDay = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
                         await createNotification(
@@ -2110,7 +2195,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
             
             if (confirm("¿Abortar misión?")) {
-                const others = jugs.filter(uid => uid !== user.uid && !uid.startsWith('GUEST_'));
+                const others = jugs.filter(uid => uid && uid !== user.uid && !(typeof uid === 'string' && uid.startsWith('GUEST_')));
                 const adminDoc = await getDocument('usuarios', user.uid);
                 const adminName = adminDoc?.nombreUsuario || adminDoc?.nombre || 'El organizador';
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
@@ -2153,7 +2238,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
 
             // If we removed the creator, reassign or handle it
             if (extra.idx === 0) {
-                 const newCreator = jugs.find(j => j && !j.startsWith('GUEST_'));
+                 const newCreator = jugs.find(j => j && !(typeof j === 'string' && j.startsWith('GUEST_')));
                  if (newCreator) {
                      updates.creador = newCreator;
                      updates.organizerId = newCreator;
@@ -2203,7 +2288,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
              }
              jugs = addResult.players || jugs;
              
-             if (!extra.uid.startsWith('GUEST_')) {
+             if (typeof extra.uid === 'string' && !extra.uid.startsWith('GUEST_')) {
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
                 const currentPlayers = jugs.filter(id => id).length;
                 await createNotification(
@@ -2362,10 +2447,11 @@ async function resolveMentionTargets(matchId, col, text, senderUid) {
 }
 
 async function getPlayerName(uid) {
-    if (!uid) return 'AnÃ³nimo';
+    if (!uid) return 'Anónimo';
     const eventName = getEventUserName(uid);
     if (eventName) return eventName;
-    if (uid.startsWith('GUEST_')) return uid.split('_')[1];
+    const g = parseGuestMeta(uid);
+    if (g) return g.name;
     if (uid.startsWith('invitado_') || uid.startsWith('manual_')) {
         const token = uid.split('_')[1];
         return token && Number.isNaN(Number(token)) ? token : 'Invitado';
@@ -3148,8 +3234,9 @@ window.removeUserFromNew = (idx) => {
 
 export async function createLinkedMatchFromEvent(eventMatchId, slotDate) {
     const ref = doc(db, 'eventoPartidos', eventMatchId);
+    const safeDate = slotDate instanceof Date ? slotDate : new Date(slotDate);
     await updateDoc(ref, {
-        fecha: Timestamp.fromDate(slotDate),
+        fecha: Timestamp.fromDate(safeDate),
         estado: 'abierto'
     });
 }

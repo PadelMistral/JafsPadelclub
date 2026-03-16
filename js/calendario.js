@@ -4,7 +4,7 @@
    ===================================================== */
 
 import { db, auth, subscribeDoc, subscribeCol, updateDocument, getDocument } from './firebase-service.js';
-import { collection, getDocs, query, orderBy, limit, where, addDoc, doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import { collection, getDocs, query, orderBy, limit, where, addDoc, doc, getDoc, setDoc, deleteDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast, countUp } from './ui-core.js';
 import { renderMatchDetail, renderCreationForm } from './match-service.js';
 import { isExpiredOpenMatch, isFinishedMatch, isCancelledMatch, getMatchPlayers } from "./utils/match-utils.js";
@@ -25,6 +25,18 @@ let apoingLastSyncAt = 0;
 let apoingNextRetryAt = 0;
 let apoingMyFutureCountLast = null;
 const APOING_DEBUG = true;
+
+function isKnockoutPhaseMatch(match = {}) {
+    const phase = String(match.phase || "").toLowerCase();
+    return ["knockout", "semi", "semis", "semifinal", "final", "cuartos", "quarter"].includes(phase);
+}
+
+function isGroupPhaseMatch(match = {}, ev = null) {
+    const phase = String(match.phase || "").toLowerCase();
+    if (["group", "liga", "league", "grupos"].includes(phase)) return true;
+    if (!phase && (ev?.formato === "groups" || ev?.formato === "league")) return true;
+    return false;
+}
 
 function getEventUserNameMap() {
     if (!window.__eventUserNameMap) window.__eventUserNameMap = new Map();
@@ -70,6 +82,7 @@ const APOING_PROXY_3 = "https://r.jina.ai/http://";
 const APOING_SYNC_TTL_MS = 120000;
 const CALENDAR_CACHE_KEY = "calendar:matches:v1";
 const APOING_CACHE_KEY = "calendar:apoing:v1";
+const PROPOSAL_DRAFT_KEY = "proposal:draft:v1";
 
 function toDateSafeLocal(value) {
     if (!value) return null;
@@ -362,6 +375,66 @@ function isRelevantApoingEvent(ev = {}) {
     if (isClubSocialEvent(ev)) return false;
     if (txt.includes("club") && !txt.includes("padel")) return false;
     return looksPadel;
+}
+
+function readProposalDraft() {
+    try {
+        const raw = localStorage.getItem(PROPOSAL_DRAFT_KEY);
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        if (!data || !Array.isArray(data.players)) return null;
+        return data;
+    } catch {
+        return null;
+    }
+}
+
+function clearProposalDraft() {
+    try { localStorage.removeItem(PROPOSAL_DRAFT_KEY); } catch {}
+}
+
+async function closeProposalDraft(proposalId) {
+    if (!proposalId) return;
+    try {
+        const chatSnap = await getDocs(collection(db, "propuestasPartido", proposalId, "chat"));
+        await Promise.all(chatSnap.docs.map((d) => deleteDoc(d.ref)));
+        await deleteDoc(doc(db, "propuestasPartido", proposalId));
+    } catch (e) {
+        console.warn("[Proposal] close failed", e);
+    }
+}
+
+async function createMatchFromProposalDraft(draft, slotDate) {
+    const safeDate = slotDate instanceof Date ? slotDate : new Date(slotDate);
+    const players = Array.isArray(draft.players) ? draft.players : [];
+    const surface = draft.surface || "indoor";
+    const courtType = draft.courtType || "normal";
+    const invitedUsers = Array.isArray(draft.invitedUsers) ? draft.invitedUsers : [];
+    const creatorId = currentUser?.uid || draft.createdBy || null;
+    const organizerId = draft.createdBy || currentUser?.uid || null;
+    if (!creatorId) throw new Error("missing-user");
+    if (players.filter(Boolean).length < 2) throw new Error("missing-players");
+
+    await addDoc(collection(db, "partidosAmistosos"), {
+        creador: creatorId,
+        organizerId,
+        fecha: safeDate,
+        jugadores: players,
+        restriccionNivel: { min: 1.0, max: 7.0 },
+        estado: "abierto",
+        visibility: "private",
+        invitedUsers,
+        equipoA: [players[0], players[1]],
+        equipoB: [players[2], players[3]],
+        surface,
+        courtType,
+        proposalId: draft.proposalId || null,
+        createdAt: serverTimestamp(),
+        timestamp: serverTimestamp(),
+    });
+
+    if (draft.proposalId) await closeProposalDraft(draft.proposalId);
+    clearProposalDraft();
 }
 
 async function getApoingSources() {
@@ -906,6 +979,25 @@ async function syncMatches() {
         }, {});
         Object.values(eventDocs).forEach((ev) => indexEventUserNames(ev));
 
+        const eventMatchesRaw = snapE.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const eventGroupReady = {};
+        const eventMatchMap = eventMatchesRaw.reduce((acc, m) => {
+            const eid = m.eventoId || m.eventId;
+            if (!eid) return acc;
+            if (!acc[eid]) acc[eid] = [];
+            acc[eid].push(m);
+            return acc;
+        }, {});
+        Object.keys(eventMatchMap).forEach((eid) => {
+            const ev = eventDocs[eid];
+            const groupMatches = eventMatchMap[eid].filter((m) => isGroupPhaseMatch(m, ev));
+            if (!groupMatches.length) {
+                eventGroupReady[eid] = true;
+                return;
+            }
+            eventGroupReady[eid] = groupMatches.every((m) => isFinishedMatch(m));
+        });
+
         allMatches = [];
         snapA.forEach(d => allMatches.push({ id: d.id, col: 'partidosAmistosos', ...d.data() }));
         snapR.forEach(d => allMatches.push({ id: d.id, col: 'partidosReto', isComp: true, ...d.data() }));
@@ -919,7 +1011,9 @@ async function syncMatches() {
             const ev = eventDocs[data.eventoId];
             if (ev) {
                 // If league/group, check teams. If knockout, we might allow it (manual)
-                allMatches.push({ id: d.id, col: 'eventoPartidos', eventMatchId: d.id, ...data });
+                const ready = eventGroupReady[data.eventoId];
+                const pendingLocked = isKnockoutPhaseMatch(data) && ready === false;
+                allMatches.push({ id: d.id, col: 'eventoPartidos', eventMatchId: d.id, pendingLocked, ...data });
             }
         });
         allMatches = dedupeEventSlots(allMatches);
@@ -1200,6 +1294,14 @@ function renderSlot(date, hour) {
 
         if (match) {
             if (match.col === 'eventoPartidos') {
+                if (match.pendingLocked) {
+                    state = 'cerrada';
+                    label = 'BRACKET PENDIENTE';
+                    sub = 'Esperando fase de grupos';
+                    ownerSub = `EVENTO: ${shortName(match.teamAName || '?')} VS ${shortName(match.teamBName || '?')}`;
+                    extraIcon = '<i class="fas fa-lock text-white/50 absolute top-2 right-2 text-xs"></i>';
+                    isLocked = true;
+                } else {
                 const isMineEvent = !!currentUser && (match.playerUids || []).includes(currentUser.uid);
                 const isPlayedEvent = String(match.estado || '').toLowerCase() === 'jugado';
                 state = isPlayedEvent ? 'jugado' : (isMineEvent ? 'propia' : 'cerrada');
@@ -1207,6 +1309,7 @@ function renderSlot(date, hour) {
                 const resLabel = match.resultado?.sets || (typeof match.resultado === 'string' ? match.resultado : 'VER RES');
                 sub = isPlayedEvent ? resLabel : (match.phase ? String(match.phase).toUpperCase() : 'TORNEO');
                 ownerSub = `EVENTO: ${shortName(match.teamAName || '?')} VS ${shortName(match.teamBName || '?')}`;
+                }
             } else {
             // Private Match Check
             if (match.visibility === 'private' && currentUser) {
@@ -1388,10 +1491,22 @@ window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
         return;
     }
 
-    if (isPastFreeSlot && !id) {
-        slotInteractionBusy = false;
-        showToast('BLOQUEADO', 'No se puede reservar en franjas horarias ya pasadas.', 'warning');
-        return;
+    const isAdmin = userData?.rol === 'Admin';
+
+    if (window._proposalDraft && !id) {
+        try {
+            const slotDate = new Date(`${date}T${hour}:00`);
+            await createMatchFromProposalDraft(window._proposalDraft, slotDate);
+            showToast("Propuesta creada", "Partido añadido al calendario.", "success");
+            window._proposalDraft = null;
+            slotInteractionBusy = false;
+            return;
+        } catch (e) {
+            console.error("[Proposal] schedule error", e);
+            showToast("No se pudo crear", "Revisa jugadores o permisos.", "error");
+            slotInteractionBusy = false;
+            return;
+        }
     }
 
     const modal = document.getElementById('modal-match');
@@ -1712,5 +1827,18 @@ async function handleUrlParams() {
     if (vincularId) {
         showToast("MODO VINCULAR", "Selecciona una franja horaria para este partido de torneo", "info");
         window._vincularMatchId = vincularId;
+    }
+    const proposalId = params.get("proposalId");
+    const draft = readProposalDraft();
+    if (draft) {
+        window._proposalDraft = draft;
+        showToast("Propuesta lista", "Selecciona una franja libre para fijar el partido.", "info");
+        if (!proposalId && draft?.proposalId) {
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.set("proposalId", draft.proposalId);
+                window.history.replaceState({}, "", url);
+            } catch {}
+        }
     }
 }

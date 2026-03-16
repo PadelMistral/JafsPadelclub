@@ -1,11 +1,12 @@
-// evento-detalle.js â€” Vista detallada del evento con panel organizador completo y modal para aÃ±adir jugador
+﻿// evento-detalle.js —" Vista detallada del evento con panel organizador completo y modal para añadir jugador
 import { db, auth, observerAuth, getDocument } from './firebase-service.js';
 import { initAppUI, showToast, showSidePreferenceModal } from './ui-core.js';
-import { doc, onSnapshot, collection, query, where, updateDoc, deleteDoc, getDocs, serverTimestamp, addDoc, arrayUnion, arrayRemove, increment, writeBatch, getDoc } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import { doc, onSnapshot, collection, query, where, orderBy, limit, updateDoc, deleteDoc, getDocs, serverTimestamp, addDoc, arrayUnion, arrayRemove, increment, writeBatch, getDoc } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { injectHeader, injectNavbar } from './modules/ui-loader.js';
 import { computeGroupTable, generateKnockoutTree, generateRoundRobin } from './event-tournament-engine.js';
 import { processMatchResults } from './ranking-service.js';
 import { openResultForm, renderMatchDetail, indexEventUserNames } from './match-service.js';
+import { createNotification } from './services/notification-service.js';
 
 initAppUI('event-detail');
 
@@ -19,6 +20,7 @@ let unsubMatches = null;
 let myTeam = null;
 let registeredUsers = [];
 let registeredUsersById = new Map();
+let userLevelUnsubs = new Map();
 
 // Mapa de formatos para mostrar etiquetas amigables
 const formatLabels = {
@@ -33,6 +35,23 @@ const getInitials = (name) => {
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     return name.substring(0, 2).toUpperCase();
 };
+
+function parseGuestMeta(uid) {
+    if (!uid) return null;
+    const s = String(uid);
+    if (!s.startsWith("GUEST_") && !s.startsWith("invitado_") && !s.startsWith("manual_")) return null;
+    const parts = s.split("_");
+    if (parts.length >= 4) {
+        const levelRaw = parts[parts.length - 2];
+        const level = parseFloat(levelRaw);
+        const nameRaw = parts.slice(1, parts.length - 2).join(" ");
+        const name = nameRaw.replace(/_/g, " ").trim() || "Invitado";
+        return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+    }
+    const name = (parts[1] || "Invitado").replace(/_/g, " ").trim() || "Invitado";
+    const level = parseFloat(parts[2]);
+    return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+}
 
 
 if (!eventId) window.location.replace('eventos.html');
@@ -64,6 +83,35 @@ async function loadRegisteredUsers() {
     }
 }
 
+function syncParticipantUserListeners(inscritos = []) {
+    const uids = (inscritos || [])
+        .map((i) => (typeof i === "string" ? i : i?.uid))
+        .filter((uid) => uid && !String(uid).startsWith("GUEST_") && !String(uid).startsWith("invitado_") && !String(uid).startsWith("manual_"));
+    const nextSet = new Set(uids);
+    // remove old listeners
+    userLevelUnsubs.forEach((unsub, uid) => {
+        if (!nextSet.has(uid)) {
+            try { if (typeof unsub === "function") unsub(); } catch {}
+            userLevelUnsubs.delete(uid);
+        }
+    });
+    // add new listeners
+    uids.forEach((uid) => {
+        if (userLevelUnsubs.has(uid)) return;
+        const unsub = onSnapshot(doc(db, "usuarios", uid), (snap) => {
+            if (!snap.exists()) return;
+            const data = snap.data() || {};
+            const prev = registeredUsersById.get(uid) || { uid };
+            const next = { ...prev, ...data, uid };
+            registeredUsersById.set(uid, next);
+            registeredUsers = registeredUsers.map((u) => (u.uid === uid ? next : u));
+            const pane = document.getElementById('pane-participantes');
+            if (pane && !pane.classList.contains('hidden')) renderParticipantes(pane);
+        });
+        userLevelUnsubs.set(uid, unsub);
+    });
+}
+
 function resolveParticipantData(p) {
     if (!p) return { uid: '', name: 'Jugador', level: 2.5, photo: '', isGuest: false };
     
@@ -72,21 +120,21 @@ function resolveParticipantData(p) {
     const data = (typeof p === 'object') ? p : {};
     
     const sUid = String(uid);
-    const isGuest = data.invitado === true || 
-                    data.manual === true || 
-                    sUid.startsWith('GUEST_') || 
-                    sUid.startsWith('invitado_') || 
-                    sUid.startsWith('manual_');
+    let isGuest = data.invitado === true || 
+                  data.manual === true || 
+                  sUid.startsWith('GUEST_') || 
+                  sUid.startsWith('invitado_') || 
+                  sUid.startsWith('manual_');
+    if (registeredUsersById.has(uid)) isGuest = false;
 
     if (isGuest) {
-        let name = data.nombre || data.nombreUsuario || '';
-        if (!name && sUid.startsWith('GUEST_')) {
-             name = sUid.split('_')[1]?.replace(/_/g, ' ');
-        }
+        const meta = parseGuestMeta(sUid);
+        const name = data.nombre || data.nombreUsuario || meta?.name || sUid || 'Invitado';
+        const level = Number(data.nivel || meta?.level || 2.5);
         return {
             uid: sUid,
-            name: name || sUid || 'Invitado',
-            level: Number(data.nivel || sUid.split('_')[2] || 2.5),
+            name,
+            level,
             photo: data.fotoPerfil || data.fotoURL || './imagenes/Logojafs.png',
             isGuest: true
         };
@@ -94,10 +142,11 @@ function resolveParticipantData(p) {
 
     if (registeredUsersById.has(uid)) {
         const u = registeredUsersById.get(uid);
+        const lvl = Number(u.nivel ?? 2.5);
         return {
             uid,
             name: u.nombreUsuario || u.nombre || u.email || uid,
-            level: Number(u.nivel || 2.5),
+            level: Number.isFinite(lvl) ? lvl : 2.5,
             photo: u.fotoPerfil || u.fotoURL || u.photoURL || '',
             isGuest: false
         };
@@ -106,7 +155,7 @@ function resolveParticipantData(p) {
     return {
         uid,
         name: data.nombre || data.nombreUsuario || uid || 'Jugador',
-        level: Number(data.nivel || 2.5),
+        level: Number(data.nivel ?? 2.5),
         photo: data.fotoPerfil || data.fotoURL || '',
         isGuest: false
     };
@@ -183,17 +232,17 @@ function setupAddPlayerModal() {
 }
 
 async function addPlayerToEvent(playerData) {
-    if (!canOrganizar()) return showToast('Sin permisos', 'Solo organizador/admin puede aÃ±adir', 'error');
+    if (!canOrganizar()) return showToast('Sin permisos', 'Solo organizador/admin puede añadir', 'error');
     const ev = currentEvent;
     if (!ev) return;
     if ((ev.inscritos || []).some(i => i.uid === playerData.uid)) {
-        return showToast('Duplicado', 'Ese jugador ya estÃ¡ inscrito', 'warning');
+        return showToast('Duplicado', 'Ese jugador ya está inscrito', 'warning');
     }
     try {
         await updateDoc(doc(db, 'eventos', eventId), {
             inscritos: arrayUnion(playerData)
         });
-        showToast('Jugador aÃ±adido', playerData.nombre, 'success');
+        showToast('Jugador añadido', playerData.nombre, 'success');
         document.getElementById('modal-add-player-detalle').classList.remove('active');
         document.getElementById('guest-name-detalle').value = '';
         document.getElementById('player-pair-code-detalle').value = '';
@@ -254,7 +303,7 @@ window.saveNewTeamED = async () => {
     if (!ev) return;
     const p1 = document.getElementById('new-team-p1')?.value || '';
     const p2 = document.getElementById('new-team-p2')?.value || '';
-    if (!p1 || !p2 || p1 === p2) return showToast('Equipo invÃ¡lido', 'Selecciona dos jugadores distintos', 'warning');
+    if (!p1 || !p2 || p1 === p2) return showToast('Equipo inválido', 'Selecciona dos jugadores distintos', 'warning');
     const used = new Set((ev.teams || []).flatMap(t => t.playerUids || []));
     if (used.has(p1) || used.has(p2)) return showToast('Jugador en otro equipo', 'No puedes duplicar jugadores', 'warning');
     const name = document.getElementById('new-team-name')?.value?.trim() || `Equipo ${String((ev.teams || []).length + 1).padStart(2, '0')}`;
@@ -288,6 +337,7 @@ function subscribeEvent() {
         if (!s.exists()) return window.location.replace('eventos.html');
         currentEvent = { id: s.id, ...s.data() };
         indexEventUserNames(currentEvent);
+        syncParticipantUserListeners(currentEvent?.inscritos || []);
         if (isInscribed()) {
             const teams = currentEvent.teams || [];
             myTeam = teams.find(t => t.playerUids?.includes(currentUser.uid));
@@ -389,7 +439,7 @@ function renderInfo(pane) {
              table = computeGroupTable(groupMatches, groupTeams, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
              const idx = table.findIndex(r => r.teamId === myTeam.id);
              if (idx !== -1) {
-                posVal = `${idx + 1}Âº`;
+                posVal = `${idx + 1}º`;
                 posText = `De ${table.length} equipos en Grupo ${myGroup}`;
              }
         }
@@ -405,7 +455,7 @@ function renderInfo(pane) {
                 <div class="ue-icon"><i class="fas fa-trophy"></i></div>
                 <div class="ue-body">
                     <div class="flex-row between items-center mb-1">
-                        <span class="text-[9px] text-primary font-black uppercase tracking-[2px]">EvoluciÃ³n en Directo</span>
+                        <span class="text-[9px] text-primary font-black uppercase tracking-[2px]">Evolución en Directo</span>
                         <div class="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20">
                             <span class="text-[10px] text-primary font-black">${pts} <small>PTS</small></span>
                         </div>
@@ -413,7 +463,7 @@ function renderInfo(pane) {
                     <h4 class="text-white font-black text-lg tracking-tight">${escapeHtml(myTeam.name)}</h4>
                     <div class="flex-row gap-3 mt-1">
                         <div class="flex-col">
-                            <span class="text-[8px] opacity-40 uppercase font-black">PosiciÃ³n</span>
+                            <span class="text-[8px] opacity-40 uppercase font-black">Posición</span>
                             <span class="text-[12px] text-white font-bold">${posVal || '-'}</span>
                         </div>
                         <div class="w-px h-6 bg-white/10"></div>
@@ -439,7 +489,7 @@ function renderInfo(pane) {
     const puedeVerSorteo = (ev.estado === 'activo' && (isInscribed() || canOrganizar())) || canOrganizar();
     const sorteoLink = puedeVerSorteo
         ? `<a class="btn-ed-primary w-full justify-center mt-4" href="evento-sorteo.html?id=${ev.id}"><i class="fas fa-dice"></i> Ver Cuadro / Sorteo</a>`
-        : (ev.estado === 'inscripcion' && isPending() ? `<div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 text-[11px] font-bold text-center mt-4">InscripciÃ³n pendiente de aprobaciÃ³n</div>` : '');
+        : (ev.estado === 'inscripcion' && isPending() ? `<div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 text-[11px] font-bold text-center mt-4">Inscripción pendiente de aprobación</div>` : '');
 
     pane.innerHTML = `
         <div class="ed-info-card border-none bg-transparent p-0">
@@ -447,13 +497,13 @@ function renderInfo(pane) {
             
             <div class="ed-info-card">
                 <h3 class="ed-info-title"><i class="fas fa-circle-info"></i> Detalles del evento</h3>
-                <p class="ed-info-text mb-6 text-[11px] leading-relaxed opacity-70">${ev.descripcion || 'Sin descripciÃ³n.'}</p>
+                <p class="ed-info-text mb-6 text-[11px] leading-relaxed opacity-70">${ev.descripcion || 'Sin descripción.'}</p>
                 <div class="ed-info-grid">
                     <div class="ed-info-item"><i class="fas fa-calendar"></i><div><span class="ed-info-label">Inicio</span><span class="ed-info-val">${fmtDate(ev.fechaInicio)}</span></div></div>
-                    <div class="ed-info-item"><i class="fas fa-hourglass-half"></i><div><span class="ed-info-label">Cierre inscripciÃ³n</span><span class="ed-info-val">${fmtDate(ev.fechaInscripcion)}</span></div></div>
+                    <div class="ed-info-item"><i class="fas fa-hourglass-half"></i><div><span class="ed-info-label">Cierre inscripción</span><span class="ed-info-val">${fmtDate(ev.fechaInscripcion)}</span></div></div>
                     <div class="ed-info-item"><i class="fas fa-user-group"></i><div><span class="ed-info-label">Modalidad</span><span class="ed-info-val">${ev.modalidad || 'parejas'}</span></div></div>
                     <div class="ed-info-item"><i class="fas fa-diagram-project"></i><div><span class="ed-info-label">Formato</span><span class="ed-info-val">${formatLabels[ev.formato] || ev.formato}</span></div></div>
-                    ${ev.repesca ? '<div class="ed-info-item"><i class="fas fa-rotate-left"></i><div><span class="ed-info-label">Repesca</span><span class="ed-info-val">SÃ­</span></div></div>' : ''}
+                    ${ev.repesca ? '<div class="ed-info-item"><i class="fas fa-rotate-left"></i><div><span class="ed-info-label">Repesca</span><span class="ed-info-val">Sí</span></div></div>' : ''}
                     ${ev.equiposPorGrupo ? `<div class="ed-info-item"><i class="fas fa-arrow-right"></i><div><span class="ed-info-label">Clasifican</span><span class="ed-info-val">${ev.equiposPorGrupo} por grupo</span></div></div>` : ''}
                 </div>
                 ${sorteoLink}
@@ -468,29 +518,38 @@ function renderParticipantes(pane) {
     const aprobados = inscritos.filter(i => i.aprobado === true);
     const pendientes = inscritos.filter(i => i.aprobado !== true);
 
-    const renderCard = (p, isPending = false) => {
+    const renderRow = (p, isPending = false) => {
         const info = resolveParticipantData(p);
         const uid = p?.uid || p;
+        const initials = getInitials(info.name);
         return `
-            <div class="p-card-v9 ${isPending ? 'pending' : ''}">
-                <div class="p-card-status"></div>
-                <div class="p-card-avatar">
-                    ${info.photo ? `<img src="${info.photo}" class="w-full h-full object-cover rounded-full">` : `<div class="p-card-initials">${getInitials(info.name)}</div>`}
+            <div class="participant-row ${isPending ? 'pending' : ''}">
+                <div class="participant-left">
+                    <span class="participant-initials">${initials}</span>
+                    <div class="participant-meta">
+                        <div class="participant-name">${escapeHtml(info.name)}</div>
+                        <div class="participant-sub">
+                            ${info.isGuest ? 'Invitado' : 'Registrado'}
+                            ${isPending ? ' · Pendiente' : ''}
+                        </div>
+                    </div>
                 </div>
-                <span class="p-card-name">${escapeHtml(info.name)}</span>
-                <span class="p-card-level">LVL ${Number(info.level || 2.5).toFixed(1)}</span>
-                ${canOrganizar() && info.isGuest ? `
-                    <div class="guest-level-edit">
-                        <input type="number" step="0.5" min="1" max="7" value="${Number(info.level || 2.5).toFixed(1)}" id="guest-level-${uid}" class="input input-guest-level">
-                        <button class="btn-guest-save" onclick="window.editarNivelInvitado('${eventId}','${uid}')">Guardar</button>
-                    </div>
-                ` : ''}
-                ${canOrganizar() ? `
-                    <div class="flex-row gap-2 mt-2">
-                        ${isPending ? `<button class="btn-aprobar-v9" onclick="window.aprobarJugador('${eventId}','${uid}')"><i class="fas fa-check"></i></button>` : ''}
-                        <button class="btn-expulsar-v9" onclick="window.expulsarJugador('${eventId}','${uid}')"><i class="fas fa-user-slash"></i></button>
-                    </div>
-                ` : ''}
+                <div class="participant-right">
+                    ${canOrganizar() ? `
+                        <div class="participant-level-edit">
+                            <input type="number" step="0.1" min="1" max="7" value="${Number(info.level || 2.5).toFixed(1)}" id="participant-level-${uid}" class="input input-guest-level">
+                            <button class="btn-guest-save" onclick="window.editarNivelParticipante('${eventId}','${uid}')">Guardar</button>
+                        </div>
+                    ` : `
+                        <span class="participant-level">LVL ${Number(info.level || 2.5).toFixed(1)}</span>
+                    `}
+                    ${canOrganizar() ? `
+                        <div class="participant-actions">
+                            ${isPending ? `<button class="btn-aprobar-v9" onclick="window.aprobarJugador('${eventId}','${uid}')"><i class="fas fa-check"></i></button>` : ''}
+                            <button class="btn-expulsar-v9" onclick="window.expulsarJugador('${eventId}','${uid}')"><i class="fas fa-user-slash"></i></button>
+                        </div>
+                    ` : ''}
+                </div>
             </div>
         `;
     };
@@ -498,8 +557,8 @@ function renderParticipantes(pane) {
     let html = `
         <div class="ed-info-card bg-transparent border-none p-0">
             <h3 class="ed-info-title mb-4"><i class="fas fa-users"></i> Guerreros Confirmados (${aprobados.length})</h3>
-            <div class="participant-grid-v9">
-                ${aprobados.length ? aprobados.map(p => renderCard(p, false)).join('') : `<div class="empty-state">No hay jugadores confirmados.</div>`}
+            <div class="participant-list">
+                ${aprobados.length ? aprobados.map(p => renderRow(p, false)).join('') : `<div class="empty-state">No hay jugadores confirmados.</div>`}
             </div>
         </div>
     `;
@@ -508,8 +567,8 @@ function renderParticipantes(pane) {
         html += `
             <div class="ed-info-card bg-transparent border-none p-0 mt-6">
                 <h3 class="ed-info-title mb-4"><i class="fas fa-user-clock"></i> Pendientes (${pendientes.length})</h3>
-                <div class="participant-grid-v9">
-                    ${pendientes.map(p => renderCard(p, true)).join('')}
+                <div class="participant-list">
+                    ${pendientes.map(p => renderRow(p, true)).join('')}
                 </div>
             </div>
         `;
@@ -588,6 +647,29 @@ function tableHtml(title, rows, teamMap, myTeam) {
 }
 
 function renderMatches(pane) {
+    if (!eventMatches.length) {
+        pane.innerHTML = `<div class="empty-state">No hay partidos generados.</div>`;
+        return;
+    }
+    const searchVal = window._matchFilter || '';
+    const isSpecialFilter = searchVal === 'mis-partidos';
+    pane.innerHTML = `
+        <div class="matches-filter-bar-v9">
+            <div class="mf-search">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Buscar equipo o grupo..." value="${isSpecialFilter ? '' : searchVal}" oninput="window.setMatchFilter(this.value, true)">
+            </div>
+            <button class="mf-btn ${isSpecialFilter ? 'active' : ''}" onclick="window.setMatchFilter('${isSpecialFilter ? '' : 'mis-partidos'}')">
+                <i class="fas fa-user"></i> ${isSpecialFilter ? 'Todos' : 'Mis Partidos'}
+            </button>
+        </div>
+        <div class="matches-list" id="matches-list-body"></div>
+    `;
+    updateMatchesList(pane);
+}
+
+function updateMatchesList(pane) {
+    const listEl = pane.querySelector('#matches-list-body') || pane;
     const teamMap = new Map((currentEvent?.teams || []).map(t => [t.id, t]));
     const normalizeTeamName = (value) => String(value || '').trim().toLowerCase();
     const isUnknownTeamName = (value) => {
@@ -640,25 +722,35 @@ function renderMatches(pane) {
         if (aPlayed !== bPlayed) return aPlayed ? a : b;
         return a;
     };
-    if (!eventMatches.length) {
-        pane.innerHTML = `<div class="empty-state">No hay partidos generados.</div>`;
-        return;
-    }
     const currentUid = auth.currentUser?.uid;
     const searchVal = window._matchFilter || '';
     const isSpecialFilter = searchVal === 'mis-partidos';
     const filterQuery = isSpecialFilter ? '' : searchVal.toLowerCase();
     
     const phaseWeights = { league: 1, group: 1, knockout: 2, semi: 3, final: 4 };
+    const groupsComplete = areGroupsComplete(currentEvent, eventMatches);
+    const myGroup = (() => {
+        if (!myTeam || !currentEvent?.groups) return null;
+        const found = Object.entries(currentEvent.groups).find(([, ids]) => Array.isArray(ids) && ids.includes(myTeam.id));
+        return found ? found[0] : null;
+    })();
 
     const normalizedMatches = eventMatches.map(enrichMatch);
     const filtered = [...normalizedMatches].filter(m => {
         if (isTbdMatch(m)) return false;
+        if (!groupsComplete && (m.phase === 'knockout' || m.phase === 'semi' || m.phase === 'final')) return false;
         // Essential: Orphan filter
         if (m.phase === 'league' || m.phase === 'group') {
             const ta = currentEvent.teams?.find(t => t.id === m.teamAId);
             const tb = currentEvent.teams?.find(t => t.id === m.teamBId);
             if (!ta && !tb) return false;
+        }
+
+        // Hide knockout for non-organizers (shown in bracket only)
+        if (!canOrganizar() && (m.phase === 'knockout' || m.phase === 'semi' || m.phase === 'final')) return false;
+        // Non-organizer: show only group matches from user's group (if groups exist)
+        if (!canOrganizar() && (m.phase === 'group' || m.phase === 'league')) {
+            if (currentEvent?.formato !== 'league' && myGroup && m.group && m.group !== myGroup) return false;
         }
         
         // Custom filters
@@ -687,55 +779,38 @@ function renderMatches(pane) {
         return acc;
     }, new Map()).values());
 
-    pane.innerHTML = `
-        <div class="matches-filter-bar-v9">
-            <div class="mf-search">
-                <i class="fas fa-search"></i>
-                <input type="text" placeholder="Buscar equipo o grupo..." value="${isSpecialFilter ? '' : searchVal}" oninput="window.setMatchFilter(this.value)">
+    listEl.innerHTML = uniqueSorted.map(m => {
+        const isMy = m.playerUids?.includes(currentUid);
+        let played = m.estado === 'jugado';
+        let score = typeof m.resultado === 'string'
+            ? m.resultado
+            : (m.resultado?.sets || m.resultado?.score || '');
+
+        return `
+        <div class="match-card match-court-bg-v7 ${isMy ? 'my-match' : ''} ${played ? 'jugado' : ''}" onclick="window.verDetallePartido('${m.id}')">
+            ${isMy && !played ? '<div class="absolute -top-1 -right-1 p-2 bg-primary/20 rounded-bl-xl"><i class="fas fa-star text-[8px] text-primary"></i></div>' : ''}
+            <div class="match-header">
+                <span>${matchPhaseLabel(m)}</span>
+                <span>${m.fecha ? new Date(m.fecha?.toDate ? m.fecha.toDate() : m.fecha).toLocaleDateString('es-ES', {hour:'2-digit', minute:'2-digit'}) : 'Fecha por decidir'}</span>
             </div>
-            <button class="mf-btn ${isSpecialFilter ? 'active' : ''}" onclick="window.setMatchFilter('${isSpecialFilter ? '' : 'mis-partidos'}')">
-                <i class="fas fa-user"></i> ${isSpecialFilter ? 'Todos' : 'Mis Partidos'}
-            </button>
-        </div>
-        <div class="matches-list">
-            ${uniqueSorted.map(m => {
-                const isMy = m.playerUids?.includes(currentUid);
-                let played = m.estado === 'jugado';
-                let score = m.resultado?.score || (typeof m.resultado === 'string' ? m.resultado : '0-0');
-                
-                // Real-time sync if there is a linked match
-                if (!played && m.linkedMatchId) {
-                    // We don't fetch from here to avoid loops, but we can check if data was updated in allMatches if we had it
-                    // The sync logic in match-service should have pushed the result update to m.resultado
-                }
-
-                return `
-                <div class="match-card match-court-bg-v7 ${isMy ? 'my-match' : ''} ${played ? 'jugado' : ''}" onclick="window.verDetallePartido('${m.id}')">
-                    ${isMy && !played ? '<div class="absolute -top-1 -right-1 p-2 bg-primary/20 rounded-bl-xl"><i class="fas fa-star text-[8px] text-primary"></i></div>' : ''}
-                    <div class="match-header">
-                        <span>${matchPhaseLabel(m)}</span>
-                        <span>${m.fecha ? new Date(m.fecha?.toDate ? m.fecha.toDate() : m.fecha).toLocaleDateString('es-ES', {hour:'2-digit', minute:'2-digit'}) : 'Fecha por decidir'}</span>
-                    </div>
-                    <div class="match-body-v9">
-                        <div class="m-team-v9 ${m.ganadorTeamId === m.teamAId ? 'winner' : ''}">
-                            <span class="team-n-v9">${m.teamAName || 'TBD'}</span>
-                        </div>
-                        <div class="m-score-v9">
-                             ${played ? score : (m.linkedMatchId ? '<i class="fas fa-link text-[10px] opacity-40"></i>' : '<span class="m-vs-v9">VS</span>')}
-                        </div>
-                        <div class="m-team-v9 ${m.ganadorTeamId === m.teamBId ? 'winner' : ''}">
-                            <span class="team-n-v9">${m.teamBName || 'TBD'}</span>
-                        </div>
-                    </div>
-                    ${m.linkedMatchId && !played ? `
-                        <div class="mt-3 py-1 px-3 bg-white/5 rounded-lg text-center text-[8px] font-black tracking-widest text-[#abc]">
-                            VINCULADO AL CALENDARIO
-                        </div>
-                    ` : ''}
-                </div>`;
-            }).join('')}
-
+            <div class="match-body-v9">
+                <div class="m-team-v9 ${m.ganadorTeamId === m.teamAId ? 'winner' : ''}">
+                    <span class="team-n-v9">${m.teamAName || 'TBD'}</span>
+                </div>
+                <div class="m-score-v9">
+                     ${played ? (score || 'FINAL') : (m.linkedMatchId ? '<i class="fas fa-link text-[10px] opacity-40"></i>' : '<span class="m-vs-v9">VS</span>')}
+                </div>
+                <div class="m-team-v9 ${m.ganadorTeamId === m.teamBId ? 'winner' : ''}">
+                    <span class="team-n-v9">${m.teamBName || 'TBD'}</span>
+                </div>
+            </div>
+            ${m.linkedMatchId || m.fecha ? `
+                <div class="mt-3 py-1 px-3 bg-white/5 rounded-lg text-center text-[8px] font-black tracking-widest text-[#abc]">
+                    VINCULADO AL CALENDARIO
+                </div>
+            ` : ''}
         </div>`;
+    }).join('') || `<div class="empty-state">No hay partidos con ese filtro.</div>`;
 }
 
 function matchPhaseLabel(m) {
@@ -821,7 +896,7 @@ window.openAdvancePhaseModal = () => {
     `;
     document.body.appendChild(overlay);
 
-    window.confirmAdvancePhase = () => {
+window.confirmAdvancePhase = () => {
         const nPasan = parseInt(document.getElementById('adv-pass-count')?.value || `${nDefault}`, 10);
         const selectedTeamIds = Array.from(overlay.querySelectorAll('.adv-team-check:checked')).map(i => i.value);
         overlay.remove();
@@ -829,12 +904,32 @@ window.openAdvancePhaseModal = () => {
     };
 };
 
+function isKnockoutPhaseMatch(match = {}) {
+    const phase = String(match.phase || "").toLowerCase();
+    return ["knockout", "semi", "semis", "semifinal", "final", "cuartos", "quarter"].includes(phase);
+}
+
+function isGroupPhaseMatch(match = {}, ev = null) {
+    const phase = String(match.phase || "").toLowerCase();
+    if (["group", "liga", "league", "grupos"].includes(phase)) return true;
+    if (!phase && (ev?.formato === "groups" || ev?.formato === "league")) return true;
+    return false;
+}
+
+function hasMatchResult(match) {
+    if (!match) return false;
+    if (typeof match.resultado === "string") return match.resultado.trim().length > 0;
+    if (typeof match?.resultado?.sets === "string") return match.resultado.sets.trim().length > 0;
+    return false;
+}
+
 function renderBracket(pane) {
     if (!currentEvent.bracket || !currentEvent.bracket.length) {
-        pane.innerHTML = `<div class="empty-state">AÃºn no se ha generado el bracket de eliminatorias.</div>`;
+        pane.innerHTML = `<div class="empty-state">Aún no se ha generado el bracket de eliminatorias.</div>`;
         return;
     }
 
+    const groupsComplete = areGroupsComplete(currentEvent, eventMatches);
     let html = `<div class="bracket-container"><div class="bracket">`;
     const rounds = currentEvent.bracket;
 
@@ -853,9 +948,10 @@ function renderBracket(pane) {
             const scoreParts = resultStr.split(' '); // Take the first set or the whole string and try to show it nicely
             const scoreA = matchData.ganadorTeamId === m.teamAId ? 'Ganador' : (resultStr ? 'Perdedor' : '');
             const scoreB = matchData.ganadorTeamId === m.teamBId ? 'Ganador' : (resultStr ? 'Perdedor' : '');
+            const pending = isKnockoutPhaseMatch(matchData) && !groupsComplete;
 
             html += `
-            <div class="bracket-match" onclick="window.verDetallePartido('${matchData.id || ''}')">
+            <div class="bracket-match ${pending ? 'pending' : ''}" ${pending ? '' : `onclick="window.verDetallePartido('${matchData.id || ''}')"`}>
                 <div class="b-team-v9 ${matchData.ganadorTeamId === m.teamAId && played ? 'winner' : ''}">
                     <span class="b-name-v9">${m.teamAName || 'TBD'}</span>
                     <span class="b-score-v9">${scoreA}</span>
@@ -864,6 +960,7 @@ function renderBracket(pane) {
                     <span class="b-name-v9">${m.teamBName || 'TBD'}</span>
                     <span class="b-score-v9">${scoreB}</span>
                 </div>
+                ${pending ? `<span class="bracket-pending-tag">PENDIENTE</span>` : ""}
             </div>`;
         });
         html += `</div>`;
@@ -879,14 +976,14 @@ function renderOrganizador(pane) {
         <div class="admin-panel compact-v9" style="padding-top:10px;">
             <div class="org-header-v9">
                 <i class="fas fa-crown text-sport-gold"></i>
-                <span>GestiÃ³n de Organizador</span>
+                <span>Gestión de Organizador</span>
             </div>
             
             <div class="org-grid-v9">
                 <div class="org-card-v9">
                     <label><i class="fas fa-toggle-on"></i> Estado</label>
                     <select id="org-ev-state" class="input">
-                        <option value="inscripcion" ${ev.estado === 'inscripcion' ? 'selected' : ''}>InscripciÃ³n</option>
+                        <option value="inscripcion" ${ev.estado === 'inscripcion' ? 'selected' : ''}>Inscripción</option>
                         <option value="activo" ${ev.estado === 'activo' ? 'selected' : ''}>Activo</option>
                         <option value="finalizado" ${ev.estado === 'finalizado' ? 'selected' : ''}>Finalizado</option>
                     </select>
@@ -929,6 +1026,9 @@ function renderOrganizador(pane) {
                         <i class="fas fa-sync-alt"></i> Fix Grupos
                     </button>
                 </div>
+                <button class="btn btn-ghost btn-sm w-full mt-2" onclick="window.simularBracketEvento()">
+                    <i class="fas fa-eye"></i> Simular Bracket
+                </button>
                 <button class="btn btn-ghost btn-sm w-full mt-2" onclick="window.validateBracketED()">
                     <i class="fas fa-shield-check"></i> Validar Bracket
                 </button>
@@ -945,7 +1045,7 @@ function renderOrganizador(pane) {
                 <h4><i class="fas fa-edit"></i> Grupos y Equipos</h4>
                 <div class="flex-row gap-2 mt-2">
                     <button class="btn btn-primary btn-sm flex-1" onclick="window.openAddPlayerModalED()">
-                        <i class="fas fa-user-plus"></i> AÃ±adir jugador
+                        <i class="fas fa-user-plus"></i> Añadir jugador
                     </button>
                     <button class="btn btn-ghost btn-sm flex-1" onclick="window.openAddTeamModalED()">
                         <i class="fas fa-people-group"></i> Crear equipo
@@ -987,7 +1087,7 @@ function renderGroupEditor(ev) {
             const memberNames = (t.playerUids || [])
                 .map((uid) => resolveParticipantData({ uid }).name)
                 .filter(Boolean)
-                .join(' Â· ');
+                .join(' · ');
             html += `<div class="group-team-edit">
                 <div class="flex-col">
                     <span>${escapeHtml(t.name)}</span>
@@ -1011,7 +1111,7 @@ function renderGroupEditor(ev) {
             const memberNames = (t.playerUids || [])
                 .map((uid) => resolveParticipantData({ uid }).name)
                 .filter(Boolean)
-                .join(' Â· ');
+                .join(' · ');
             html += `<div class="group-team-edit">
                 <div class="flex-col">
                     <span>${escapeHtml(t.name)}</span>
@@ -1030,7 +1130,7 @@ function renderGroupEditor(ev) {
     container.innerHTML = html;
 }
 
-// Funciones globales para ediciÃ³n de grupos
+// Funciones globales para edición de grupos
 window.moverEquipo = (teamId, fromGroup, toGroup) => {
     if (!toGroup) return;
     const newGroup = prompt('Introduce el grupo destino (A, B, C, D):', toGroup || 'A');
@@ -1045,7 +1145,7 @@ window.guardarMovimiento = async (teamId, newGroup) => {
     for (let g in groups) {
         groups[g] = groups[g].filter(id => id !== teamId);
     }
-    // AÃ±adir al nuevo grupo
+    // Añadir al nuevo grupo
     if (!groups[newGroup]) groups[newGroup] = [];
     groups[newGroup].push(teamId);
     try {
@@ -1058,7 +1158,7 @@ window.guardarMovimiento = async (teamId, newGroup) => {
 
 window.deleteTeamED = async (teamId) => {
     if (!canOrganizar()) return;
-    if (!confirm('Â¿Eliminar este equipo y sus partidos?')) return;
+    if (!confirm('¿Eliminar este equipo y sus partidos?')) return;
     const ev = currentEvent;
     if (!ev) return;
     try {
@@ -1106,7 +1206,7 @@ window.openTeamEditor = (teamId) => {
     overlay.innerHTML = `
         <div class="modal-card glass-strong" style="max-width:460px;">
             <div class="modal-header">
-                <h3 class="modal-title">Editar equipo Â· ${escapeHtml(team.name || team.id)}</h3>
+                <h3 class="modal-title">Editar equipo · ${escapeHtml(team.name || team.id)}</h3>
                 <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
             </div>
             <div class="modal-body">
@@ -1136,7 +1236,7 @@ window.saveTeamEdit = async (teamId) => {
     const sel1 = document.getElementById('team-edit-p1')?.value || '';
     const sel2 = document.getElementById('team-edit-p2')?.value || '';
     if (!sel1 || !sel2 || sel1 === sel2) {
-        showToast('Equipo invÃ¡lido', 'Selecciona dos jugadores distintos', 'warning');
+        showToast('Equipo inválido', 'Selecciona dos jugadores distintos', 'warning');
         return;
     }
 
@@ -1189,7 +1289,7 @@ window.guardarGrupos = async () => {
     showToast('Grupos guardados', '', 'success');
 };
 
-// FunciÃ³n para abrir el evento (cambiar estado a activo)
+// Función para abrir el evento (cambiar estado a activo)
 window.abrirEvento = async () => {
     if (!canOrganizar()) return;
     try {
@@ -1216,14 +1316,14 @@ window.guardarConfigOrganizador = async () => {
             equiposPorGrupo: advPerGroup,
             bracketSeeding
         });
-        showToast('Configuraci�n guardada', '', 'success');
+        showToast('Configuraci?n guardada', '', 'success');
     } catch (e) {
         showToast('Error', e.message, 'error');
     }
 };
 
 window.reiniciarTorneo = async () => {
-    if (!confirm('Â¿Reiniciar el torneo? Se perderÃ¡n todos los resultados y se volverÃ¡ a estado de inscripciÃ³n.')) return;
+    if (!confirm('¿Reiniciar el torneo? Se perderán todos los resultados y se volverá a estado de inscripción.')) return;
     try {
         const matchesSnap = await getDocs(query(collection(db, 'eventoPartidos'), where('eventoId', '==', eventId)));
         await Promise.all(matchesSnap.docs.map(d => deleteDoc(doc(db, 'eventoPartidos', d.id))));
@@ -1235,7 +1335,7 @@ window.reiniciarTorneo = async () => {
             drawState: { status: 'pending', steps: [], version: 0 },
             updatedAt: serverTimestamp()
         });
-        showToast('Torneo reiniciado', 'Volviendo a inscripciÃ³n', 'success');
+        showToast('Torneo reiniciado', 'Volviendo a inscripción', 'success');
         setTimeout(() => window.location.reload(), 1000);
     } catch (e) {
         showToast('Error', e.message, 'error');
@@ -1243,7 +1343,7 @@ window.reiniciarTorneo = async () => {
 };
 
 window.deleteEvent = async () => {
-    if (!confirm('Â¿Eliminar evento permanentemente?')) return;
+    if (!confirm('¿Eliminar evento permanentemente?')) return;
     try {
         await deleteDoc(doc(db, 'eventos', eventId));
         showToast('Evento eliminado', '', 'info');
@@ -1323,7 +1423,7 @@ window.asignarFechaPartido = async (matchId) => {
             fecha: dateStr,
             updatedAt: serverTimestamp()
         });
-        showToast('Fecha asignada', 'El partido aparecerÃ¡ en el calendario/home', 'success');
+        showToast('Fecha asignada', 'El partido aparecerá en el calendario/home', 'success');
     } catch(e) {
         showToast('Error asignando fecha', e.message, 'error');
     }
@@ -1378,7 +1478,7 @@ window.verDetallePartido = (matchId) => {
         <div class="modal-card glass-strong slide-up" style="max-width: 440px;">
             <div class="modal-header">
                 <h3 class="modal-title">${matchPhaseLabel(match)}</h3>
-                <button class="close-btn" onclick="this.closest('.modal-overlay').classList.remove('active')">Ã—</button>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').classList.remove('active')">×</button>
             </div>
             <div class="modal-body p-6">
                 <div class="match-detail-v9">
@@ -1450,7 +1550,7 @@ window.saveMatchTeamEdit = async (matchId) => {
     const teamAId = document.getElementById('match-edit-teamA')?.value || '';
     const teamBId = document.getElementById('match-edit-teamB')?.value || '';
     if (!teamAId || !teamBId || teamAId === teamBId) {
-        return showToast('Equipos invÃ¡lidos', 'Selecciona dos equipos distintos', 'warning');
+        return showToast('Equipos inválidos', 'Selecciona dos equipos distintos', 'warning');
     }
     const conflict = eventMatches.find(m =>
         m.id !== matchId &&
@@ -1459,7 +1559,7 @@ window.saveMatchTeamEdit = async (matchId) => {
         (m.teamAId === teamAId || m.teamBId === teamAId || m.teamAId === teamBId || m.teamBId === teamBId)
     );
     if (conflict) {
-        return showToast('Conflicto', 'Ese equipo ya estÃ¡ asignado en otro partido de la misma ronda.', 'error');
+        return showToast('Conflicto', 'Ese equipo ya está asignado en otro partido de la misma ronda.', 'error');
     }
     const teamA = (currentEvent?.teams || []).find(t => t.id === teamAId);
     const teamB = (currentEvent?.teams || []).find(t => t.id === teamBId);
@@ -1496,7 +1596,7 @@ window.saveMatchTeamEdit = async (matchId) => {
 window.validateBracketED = () => {
     if (!canOrganizar()) return;
     const rounds = currentEvent?.bracket || [];
-    if (!rounds.length) return showToast('Bracket vacÃ­o', 'No hay bracket generado', 'warning');
+    if (!rounds.length) return showToast('Bracket vacío', 'No hay bracket generado', 'warning');
 
     const issues = [];
     rounds.forEach((round, ri) => {
@@ -1521,7 +1621,7 @@ window.validateBracketED = () => {
     overlay.innerHTML = `
         <div class="modal-card glass-strong" style="max-width:480px;">
             <div class="modal-header">
-                <h3 class="modal-title">ValidaciÃ³n de Bracket</h3>
+                <h3 class="modal-title">Validación de Bracket</h3>
                 <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
             </div>
             <div class="modal-body">
@@ -1550,12 +1650,12 @@ window.abrirProgramacionCalendarioED = (matchId) => {
         <div class="modal-card glass-strong slide-up" style="max-width: 440px;">
             <div class="modal-header">
                 <h3 class="modal-title">Programar Fecha</h3>
-                <button class="close-btn" onclick="this.closest('.modal-overlay').classList.remove('active')">Ã—</button>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').classList.remove('active')">×</button>
             </div>
             <div class="modal-body p-6">
-                 <p class="text-[11px] text-muted mb-4 text-center">Selecciona cuÃ¡ndo se jugarÃ¡ el partido. Se crearÃ¡ automÃ¡ticamente una reserva vinculada en el calendario general.</p>
+                 <p class="text-[11px] text-muted mb-4 text-center">Selecciona cuándo se jugará el partido. Se creará automáticamente una reserva vinculada en el calendario general.</p>
                 <div class="form-group mb-4">
-                    <label class="form-label text-[10px] opacity-70 mb-2 block">DÃA DEL PARTIDO</label>
+                    <label class="form-label text-[10px] opacity-70 mb-2 block">DÍA DEL PARTIDO</label>
                     <input type="date" id="ed-match-date" class="input py-3" value="${isoDate}">
                 </div>
                 <div class="form-group">
@@ -1629,7 +1729,7 @@ window.confirmarProgramacionCalendarioED = async (matchId) => {
         }
         
         hideLoading();
-        showToast("Â¡Listo!", "Calendario actualizado y partido programado", "success");
+        showToast("¡Listo!", "Calendario actualizado y partido programado", "success");
         document.getElementById('modal-match-detail-ed').classList.remove('active');
     } catch (e) {
         hideLoading();
@@ -1642,14 +1742,14 @@ window.generarFaseEliminatoria = async (opts = {}) => {
     const ev = currentEvent;
     
     if (ev.formato === 'league') {
-        showToast('AtenciÃ³n', 'Este formato es de liga, no tiene eliminatorias', 'info');
+        showToast('Atención', 'Este formato es de liga, no tiene eliminatorias', 'info');
         return;
     }
 
     const manualIds = Array.isArray(opts.selectedTeamIds) ? opts.selectedTeamIds.filter(Boolean) : null;
     let nPasan = Number.isFinite(Number(opts.nPasan)) ? parseInt(opts.nPasan) : null;
     if (!nPasan) {
-        const pasanPorGrupo = prompt('Â¿CuÃ¡ntos equipos pasan por grupo a la siguiente fase?', ev.equiposPorGrupo || 2);
+        const pasanPorGrupo = prompt('¿Cuántos equipos pasan por grupo a la siguiente fase?', ev.equiposPorGrupo || 2);
         if (!pasanPorGrupo) return;
         nPasan = parseInt(pasanPorGrupo);
     }
@@ -1685,7 +1785,7 @@ window.generarFaseEliminatoria = async (opts = {}) => {
         return;
     }
 
-    if (!confirm(`PasarÃ¡n ${clasificados.length} equipos al bracket final y se eliminarÃ¡n ${eliminados.length} equipos. Â¿EstÃ¡s seguro?`)) return;
+    if (!confirm(`Pasarán ${clasificados.length} equipos al bracket final y se eliminarán ${eliminados.length} equipos. ¿Estás seguro?`)) return;
 
     try {
         const updatedTeams = (ev.teams || []).map(t => {
@@ -1779,8 +1879,122 @@ window.generarFaseEliminatoria = async (opts = {}) => {
     }
 };
 
+window.simularBracketEvento = async () => {
+    if (!canOrganizar()) return;
+    const ev = currentEvent;
+    if (!ev) return;
+    if (ev.formato === 'league') {
+        showToast('Atención', 'Este formato es de liga, no tiene eliminatorias', 'info');
+        return;
+    }
+
+    const nPasan = Number(ev.equiposPorGrupo || 2);
+    const groupsKeys = Object.keys(ev.groups || {});
+    const teamMap = new Map((ev.teams || []).map(t => [t.id, t]));
+    let clasificados = [];
+
+    groupsKeys.forEach(g => {
+        const teamIds = ev.groups[g] || [];
+        const teamsEnGrupo = teamIds.map(id => teamMap.get(id));
+        const groupMatches = eventMatches.filter(m => m.phase === 'group' && m.group === g);
+        const tabla = computeGroupTable(groupMatches, teamsEnGrupo, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+        tabla.forEach((fila, idx) => {
+            if (idx < nPasan) clasificados.push(teamMap.get(fila.teamId));
+        });
+    });
+
+    if (clasificados.length < 2) {
+        showToast('Error', 'No hay suficientes equipos clasificados para simular', 'error');
+        return;
+    }
+
+    const seedingMode = ev.bracketSeeding || 'random';
+    let seededTeams = clasificados.filter(Boolean);
+    if (seedingMode === 'cross' && groupsKeys.length === 2) {
+        const gA = groupsKeys[0];
+        const gB = groupsKeys[1];
+        const teamsA = (ev.groups[gA] || []).map(id => teamMap.get(id)).filter(Boolean);
+        const teamsB = (ev.groups[gB] || []).map(id => teamMap.get(id)).filter(Boolean);
+        const matchesA = eventMatches.filter(m => m.phase === 'group' && m.group === gA);
+        const matchesB = eventMatches.filter(m => m.phase === 'group' && m.group === gB);
+        const tablaA = computeGroupTable(matchesA, teamsA, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+        const tablaB = computeGroupTable(matchesB, teamsB, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+        const aTop = tablaA.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
+        const bTop = tablaB.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
+        const order = [];
+        for (let i = 0; i < nPasan; i++) {
+            const a = aTop[i];
+            const b = bTop[nPasan - 1 - i];
+            if (a && b) order.push(a, b);
+        }
+        for (let i = 0; i < nPasan; i++) {
+            const b = bTop[i];
+            const a = aTop[nPasan - 1 - i];
+            if (a && b) order.push(b, a);
+        }
+        seededTeams = order.filter(Boolean);
+    } else if (seedingMode === 'rank') {
+        const groupMatches = eventMatches.filter(m => m.phase === 'group');
+        const tabla = computeGroupTable(groupMatches, seededTeams, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+        seededTeams = tabla.map(r => teamMap.get(r.teamId)).filter(Boolean);
+    }
+
+    const rounds = generateKnockoutTree(
+        seededTeams,
+        ev.id + '_preview',
+        { shuffle: seedingMode === 'random' }
+    );
+    openBracketPreviewModal(rounds);
+};
+
+function openBracketPreviewModal(rounds = []) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:900px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Simulación de Bracket</h3>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">×</button>
+            </div>
+            <div class="modal-body scroll-y" style="max-height:75vh;">
+                <div class="bracket-container" id="bracket-preview-body"></div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    const body = overlay.querySelector("#bracket-preview-body");
+    if (!body) return;
+    if (!rounds.length) {
+        body.innerHTML = `<div class="empty-state">No hay bracket para simular.</div>`;
+        return;
+    }
+    let html = `<div class="bracket">`;
+    rounds.forEach((round, i) => {
+        const label = i === rounds.length - 1 ? "Final" : (i === rounds.length - 2 ? "Semifinal" : `Ronda ${i + 1}`);
+        html += `<div class="bracket-round"><div class="bracket-round-label">${label}</div>`;
+        round.forEach((m) => {
+            const teamA = currentEvent?.teams?.find(t => t.id === m.teamAId);
+            const teamB = currentEvent?.teams?.find(t => t.id === m.teamBId);
+            html += `
+                <div class="bracket-match">
+                    <div class="b-team-v9">
+                        <span class="b-name-v9">${teamA?.name || 'TBD'}</span>
+                        <span class="b-score-v9">-</span>
+                    </div>
+                    <div class="b-team-v9">
+                        <span class="b-name-v9">${teamB?.name || 'TBD'}</span>
+                        <span class="b-score-v9">-</span>
+                    </div>
+                </div>`;
+        });
+        html += `</div>`;
+    });
+    html += `</div>`;
+    body.innerHTML = html;
+}
+
 window.reiniciarPartido = async (matchId) => {
-    if (!confirm('Â¿Reiniciar este partido? Se borrarÃ¡ el resultado.')) return;
+    if (!confirm('¿Reiniciar este partido? Se borrará el resultado.')) return;
     try {
         await updateDoc(doc(db, 'eventoPartidos', matchId), {
             resultado: null,
@@ -1803,7 +2017,7 @@ window.regenerarPartidosLiga = async () => {
         return;
     }
 
-    if (!confirm('Esto ELIMINARÃ todos los partidos de liga/grupo del evento (incluidos vÃ­nculos) y los volverÃ¡ a crear. Â¿Continuar?')) return;
+    if (!confirm('Esto ELIMINARÁ todos los partidos de liga/grupo del evento (incluidos vínculos) y los volverá a crear. ¿Continuar?')) return;
 
     try {
         showToast('Procesando...', 'Regenerando partidos de liga', 'info');
@@ -1858,7 +2072,7 @@ window.regenerarPartidosLiga = async () => {
                 });
             }
         }
-        showToast('Ã‰XITO', 'Partidos regenerados correctamente', 'success');
+        showToast('—XITO', 'Partidos regenerados correctamente', 'success');
     } catch (e) {
         console.error(e);
         showToast('Error', e.message, 'error');
@@ -1882,7 +2096,7 @@ window.aprobarJugador = async (eventId, uid) => {
 };
 
 window.expulsarJugador = async (eventId, uid) => {
-    if (!confirm('Â¿Expulsar a este jugador?')) return;
+    if (!confirm('¿Expulsar a este jugador?')) return;
     const ev = currentEvent;
     if (!ev) return;
     const entry = ev.inscritos?.find(i => i.uid === uid);
@@ -1945,6 +2159,40 @@ window.editarNivelInvitado = async (eventId, uid) => {
     }
 };
 
+window.editarNivelParticipante = async (eventId, uid) => {
+    const ev = currentEvent;
+    if (!ev || !uid) return;
+    const input = document.getElementById(`participant-level-${uid}`);
+    const raw = input?.value;
+    const nivel = Number(raw);
+    if (!Number.isFinite(nivel) || nivel < 1 || nivel > 7) {
+        return showToast('Nivel inválido', 'Introduce un nivel entre 1.0 y 7.0', 'warning');
+    }
+    const inscritos = ev.inscritos || [];
+    const index = inscritos.findIndex(i => i.uid === uid);
+    if (index === -1) return;
+    const updated = [...inscritos];
+    updated[index] = { ...updated[index], nivel };
+    try {
+        await updateDoc(doc(db, 'eventos', eventId), { inscritos: updated });
+        if (registeredUsersById.has(uid)) {
+            await updateDoc(doc(db, 'usuarios', uid), { nivel });
+            const prev = registeredUsersById.get(uid);
+            if (prev) {
+                const next = { ...prev, nivel };
+                registeredUsersById.set(uid, next);
+                registeredUsers = registeredUsers.map(u => u.uid === uid ? next : u);
+            }
+        }
+        const pane = document.getElementById('pane-participantes');
+        if (pane && !pane.classList.contains('hidden')) renderParticipantes(pane);
+        showToast('Nivel actualizado', `Nivel ${nivel.toFixed(1)}`, 'success');
+    } catch (e) {
+        console.error(e);
+        showToast('Error', e.message || 'No se pudo actualizar el nivel', 'error');
+    }
+};
+
 function renderActionBar() {
     const bar = document.getElementById('ed-action-bar');
     const content = document.getElementById('ed-action-content');
@@ -1952,10 +2200,10 @@ function renderActionBar() {
 
     if (currentEvent.estado === 'inscripcion' && !isInscribed() && !isPending()) {
         bar.classList.remove('hidden');
-        content.innerHTML = `<button class="btn-ed-primary" onclick="window.inscribirseEventoED()"><i class="fas fa-bolt"></i> SOLICITAR INSCRIPCIÃ“N</button>`;
+        content.innerHTML = `<button class="btn-ed-primary" onclick="window.inscribirseEventoED()"><i class="fas fa-bolt"></i> SOLICITAR INSCRIPCIÓN</button>`;
     } else if (isPending()) {
         bar.classList.remove('hidden');
-        content.innerHTML = `<div class="inscribed-badge pending"><i class="fas fa-hourglass-half"></i> Pendiente de aprobaciÃ³n</div>`;
+        content.innerHTML = `<div class="inscribed-badge pending"><i class="fas fa-hourglass-half"></i> Pendiente de aprobación</div>`;
     } else if (isInscribed() || canOrganizar()) {
         bar.classList.remove('hidden');
         content.innerHTML = `<div class="inscribed-badge"><i class="fas fa-check-circle"></i> ${isInscribed() ? 'Inscrito' : 'Modo organizador'}</div>`;
@@ -1965,12 +2213,12 @@ function renderActionBar() {
 }
 
 window.inscribirseEventoED = async () => {
-    if (!currentUser) { showToast('Acceso requerido', 'Inicia sesiÃ³n', 'warning'); return; }
+    if (!currentUser) { showToast('Acceso requerido', 'Inicia sesión', 'warning'); return; }
     const ev = currentEvent;
     if (!ev) return;
 
     if (ev.inscritos?.some(i => i.uid === currentUser.uid)) {
-        showToast('Ya solicitado', 'Ya has solicitado inscripciÃ³n', 'info');
+        showToast('Ya solicitado', 'Ya has solicitado inscripción', 'info');
         return;
     }
     const aprobados = (ev.inscritos || []).filter(i => i.aprobado === true).length;
@@ -1979,7 +2227,7 @@ window.inscribirseEventoED = async () => {
         return;
     }
     if (ev.estado !== 'inscripcion') {
-        showToast('InscripciÃ³n cerrada', 'Este evento ya no acepta inscripciones.', 'warning');
+        showToast('Inscripción cerrada', 'Este evento ya no acepta inscripciones.', 'warning');
         return;
     }
 
@@ -1999,10 +2247,10 @@ window.inscribirseEventoED = async () => {
 
         let pairCode = '';
         if (ev.modalidad === 'parejas' && ev.companeroObligatorio) {
-            const code = prompt('CÃ³digo de pareja (igual para ambos)', 'pareja-1');
+            const code = prompt('Código de pareja (igual para ambos)', 'pareja-1');
             if (code === null) return;
             pairCode = code.trim().toLowerCase();
-            if (!pairCode) { showToast('Pareja', 'Debes indicar cÃ³digo de pareja.', 'warning'); return; }
+            if (!pairCode) { showToast('Pareja', 'Debes indicar código de pareja.', 'warning'); return; }
         }
 
         const newInscripto = {
@@ -2018,10 +2266,10 @@ window.inscribirseEventoED = async () => {
         const evRef = doc(db, 'eventos', eventId);
         await updateDoc(evRef, { inscritos: arrayUnion(newInscripto) });
 
-        showToast('Â¡Solicitud enviada!', 'Espera la aprobaciÃ³n del organizador', 'success');
+        showToast('¡Solicitud enviada!', 'Espera la aprobación del organizador', 'success');
     } catch (e) {
         console.error(e);
-        showToast('Error', 'No se pudo completar la inscripciÃ³n', 'error');
+        showToast('Error', 'No se pudo completar la inscripción', 'error');
     }
 };
 
@@ -2030,10 +2278,21 @@ function fmtDate(d) {
     const date = d.toDate ? d.toDate() : new Date(d);
     return isNaN(date) ? '-' : date.toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
-window.setMatchFilter = (f) => {
+function formatChatTime(ts) {
+    if (!ts) return "";
+    const d = ts?.toDate ? ts.toDate() : new Date(ts);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+}
+window.setMatchFilter = (f, silent = false) => {
     window._matchFilter = f;
     const pane = document.getElementById('pane-partidos');
-    if (pane) renderMatches(pane);
+    if (!pane) return;
+    if (silent) {
+        updateMatchesList(pane);
+        return;
+    }
+    renderMatches(pane);
 };
 
 function escapeHtml(s) {
@@ -2048,40 +2307,128 @@ function escapeHtml(s) {
 }
 
 
+let proposalChatUnsubED = null;
 window.proponerFechaEvento = async (matchId) => {
     const match = eventMatches.find(m => m.id === matchId);
     if (!match) return;
-
-    let modal = document.getElementById('modal-match');
-    let area = document.getElementById('match-detail-area');
-    let title = document.getElementById('modal-titulo');
-
-    if (!modal) {
-        // Fallback for evento-detalle context if modal-match not present
-        modal = document.getElementById('modal-match-detail-ed');
-        area = modal?.querySelector('.modal-body') || document.getElementById('match-modal-body-ed');
-        title = modal?.querySelector('.modal-title');
+    const teamMap = new Map((currentEvent?.teams || []).map(t => [t.id, t]));
+    const teamA = teamMap.get(match.teamAId);
+    const teamB = teamMap.get(match.teamBId);
+    const players = (match.playerUids && match.playerUids.length)
+        ? match.playerUids
+        : [...(teamA?.playerUids || []), ...(teamB?.playerUids || [])];
+    const participantUids = players.filter((uid) => uid && !String(uid).startsWith("GUEST_") && !String(uid).startsWith("invitado_") && !String(uid).startsWith("manual_"));
+    const participantNames = participantUids.map((uid) => {
+        const reg = registeredUsersById.get(uid);
+        if (reg) return reg.nombreUsuario || reg.nombre || reg.email || uid;
+        const ins = (currentEvent?.inscritos || []).find((i) => i.uid === uid);
+        return ins?.nombre || ins?.nombreUsuario || uid;
+    });
+    if (!canOrganizar() && !participantUids.includes(currentUser?.uid)) {
+        return showToast("Sin acceso", "Solo participantes del partido pueden entrar al chat.", "warning");
     }
 
-    if (!modal || !area) return;
+    const title = `Propuesta: ${(match.teamAName || teamA?.name || "Equipo A")} vs ${(match.teamBName || teamB?.name || "Equipo B")}`;
+    let proposalId = null;
+    const existing = await getDocs(query(collection(db, "propuestasPartido"), where("eventMatchId", "==", matchId), limit(1)));
+    if (!existing.empty) {
+        const docRef = existing.docs[0];
+        proposalId = docRef.id;
+    } else {
+        const ref = await addDoc(collection(db, "propuestasPartido"), {
+            title,
+            createdBy: currentUser?.uid || null,
+            participantUids,
+            participantNames,
+            status: "open",
+            eventId: currentEvent?.id || null,
+            eventMatchId: matchId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        proposalId = ref.id;
+    }
 
-    modal.classList.add('active');
-    if (title) title.textContent = "CHAT DEL PARTIDO";
-    
-    area.innerHTML = `
-        <div class="flex-col gap-4 p-4">
-            <div class="info-box-v7">
-                <i class="fas fa-comments"></i>
-                <p class="text-[11px] font-medium leading-relaxed">Usa este chat para proponer fechas y acordar el partido con tus rivales.</p>
+    let modal = document.getElementById("modal-proposal-chat-ed");
+    if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "modal-proposal-chat-ed";
+        modal.className = "modal-overlay active";
+        document.body.appendChild(modal);
+        modal.addEventListener("click", (e) => {
+            if (e.target === modal) modal.classList.remove("active");
+        });
+    }
+    modal.classList.add("active");
+    modal.innerHTML = `
+        <div class="modal-card glass-strong slide-up" style="max-width: 520px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Chat de Propuesta</h3>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').classList.remove('active')">×</button>
             </div>
-            <div id="match-chat-container">
-                 <div class="center py-10"><div class="spinner-galaxy"></div></div>
+            <div class="modal-body p-4 flex-col gap-3">
+                <div class="text-[10px] uppercase tracking-widest font-black text-primary">${title}</div>
+                <div id="proposal-chat-list-ed" class="proposal-chat-list"></div>
+                <div class="proposal-chat-input">
+                    <input id="proposal-chat-text-ed" class="input" placeholder="Escribe tu propuesta...">
+                    <button class="btn-confirm-v7" id="proposal-send-btn-ed">Enviar</button>
+                </div>
+                <div class="flex-row gap-2">
+                    <button class="btn-ghost w-full" onclick="window.vincularPartidoCalendario('${matchId}')">Vincular al calendario</button>
+                    <button class="btn-ghost w-full" onclick="this.closest('.modal-overlay').classList.remove('active')">Cerrar</button>
+                </div>
             </div>
         </div>
     `;
 
-    // Re-use match-service detail rendering which includes chat
-    await renderMatchDetail(area, matchId, 'eventoPartidos', currentUser, currentUserData);
+    const chatList = modal.querySelector("#proposal-chat-list-ed");
+    if (typeof proposalChatUnsubED === "function") proposalChatUnsubED();
+    proposalChatUnsubED = onSnapshot(
+        query(collection(db, "propuestasPartido", proposalId, "chat"), orderBy("createdAt", "asc")),
+        (snap) => {
+            if (!chatList) return;
+            chatList.innerHTML = snap.docs.map((d) => {
+                const m = d.data() || {};
+                const isMe = m.uid === currentUser?.uid;
+                return `
+                    <div class="proposal-msg ${isMe ? "me" : ""}">
+                        <div class="proposal-msg-meta">${m.name || "Jugador"} · ${formatChatTime(m.createdAt)}</div>
+                        <div class="proposal-msg-text">${escapeHtml(m.text || "")}</div>
+                    </div>
+                `;
+            }).join("") || `<div class="text-[10px] opacity-50">Sin mensajes todavía.</div>`;
+            chatList.scrollTop = chatList.scrollHeight;
+        },
+    );
+
+    modal.querySelector("#proposal-send-btn-ed")?.addEventListener("click", async () => {
+        const input = modal.querySelector("#proposal-chat-text-ed");
+        const text = input?.value?.trim();
+        if (!text) return;
+        input.value = "";
+        try {
+            const name = currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador";
+            await addDoc(collection(db, "propuestasPartido", proposalId, "chat"), {
+                uid: currentUser.uid,
+                name,
+                text,
+                createdAt: serverTimestamp(),
+            });
+            const targets = participantUids.filter((uid) => uid && uid !== currentUser.uid);
+            if (targets.length) {
+                await createNotification(
+                    targets,
+                    "Mensaje de propuesta",
+                    `Tienes un mensaje en: ${title}`,
+                    "proposal_message",
+                    "home.html",
+                    { type: "proposal_message", proposalId, dedupId: `proposal_msg_${proposalId}_${Date.now()}` },
+                );
+            }
+        } catch (e) {
+            showToast("Error", "No se pudo enviar el mensaje.", "error");
+        }
+    });
 };
 
 window.vincularPartidoCalendario = (matchId) => {

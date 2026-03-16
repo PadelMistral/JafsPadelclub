@@ -88,6 +88,8 @@ async function _syncData() {
       usersSnap,
       openAmis,
       openReto,
+      eventMatchSnap,
+      eventsSnap,
       weatherData,
     ] = await Promise.all([
       getDocument("usuarios", uid),
@@ -148,9 +150,10 @@ async function _syncData() {
     }
     DATA_CACHE.user = uData;
     DATA_CACHE.eloHistory = eloSnap.docs.map((d) => d.data());
+    DATA_CACHE.matches = [
       ...matchAmis.docs.map((d) => ({ ...d.data(), id: d.id, _col: "amistoso" })),
       ...matchReto.docs.map((d) => ({ ...d.data(), id: d.id, _col: "reto" })),
-      ...(arguments[8] ? arguments[8].docs.map(d => ({ ...d.data(), id: d.id, _col: "evento" })) : []),
+      ...eventMatchSnap.docs.map((d) => ({ ...d.data(), id: d.id, _col: "evento" })),
     ].sort((a, b) => {
       const getT = (x) => {
         try {
@@ -189,7 +192,7 @@ async function _syncData() {
       refreshedAt: new Date().toISOString(),
     };
 
-    DATA_CACHE.currentEvents = arguments[9]?.docs?.map(d => ({ id: d.id, ...d.data() })) || [];
+    DATA_CACHE.currentEvents = eventsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
     DATA_CACHE.lastUpdate = now;
     userData = uData;
 

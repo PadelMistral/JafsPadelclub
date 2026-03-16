@@ -6,7 +6,7 @@
 //  - Demotion Shield: 3 partidos de protección al subir de división
 //  - Bandas más amplias = usuarios permanecen más tiempo en su nivel real
 
-export const ELO_SYSTEM_VERSION = "elo2v5_v1_pro";
+export const ELO_SYSTEM_VERSION = "elo2v6_v2_boost";
 
 export const ELO_CONFIG = {
   BASE_RATING: 1000,
@@ -15,20 +15,20 @@ export const ELO_CONFIG = {
   LEVEL_MIN: 1.0,
   LEVEL_MAX: 7.0,
   LEVEL_STEP: 0.001, 
-  BONUS_CAP_RATIO: 0.25, 
+  BONUS_CAP_RATIO: 0.35, 
   RATING_PER_LEVEL: 1000,
 
   K: {
-    PROVISIONAL: 40, 
-    DEVELOPING: 32, 
-    STABLE: 22, 
-    ELITE: 16, 
-    LEGEND: 12, 
+    PROVISIONAL: 60, 
+    DEVELOPING: 48, 
+    STABLE: 36, 
+    ELITE: 28, 
+    LEGEND: 22, 
   },
 
   CAPS: {
-    COMPETITIVE_ABS: 60, 
-    FRIENDLY_ABS: 30,     
+    COMPETITIVE_ABS: 90, 
+    FRIENDLY_ABS: 60,     
   },
 
   DEMOTION_SHIELD_MATCHES: 3,

@@ -39,7 +39,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showNotificationHelpModal(status);
   };
   
-  // Simplificado: Solo escuchamos la bandeja de entrada y el permiso bÃ¡sico
+  // Simplificado: Solo escuchamos la bandeja de entrada y el permiso básico
 
   observerAuth(async (user) => {
     if (!user) {
@@ -285,7 +285,7 @@ async function registerAppShellServiceWorker() {
 }
 
 async function hardResetNotifications() {
-  if (!confirm("Se limpiarÃ¡ cachÃ© local y Service Worker. Â¿Continuar?")) return;
+  if (!confirm("Se limpiará caché local y Service Worker. ¿Continuar?")) return;
   analyticsSetFlag("notifications.permission", false);
   analyticsCount("notifications.hard_reset", 1);
   localStorage.clear();
@@ -391,7 +391,7 @@ function renderPermissionState(health) {
     } else {
       card.style.display = "flex";
       card.classList.add("state-default");
-      text.textContent = "Estado: Pendiente de activaciÃ³n.";
+      text.textContent = "Estado: Pendiente de activación.";
       btn.textContent = "ACTIVAR AHORA";
       btn.disabled = false;
       btn.style.opacity = "1";
@@ -403,13 +403,13 @@ function renderPermissionState(health) {
     banner.classList.remove("ok", "warn", "error");
     if (health.backgroundReady) {
       banner.classList.add("ok");
-      bannerText.textContent = "CONFIGURACIÃ“N CORRECTA";
+      bannerText.textContent = "CONFIGURACIÓN CORRECTA";
     } else if (health.permission === "denied") {
       banner.classList.add("error");
       bannerText.textContent = "BLOQUEADO POR NAVEGADOR";
     } else if (health.issues && health.issues.includes("sw_scope_conflict")) {
       banner.classList.add("error");
-      bannerText.textContent = "CONFLICTO DE VERSIÃ“N";
+      bannerText.textContent = "CONFLICTO DE VERSIÓN";
     } else if (health.issues && health.issues.includes("sw_inactive")) {
       banner.classList.add("warn");
       bannerText.textContent = "SW INACTIVO";
@@ -418,7 +418,7 @@ function renderPermissionState(health) {
       bannerText.textContent = "PENDIENTE DE REGISTRO";
     } else {
       banner.classList.add("warn");
-      bannerText.textContent = "PENDIENTE DE ACTIVACIÃ“N";
+      bannerText.textContent = "PENDIENTE DE ACTIVACIÓN";
     }
   }
 }
@@ -441,11 +441,11 @@ async function markAllAsRead() {
     batch.update(doc(db, "notificaciones", n.id), { read: true, leido: true });
   });
   await batch.commit();
-  showToast("Bandeja", "Todo marcado como leÃ­do", "success");
+  showToast("Bandeja", "Todo marcado como leído", "success");
 }
 
 async function clearAllNotifications() {
-  if (!confirm("Â¿Vaciar toda la bandeja permanentemente?")) return;
+  if (!confirm("¿Vaciar toda la bandeja permanentemente?")) return;
   const batch = writeBatch(db);
   allNotifs.forEach((n) => {
     batch.delete(doc(db, "notificaciones", n.id));
@@ -515,7 +515,7 @@ window.handleNotifClick = async (id, link) => {
 };
 
 window.deleteNotif = async (id) => {
-  if (!confirm("Â¿Borrar alerta?")) return;
+  if (!confirm("¿Borrar alerta?")) return;
   await deleteDoc(doc(db, "notificaciones", id));
   showToast("Borrado", "Alerta eliminada", "info");
 };
@@ -528,7 +528,7 @@ window.showPushHelpGuide = () => {
     overlay.innerHTML = `
         <div class="modal-card glass-strong animate-up" style="max-width:400px; padding:0; overflow:hidden; border-radius: 24px !important;">
             <div class="p-6 border-b border-white-05 flex items-center justify-between bg-white/02">
-                <h3 class="text-sm font-black italic tracking-widest text-primary uppercase">GuÃ­a de Notificaciones</h3>
+                <h3 class="text-sm font-black italic tracking-widest text-primary uppercase">Guía de Notificaciones</h3>
                 <button class="text-white/40 hover:text-white" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body custom-scroll p-6" style="max-height: 70vh;">
@@ -538,15 +538,15 @@ window.showPushHelpGuide = () => {
                             <span class="w-6 h-6 rounded-lg bg-primary/20 text-primary flex items-center justify-center text-xs font-black">1</span>
                             <h4 class="text-xs font-black uppercase text-white">Activar Permisos</h4>
                         </div>
-                        <p class="text-[11px] text-white/50 leading-relaxed pl-9">Pulsa el botÃ³n "Sincronizar Dispositivo" en la parte superior. Si el navegador pregunta, selecciona "Permitir".</p>
+                        <p class="text-[11px] text-white/50 leading-relaxed pl-9">Pulsa el botón "Sincronizar Dispositivo" en la parte superior. Si el navegador pregunta, selecciona "Permitir".</p>
                     </div>
                     
                     <div class="help-step">
                         <div class="flex items-center gap-3 mb-2">
                             <span class="w-6 h-6 rounded-lg bg-primary/20 text-primary flex items-center justify-center text-xs font-black">2</span>
-                            <h4 class="text-xs font-black uppercase text-white">AÃ±adir a Inicio (iOS)</h4>
+                            <h4 class="text-xs font-black uppercase text-white">Añadir a Inicio (iOS)</h4>
                         </div>
-                        <p class="text-[11px] text-white/50 leading-relaxed pl-9">En iPhone, pulsa el botÃ³n compartir <i class="fas fa-arrow-up-from-bracket mx-1 text-primary"></i> y elige "AÃ±adir a pantalla de inicio". Las notificaciones solo funcionan desde el icono del escritorio.</p>
+                        <p class="text-[11px] text-white/50 leading-relaxed pl-9">En iPhone, pulsa el botón compartir <i class="fas fa-arrow-up-from-bracket mx-1 text-primary"></i> y elige "Añadir a pantalla de inicio". Las notificaciones solo funcionan desde el icono del escritorio.</p>
                     </div>
 
                     <div class="help-step">
@@ -562,7 +562,7 @@ window.showPushHelpGuide = () => {
                             <i class="fas fa-bolt text-primary mt-1"></i>
                             <div class="flex-col gap-1">
                                 <span class="text-[10px] font-black text-primary uppercase">Pro Tip</span>
-                                <p class="text-[10px] text-white/60">Si nada funciona, usa el botÃ³n "DiagnÃ³stico de Red" en esta pÃ¡gina.</p>
+                                <p class="text-[10px] text-white/60">Si nada funciona, usa el botón "Diagnóstico de Red" en esta página.</p>
                             </div>
                         </div>
                     </div>

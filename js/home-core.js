@@ -1,4 +1,4 @@
-/* Home V2 - Clean and Real Player Names */
+﻿/* Home V2 - Clean and Real Player Names */
 import { db, subscribeCol, getDocument } from "./firebase-service.js";
 import {
   collection,
@@ -17,6 +17,7 @@ import {
 import { initAppUI, showToast } from "./ui-core.js";
 import { injectHeader, injectNavbar } from "./modules/ui-loader.js";
 import { renderMatchDetail } from "./match-service.js";
+import { createNotification } from "./services/notification-service.js";
 import {
   isCancelledMatch,
   isFinishedMatch,
@@ -69,6 +70,8 @@ let proposalUsersCache = [];
 let proposalListUnsub = null;
 let proposalChatUnsub = null;
 let activeProposalId = null;
+let activeProposalMeta = null;
+let proposalInlineMode = false;
 
 /* Apoing Integration */
 let apoingEvents = [];
@@ -118,6 +121,23 @@ function getEventUserName(uid) {
   } catch {
     return null;
   }
+}
+
+function parseGuestMeta(uid) {
+  if (!uid) return null;
+  const s = String(uid);
+  if (!s.startsWith("GUEST_") && !s.startsWith("invitado_") && !s.startsWith("manual_")) return null;
+  const parts = s.split("_");
+  if (parts.length >= 4) {
+    const levelRaw = parts[parts.length - 2];
+    const level = parseFloat(levelRaw);
+    const nameRaw = parts.slice(1, parts.length - 2).join(" ");
+    const name = nameRaw.replace(/_/g, " ").trim() || "Invitado";
+    return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+  }
+  const name = (parts[1] || "Invitado").replace(/_/g, " ").trim() || "Invitado";
+  const level = parseFloat(parts[2]);
+  return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
 }
 
 function normalizeMatchForCache(match) {
@@ -175,9 +195,8 @@ async function resolvePlayerName(uid) {
   const eventName = getEventUserName(uid);
   if (eventName) return eventName;
   const sUid = String(uid);
-  if (sUid.startsWith("GUEST_"))
-    return String(uid).split("GUEST_")[1]?.replace(/_/g, " ") || String(uid).split("_")[1] || "Invitado";
-  if (sUid.startsWith("invitado_") || sUid.startsWith("manual_")) return "Invitado";
+  const guestMeta = parseGuestMeta(sUid);
+  if (guestMeta) return guestMeta.name || "Invitado";
   if (playerNameCache.has(uid)) return playerNameCache.get(uid);
   try {
     const doc = await getDocument("usuarios", uid);
@@ -208,12 +227,10 @@ function getPlayerDisplayName(uid) {
   const sUid = String(uid);
   const eventName = getEventUserName(sUid);
   if (eventName) return eventName;
-  if (sUid.startsWith("GUEST_") || sUid.startsWith("invitado_") || sUid.startsWith("manual_")) {
-    const parts = sUid.split("_");
-    return parts[1] || "Invitado";
-  }
+  const guestMeta = parseGuestMeta(sUid);
+  if (guestMeta) return guestMeta.name || "Invitado";
   if (uid === currentUser?.uid)
-    return currentUserData?.nombreUsuario || currentUserData?.nombre || "TÚ";
+    return currentUserData?.nombreUsuario || currentUserData?.nombre || "Tú";
   return playerNameCache.get(uid) || "Jugador";
 }
 
@@ -796,7 +813,7 @@ function refreshRecommendations() {
     const resultLabel = winner ? (winner === mySide ? "victoria" : "derrota") : "resultado parcial";
     const teamA = getTeamNames(lastMatch, "A");
     const teamB = getTeamNames(lastMatch, "B");
-    lines.push(`Último partido (${when}): ${teamA} vs ${teamB} · ${sets} · ${resultLabel}.`);
+    lines.push(`último partido (${when}): ${teamA} vs ${teamB} · ${sets} · ${resultLabel}.`);
   }
 
   const diaryEntries = currentUserData?.diario || [];
@@ -870,6 +887,34 @@ function isEventMatch(match) {
     String(match?.col || "") === "eventoPartidos" ||
     Boolean(match?.eventMatchId || match?.eventoId || match?.eventLink?.eventoId)
   );
+}
+
+function isKnockoutPhaseMatch(match = {}) {
+  const phase = String(match.phase || "").toLowerCase();
+  return ["knockout", "semi", "semis", "semifinal", "final", "cuartos", "quarter"].includes(phase);
+}
+
+function isGroupPhaseMatch(match = {}, ev = null) {
+  const phase = String(match.phase || "").toLowerCase();
+  if (["group", "liga", "league", "grupos"].includes(phase)) return true;
+  if (!phase && (ev?.formato === "groups" || ev?.formato === "league")) return true;
+  return false;
+}
+
+function isEventGroupsComplete(eventId) {
+  if (!eventId) return true;
+  const ev = eventDocCache.get(eventId) || null;
+  const matches = allMatches.filter((m) => getEventIdFromMatch(m) === eventId);
+  const groupMatches = matches.filter((m) => isGroupPhaseMatch(m, ev));
+  if (!groupMatches.length) return true;
+  return groupMatches.every((m) => isFinishedMatch(m));
+}
+
+function isEventKnockoutLocked(match) {
+  if (!isEventMatch(match)) return false;
+  if (!isKnockoutPhaseMatch(match)) return false;
+  const eventId = getEventIdFromMatch(match);
+  return !isEventGroupsComplete(eventId);
 }
 
 function isMatchRelevantToMe(match) {
@@ -1069,16 +1114,24 @@ function renderEventSpotlight() {
     const eventMatches = dedupeEventLinkedMatches(allMatches).filter(
       (m) => isEventMatch(m) && getEventIdFromMatch(m) === nextEvent.id,
     );
+    const myGroup = getMyTeamFromEvent(nextEvent)
+      ? Object.entries(nextEvent.groups || {}).find(([, ids]) => ids?.includes(getMyTeamFromEvent(nextEvent)?.id))?.[0]
+      : null;
+    const groupMatches = eventMatches.filter((m) => {
+      if (!isGroupPhaseMatch(m, nextEvent)) return false;
+      if (myGroup && m.group) return String(m.group) === String(myGroup);
+      return true;
+    });
     // Find team matches by ID if generated, or just by player UIDs if still in pool
     const teamMatches = myTeam?.id
-      ? eventMatches.filter((m) => m.teamAId === myTeam.id || m.teamBId === myTeam.id)
-      : eventMatches.filter((m) => getNormalizedPlayers(m).includes(currentUser?.uid));
+      ? groupMatches.filter((m) => m.teamAId === myTeam.id || m.teamBId === myTeam.id)
+      : groupMatches.filter((m) => getNormalizedPlayers(m).includes(currentUser?.uid));
 
     const totalTeam = teamMatches.length;
     const playedTeam = teamMatches.filter((m) => isFinishedMatch(m)).length;
     const pendingTeam = totalTeam - playedTeam;
-    const totalEvent = eventMatches.length;
-    const playedEvent = eventMatches.filter((m) => isFinishedMatch(m)).length;
+    const totalEvent = groupMatches.length;
+    const playedEvent = groupMatches.filter((m) => isFinishedMatch(m)).length;
     const teamPct = totalTeam ? Math.round((playedTeam / totalTeam) * 100) : 0;
     const eventPct = totalEvent ? Math.round((playedEvent / totalEvent) * 100) : 0;
 
@@ -1479,6 +1532,7 @@ function renderNextMatch() {
   const now = Date.now();
   const mine = allMatches
     .filter((m) => isMatchRelevantToMe(m))
+    .filter((m) => !isEventKnockoutLocked(m))
     .filter((m) => !isCancelledMatch(m) && !isFinishedMatch(m))
     .filter((m) => {
       const d = toDateSafe(m.fecha);
@@ -1612,6 +1666,7 @@ function renderMatchesByFilter(filter) {
 
   let list = dedupeEventLinkedMatches([...allMatches, ...apoingMatches])
     .filter((m) => !isCancelledMatch(m))
+    .filter((m) => !isEventKnockoutLocked(m))
     .filter((m) => {
       if (isEventMatch(m) && !m.fecha) return false;
       return true;
@@ -1818,7 +1873,7 @@ window.openNexusModal = () => {
             ${photo ? `<img src="${photo}" alt="${name}" onerror="this.outerHTML='<span class=&quot;nexus-initials&quot;>${initials}</span>'">` : `<span class="nexus-initials">${initials}</span>`}
           </div>
           <div class="nexus-modal-info">
-            <span class="nexus-modal-name">${isMe ? "TÚ" : name}</span>
+            <span class="nexus-modal-name">${isMe ? "Tú" : name}</span>
             <span class="nexus-modal-meta">Conectado ahora</span>
           </div>
         </div>
@@ -1828,7 +1883,7 @@ window.openNexusModal = () => {
     : '<div class="nexus-modal-empty">No hay usuarios conectados ahora</div>';
 
   const offlineHtml = `
-    <div class="nexus-modal-divider">No conectados â€” última actividad (${offlineUsers.length})</div>
+    <div class="nexus-modal-divider">No conectados —" última actividad (${offlineUsers.length})</div>
     ${
       offlineUsers.length
         ? offlineUsers
@@ -1847,7 +1902,7 @@ window.openNexusModal = () => {
                   </div>
                   <div class="nexus-modal-info">
                     <span class="nexus-modal-name">${name}</span>
-                    <span class="nexus-modal-meta">Último acceso: ${lastTxt}</span>
+                    <span class="nexus-modal-meta">último acceso: ${lastTxt}</span>
                   </div>
                 </div>
               `;
@@ -2077,42 +2132,66 @@ window.openProposeMatchChat = () => {
 };
 
 function ensureProposalModal() {
-    if (document.getElementById("proposal-modal")) return;
-    const modal = document.createElement("div");
-    modal.id = "proposal-modal";
-    modal.className = "modal-overlay";
-    modal.innerHTML = `
-        <div class="modal-card glass-strong" style="max-width:560px;">
-            <div class="modal-header">
-                <h3 class="modal-title">Propuesta de Partido</h3>
-                <button class="close-btn" id="proposal-close-btn">&times;</button>
-            </div>
-            <div class="modal-body scroll-y" style="max-height: 80vh;">
+    if (document.getElementById("proposal-view-list")) return;
+    const inline = document.getElementById("proposal-inline-section");
+    proposalInlineMode = !!inline;
+    const wrapper = document.createElement("div");
+    if (proposalInlineMode) {
+        wrapper.className = "hv2-proposal-panel";
+        wrapper.innerHTML = `
+            <div class="flex-col gap-3">
+                <div class="text-[10px] uppercase tracking-widest font-black text-primary">Propuestas</div>
                 <div id="proposal-view-list" class="flex-col gap-3"></div>
                 <div id="proposal-view-create" class="flex-col gap-3 hidden"></div>
                 <div id="proposal-view-chat" class="flex-col gap-3 hidden"></div>
             </div>
-        </div>
-    `;
-    modal.addEventListener("click", (e) => {
-        if (e.target === modal) modal.classList.remove("active");
-    });
-    document.body.appendChild(modal);
-    modal.querySelector("#proposal-close-btn")?.addEventListener("click", () => {
-        modal.classList.remove("active");
-        cleanupProposalChat();
-    });
+        `;
+        inline.appendChild(wrapper);
+    } else {
+        wrapper.id = "proposal-modal";
+        wrapper.className = "modal-overlay";
+        wrapper.innerHTML = `
+            <div class="modal-card glass-strong" style="max-width:560px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">Propuesta de Partido</h3>
+                    <button class="close-btn" id="proposal-close-btn">&times;</button>
+                </div>
+                <div class="modal-body scroll-y" style="max-height: 80vh;">
+                    <div id="proposal-view-list" class="flex-col gap-3"></div>
+                    <div id="proposal-view-create" class="flex-col gap-3 hidden"></div>
+                    <div id="proposal-view-chat" class="flex-col gap-3 hidden"></div>
+                </div>
+            </div>
+        `;
+        wrapper.addEventListener("click", (e) => {
+            if (e.target === wrapper) wrapper.classList.remove("active");
+        });
+        document.body.appendChild(wrapper);
+        wrapper.querySelector("#proposal-close-btn")?.addEventListener("click", () => {
+            wrapper.classList.remove("active");
+            cleanupProposalChat();
+        });
+    }
 }
 
 function openProposalModal() {
     console.log('[Proposal] open modal');
-    const modal = document.getElementById("proposal-modal");
-    if (!modal) return;
-    modal.classList.add("active");
+    ensureProposalModal();
+    if (!proposalInlineMode) {
+        const modal = document.getElementById("proposal-modal");
+        if (!modal) return;
+        modal.classList.add("active");
+    } else {
+        const inline = document.getElementById("proposal-inline-section");
+        if (inline) {
+            inline.classList.remove("hidden");
+            inline.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    }
     if (!currentUser?.uid) {
         showToast("Cargando usuario", "Espera un segundo y vuelve a abrir la propuesta.", "info");
         setTimeout(() => {
-            if (document.getElementById("proposal-modal")?.classList.contains("active")) {
+            if (proposalInlineMode || document.getElementById("proposal-modal")?.classList.contains("active")) {
                 renderProposalList();
             }
         }, 600);
@@ -2155,18 +2234,17 @@ async function renderProposalList() {
                     const tb = b?.createdAt?.toMillis?.() || 0;
                     return tb - ta;
                 });
-            listEl.innerHTML = `
-                <div class="flex-row between items-center">
-                    <div class="text-[10px] uppercase tracking-widest font-black text-primary">Mis propuestas</div>
-                    <button class="btn-confirm-v7" id="btn-new-proposal">Nueva propuesta</button>
+            const inline = document.getElementById("proposal-inline-section");
+            if (inline && !rows.length) {
+                inline.classList.add("hidden");
+            } else if (inline) {
+                inline.classList.remove("hidden");
+            }
+            listEl.innerHTML = rows.length ? rows.map((p) => proposalCardHtml(p)).join("") : `
+                <div class="p-4 rounded-xl border border-white/10 bg-white/5 text-center text-[10px] opacity-70">
+                    No tienes propuestas activas.
                 </div>
-                ${rows.length ? rows.map((p) => proposalCardHtml(p)).join("") : `
-                    <div class="p-4 rounded-xl border border-white/10 bg-white/5 text-center text-[10px] opacity-70">
-                        No tienes propuestas activas.
-                    </div>
-                `}
             `;
-            listEl.querySelector("#btn-new-proposal")?.addEventListener("click", renderProposalCreate);
             listEl.querySelectorAll("[data-prop-id]").forEach((btn) => {
                 btn.addEventListener("click", () => {
                     const pid = btn.getAttribute("data-prop-id");
@@ -2305,6 +2383,7 @@ async function openProposalChat(proposalId) {
         return;
     }
 
+    activeProposalMeta = propSnap;
     chatEl.innerHTML = `
         <div class="flex-row between items-center">
             <div>
@@ -2314,14 +2393,14 @@ async function openProposalChat(proposalId) {
             </div>
             <button class="btn-ghost" id="proposal-back-list">Volver</button>
         </div>
-        <div id="proposal-chat-list" class="proposal-chat-list"></div>
-        <div class="proposal-chat-input">
-            <input id="proposal-chat-text" class="input" placeholder="Escribe tu propuesta...">
+        <div id="proposal-chat-list" class="proposal-chat-list whatsapp"></div>
+        <div class="proposal-chat-input whatsapp">
+            <input id="proposal-chat-text" class="input" placeholder="Escribe un mensaje...">
             <button class="btn-confirm-v7" id="proposal-send-btn">Enviar</button>
         </div>
         <div class="proposal-actions">
-            <button class="btn-ghost" id="proposal-reject-btn">Rechazar propuesta</button>
-            <button class="btn-confirm-v7" id="proposal-confirm-btn">Concretar propuesta</button>
+            <button class="btn-ghost" id="proposal-leave-btn">Abandonar propuesta</button>
+            <button class="btn-ghost" id="proposal-confirm-btn">Concretar propuesta</button>
         </div>
         <div id="proposal-confirm-area" class="proposal-confirm-area hidden"></div>
     `;
@@ -2334,7 +2413,7 @@ async function openProposalChat(proposalId) {
     chatEl.querySelector("#proposal-chat-text")?.addEventListener("keydown", (e) => {
         if (e.key === "Enter") sendProposalMessage(proposalId);
     });
-    chatEl.querySelector("#proposal-reject-btn")?.addEventListener("click", () => rejectProposal(proposalId));
+    chatEl.querySelector("#proposal-leave-btn")?.addEventListener("click", () => leaveProposal(proposalId));
     chatEl.querySelector("#proposal-confirm-btn")?.addEventListener("click", () => toggleProposalConfirm(propSnap));
 
     const chatList = chatEl.querySelector("#proposal-chat-list");
@@ -2378,6 +2457,18 @@ async function sendProposalMessage(proposalId) {
             text,
             createdAt: serverTimestamp(),
         });
+        const meta = activeProposalMeta || (await getDocument("propuestasPartido", proposalId));
+        const targets = (meta?.participantUids || []).filter((uid) => uid && uid !== currentUser.uid);
+        if (targets.length) {
+            await createNotification(
+                targets,
+                "Mensaje de propuesta",
+                `Tienes un mensaje en: ${meta?.title || "Propuesta de partido"}`,
+                "proposal_message",
+                "home.html",
+                { type: "proposal_message", proposalId, dedupId: `proposal_msg_${proposalId}_${Date.now()}` },
+            );
+        }
     } catch (e) {
         showToast("Error", "No se pudo enviar el mensaje.", "error");
     }
@@ -2392,6 +2483,18 @@ async function rejectProposal(proposalId) {
         renderProposalList();
     } catch (e) {
         showToast("Error", "No se pudo rechazar la propuesta.", "error");
+    }
+}
+
+async function leaveProposal(proposalId) {
+    if (!confirm("¿Abandonar esta propuesta? Se eliminará para todos.")) return;
+    try {
+        await deleteProposalChat(proposalId);
+        showToast("Propuesta eliminada", "La propuesta se ha cerrado.", "info");
+        cleanupProposalChat();
+        renderProposalList();
+    } catch (e) {
+        showToast("Error", "No se pudo cerrar la propuesta.", "error");
     }
 }
 
@@ -2444,8 +2547,9 @@ function renderProposalConfirmForm(propSnap) {
             <div id="proposal-preview" class="p-2 rounded-xl border border-white/10 bg-white/5 text-[10px]"></div>
             <div class="flex-row gap-2">
                 <button class="btn-ghost w-full" id="proposal-cancel-confirm">Cancelar</button>
-                <button class="btn-confirm-v7 w-full" id="proposal-finalize">Crear partido</button>
+                <button class="btn-ghost w-full" id="proposal-assign-calendar">Asignar en calendario</button>
             </div>
+            <button class="btn-confirm-v7 w-full" id="proposal-finalize">Crear partido ahora</button>
         </div>
     `;
     area.querySelectorAll(".proposal-slot").forEach((sel) => {
@@ -2462,6 +2566,7 @@ function renderProposalConfirmForm(propSnap) {
         inp.addEventListener("input", () => updateProposalPreview(propSnap));
     });
     area.querySelector("#proposal-cancel-confirm")?.addEventListener("click", () => area.classList.add("hidden"));
+    area.querySelector("#proposal-assign-calendar")?.addEventListener("click", () => assignProposalToCalendar(propSnap));
     area.querySelector("#proposal-finalize")?.addEventListener("click", () => finalizeProposal(propSnap));
     updateProposalPreview(propSnap);
 }
@@ -2495,11 +2600,11 @@ function updateProposalPreview(propSnap) {
     `;
 }
 
-async function finalizeProposal(propSnap) {
-    console.log('[Proposal] finalize', { proposalId: propSnap?.id });
-    const date = document.getElementById("proposal-date")?.value;
+function collectProposalFormData(propSnap) {
+    const date = document.getElementById("proposal-date")?.value || "";
     const time = document.getElementById("proposal-time")?.value || "19:00";
-    if (!date) return showToast("Fecha requerida", "Indica el día del partido.", "warning");
+    const surface = document.getElementById("proposal-surface")?.value || "indoor";
+    const courtType = document.getElementById("proposal-court")?.value || "normal";
     const players = [];
     document.querySelectorAll(".proposal-slot").forEach((sel) => {
         const val = sel.value;
@@ -2513,29 +2618,59 @@ async function finalizeProposal(propSnap) {
         players.push(val);
     });
     while (players.length < 4) players.push(null);
-    if (players.filter(Boolean).length < 2) {
+    const invitedUsers = (propSnap.participantUids || []).filter((uid) => uid && !String(uid).startsWith("GUEST_"));
+    return { date, time, surface, courtType, players, invitedUsers };
+}
+
+async function assignProposalToCalendar(propSnap) {
+    const data = collectProposalFormData(propSnap);
+    if (data.players.filter(Boolean).length < 2) {
+        return showToast("Faltan jugadores", "Selecciona al menos 2 jugadores.", "warning");
+    }
+    try {
+        const payload = {
+            proposalId: propSnap?.id || null,
+            createdBy: currentUser?.uid || null,
+            players: data.players,
+            invitedUsers: data.invitedUsers,
+            surface: data.surface,
+            courtType: data.courtType,
+            title: propSnap?.title || "Propuesta de partido",
+            createdAt: Date.now(),
+        };
+        localStorage.setItem("proposal:draft:v1", JSON.stringify(payload));
+        showToast("Selecciona franja", "Elige una hora en el calendario para crear el partido.", "info");
+        window.location.href = `calendario.html?proposalId=${propSnap?.id || ""}`;
+    } catch (e) {
+        console.error("[Proposal] assign calendar failed", e);
+        showToast("Error", "No se pudo preparar el calendario.", "error");
+    }
+}
+
+async function finalizeProposal(propSnap) {
+    console.log('[Proposal] finalize', { proposalId: propSnap?.id });
+    const data = collectProposalFormData(propSnap);
+    if (!data.date) return showToast("Fecha requerida", "Indica el día del partido.", "warning");
+    if (data.players.filter(Boolean).length < 2) {
         return showToast("Faltan jugadores", "Selecciona al menos 2 jugadores.", "warning");
     }
 
     try {
-        const matchDate = new Date(`${date}T${time}`);
-        const surface = document.getElementById("proposal-surface")?.value || "indoor";
-        const courtType = document.getElementById("proposal-court")?.value || "normal";
-        const invitedUsers = (propSnap.participantUids || []).filter((uid) => uid && !String(uid).startsWith("GUEST_"));
+        const matchDate = new Date(`${data.date}T${data.time}`);
 
         await addDoc(collection(db, "partidosAmistosos"), {
             creador: currentUser.uid,
             organizerId: currentUser.uid,
             fecha: matchDate,
-            jugadores: players,
+            jugadores: data.players,
             restriccionNivel: { min: 1.0, max: 7.0 },
             estado: "abierto",
             visibility: "private",
-            invitedUsers,
-            equipoA: [players[0], players[1]],
-            equipoB: [players[2], players[3]],
-            surface,
-            courtType,
+            invitedUsers: data.invitedUsers,
+            equipoA: [data.players[0], data.players[1]],
+            equipoB: [data.players[2], data.players[3]],
+            surface: data.surface,
+            courtType: data.courtType,
             proposalId: propSnap.id,
             createdAt: serverTimestamp(),
             timestamp: serverTimestamp(),

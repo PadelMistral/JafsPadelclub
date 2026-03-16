@@ -1608,6 +1608,59 @@ body.home-booting {
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
+
+.hv2-proposal-inline {
+  margin-top: 14px;
+}
+.hv2-proposal-inline.hidden {
+  display: none;
+}
+.hv2-proposal-panel {
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(2,6,23,0.6);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+}
+
+.proposal-chat-list.whatsapp {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 6px;
+  background: rgba(0,0,0,0.15);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.proposal-chat-input.whatsapp {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.proposal-msg {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  max-width: 80%;
+}
+.proposal-msg.me {
+  align-self: flex-end;
+  background: rgba(0,212,255,0.12);
+  border-color: rgba(0,212,255,0.35);
+}
+.proposal-msg-meta {
+  font-size: 9px;
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
 .hv2-propose-card:hover {
   transform: translateY(-2px);
   border-color: rgba(129, 140, 248, 0.5);
