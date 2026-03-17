@@ -1,15 +1,19 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Sorteo | Padeluminatis Pro</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="./css/global.css">
     <link rel="stylesheet" href="./css/eventos.css">
     <link rel="stylesheet" href="./css/evento-sorteo.css">
 </head>
+
 <body>
     <div class="sport-bg"></div>
 
@@ -30,7 +34,7 @@
             <div id="card" class="card">
                 <div class="card-inner">
                     <div class="card-front">
-                        <img src="./imagenes/Logojafs.png" alt="Padeluminatis Logo" class="card-logo">
+                        <i class="fas fa-dice-d6"></i>
                     </div>
                     <div class="card-back">
                         <span id="playerNameDisplay" class="player-name"></span>
@@ -52,11 +56,13 @@
 
     <!-- MODAL: AMAÑAR SORTEO (solo admin) -->
     <div id="modal-rigging" class="modal-overlay">
-        <button id="btn-load-preset" class="btn btn-secondary w-full mt-2"><i class="fas fa-download"></i> Cargar configuración primer torneo</button>
+        <button id="btn-load-preset" class="btn btn-secondary w-full mt-2"><i class="fas fa-download"></i> Cargar
+            configuración primer torneo</button>
         <div class="modal-card glass-strong slide-up" style="max-width: 500px;">
             <div class="modal-header">
                 <h3 class="modal-title">Amañar sorteo</h3>
-                <button class="close-btn" onclick="document.getElementById('modal-rigging').classList.remove('active')">×</button>
+                <button class="close-btn"
+                    onclick="document.getElementById('modal-rigging').classList.remove('active')">×</button>
             </div>
             <div class="modal-body p-4">
                 <div class="form-group">
@@ -90,4 +96,5 @@
 
     <script type="module" src="./js/evento-sorteo.js"></script>
 </body>
+
 </html>
