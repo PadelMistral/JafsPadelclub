@@ -1,4 +1,4 @@
-﻿/* Home V2 - Clean and Real Player Names */
+/* Home V2 - Clean and Real Player Names */
 import { db, subscribeCol, getDocument } from "./firebase-service.js";
 import {
   collection,
@@ -41,6 +41,8 @@ import {
   queryCoreAI,
   startCorePresence,
 } from "./core/core-engine.js";
+import { computeGroupTable } from "./event-tournament-engine.js";
+
 
 let currentUser = null;
 let currentUserData = null;
@@ -1111,20 +1113,24 @@ function renderEventSpotlight() {
     }
     partnerName = partnerName || "Pendiente asignar";
 
+    const myTeamFromEvent = getMyTeamFromEvent(nextEvent);
+    const myGroup = myTeamFromEvent
+      ? Object.entries(nextEvent.groups || {}).find(([, ids]) => ids?.includes(myTeamFromEvent.id))?.[0]
+      : null;
+
     const eventMatches = dedupeEventLinkedMatches(allMatches).filter(
       (m) => isEventMatch(m) && getEventIdFromMatch(m) === nextEvent.id,
     );
-    const myGroup = getMyTeamFromEvent(nextEvent)
-      ? Object.entries(nextEvent.groups || {}).find(([, ids]) => ids?.includes(getMyTeamFromEvent(nextEvent)?.id))?.[0]
-      : null;
+    
     const groupMatches = eventMatches.filter((m) => {
       if (!isGroupPhaseMatch(m, nextEvent)) return false;
       if (myGroup && m.group) return String(m.group) === String(myGroup);
       return true;
     });
+
     // Find team matches by ID if generated, or just by player UIDs if still in pool
-    const teamMatches = myTeam?.id
-      ? groupMatches.filter((m) => m.teamAId === myTeam.id || m.teamBId === myTeam.id)
+    const teamMatches = myTeamFromEvent?.id
+      ? groupMatches.filter((m) => m.teamAId === myTeamFromEvent.id || m.teamBId === myTeamFromEvent.id)
       : groupMatches.filter((m) => getNormalizedPlayers(m).includes(currentUser?.uid));
 
     const totalTeam = teamMatches.length;
@@ -1135,37 +1141,52 @@ function renderEventSpotlight() {
     const teamPct = totalTeam ? Math.round((playedTeam / totalTeam) * 100) : 0;
     const eventPct = totalEvent ? Math.round((playedEvent / totalEvent) * 100) : 0;
 
+
     cards.push(`
-      <div class="hv2-event-chip">
-        <div class="hv2-event-chip-title">${(nextEvent.nombre || "Evento").toUpperCase()}</div>
-        <div class="hv2-event-chip-sub">Fase: ${String(nextEvent.estado || "inscripcion").toUpperCase()} · ${inscritos}/${Number(nextEvent.plazasMax || 16)} plazas</div>
-        <div class="hv2-event-meta">
-          <div>
+      <div class="hv2-event-chip premium-v2">
+        <div class="hv2-event-chip-header">
+           <div class="hv2-event-chip-title">${(nextEvent.nombre || "Evento").toUpperCase()}</div>
+           <div class="hv2-event-chip-tag">${String(nextEvent.estado || "inscripcion").toUpperCase()}</div>
+        </div>
+        
+        <div class="hv2-event-chip-sub">
+          <i class="fas fa-users-viewfinder mr-1"></i> ${inscritos}/${Number(nextEvent.plazasMax || 16)} Plazas confirmadas
+        </div>
+
+        <div class="hv2-event-meta-grid">
+          <div class="hv2-meta-item">
             <span class="hv2-meta-label">Compañero/a</span>
-            <span class="hv2-meta-value">${partnerName}</span>
+            <div class="hv2-meta-val-wrap">
+              <i class="fas fa-user-friends text-primary"></i>
+              <span class="hv2-meta-value">${partnerName}</span>
+            </div>
           </div>
-          <div>
-            <span class="hv2-meta-label">Mis Partidos</span>
-            <span class="hv2-meta-value">${playedTeam}/${totalTeam || 0} jugados</span>
+          <div class="hv2-meta-item">
+            <span class="hv2-meta-label">Tu Grupo</span>
+            <div class="hv2-meta-val-wrap">
+              <i class="fas fa-layer-group text-primary"></i>
+              <span class="hv2-meta-value">${myGroup ? `GRUPO ${myGroup}` : 'POR ASIGNAR'}</span>
+            </div>
           </div>
         </div>
-        <div class="hv2-event-progress">
+
+        <div class="hv2-event-progress-section">
           <div class="hv2-progress-row">
             <div class="hv2-progress-head">
-              <span>Progreso de tu equipo ${pendingTeam > 0 ? `<span style="opacity:0.5; font-size:8px;">(Faltan ${pendingTeam})</span>` : ''}</span>
+              <span>Progreso de tu equipo</span>
               <span>${playedTeam}/${totalTeam || 0}</span>
             </div>
-            <div class="hv2-progress-bar"><span style="width:${teamPct}%"></span></div>
-          </div>
-          <div class="hv2-progress-row">
-            <div class="hv2-progress-head">
-              <span>Progreso del evento</span>
-              <span>${playedEvent}/${totalEvent || 0}</span>
-            </div>
-            <div class="hv2-progress-bar alt"><span style="width:${eventPct}%"></span></div>
+            <div class="hv2-progress-bar main"><span style="width:${teamPct}%"></span></div>
           </div>
         </div>
-        <div id="event-standings-slot" class="hv2-event-standings"></div>
+
+        <div id="event-standings-slot" class="hv2-event-standings-container"></div>
+        
+        <div class="hv2-event-actions mt-3">
+           <a href="evento-detalle.html?id=${nextEvent.id}" class="btn-event-enter">
+              VER PANEL COMPLETO <i class="fas fa-chevron-right ml-1"></i>
+           </a>
+        </div>
       </div>
     `);
   }
@@ -1200,10 +1221,21 @@ function renderEventSpotlight() {
       const teamBLabel = getTeamLabel(m.teamBId, m.teamBName, m.playerUids?.slice(2,4) || m.jugadores?.slice(2,4));
 
       cards.push(`
-        <div class="hv2-event-chip" onclick="window.openMatch('${m.id}','${m.col}')">
-          <div class="hv2-event-chip-title">PARTIDO DE TORNEO · ${phasePretty}</div>
-          <div class="hv2-event-chip-sub">${teamALabel} vs ${teamBLabel} · ${when}</div>
-          <div class="hv2-event-chip-sub">Estado: ${estado}${result}</div>
+        <div class="hv2-event-chip premium-v2 tournament-match" onclick="window.openMatch('${m.id}','${m.col}')">
+          <div class="hv2-event-chip-header">
+            <div class="hv2-event-chip-title">PARTIDO DE TORNEO</div>
+            <div class="hv2-event-chip-tag phase">${phasePretty}</div>
+          </div>
+          <div class="hv2-event-chip-sub mt-2">
+            <div class="flex-row items-center justify-between">
+               <span class="text-white font-bold">${teamALabel} <span class="text-primary italic">vs</span> ${teamBLabel}</span>
+               <span class="text-[10px] text-white/40">${when}</span>
+            </div>
+          </div>
+          <div class="hv2-event-chip-footer mt-2 pt-2 border-t border-white/5 flex between items-center">
+             <span class="text-[9px] font-black tracking-widest text-[#abc]">${estado}${result}</span>
+             <i class="fas fa-chevron-right text-primary text-[10px]"></i>
+          </div>
         </div>
       `);
     });
@@ -1242,101 +1274,88 @@ async function renderEventStandings(eventDoc) {
   const myTeamId = myTeam?.id || null;
   const myGroup = getMyGroupFromEvent(eventDoc, myTeamId);
 
-  slot.innerHTML = `<div class="hv2-event-standings-title">Clasificación${myGroup ? ` · Grupo ${String(myGroup).toUpperCase()}` : ""}</div>`;
   try {
-    if (activeEventStandingsId !== eventDoc.id) {
-      if (typeof unsubEventStandings === "function") unsubEventStandings();
-      activeEventStandingsId = eventDoc.id;
-      unsubEventStandings = await subscribeCol(
-        "eventoClasificacion",
-        (list) => {
-          renderStandingsRows(list, eventDoc, myTeamId, myGroup, slot);
-        },
-        [["eventoId", "==", eventDoc.id]],
-        [["puntos", "desc"], ["diferencia", "desc"]],
-        200,
-      );
+    const cfg = { 
+      win: eventDoc.puntosVictoria || 3, 
+      draw: eventDoc.puntosEmpate || 1, 
+      loss: eventDoc.puntosDerrota || 0 
+    };
+    
+    // Use the matches we already have in allMatches for this event, but deduplicated
+    const deduped = dedupeEventLinkedMatches(allMatches);
+    const eventMatches = deduped.filter(m => isEventMatch(m) && getEventIdFromMatch(m) === eventDoc.id);
+    const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
+
+    
+    let computedRows = [];
+    if (eventDoc.formato === 'league') {
+        computedRows = computeGroupTable(eventMatches.filter(m => m.phase === 'league' || !m.phase), teams, cfg);
+    } else {
+        // Group phase (filter by my group if available)
+        const g = myGroup;
+        const gTeams = g ? (eventDoc.groups?.[g] || []).map(tid => teams.find(t => t.id === tid)).filter(Boolean) : teams;
+        computedRows = computeGroupTable(eventMatches.filter(m => m.group === g), gTeams, cfg);
     }
-    const snap = await getDocs(
-      query(
-        collection(db, "eventoClasificacion"),
-        where("eventoId", "==", eventDoc.id)
-      ),
-    );
-    renderStandingsRows(
-      snap.docs.map((d) => ({ id: d.id, ...d.data() })),
-      eventDoc,
-      myTeamId,
-      myGroup,
-      slot,
-    );
+
+    renderStandingsRows(computedRows, eventDoc, myTeamId, myGroup, slot);
   } catch (e) {
-    slot.innerHTML += `<div class="hv2-event-standings-empty">La clasificación se activará al comenzar la fase de grupos.</div>`;
+    console.error("renderEventStandings fail:", e);
+    slot.innerHTML += `<div class="hv2-event-standings-empty">No se pudo calcular la clasificación.</div>`;
   }
 }
 
+
 function renderStandingsRows(rowsIn, eventDoc, myTeamId, myGroup, slot) {
   let rows = Array.isArray(rowsIn) ? rowsIn.slice() : [];
-    rows.sort((a,b) => (b.puntos || 0) - (a.puntos || 0) || (b.diferencia || 0) - (a.diferencia || 0));
-  slot.innerHTML = `<div class="hv2-event-standings-title">Clasificación${myGroup ? ` · Grupo ${String(myGroup).toUpperCase()}` : ""}</div>`;
-    const teamToGroup = new Map();
-    if (eventDoc.groups) {
-      Object.entries(eventDoc.groups).forEach(([g, ids]) => {
-        (ids || []).forEach((id) => teamToGroup.set(id, g));
-      });
-    }
+  rows.sort((a,b) => (b.puntos || 0) - (a.puntos || 0) || (b.diferencia || 0) - (a.diferencia || 0));
+  
+  const title = myGroup ? `Clasificación Grupo ${String(myGroup).toUpperCase()}` : "Clasificación General";
+  
+  let html = `
+    <div class="hv2-standings-header">
+      <span class="hv2-standings-title">${title}</span>
+    </div>
+    <div class="hv2-standings-table-mini">
+      <div class="hv2-std-head">
+        <span class="pos">#</span>
+        <span class="team">EQUIPO</span>
+        <span class="pj">PJ</span>
+        <span class="pts">PTS</span>
+      </div>
+      <div class="hv2-std-body">
+  `;
 
-    if (myGroup && eventDoc.groups?.[myGroup]) {
-      const memberIds = eventDoc.groups[myGroup];
-      const byId = new Map(rows.map(r => [r.uid || r.teamId, r]));
-      rows = memberIds.map(tid => {
-        const base = byId.get(tid) || {};
-        const teamObj = (eventDoc.teams || []).find(t => t.id === tid);
-        return {
-          uid: tid,
-          teamId: tid,
-          nombre: teamObj?.nombre || teamObj?.name || base.nombre || base.teamName || "Equipo",
-          puntos: Number(base.puntos || 0),
-          diferencia: Number(base.diferencia || 0),
-          puntosGanados: Number(base.puntosGanados || 0),
-          puntosPerdidos: Number(base.puntosPerdidos || 0),
-          pj: Number(base.pj || 0),
-        };
-      });
-      rows.sort((a,b) => (b.puntos || 0) - (a.puntos || 0) || (b.diferencia || 0) - (a.diferencia || 0));
-    } else if (myGroup) {
-      rows = rows.filter((r) => teamToGroup.get(r.uid || r.teamId) === myGroup);
-    }
+  const memberIds = myGroup && eventDoc.groups?.[myGroup] ? eventDoc.groups[myGroup] : [];
+  
+  // If we have a group, we filter rows by that group
+  let displayRows = rows;
+  if (myGroup && memberIds.length) {
+    displayRows = rows.filter(r => memberIds.includes(r.uid || r.teamId));
+  }
 
-    const top = rows;
-    if (!top.length) {
-      slot.innerHTML += `<div class="hv2-event-standings-empty">Sin clasificación aún</div>`;
-      return;
-    }
-    slot.innerHTML += top
-      .map((r, i) => {
-        const isMine = myTeamId && (r.uid === myTeamId || r.teamId === myTeamId);
-        const status = i < 4 ? "CLASIFICA" : "ELIM.";
-        const pj = Number(r.pj || 0);
-        const dif = Number(r.diferencia || 0);
-        const pts = Number(r.puntos || 0);
-        return `
-          <div class="hv2-event-standings-row ${isMine ? "mine" : ""}">
-            <span class="pos">#${i + 1}</span>
-            <span class="name">${(r.nombre || r.teamName || r.uid || "Equipo").toUpperCase()}</span>
-            <span class="pts">
-              <span class="stat">PJ ${pj}</span>
-              <span class="sep">·</span>
-              <span class="stat">DIF ${dif}</span>
-              <span class="sep">·</span>
-              <span class="stat">PTS ${pts}</span>
-            </span>
-            <span class="hv2-qual ${i < 4 ? "ok" : "out"}">${status}</span>
-          </div>
-        `;
-      })
-      .join("");
+  if (!displayRows.length) {
+    html += `<div class="hv2-event-standings-empty">La clasificación se actualizará al registrar resultados.</div>`;
+  } else {
+    displayRows.forEach((r, i) => {
+      const isMine = (r.uid || r.teamId) === myTeamId;
+      const teamObj = (eventDoc.teams || []).find(t => t.id === (r.uid || r.teamId));
+      const teamName = teamObj?.nombre || teamObj?.name || r.nombre || r.teamName || "Equipo";
+      
+      html += `
+        <div class="hv2-std-row ${isMine ? 'mine' : ''}">
+          <span class="pos">${i + 1}</span>
+          <span class="team">${teamName}</span>
+          <span class="pj">${r.pj || 0}</span>
+          <span class="pts">${r.puntos || 0}</span>
+        </div>
+      `;
+    });
+  }
+
+  html += `</div></div>`;
+  slot.innerHTML = html;
 }
+
 
 async function createSelfNoticeOnce(key, title, message, link = "home.html", data = {}) {
   if (!currentUser?.uid) return;
@@ -1384,15 +1403,65 @@ function maybeCreateEventDayNotice() {
   const next = getMineUpcomingEventMatches()[0];
   const d = toDateSafe(next?.fecha);
   if (!next || !d) return;
-  if (!sameDay(d, new Date())) return;
-  const key = `event_today:${next.id}:${new Date().toISOString().slice(0, 10)}`;
-  const msg = `Hoy juegas partido de evento a las ${d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}.`;
-  createSelfNoticeOnce(key, "Partido de evento hoy", msg, `evento-detalle.html?id=${next.eventoId || ""}&tab=partidos`, {
-    type: "event_match_today",
-    matchId: next.id,
-    eventId: next.eventId || null,
-  });
+
+  const today = new Date();
+  if (!sameDay(d, today)) return;
+
+  const key = `event_today_modal_v2:${next.id}:${today.toISOString().slice(0, 10)}`;
+  try {
+    if (localStorage.getItem(key)) return;
+  } catch {}
+
+  const diffMs = d.getTime() - today.getTime();
+  const diffH = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+  
+  const players = getNormalizedPlayers(next);
+  const n = (idx) => getPlayerDisplayName(players[idx]) || "Pendiente";
+
+  const modal = document.createElement("div");
+  modal.className = "event-day-alert";
+  modal.innerHTML = `
+    <div class="eda-card">
+      <div class="eda-glow"></div>
+      <div class="eda-icon"><i class="fas fa-rocket"></i></div>
+      <div class="eda-title">¡HOY JUEGAS!</div>
+      <div class="eda-match-info">
+        <div class="eda-match-players">
+           <div class="eda-team-col">
+              <div class="eda-p-name">${n(0)}</div>
+              <div class="eda-p-name">${n(1)}</div>
+           </div>
+           <div class="eda-vs-badge">VS</div>
+           <div class="eda-team-col">
+              <div class="eda-p-name">${n(2)}</div>
+              <div class="eda-p-name">${n(3)}</div>
+           </div>
+        </div>
+        <div class="eda-venue-info" style="font-size:11px; opacity:0.6; margin-top:14px; text-transform:uppercase; letter-spacing:1.2px; font-weight:800; display:flex; align-items:center; justify-content:center; gap:10px;">
+           <span><i class="fas fa-clock text-primary mr-1"></i> ${d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
+           <span style="opacity:0.3">|</span>
+           <span><i class="fas fa-map-marker-alt text-primary mr-1"></i> PISTA RESERVADA</span>
+        </div>
+      </div>
+      <div class="eda-msg">Faltan <span>${diffH} HORAS</span> para el enfrentamiento.</div>
+      <div class="eda-actions">
+        <button class="btn-eda-share" onclick="window.shareMatch('${next.id}', '${next.col}')">
+           <i class="fas fa-share-nodes mr-2"></i> COMPARTIR CARTEL
+        </button>
+        <button class="btn-eda-close" id="close-eda">ENTENDIDO, CERRAR</button>
+      </div>
+
+    </div>
+  `;
+  document.body.appendChild(modal);
+  
+  modal.querySelector("#close-eda").onclick = () => {
+    modal.remove();
+    localStorage.setItem(key, "1");
+  };
 }
+
+
 
 /* Match data */
 async function mergeMatches(col, list) {
@@ -1652,7 +1721,18 @@ function renderMatchesByFilter(filter) {
   const now = Date.now();
   
   // Merge Apoing events into matches list
-  const apoingMatches = apoingEvents.map(ev => ({
+  const apoingMatches = apoingEvents.filter(ev => {
+    // Filter out Apoing events that match an existing match in my collections
+    const startTime = ev.dtStart.getTime();
+    const overlaps = allMatches.some(m => {
+        const d = toDateSafe(m.fecha);
+        if (!d) return false;
+        // Increase tolerance to 5 min to detect group matches
+        return Math.abs(d.getTime() - startTime) < 5 * 60 * 1000;
+    });
+    return !overlaps;
+  }).map(ev => ({
+
     id: `apoing_${ev.uid || Math.random()}`,
     col: "apoing",
     fecha: ev.dtStart,
@@ -1663,6 +1743,7 @@ function renderMatchesByFilter(filter) {
     sourceName: ev.sourceName || "Jugador Apoing",
     owner: ev.owner || "Jugador"
   }));
+
 
   let list = dedupeEventLinkedMatches([...allMatches, ...apoingMatches])
     .filter((m) => !isCancelledMatch(m))
@@ -1768,6 +1849,19 @@ function renderMatchCard(match, idx = 0) {
     ? `window.openApoingMatch('${match.id}')` 
     : `window.openMatch('${match.id}','${match.col}')`;
 
+  let winnerBadge = "";
+  if (finished && hasResult) {
+      const sets = Array.isArray(match.resultado?.setsArray) ? match.resultado.setsArray : [];
+      let setsA = 0, setsB = 0;
+      sets.forEach(s => {
+          if (s.a > s.b) setsA++;
+          else if (s.b > s.a) setsB++;
+      });
+      if (setsA !== setsB) {
+          winnerBadge = `<span class="hv2-mc-winner-badge">Ganador: ${setsA > setsB ? 'Equipo A' : 'Equipo B'}</span>`;
+      }
+  }
+
   return `
     <div class="hv2-match-card ${isMine ? "mine-card" : ""} ${finished ? "finished-card" : ""} ${match.isApoing ? "apoing-card" : ""}" style="animation-delay:${delay}ms" onclick="${cardClick}">
       ${badge}
@@ -1786,8 +1880,13 @@ function renderMatchCard(match, idx = 0) {
         ${pn(players[2])}
         ${pn(players[3])}
       </div>
+      ${winnerBadge}
+      <button class="hv2-mc-share-btn" onclick="event.stopPropagation(); window.shareMatch('${match.id}', '${match.col}')">
+         <i class="fas fa-share-nodes"></i>
+      </button>
     </div>
   `;
+
 }
 
 /* Match modal */
@@ -2234,6 +2333,7 @@ async function renderProposalList() {
                     const tb = b?.createdAt?.toMillis?.() || 0;
                     return tb - ta;
                 });
+            updateProposalBadges(rows);
             const inline = document.getElementById("proposal-inline-section");
             if (inline && !rows.length) {
                 inline.classList.add("hidden");
@@ -2707,4 +2807,73 @@ function escapeHtml(raw = "") {
 
 
 
+
+async function updateProposalBadges(proposals) {
+    const badgeEl = document.querySelector(".hv2-propose-badge");
+    if (!badgeEl) return;
+
+    const activeCount = proposals.length;
+    if (activeCount === 0) {
+        badgeEl.innerHTML = '<i class="fas fa-plus"></i>';
+        badgeEl.classList.remove("has-messages", "has-proposals");
+        return;
+    }
+
+    // Check for messages in the last 24h
+    let totalMessages = 0;
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+
+    // We only check if any proposal has been updated recently to avoid too many fetches
+    const recentlyUpdated = proposals.some(p => {
+        const up = p.updatedAt?.toMillis?.() || 0;
+        return up > dayAgo;
+    });
+
+    if (recentlyUpdated) {
+        badgeEl.classList.add("has-messages");
+        badgeEl.innerHTML = `<span>${activeCount}</span>`;
+    } else {
+        badgeEl.classList.add("has-proposals");
+        badgeEl.innerHTML = `<span>${activeCount}</span>`;
+    }
+}
+
+window.shareMatch = async (matchId, col) => {
+    const match = allMatches.find(m => m.id === matchId) || {};
+    const d = toDateSafe(match.fecha);
+    const dateStr = d ? d.toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : "próximamente";
+    const players = getNormalizedPlayers(match);
+    const names = players.map(uid => getPlayerDisplayName(uid));
+    
+    let text = `🎾 ¡Partido de Padel! \n📅 ${dateStr}\n`;
+    if (names.length >= 4) {
+        text += `⚔️ ${names[0]} / ${names[1]} VS ${names[2]} / ${names[3]}\n`;
+    }
+    
+    if (match.resultado?.sets) {
+        text += `🏆 Resultado: ${match.resultado.sets}\n`;
+    }
+    
+    text += `\n¡Entra en Padeluminatis para ver más!`;
+
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'Partido de Padeluminatis',
+                text: text,
+                url: window.location.origin
+            });
+        } catch (err) {
+            console.log('Share failed', err);
+        }
+    } else {
+        try {
+            await navigator.clipboard.writeText(text);
+            showToast("Copiado", "Detalles del partido copiados al portapapeles", "success");
+        } catch (err) {
+            console.error("Clipboard fail", err);
+        }
+    }
+};
 

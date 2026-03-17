@@ -402,22 +402,79 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         ? nonGuestKs.reduce((acc, k) => acc + k, 0) / nonGuestKs.length
         : ELO_CONFIG.K.STABLE;
 
-      const teamARaw = round2(kCombined * ((winnerIsA ? 1 : 0) - expectedA) * modeMult * matchFactor);
-      let teamADelta = clampNumber(teamARaw, -capAbs, capAbs);
-      let teamBDelta = -teamADelta;
+      // ─── PRE-READ: Event + standings docs BEFORE any writes ───
+      let eventWinnerTeamId = null;
+      let eventLoserTeamId = null;
+      let eventWinnerName = null;
+      let eventLoserName = null;
+      const eventId = match.eventoId || match.eventId || null;
+      let evData = {};
+      let winSnapData = {};
+      let loseSnapData = {};
+      let winRef = null;
+      let loseRef = null;
+
+      if (col === "eventoPartidos" && eventId) {
+        const teamAId_ev = match.teamAId || match.equipoAUid || null;
+        const teamBId_ev = match.teamBId || match.equipoBUid || null;
+        if (teamAId_ev && teamBId_ev) {
+          eventWinnerTeamId = winnerIsA ? teamAId_ev : teamBId_ev;
+          eventLoserTeamId = winnerIsA ? teamBId_ev : teamAId_ev;
+          eventWinnerName = winnerIsA ? (match.teamAName || match.equipoA || null) : (match.teamBName || match.equipoB || null);
+          eventLoserName = winnerIsA ? (match.teamBName || match.equipoB || null) : (match.teamAName || match.equipoA || null);
+
+          // Read event doc
+          const evRef = doc(db, "eventos", eventId);
+          const evSnap = await transaction.get(evRef);
+          evData = evSnap.exists() ? evSnap.data() : {};
+
+          // Read standings docs
+          const winKey = `${eventId}_${eventWinnerTeamId}`;
+          const loseKey = `${eventId}_${eventLoserTeamId}`;
+          winRef = doc(db, "eventoClasificacion", winKey);
+          loseRef = doc(db, "eventoClasificacion", loseKey);
+          const winSnap = await transaction.get(winRef);
+          const loseSnap = await transaction.get(loseRef);
+          winSnapData = winSnap.exists() ? winSnap.data() : {};
+          loseSnapData = loseSnap.exists() ? loseSnap.data() : {};
+        }
+      }
+      // ─── END PRE-READ ───
+
+      const playerBase = [0, 0, 0, 0];
+      let teamATotalBase = 0;
+      let teamBTotalBase = 0;
+
+      for (let i = 0; i < 4; i += 1) {
+        const player = roster[i];
+        if (!player || player.isGuest) continue;
+        
+        const amITeamA = i < 2;
+        const didWin = (amITeamA && winnerIsA) || (!amITeamA && !winnerIsA);
+        const actual = didWin ? 1 : 0;
+        
+        const rivalRating = amITeamA ? teamBRating : teamARating;
+        const myRating = resolvePlayerRating(player);
+        const partner = amITeamA ? (i === 0 ? roster[1] : roster[0]) : (i === 2 ? roster[3] : roster[2]);
+        const partnerRating = partner && !partner.isGuest ? resolvePlayerRating(partner) : myRating;
+        
+        // Ponderación: El rating propio afecta más que el rating del compañero
+        const myEffectiveTeamRating = (myRating * 0.7) + (partnerRating * 0.3);
+        const myExpected = computeExpectedScore(myEffectiveTeamRating, rivalRating);
+        const myK = getDynamicKFactor(player);
+        
+        const myRawDelta = myK * (actual - myExpected) * modeMult * matchFactor;
+        const finalBase = round2(clampNumber(myRawDelta, -capAbs, capAbs));
+        playerBase[i] = finalBase;
+        
+        if (amITeamA) teamATotalBase += finalBase;
+        else teamBTotalBase += finalBase;
+      }
 
       const teamARealCount = teamA.filter((p) => p && !p.isGuest).length;
       const teamBRealCount = teamB.filter((p) => p && !p.isGuest).length;
-      const teamATotalDelta = teamADelta * 2;
-      const teamBTotalDelta = -teamATotalDelta;
-      const teamABaseForReal = teamARealCount > 0 ? round2(teamATotalDelta / teamARealCount) : 0;
-      const teamBBaseForReal = teamBRealCount > 0 ? round2(teamBTotalDelta / teamBRealCount) : 0;
-      const playerBase = [
-        roster[0] && !roster[0].isGuest ? teamABaseForReal : 0,
-        roster[1] && !roster[1].isGuest ? teamABaseForReal : 0,
-        roster[2] && !roster[2].isGuest ? teamBBaseForReal : 0,
-        roster[3] && !roster[3].isGuest ? teamBBaseForReal : 0,
-      ];
+      let teamADelta = teamARealCount > 0 ? (teamATotalBase / teamARealCount) : 0;
+      let teamBDelta = teamBRealCount > 0 ? (teamBTotalBase / teamBRealCount) : 0;
       const bonusDeltas = [0, 0, 0, 0];
       const streakDeltas = [0, 0, 0, 0];
       const surpriseDeltas = [0, 0, 0, 0];
@@ -664,57 +721,29 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         createdAt: serverTimestamp(),
       });
 
-      let eventWinnerTeamId = null;
-      let eventLoserTeamId = null;
-      let eventWinnerName = null;
-      let eventLoserName = null;
-      const eventId = match.eventoId || match.eventId || null;
-      if (col === "eventoPartidos" && eventId) {
-        const teamAId = match.teamAId || match.equipoAUid || null;
-        const teamBId = match.teamBId || match.equipoBUid || null;
-        if (teamAId && teamBId) {
-          eventWinnerTeamId = winnerIsA ? teamAId : teamBId;
-          eventLoserTeamId = winnerIsA ? teamBId : teamAId;
-          eventWinnerName = winnerIsA ? (match.teamAName || match.equipoA || null) : (match.teamBName || match.equipoB || null);
-          eventLoserName = winnerIsA ? (match.teamBName || match.equipoB || null) : (match.teamAName || match.equipoA || null);
-        }
-      }
-
-      if (col === "eventoPartidos" && eventId && eventWinnerTeamId && eventLoserTeamId) {
-        const evRef = doc(db, "eventos", eventId);
-        const evSnap = await transaction.get(evRef);
-        const ev = evSnap.exists() ? evSnap.data() : {};
-        const canUpdateStandings = true;
-        if (canUpdateStandings) {
-          const ptsWin = Number(ev?.puntosVictoria || 2);
-          const ptsLoss = Number(ev?.puntosDerrota || 1);
-          const winKey = `${eventId}_${eventWinnerTeamId}`;
-          const loseKey = `${eventId}_${eventLoserTeamId}`;
-          const winRef = doc(db, "eventoClasificacion", winKey);
-          const loseRef = doc(db, "eventoClasificacion", loseKey);
-          const winSnap = await transaction.get(winRef);
-          const loseSnap = await transaction.get(loseRef);
-          const winData = winSnap.exists() ? winSnap.data() : {};
-          const loseData = loseSnap.exists() ? loseSnap.data() : {};
+      // ─── WRITE: Event standings using PRE-READ data ───
+      if (col === "eventoPartidos" && eventId && eventWinnerTeamId && eventLoserTeamId && winRef && loseRef) {
+          const ptsWin = Number(evData?.puntosVictoria || 2);
+          const ptsLoss = Number(evData?.puntosDerrota || 1);
           const teamAGames = Number(parsed?.teamAGames || 0);
           const teamBGames = Number(parsed?.teamBGames || 0);
           const winGamesFor = winnerIsA ? teamAGames : teamBGames;
           const winGamesAgainst = winnerIsA ? teamBGames : teamAGames;
           const loseGamesFor = winnerIsA ? teamBGames : teamAGames;
           const loseGamesAgainst = winnerIsA ? teamAGames : teamBGames;
-          const winPF = Number(winData.puntosGanados || 0) + winGamesFor;
-          const winPA = Number(winData.puntosPerdidos || 0) + winGamesAgainst;
-          const losePF = Number(loseData.puntosGanados || 0) + loseGamesFor;
-          const losePA = Number(loseData.puntosPerdidos || 0) + loseGamesAgainst;
+          const winPF = Number(winSnapData.puntosGanados || 0) + winGamesFor;
+          const winPA = Number(winSnapData.puntosPerdidos || 0) + winGamesAgainst;
+          const losePF = Number(loseSnapData.puntosGanados || 0) + loseGamesFor;
+          const losePA = Number(loseSnapData.puntosPerdidos || 0) + loseGamesAgainst;
           transaction.set(
             winRef,
             {
               eventoId: eventId,
               uid: eventWinnerTeamId,
-              nombre: eventWinnerName || winData.nombre || eventWinnerTeamId,
-              pj: Number(winData.pj || 0) + 1,
-              ganados: Number(winData.ganados || 0) + 1,
-              puntos: Number(winData.puntos || 0) + ptsWin,
+              nombre: eventWinnerName || winSnapData.nombre || eventWinnerTeamId,
+              pj: Number(winSnapData.pj || 0) + 1,
+              ganados: Number(winSnapData.ganados || 0) + 1,
+              puntos: Number(winSnapData.puntos || 0) + ptsWin,
               puntosGanados: winPF,
               puntosPerdidos: winPA,
               diferencia: winPF - winPA,
@@ -726,17 +755,16 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
             {
               eventoId: eventId,
               uid: eventLoserTeamId,
-              nombre: eventLoserName || loseData.nombre || eventLoserTeamId,
-              pj: Number(loseData.pj || 0) + 1,
-              perdidos: Number(loseData.perdidos || 0) + 1,
-              puntos: Number(loseData.puntos || 0) + ptsLoss,
+              nombre: eventLoserName || loseSnapData.nombre || eventLoserTeamId,
+              pj: Number(loseSnapData.pj || 0) + 1,
+              perdidos: Number(loseSnapData.perdidos || 0) + 1,
+              puntos: Number(loseSnapData.puntos || 0) + ptsLoss,
               puntosGanados: losePF,
               puntosPerdidos: losePA,
               diferencia: losePF - losePA,
             },
             { merge: true },
           );
-        }
       }
 
       transaction.update(matchRef, {

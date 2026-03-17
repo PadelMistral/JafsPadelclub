@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file match-service.js
  * @version 19.5 (Final V7 Refactor)
  * @description Premium Match Management Service for Padeluminatis.
@@ -2462,6 +2462,7 @@ async function getPlayerName(uid) {
 
 window.closeMatchModal = () => {
     document.getElementById('modal-match')?.classList.remove('active');
+    document.getElementById('modal-result-form')?.classList.remove('active');
     if (typeof matchDetailUnsub === "function") {
         try { matchDetailUnsub(); } catch (_) {}
         matchDetailUnsub = null;
@@ -2471,31 +2472,44 @@ window.closeMatchModal = () => {
 // Ensure there's a usable modal container for the result form on any page.
 function ensureResultModalArea() {
     let area = document.getElementById('match-detail-area');
-    if (area) return area;
-
-    let modal = document.getElementById('modal-match') || document.getElementById('modal-match-detail-ed');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'modal-match';
-        modal.className = 'modal-overlay active';
-        modal.innerHTML = `
-            <div class="modal-card glass-strong">
-                <div class="modal-header">
-                    <h3 class="modal-title" id="modal-titulo">DETALLE DE PARTIDO</h3>
-                    <button class="close-btn" onclick="window.closeMatchModal()">&times;</button>
-                </div>
-                <div class="modal-body scroll-y" id="match-detail-area" style="max-height: 80vh;"></div>
-            </div>
-        `;
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.classList.remove('active');
-        });
-        document.body.appendChild(modal);
+    if (area) {
+        // Make sure the parent modal is visible
+        const parentModal = area.closest('.modal-overlay');
+        if (parentModal) parentModal.classList.add('active');
+        return area;
     }
 
-    modal.classList.add('active');
-    area = modal.querySelector('#match-detail-area') || modal.querySelector('.modal-body');
-    return area;
+    // Try existing modal-match first (calendar page)
+    let modal = document.getElementById('modal-match');
+    if (modal) {
+        modal.classList.add('active');
+        area = modal.querySelector('#match-detail-area') || modal.querySelector('.modal-body');
+        if (area) return area;
+    }
+
+    // Always create a fresh dedicated modal for the result form
+    // This prevents conflicts with evento-detalle's modal-match-detail-ed
+    const existingResultModal = document.getElementById('modal-result-form');
+    if (existingResultModal) existingResultModal.remove();
+
+    modal = document.createElement('div');
+    modal.id = 'modal-result-form';
+    modal.className = 'modal-overlay active';
+    modal.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:480px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-titulo">REGISTRAR RESULTADO</h3>
+                <button class="close-btn" onclick="document.getElementById('modal-result-form').classList.remove('active')">×</button>
+            </div>
+            <div class="modal-body scroll-y" id="match-detail-area" style="max-height: 80vh;"></div>
+        </div>
+    `;
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('active');
+    });
+    document.body.appendChild(modal);
+
+    return document.getElementById('match-detail-area');
 }
 
 function extractSetScores(resultStr = "") {

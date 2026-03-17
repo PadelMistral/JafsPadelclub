@@ -15,32 +15,32 @@ export const ELO_CONFIG = {
   LEVEL_MIN: 1.0,
   LEVEL_MAX: 7.0,
   LEVEL_STEP: 0.001, 
-  BONUS_CAP_RATIO: 0.35, 
-  RATING_PER_LEVEL: 1000,
+  BONUS_CAP_RATIO: 0.18, 
+  RATING_PER_LEVEL: 1200, // Subido de 1000 a 1200 para cambios más lentos
 
   K: {
-    PROVISIONAL: 60, 
-    DEVELOPING: 48, 
-    STABLE: 36, 
-    ELITE: 28, 
-    LEGEND: 22, 
+    PROVISIONAL: 32,  // bajado más
+    DEVELOPING: 24,   
+    STABLE: 18,       
+    ELITE: 14,        
+    LEGEND: 10,       
   },
 
   CAPS: {
-    COMPETITIVE_ABS: 90, 
-    FRIENDLY_ABS: 60,     
+    COMPETITIVE_ABS: 55, // bajado más
+    FRIENDLY_ABS: 35,    
   },
 
   DEMOTION_SHIELD_MATCHES: 3,
-  DEMOTION_BUFFER_PTS: 5,
+  DEMOTION_BUFFER_PTS: 8,
 
-  // Sistema de Multiplicadores de Alta Precisión
+  // Sistema de Multiplicadores aún más conservadores
   DYNAMIC: {
-    STREAK_M: 0.12,     // Multiplicador base por racha
-    UPSET_M: 1.45,      // Factor sorpresa
-    DOMINANCE_M: 1.25,  // Factor por sets/juegos
-    CLUTCH_M: 0.05,     // Plus por tie-break o 7-5
-    ACTIVITY_M: 1.15,   // Plus para jugadores activos
+    STREAK_M: 0.05,     
+    UPSET_M: 1.10,      
+    DOMINANCE_M: 1.05,  
+    CLUTCH_M: 0.01,     
+    ACTIVITY_M: 1.02,   
   }
 };
 
