@@ -42,6 +42,8 @@ import {
   startCorePresence,
 } from "./core/core-engine.js";
 import { computeGroupTable } from "./event-tournament-engine.js";
+import { shareMatchResult, shareMatchPoster } from "./utils/share-utils.js";
+
 
 
 let currentUser = null;
@@ -103,7 +105,10 @@ function indexEventUserNames(eventDoc) {
   inscritos.forEach((i) => {
     const uid = i?.uid;
     const name = i?.nombre || i?.nombreUsuario;
-    if (uid && name) map.set(String(uid), String(name));
+    if (uid && name) {
+        map.set(String(uid), String(name));
+        if (!playerNameCache.has(uid)) playerNameCache.set(uid, name);
+    }
   });
   const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
   teams.forEach((t) => {
@@ -111,7 +116,10 @@ function indexEventUserNames(eventDoc) {
     players.forEach((p) => {
       const uid = p?.uid || p?.id;
       const name = p?.nombre || p?.nombreUsuario;
-      if (uid && name) map.set(String(uid), String(name));
+      if (uid && name) {
+          map.set(String(uid), String(name));
+          if (!playerNameCache.has(uid)) playerNameCache.set(uid, name);
+      }
     });
   });
 }
@@ -327,7 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
         applyHomeMatchCache({ complete: true });
       }
 
-      // Final fallback to ensure UI isn't stuck
+      // Final fallback to ensure UI isn't stuck and Today notice shows
       setTimeout(() => {
         if (!matchLoadFallbackFired) {
           matchLoadFallbackFired = true;
@@ -337,7 +345,10 @@ document.addEventListener("DOMContentLoaded", () => {
           );
           completeHomeEntryOverlay();
         }
+        // Force check for today's match even if cache was used
+        maybeCreateEventDayNotice();
       }, 3500);
+
 
       window.getAICoachContext = () =>
         getCoreAIContext({ uid: currentUser.uid });
@@ -508,14 +519,8 @@ async function checkHomeNotices() {
         );
     });
 
-    if (todayMatches.length > 0) {
-        notices.push({
-            type: 'game',
-            title: '¡HOY JUEGAS!',
-            message: `Tienes ${todayMatches.length} ${todayMatches.length > 1 ? 'partidos' : 'partido'} programado para hoy. ¡A por todas!`,
-            action: () => window.location.href = 'calendario.html'
-        });
-    }
+    // 1. Today Match - Handled by maybeCreateEventDayNotice directly for premium view
+
 
     // 2. Pending Result
     const pendingResult = myMatches.filter((m) => {
@@ -1307,7 +1312,13 @@ async function renderEventStandings(eventDoc) {
 
 function renderStandingsRows(rowsIn, eventDoc, myTeamId, myGroup, slot) {
   let rows = Array.isArray(rowsIn) ? rowsIn.slice() : [];
-  rows.sort((a,b) => (b.puntos || 0) - (a.puntos || 0) || (b.diferencia || 0) - (a.diferencia || 0));
+  rows.sort((a,b) => {
+    const ptsA = a.pts ?? a.puntos ?? 0;
+    const ptsB = b.pts ?? b.puntos ?? 0;
+    const difA = a.dif ?? a.diferencia ?? 0;
+    const difB = b.dif ?? b.diferencia ?? 0;
+    return ptsB - ptsA || difB - difA;
+  });
   
   const title = myGroup ? `Clasificación Grupo ${String(myGroup).toUpperCase()}` : "Clasificación General";
   
@@ -1345,9 +1356,10 @@ function renderStandingsRows(rowsIn, eventDoc, myTeamId, myGroup, slot) {
         <div class="hv2-std-row ${isMine ? 'mine' : ''}">
           <span class="pos">${i + 1}</span>
           <span class="team">${teamName}</span>
-          <span class="pj">${r.pj || 0}</span>
-          <span class="pts">${r.puntos || 0}</span>
+          <span class="pj">${r.pj ?? 0}</span>
+          <span class="pts">${r.pts ?? r.puntos ?? 0}</span>
         </div>
+
       `;
     });
   }
@@ -1391,6 +1403,7 @@ async function createSelfNoticeOnce(key, title, message, link = "home.html", dat
 
 
 
+
 function sameDay(a, b) {
   return (
     a.getDate() === b.getDate() &&
@@ -1407,7 +1420,7 @@ function maybeCreateEventDayNotice() {
   const today = new Date();
   if (!sameDay(d, today)) return;
 
-  const key = `event_today_modal_v2:${next.id}:${today.toISOString().slice(0, 10)}`;
+  const key = `event_today_premium_v3:${next.id}:${today.toISOString().slice(0, 10)}`;
   try {
     if (localStorage.getItem(key)) return;
   } catch {}
@@ -1416,12 +1429,24 @@ function maybeCreateEventDayNotice() {
   const diffH = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
   
   const players = getNormalizedPlayers(next);
-  const n = (idx) => getPlayerDisplayName(players[idx]) || "Pendiente";
+  const n = (idx) => String(getPlayerDisplayName(players[idx]) || "Pendiente");
+
+  // Pre-load levels if available
+  const getLvl = (idx) => {
+      const uid = players[idx];
+      if (!uid) return "";
+      if (String(uid).startsWith("GUEST_")) {
+          const m = parseGuestMeta(uid);
+          return m ? `NV ${m.level.toFixed(1)}` : "";
+      }
+      return ""; // Profile levels need async fetch, omitting for sync modal for now
+  };
 
   const modal = document.createElement("div");
   modal.className = "event-day-alert";
+  modal.style.zIndex = "20000";
   modal.innerHTML = `
-    <div class="eda-card">
+    <div class="eda-card animate-scale-in">
       <div class="eda-glow"></div>
       <div class="eda-icon"><i class="fas fa-rocket"></i></div>
       <div class="eda-title">¡HOY JUEGAS!</div>
@@ -1445,21 +1470,49 @@ function maybeCreateEventDayNotice() {
       </div>
       <div class="eda-msg">Faltan <span>${diffH} HORAS</span> para el enfrentamiento.</div>
       <div class="eda-actions">
-        <button class="btn-eda-share" onclick="window.shareMatch('${next.id}', '${next.col}')">
-           <i class="fas fa-share-nodes mr-2"></i> COMPARTIR CARTEL
+        <button class="btn-eda-share" id="eda-btn-download">
+           <i class="fas fa-file-image mr-2"></i> DESCARGAR CARTEL PNG
         </button>
-        <button class="btn-eda-close" id="close-eda">ENTENDIDO, CERRAR</button>
+         <button class="btn-premium-v7" style="border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:#fff; font-size:10px;" id="eda-btn-share">
+           <i class="fas fa-share-nodes mr-2"></i> COMPARTIR POR REDES
+        </button>
+        <button class="btn-eda-close" id="close-eda">CERRAR PANEL</button>
       </div>
-
     </div>
   `;
   document.body.appendChild(modal);
+
+  const prepareMetadata = () => {
+    const pNames = players.map(uid => getPlayerDisplayName(uid));
+    const levels = players.map(uid => {
+        const u = playerNameCache.get(uid); 
+        return currentUserData?.uid === uid ? Number(currentUserData.nivel || 2.5) : 2.5; 
+    });
+    return {
+      title: "PARTIDO DE HOY",
+      when: d.toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }),
+      teamA: [pNames[0], pNames[1]],
+      teamB: [pNames[2], pNames[3]],
+      levelsA: [levels[0], levels[1]],
+      levelsB: [levels[2], levels[3]],
+      club: "PADELUMINATIS CLUB"
+    };
+  };
+  
+  modal.querySelector("#eda-btn-download").onclick = async () => {
+     await shareMatchPoster(prepareMetadata());
+  };
+
+  modal.querySelector("#eda-btn-share").onclick = async () => {
+     window.shareMatch(next.id, next.col);
+  };
   
   modal.querySelector("#close-eda").onclick = () => {
     modal.remove();
     localStorage.setItem(key, "1");
   };
 }
+
 
 
 
@@ -1707,7 +1760,9 @@ function renderNextMatch() {
       </div>
     </div>
   `;
+  maybeCreateEventDayNotice(); // Reinforce when scoreboard renders
 }
+
 
 /* Match list */
 function renderMatchesByFilter(filter) {
@@ -1727,9 +1782,10 @@ function renderMatchesByFilter(filter) {
     const overlaps = allMatches.some(m => {
         const d = toDateSafe(m.fecha);
         if (!d) return false;
-        // Increase tolerance to 5 min to detect group matches
-        return Math.abs(d.getTime() - startTime) < 5 * 60 * 1000;
+        // Increase tolerance to 120 min to avoid any double booking
+        return Math.abs(d.getTime() - startTime) < 120 * 60 * 1000;
     });
+
     return !overlaps;
   }).map(ev => ({
 
@@ -2846,13 +2902,39 @@ window.shareMatch = async (matchId, col) => {
     const players = getNormalizedPlayers(match);
     const names = players.map(uid => getPlayerDisplayName(uid));
     
+    // Check if finished to use mission / result poster
+    if (isFinishedMatch(match)) {
+        const sets = (match.resultado?.sets || (typeof match.resultado === "string" ? match.resultado : "PARTIDO FINALIZADO"));
+        const winner = resolveWinnerTeam(match);
+        const pNames = players.map(uid => String(getPlayerDisplayName(uid) || "Jugador"));
+        
+        const metadata = {
+            players: pNames,
+            teamA: [pNames[0], pNames[1]],
+            teamB: [pNames[2], pNames[3]],
+            winner,
+            sets,
+            club: "PADELUMINATIS CLUB",
+            logoUrl: 'imagenes/Logojafs.png'
+        };
+
+        
+        const analysis = {
+            sets: sets,
+            delta: 0,
+            pointsAfter: "CONFIRMADAS",
+            levelBand: "MISION CUMPLIDA"
+        };
+        
+        await shareMatchResult(analysis, metadata);
+        return;
+    }
+
+
+    // Default social share text
     let text = `🎾 ¡Partido de Padel! \n📅 ${dateStr}\n`;
     if (names.length >= 4) {
         text += `⚔️ ${names[0]} / ${names[1]} VS ${names[2]} / ${names[3]}\n`;
-    }
-    
-    if (match.resultado?.sets) {
-        text += `🏆 Resultado: ${match.resultado.sets}\n`;
     }
     
     text += `\n¡Entra en Padeluminatis para ver más!`;
@@ -2876,4 +2958,5 @@ window.shareMatch = async (matchId, col) => {
         }
     }
 };
+
 

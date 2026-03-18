@@ -1,4 +1,4 @@
-﻿import { RESULT_LOCK_MINUTES } from "../config/match-constants.js";
+import { RESULT_LOCK_MINUTES } from "../config/match-constants.js";
 
 export function toDateSafe(value) {
   if (!value) return null;
@@ -103,4 +103,18 @@ export function getMatchPlayers(match) {
   const ids = normalizePlayerIds(match.playerIds);
   if (ids.length) return ids;
   return [];
+}
+
+export function isEventMatch(match) {
+  if (!match) return false;
+  const col = String(match.col || "").toLowerCase();
+  if (col === "eventopartidos" || col === "torneopartidos") return true;
+  if (match.eventoId || match.eventId || match.eventMatchId || match.eventLink?.eventoId) return true;
+  return false;
+}
+
+export function getNormalizedPlayers(match) {
+  const players = getMatchPlayers(match);
+  if (!players.length) return [];
+  return [...new Set(players)].slice(0, 4);
 }

@@ -1,4 +1,4 @@
-﻿// evento-detalle.js —" Vista detallada del evento con panel organizador completo y modal para añadir jugador
+// evento-detalle.js —" Vista detallada del evento con panel organizador completo y modal para añadir jugador
 import { db, auth, observerAuth, getDocument } from './firebase-service.js';
 import { initAppUI, showToast, showSidePreferenceModal } from './ui-core.js';
 import { doc, onSnapshot, collection, query, where, orderBy, limit, updateDoc, deleteDoc, getDocs, serverTimestamp, addDoc, arrayUnion, arrayRemove, increment, writeBatch, getDoc } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
@@ -1448,7 +1448,20 @@ window.verDetallePartido = (matchId) => {
     const teamBName = (match.teamBName || teamMap.get(match.teamBId)?.name || 'TBD');
     
     let actionsHtml = '';
-    if (canOrganizar() || (isParticipant && !played)) {
+    if (played) {
+        actionsHtml = `
+            <div class="flex-col gap-2 mt-4">
+                <button class="btn btn-primary btn-sm w-full" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;" onclick="window.shareMatchResultPoster?.('${match.id}', 'eventoPartidos')">
+                    <i class="fas fa-share-nodes mr-2"></i> COMPARTIR CARTEL PNG
+                </button>
+                ${canOrganizar() ? `
+                    <button class="btn btn-ghost btn-sm w-full text-red-400 opacity-60 mt-2" onclick="window.reiniciarPartido('${match.id}')">
+                        <i class="fas fa-rotate-left mr-2"></i> RESETEAR PARTIDO
+                    </button>
+                ` : ''}
+            </div>
+        `;
+    } else if (canOrganizar() || isParticipant) {
         actionsHtml = `
             <div class="flex-col gap-2 mt-4">
                 <button class="btn btn-primary btn-sm w-full" style="background: linear-gradient(90deg, #818cf8, #6366f1) !important;" onclick="window.proponerFechaEvento('${match.id}')">
@@ -1465,11 +1478,6 @@ window.verDetallePartido = (matchId) => {
                 <button class="btn btn-primary btn-sm w-full" onclick="window.vincularPartidoCalendario('${match.id}')" style="background: rgba(255,255,255,0.05) !important;">
                     <i class="fas fa-calendar-plus mr-2"></i> VINCULAR A CALENDARIO
                 </button>` : ''}
-                ${canOrganizar() ? `
-                    <button class="btn btn-ghost btn-sm w-full text-red-400 opacity-60 mt-2" onclick="window.reiniciarPartido('${match.id}')">
-                        <i class="fas fa-rotate-left mr-2"></i> RESETEAR PARTIDO
-                    </button>
-                ` : ''}
             </div>
         `;
     }

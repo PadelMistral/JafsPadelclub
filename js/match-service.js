@@ -1870,11 +1870,21 @@ function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col
     const isPlayed = hasResult || matchState === 'cancelado' || matchState === 'anulado';
     const canReportNow = canReportResultNow(m);
     if (isPlayed) {
-        if (isAdmin) {
-            return `<button class="btn-confirm-v7" onclick="openResultForm('${id}', '${col}')"><span class="t-main">EDITAR RESULTADO</span><i class="fas fa-pen"></i></button>`;
-        }
-        return `<button class="btn-confirm-v7 opacity-80" onclick="openResultForm('${id}', '${col}')"><span class="t-main">SOLO LECTURA</span><i class="fas fa-eye"></i></button>`;
+        const btnAdmin = isAdmin 
+            ? `<button class="btn-confirm-v7" onclick="openResultForm('${id}', '${col}')"><span class="t-main">EDITAR RESULTADO</span><i class="fas fa-pen"></i></button>`
+            : `<button class="btn-confirm-v7 opacity-80" onclick="openResultForm('${id}', '${col}')"><span class="t-main">SOLO LECTURA</span><i class="fas fa-eye"></i></button>`;
+        
+        return `
+            <div class="flex-col gap-2 w-full">
+                ${btnAdmin}
+                <button class="btn-confirm-v7" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-top: 8px;" onclick="window.shareMatchResultPoster?.('${id}', '${col}')">
+                    <span class="t-main">COMPARTIR RESULTADO</span>
+                    <i class="fas fa-share-nodes"></i>
+                </button>
+            </div>
+        `;
     }
+
 
     let actionsHtml = '';
     
@@ -3261,3 +3271,84 @@ export async function createLinkedMatchFromEvent(eventMatchId, slotDate) {
 
 
 
+
+window.shareMatchResultPoster = async (matchId, col) => {
+    try {
+        const { getDocument } = await import('./firebase-service.js');
+        const m = await getDocument(col, matchId);
+        if (!m) return;
+        
+        const { shareMatchResult } = await import('./utils/share-utils.js');
+        const { resolveWinnerTeam } = await import('./utils/match-utils.js');
+
+        // Get players and resolve names/levels asynchronously
+        let players = [];
+        if (window.getNormalizedPlayers) {
+            players = window.getNormalizedPlayers(m);
+        } else {
+            players = (m.jugadores || m.playerUids || m.players || []).filter(Boolean);
+        }
+
+        const resolvePlayerInfo = async (uid) => {
+            if (!uid) return { name: "LIBRE", level: 2.5 };
+            
+            // Try to find name and level
+            let name = "Jugador";
+            let level = 2.5;
+
+            // Global helpers if available
+            if (window.resolvePlayerName) {
+                name = await window.resolvePlayerName(uid);
+            } else if (window.getPlayerDisplayName) {
+                name = window.getPlayerDisplayName(uid);
+            }
+
+            // Get level from meta or firestore
+            const guest = String(uid).startsWith("GUEST_") || String(uid).startsWith("invitado_");
+            if (guest && window.parseGuestMeta) {
+                const gm = window.parseGuestMeta(uid);
+                if (gm) level = gm.level;
+            } else {
+                try {
+                    const uDoc = await getDocument("usuarios", uid);
+                    if (uDoc) level = uDoc.nivel || uDoc.level || 2.5;
+                } catch(e){}
+            }
+
+            return { name: String(name), level };
+        };
+
+        const playerInfos = await Promise.all(players.map(uid => resolvePlayerInfo(uid)));
+        const pNames = playerInfos.map(i => i.name);
+        const pLevels = playerInfos.map(i => i.level);
+
+        const sets = (m.resultado?.sets || (typeof m.resultado === "string" ? m.resultado : "PARTIDO FINALIZADO"));
+        const winner = resolveWinnerTeam(m);
+        
+        const metadata = {
+            players: pNames,
+            levels: pLevels,
+            teamA: [pNames[0], pNames[1]],
+            teamB: [pNames[2], pNames[3]],
+            levelsA: [pLevels[0], pLevels[1]],
+            levelsB: [pLevels[2], pLevels[3]],
+            winner: winner,
+            sets: sets,
+            club: "PADELUMINATIS CLUB",
+            logoUrl: 'imagenes/Logojafs.png'
+        };
+
+
+        
+        const analysis = {
+            sets: sets,
+            delta: 0,
+            pointsAfter: "CONFIRMADAS",
+            levelBand: "MISION CUMPLIDA"
+        };
+        
+        await shareMatchResult(analysis, metadata);
+    } catch (e) {
+        console.error("Poster share failed", e);
+    }
+};

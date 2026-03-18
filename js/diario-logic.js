@@ -1,4 +1,4 @@
-﻿
+
 // diario-logic.js - Premium Diary V9.0 (Advanced Data & Wizard)
 import {
   auth,
@@ -497,7 +497,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function computeDiaryPeerBonuses(entry, matchData, authorUid) {
     const bonuses = [];
-    const players = matchData?.jugadores || [];
+    const players = (matchData?.jugadores || matchData?.playerUids || []).filter(Boolean);
     if (!players.length || !Array.isArray(entry.evaluations)) return bonuses;
     const myIdx = players.indexOf(authorUid);
     if (myIdx === -1) return bonuses;
@@ -557,44 +557,49 @@ document.addEventListener("DOMContentLoaded", async () => {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     
     try {
+      const val = (id) => document.getElementById(id)?.value || "";
+      const valInt = (id) => parseInt(document.getElementById(id)?.value || 0);
+
       const entry = {
         id: Date.now().toString(),
         fecha: new Date().toISOString(),
-        matchId: entryMode === "match" ? document.getElementById("inp-match-id").value : null,
+        matchId: entryMode === "match" ? val("inp-match-id") : null,
         sessionMode: entryMode,
-        tipo: entryMode === "note" ? "Nota Libre" : document.getElementById("inp-tipo")?.value || "Sesión",
-        hora: document.getElementById("inp-hora")?.value || "N/A",
+        tipo: entryMode === "note" ? "Nota Libre" : val("inp-tipo") || "Sesión",
+        hora: val("inp-hora") || "N/A",
         surface: document.querySelector("#surface-selector .active")?.dataset?.val || "indoor",
         posicion: document.querySelector("#pos-selector .active")?.dataset?.val || "reves",
         evaluations: Array.from(document.querySelectorAll(".player-eval-card")).map((card) => ({
           uid: card.dataset.uid,
-          performance: parseInt(card.querySelector(".performance").value),
-          control: parseInt(card.querySelector(".control").value),
-          weakness: parseInt(card.querySelector(".weakness").value),
-          discomfort: parseInt(card.querySelector(".discomfort").value),
-          isMvp: card.querySelector(".mvp-radio").checked,
+          performance: parseInt(card.querySelector(".performance")?.value || 5),
+          control: parseInt(card.querySelector(".control")?.value || 5),
+          weakness: parseInt(card.querySelector(".weakness")?.value || 3),
+          discomfort: parseInt(card.querySelector(".discomfort")?.value || 2),
+          isMvp: !!card.querySelector(".mvp-radio")?.checked,
         })),
         shots: {
-          serve: parseInt(document.getElementById("inp-shot-serve")?.value || 5),
-          volley: parseInt(document.getElementById("inp-shot-volley")?.value || 5),
-          bandeja: parseInt(document.getElementById("inp-shot-bandeja")?.value || 5),
-          vibora: parseInt(document.getElementById("inp-shot-vibora")?.value || 5),
-          smash: parseInt(document.getElementById("inp-shot-smash")?.value || 5),
-          lob: parseInt(document.getElementById("inp-shot-lob")?.value || 5),
+          serve: valInt("inp-shot-serve") || 5,
+          volley: valInt("inp-shot-volley") || 5,
+          bandeja: valInt("inp-shot-bandeja") || 5,
+          vibora: valInt("inp-shot-vibora") || 5,
+          smash: valInt("inp-shot-smash") || 5,
+          lob: valInt("inp-shot-lob") || 5,
         },
         biometria: {
-          fisico: parseInt(document.getElementById("inp-fisico").value),
-          mental: parseInt(document.getElementById("inp-mental").value),
-          confianza: parseInt(document.getElementById("inp-confianza").value),
+          fisico: valInt("inp-fisico") || 5,
+          mental: valInt("inp-mental") || 5,
+          confianza: valInt("inp-confianza") || 5,
           mood: document.querySelector("#mood-box .active")?.dataset.mood || "Normal",
         },
         tactica: {
-          clave: document.getElementById("inp-key-moment").value,
-          notas: document.getElementById("entry-notes").value,
+          clave: val("inp-key-moment"),
+          notas: val("entry-notes"),
+          damageReceived: val("inp-damage-received"),
+          damageInflicted: val("inp-damage-inflicted"),
         },
-        memoryNote: document.getElementById("entry-memory")?.value || "",
-        lesson: document.getElementById("entry-lesson")?.value || "",
-        nextGoal: document.getElementById("inp-next-goal")?.value || "",
+        memoryNote: val("entry-memory"),
+        lesson: val("entry-lesson"),
+        nextGoal: val("inp-next-goal"),
       };
 
       entry.aiSummary = generateSmartSummary(entry);
@@ -611,21 +616,38 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (entry.matchId) {
           const matchRefA = doc(db, "partidosAmistosos", entry.matchId);
           const matchRefR = doc(db, "partidosReto", entry.matchId);
-          const [mSnapA, mSnapR] = await Promise.all([transaction.get(matchRefA), transaction.get(matchRefR)]);
-          let mRef = mSnapA.exists() ? matchRefA : (mSnapR.exists() ? matchRefR : null);
-          let mData = mSnapA.exists() ? mSnapA.data() : (mSnapR.exists() ? mSnapR.data() : null);
+          const matchRefE = doc(db, "eventoPartidos", entry.matchId);
+          const [mSnapA, mSnapR, mSnapE] = await Promise.all([
+            transaction.get(matchRefA), 
+            transaction.get(matchRefR),
+            transaction.get(matchRefE)
+          ]);
+          
+          let mRef = mSnapA.exists() ? matchRefA : (mSnapR.exists() ? matchRefR : (mSnapE.exists() ? matchRefE : null));
+          let mData = mSnapA.exists() ? mSnapA.data() : (mSnapR.exists() ? mSnapR.data() : (mSnapE.exists() ? mSnapE.data() : null));
 
           if (mRef && mData) {
             const diaryImpactBy = mData.diaryImpactBy || {};
             if (!diaryImpactBy[currentUser.uid]) {
               const peerBonuses = computeDiaryPeerBonuses(entry, mData, currentUser.uid);
+              
+              // NEW logic: All reads BEFORE any updates
+              const peerUpdates = [];
               for (const peer of peerBonuses) {
                 const pRef = doc(db, "usuarios", peer.uid);
                 const pSnap = await transaction.get(pRef);
-                if (pSnap.exists()) {
-                  transaction.update(pRef, { puntosRanking: (pSnap.data().puntosRanking || 1000) + peer.diff });
+                peerUpdates.push({ ref: pRef, snap: pSnap, diff: peer.diff });
+              }
+
+              // Now execute the updates
+              for (const pu of peerUpdates) {
+                if (pu.snap.exists()) {
+                  transaction.update(pu.ref, { 
+                    puntosRanking: (pu.snap.data().puntosRanking || 1000) + pu.diff 
+                  });
                 }
               }
+
               diaryImpactBy[currentUser.uid] = serverTimestamp();
               transaction.update(mRef, { diaryImpactBy });
             }

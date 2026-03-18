@@ -62,6 +62,7 @@ function bindFilters() {
     document.getElementById("users-role-filter")?.addEventListener("change", renderUsers);
     document.getElementById("matches-filter")?.addEventListener("change", renderMatches);
     document.getElementById("matches-type-filter")?.addEventListener("change", renderMatches);
+    document.getElementById("matches-user-search")?.addEventListener("input", renderMatches);
     document.getElementById("pending-search")?.addEventListener("input", renderPending);
     document.getElementById("btn-refresh-admin")?.addEventListener("click", refreshAll);
     document.getElementById("btn-refresh-proposals")?.addEventListener("click", refreshProposals);
@@ -534,6 +535,8 @@ function renderPending() {
 function renderMatches() {
     const mode = document.getElementById("matches-filter")?.value || "all";
     const type = document.getElementById("matches-type-filter")?.value || "all";
+    const userKeyword = document.getElementById("matches-user-search")?.value.trim().toLowerCase() || "";
+    
     let data = [...matchesArr].filter(m => {
         if (m.col === 'eventoPartidos') {
             const played = isPlayed(m);
@@ -548,6 +551,16 @@ function renderMatches() {
     if (mode === 'upcoming') data = data.filter(m => !isPlayed(m) && toDate(m.fecha)?.getTime() >= Date.now());
     if (mode === 'orphan') data = data.filter(m => hasOrphanPlayers(m));
     if (type !== 'all') data = data.filter(m => m.col === type);
+
+    // Filter by User
+    if (userKeyword) {
+        data = data.filter(m => {
+            const teamA = String(m.teamAName || "").toLowerCase();
+            const teamB = String(m.teamBName || "").toLowerCase();
+            const participants = (m.jugadores || []).map(id => String(id).toLowerCase());
+            return teamA.includes(userKeyword) || teamB.includes(userKeyword) || participants.includes(userKeyword) || m.id.toLowerCase().includes(userKeyword);
+        });
+    }
 
     const container = document.getElementById("matches-accordion-container");
     if (!container) return;
@@ -751,7 +764,7 @@ function renderProposals() {
                         <div class="admin-acc-head" onclick="this.parentElement.classList.toggle('active')">
                             <div class="flex-col">
                                 <span class="admin-acc-title">${escapeHtml(p.title || "Propuesta")}</span>
-                                <span class="admin-acc-sub">${status} · ${escapeHtml(names || "sin participantes")}</span>
+                                <span class="admin-acc-sub">${status} ï¿½ ${escapeHtml(names || "sin participantes")}</span>
                                 <span class="text-[9px] opacity-50">${dates}</span>
                             </div>
                             <button class="btn-v9 ghost" onclick="event.stopPropagation(); window.openProposalAdminChat('${p.id}')">Ver chat</button>
