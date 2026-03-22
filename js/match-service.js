@@ -26,6 +26,7 @@ import { logError } from "./core/app-logger.js";
 import { analyticsCount, analyticsTiming } from "./core/analytics.js";
 import { rateLimitCheck } from "./core/rate-limit.js";
 import { getDivisionByRating } from "./config/elo-system.js";
+import { getFriendlyTeamName } from "./utils/team-utils.js";
 
 /*
   PROD_AUDIT_NEXT_PHASE (analysis only):
@@ -660,7 +661,13 @@ async function loadEventLinkOptions(dateStr, hour, uid) {
         const options = window._pendingEventMatches.map((m) => {
             const phase = String(m.phase || 'evento').toUpperCase();
             const groupTag = m.group ? ` · GRUPO ${String(m.group).toUpperCase()}` : '';
-            const label = `${phase}${groupTag} · ${m.teamAName || 'Equipo A'} VS ${m.teamBName || 'Equipo B'}`;
+            const label = `${phase}${groupTag} · ${getFriendlyTeamName({
+                teamName: m.teamAName,
+                fallback: 'Pareja 1'
+            })} VS ${getFriendlyTeamName({
+                teamName: m.teamBName,
+                fallback: 'Pareja 2'
+            })}`;
             return `<option value="${m.eventoId}|${m.id}|${m.phase || ''}">${label}</option>`;
         });
 
@@ -838,8 +845,10 @@ window.executeCreateMatch = async (dateStr, hour) => {
     
     // Ensure we have exactly MAX_PLAYERS slots
     const jugs = window._initialJugadores || [auth.currentUser.uid, null, null, null];
+    const creationSides = Array.isArray(window._creationSides) ? [...window._creationSides] : ["derecha", "reves", "derecha", "reves"];
     while (jugs.length < MAX_PLAYERS) jugs.push(null);
     if (jugs.length > MAX_PLAYERS) jugs.length = MAX_PLAYERS;
+    while (creationSides.length < MAX_PLAYERS) creationSides.push(creationSides.length % 2 === 0 ? "derecha" : "reves");
     
     const matchDate = new Date(`${dateStr}T${hour}`);
     const linkedEvent = getEventLinkValue();
@@ -851,7 +860,7 @@ window.executeCreateMatch = async (dateStr, hour) => {
     const createT0 = performance.now();
     try {
         const { showLoading, hideLoading } = await import('./modules/ui-loader.js?v=6.5');
-        showLoading("Creando partido en la Matrix...");
+        showLoading("Creando partida...");
 
         const creatorDoc = await getDocument('usuarios', auth.currentUser.uid);
         const creatorName = creatorDoc?.nombreUsuario || creatorDoc?.nombre || 'Un jugador';
@@ -874,6 +883,28 @@ window.executeCreateMatch = async (dateStr, hour) => {
             }
         }
 
+        const normalizedPlayerIds = jugs.filter(Boolean).map((id) => String(id));
+        const slotExistingSnap = await getDocs(query(collection(db, col), where("fecha", "==", matchDate), limit(40)));
+        const conflictingMatch = slotExistingSnap.docs
+            .map((snap) => ({ id: snap.id, ...snap.data() }))
+            .find((existing) => {
+                const existingState = String(existing?.estado || "").toLowerCase();
+                if (["cancelado", "anulado"].includes(existingState)) return false;
+                const existingPlayers = Array.isArray(existing?.jugadores) ? existing.jugadores.filter(Boolean).map((id) => String(id)) : [];
+                const sharedPlayers = normalizedPlayerIds.filter((id) => existingPlayers.includes(id));
+                const sameCreator = String(existing?.creador || existing?.organizerId || "") === String(auth.currentUser.uid);
+                return sameCreator || sharedPlayers.length > 0;
+            });
+
+        if (conflictingMatch) {
+            hideLoading();
+            return showToast(
+                "Conflicto detectado",
+                "Ya existe otra partida en ese horario con jugadores coincidentes. Revisa el calendario antes de crear otra.",
+                "warning",
+            );
+        }
+
         const matchData = {
             creador: auth.currentUser.uid,
             organizerId: auth.currentUser.uid,
@@ -887,6 +918,8 @@ window.executeCreateMatch = async (dateStr, hour) => {
             timestamp: serverTimestamp(),
             equipoA: [jugs[0], jugs[1]],
             equipoB: [jugs[2], jugs[3]],
+            sidePreferences: creationSides,
+            posiciones: creationSides.map((side) => String(side || "").toLowerCase().includes("der") ? "drive" : "reves"),
             surface: document.getElementById('inp-surface')?.value || 'indoor',
             courtType: document.getElementById('inp-court')?.value || 'normal',
             eventLink: linkedEventMatch ? {
@@ -970,7 +1003,7 @@ window.executeCreateMatch = async (dateStr, hour) => {
                     : `${creatorName} creo una partida para el ${day} a las ${time}.`);
             await createNotification(
                 targets,
-                "Padeluminatis",
+                "JafsPadel",
                 notifMsg,
                 notifType,
                 'calendario.html',
@@ -1171,9 +1204,9 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
             
             let winnerHtml = '';
             if (m.resultado.ganador === 'A') {
-                winnerHtml = `<span class="text-[10px] font-black uppercase text-primary">GANADOR: EQUIPO A</span>`;
+                winnerHtml = `<span class="text-[10px] font-black uppercase text-primary">GANADOR: ${teamALabel}</span>`;
             } else if (m.resultado.ganador === 'B') {
-                winnerHtml = `<span class="text-[10px] font-black uppercase text-secondary">GANADOR: EQUIPO B</span>`;
+                winnerHtml = `<span class="text-[10px] font-black uppercase text-secondary">GANADOR: ${teamBLabel}</span>`;
             }
 
             if (detail) {
@@ -1453,7 +1486,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     if (!teamA.length && (m?.teamAName || m?.equipoA)) teamA = [String(m.teamAName || m.equipoA)];
                     if (!teamB.length && (m?.teamBName || m?.equipoB)) teamB = [String(m.teamBName || m.equipoB)];
                     const when = date.toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-                    await shareMatchPoster({ title: 'PROXIMO PARTIDO', teamA, teamB, levelsA, levelsB, when, club: 'PADELUMINATIS CLUB' });
+                    await shareMatchPoster({ title: 'PROXIMA PARTIDA', teamA, teamB, levelsA, levelsB, when, club: 'PADELUMINATIS' });
                 } catch (e) {
                     console.error('Share poster failed', e);
                 }
@@ -1570,8 +1603,8 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                         <div class="court-schema-v7-line-bottom"></div>
                         
                         <div class="players-row-v7 top mb-8">
-                            ${await renderCreationSlot(0, preFillPlayers?.[0], currentUser, userData)}
-                            ${await renderCreationSlot(1, preFillPlayers?.[1], currentUser, userData, 'COMPAÑERO')}
+                            ${await renderCreationSlot(0, preFillPlayers?.[0], currentUser, userData, 'EQUIPO A · DERECHA')}
+                            ${await renderCreationSlot(1, preFillPlayers?.[1], currentUser, userData, 'EQUIPO A · REVÉS')}
                         </div>
                         
                         <div class="vs-divider-v7">
@@ -1581,10 +1614,20 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                         </div>
                         
                         <div class="players-row-v7 bottom mt-8">
-                            ${await renderCreationSlot(2, preFillPlayers?.[2], currentUser, userData, 'RIVAL 1')}
-                            ${await renderCreationSlot(3, preFillPlayers?.[3], currentUser, userData, 'RIVAL 2')}
+                            ${await renderCreationSlot(2, preFillPlayers?.[2], currentUser, userData, 'EQUIPO B · DERECHA')}
+                            ${await renderCreationSlot(3, preFillPlayers?.[3], currentUser, userData, 'EQUIPO B · REVÉS')}
                         </div>
                     </div>
+                </div>
+
+                <div class="creation-side-panel mb-4">
+                    <div class="creation-side-head">
+                        <span class="creation-side-title">Lado y reparto</span>
+                        <button type="button" class="creation-side-shuffle" onclick="window.shuffleCreationTeams()">
+                            <i class="fas fa-shuffle"></i> SORTEAR EQUIPOS
+                        </button>
+                    </div>
+                    <p class="creation-side-copy">Cada plaza puede marcar derecha, revés o flexible. Si no os ponéis de acuerdo, el sorteo recompone la partida automáticamente.</p>
                 </div>
 
                 <!-- Configuración -->
@@ -1668,6 +1711,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
     window._creationType = 'amistoso';
     window._creationVisibility = 'public';
     window._initialJugadores = preFillPlayers || [currentUser.uid, null, null, null];
+    window._creationSides = await buildInitialCreationSides(currentUser, userData, window._initialJugadores);
 
     window.setMatchType = (t) => {
         window._creationType = t;
@@ -1717,6 +1761,7 @@ async function renderCreationSlot(idx, preUid, currentUser, userData, label = ""
                 </div>
                 <span class="p-badge" style="color:${teamColor}; border-color:currentColor">${p.level.toFixed(1)}</span>
                 <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${teamColor}">${name}</span>
+                ${renderCreationSideSelector(idx, p.side || defaultSideForIndex(idx))}
             </div>
         `;
     }
@@ -1724,6 +1769,7 @@ async function renderCreationSlot(idx, preUid, currentUser, userData, label = ""
         <div class="p-slot-v7 pointer" id="slot-${idx}-wrap" onclick="window.handleCreationSlotClick(${idx})">
             <div class="p-img-box empty" style="border-color:${teamColor}; opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
             <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:${teamColor}; opacity:0.5">${label || (idx < 2 ? 'COMPAÑERO' : 'RIVAL')}</span>
+            ${renderCreationSideSelector(idx, defaultSideForIndex(idx))}
         </div>
     `;
 }
@@ -1747,14 +1793,14 @@ async function getPlayerData(uid) {
         const name = eventMeta?.name || eventName || guestMeta.name || 'Invitado';
         const level = Number.isFinite(eventMeta?.level) ? eventMeta.level : (Number.isFinite(guestMeta.level) ? guestMeta.level : 2.5);
         const photo = eventMeta?.photo || `./imagenes/Logojafs.png`;
-        return { name, level, id: sUid, isGuest: true, photo, points: 1000 };
+        return { name, level, id: sUid, isGuest: true, photo, points: 1000, side: "flex" };
     }
 
     const cached = Array.isArray(window.psUsersCache) ? window.psUsersCache.find(x => x && x.id === sUid) : null;
     if (cached) {
         const name = cached.nombreUsuario || cached.nombre || 'Jugador';
         const photo = cached.fotoPerfil || cached.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
-        return { name, photo, level: cached.nivel || 2.5, id: sUid, points: cached.puntosRanking || 1000 };
+        return { name, photo, level: cached.nivel || 2.5, id: sUid, points: cached.puntosRanking || 1000, side: normalizeCreationSide(cached.posicionPreferida || cached.sidePreference || cached.posicion) };
     }
 
     try {
@@ -1763,23 +1809,122 @@ async function getPlayerData(uid) {
             if (eventMeta) {
                 const name = eventMeta.name || eventName || 'Jugador';
                 const photo = eventMeta.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
-                return { name, photo, level: eventMeta.level || 2.5, id: sUid, points: 1000 };
+                return { name, photo, level: eventMeta.level || 2.5, id: sUid, points: 1000, side: "flex" };
             }
             return { ...fallback, name: eventName || 'Jugador', id: sUid };
         }
         const name = d.nombreUsuario || d.nombre || 'Jugador';
         const photo = d.fotoPerfil || d.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
-        return { name, photo, level: d.nivel || 2.5, id: sUid, points: d.puntosRanking || 1000 };
+        return { name, photo, level: d.nivel || 2.5, id: sUid, points: d.puntosRanking || 1000, side: normalizeCreationSide(d.posicionPreferida || d.sidePreference || d.posicion) };
     } catch(e) {
         console.warn("getPlayerData failed for", sUid, e);
         if (eventMeta) {
             const name = eventMeta.name || eventName || 'Jugador';
             const photo = eventMeta.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
-            return { name, photo, level: eventMeta.level || 2.5, id: sUid, points: 1000 };
+            return { name, photo, level: eventMeta.level || 2.5, id: sUid, points: 1000, side: "flex" };
         }
         return { ...fallback, name: eventName || 'Jugador', id: sUid };
     }
 }
+
+function normalizeCreationSide(value) {
+    const raw = String(value || "").toLowerCase().trim();
+    if (raw.includes("der") || raw.includes("drive")) return "derecha";
+    if (raw.includes("rev")) return "reves";
+    return "flex";
+}
+
+function defaultSideForIndex(idx) {
+    return idx % 2 === 0 ? "derecha" : "reves";
+}
+
+function renderCreationSideSelector(idx, currentValue = "flex") {
+    const safe = normalizeCreationSide(currentValue);
+    return `
+        <div class="creation-side-box" onclick="event.stopPropagation()">
+            <select class="creation-side-select" id="creation-side-${idx}" onchange="window.updateCreationSide(${idx}, this.value)">
+                <option value="derecha" ${safe === "derecha" ? "selected" : ""}>Derecha</option>
+                <option value="reves" ${safe === "reves" ? "selected" : ""}>Revés</option>
+                <option value="flex" ${safe === "flex" ? "selected" : ""}>Me da igual</option>
+            </select>
+        </div>
+    `;
+}
+
+async function buildInitialCreationSides(currentUser, userData, players = []) {
+    const safePlayers = Array.isArray(players) ? players.slice(0, MAX_PLAYERS) : [];
+    const sides = await Promise.all(safePlayers.map(async (uid, idx) => {
+        if (!uid) return defaultSideForIndex(idx);
+        if (uid === currentUser?.uid) {
+            return normalizeCreationSide(userData?.posicionPreferida || userData?.sidePreference || userData?.posicion);
+        }
+        const p = await getPlayerData(uid);
+        return normalizeCreationSide(p?.side);
+    }));
+    while (sides.length < MAX_PLAYERS) sides.push(defaultSideForIndex(sides.length));
+    return sides;
+}
+
+window.updateCreationSide = (idx, value) => {
+    if (!Array.isArray(window._creationSides)) window._creationSides = ["derecha", "reves", "derecha", "reves"];
+    window._creationSides[idx] = normalizeCreationSide(value);
+};
+
+window.shuffleCreationTeams = async () => {
+    const players = Array.isArray(window._initialJugadores) ? [...window._initialJugadores] : [];
+    const sides = Array.isArray(window._creationSides) ? [...window._creationSides] : [];
+    const entries = players
+        .map((uid, idx) => ({ uid, side: normalizeCreationSide(sides[idx] || defaultSideForIndex(idx)) }))
+        .filter((entry) => entry.uid);
+
+    if (entries.length < 2) {
+        showToast("Sorteo", "Añade al menos dos jugadores antes de sortear equipos.", "warning");
+        return;
+    }
+
+    const available = [...entries].sort(() => Math.random() - 0.5);
+    const targets = ["derecha", "reves", "derecha", "reves"];
+    const nextPlayers = [null, null, null, null];
+    const nextSides = [...targets];
+
+    targets.forEach((targetSide, idx) => {
+        const exactIdx = available.findIndex((entry) => entry.side === targetSide);
+        const flexIdx = available.findIndex((entry) => entry.side === "flex");
+        const pickIdx = exactIdx >= 0 ? exactIdx : (flexIdx >= 0 ? flexIdx : 0);
+        const picked = available.splice(pickIdx, 1)[0];
+        if (picked) nextPlayers[idx] = picked.uid;
+    });
+
+    window._initialJugadores = nextPlayers;
+    window._creationSides = nextSides;
+
+    await Promise.all(nextPlayers.map(async (uid, idx) => {
+        const slot = document.getElementById(`slot-${idx}-wrap`);
+        if (!slot) return;
+        const isTeamA = idx < 2;
+        const color = isTeamA ? 'var(--primary)' : 'var(--secondary)';
+        if (!uid) {
+            slot.className = "p-slot-v7";
+            slot.innerHTML = `<div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>${renderCreationSideSelector(idx, nextSides[idx])}`;
+            slot.onclick = () => window.handleCreationSlotClick(idx);
+            return;
+        }
+        const p = await getPlayerData(uid);
+        slot.className = "p-slot-v7 pointer";
+        slot.onclick = () => window.removeUserFromNew(idx);
+        slot.innerHTML = `
+            <div class="p-img-box" style="border-color:${color}">
+                <img src="${p?.photo || './imagenes/Logojafs.png'}">
+            </div>
+            <span class="p-badge" style="color:${color}; border-color:currentColor">${(Number(p?.level) || 2.5).toFixed(1)}</span>
+            <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${color}">${uid === auth.currentUser?.uid ? 'Tú' : (p?.name || 'Jugador')}</span>
+            ${renderCreationSideSelector(idx, nextSides[idx])}
+            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px] shadow-lg z-10 hover:scale-110 transition-transform" onclick="event.stopPropagation(); window.removeUserFromNew(${idx})"><i class="fas fa-times"></i></button>
+        `;
+    }));
+
+    showToast("Equipos sorteados", "La alineación se ha repartido según lados y disponibilidad.", "success");
+};
 
 /**
  * Renders a single player slot for the detailed view.
@@ -2711,7 +2856,7 @@ export const openResultForm = async (id, col) => {
 
                 <div class="flex-row items-stretch gap-2 mb-6">
                      <div class="flex-1 flex-col items-center p-4 rounded-2xl border ${winA === null ? 'border-white/10 bg-white/3' : winA ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/3 opacity-60'}">
-                        <span class="text-[8px] font-black text-muted uppercase mb-2">Equipo A</span>
+                        <span class="text-[8px] font-black text-muted uppercase mb-2">${teamALabel}</span>
                         ${winA ? '<span class="text-[10px] font-bold text-primary mb-2"><i class="fas fa-trophy mr-1"></i> GANADOR</span>' : ''}
                         <div class="flex-row gap-1">
                             <div class="w-8 h-8 rounded-full bg-white/10 border border-white/10 overflow-hidden"><img src="https://ui-avatars.com/api/?name=A1&background=random" class="w-full h-full object-cover"></div>
@@ -2724,7 +2869,7 @@ export const openResultForm = async (id, col) => {
                      </div>
 
                      <div class="flex-1 flex-col items-center p-4 rounded-2xl border ${winA === null ? 'border-white/10 bg-white/3' : !winA ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/3 opacity-60'}">
-                        <span class="text-[8px] font-black text-muted uppercase mb-2">Equipo B</span>
+                        <span class="text-[8px] font-black text-muted uppercase mb-2">${teamBLabel}</span>
                         ${winA === null ? '' : !winA ? '<span class="text-[10px] font-bold text-primary mb-2"><i class="fas fa-trophy mr-1"></i> GANADOR</span>' : ''}
                         <div class="flex-row gap-1">
                             <div class="w-8 h-8 rounded-full bg-white/10 border border-white/10 overflow-hidden"><img src="https://ui-avatars.com/api/?name=B1&background=random" class="w-full h-full object-cover"></div>
@@ -2749,6 +2894,17 @@ export const openResultForm = async (id, col) => {
     }
 
     const adminEditMode = isPlayed && allowAdminEdit;
+    const playerNamesQuick = await Promise.all((players || []).map(async (uid, idx) => {
+        if (!uid) return `Jugador ${idx + 1}`;
+        if (String(uid).startsWith("GUEST_")) {
+            const raw = String(uid).split("_").slice(1).join(" ").trim();
+            return raw || `Invitado ${idx + 1}`;
+        }
+        const u = await getDocument("usuarios", uid);
+        return u?.nombreUsuario || u?.nombre || `Jugador ${idx + 1}`;
+    }));
+    const teamALabel = playerNamesQuick.slice(0, 2).filter(Boolean).join(" / ") || "Por definir";
+    const teamBLabel = playerNamesQuick.slice(2, 4).filter(Boolean).join(" / ") || "Por definir";
 
     if (!isParticipant && !isAdmin) {
         area.innerHTML = `
@@ -3183,6 +3339,7 @@ function finalizeSelection(uid, idx) {
             </div>
             <span class="p-badge" style="color:${color}; border-color:currentColor">${(Number(u.nivel)||2.5).toFixed(1)}</span>
             <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${color}">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
+            ${renderCreationSideSelector(idx, Array.isArray(window._creationSides) ? window._creationSides[idx] : defaultSideForIndex(idx))}
             <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px] shadow-lg z-10 hover:scale-110 transition-transform" onclick="event.stopPropagation(); window.removeUserFromNew(${idx})"><i class="fas fa-times"></i></button>
         `;
     }
@@ -3238,7 +3395,7 @@ window.handleCreationSlotClick = (idx) => {
     const meUid = auth.currentUser?.uid;
     // If user is not already in formation, fill this slot directly.
     if (meUid && !window._initialJugadores.includes(meUid)) {
-        window.selectUserForNew(meUid);
+        window.selectUserForNew(meUid, idx);
         showToast("Alineación", "Te has añadido automáticamente al hueco seleccionado", "success");
         return;
     }
@@ -3248,10 +3405,12 @@ window.handleCreationSlotClick = (idx) => {
 
 window.removeUserFromNew = (idx) => {
     window._initialJugadores[idx] = null;
+    if (!Array.isArray(window._creationSides)) window._creationSides = ["derecha", "reves", "derecha", "reves"];
+    window._creationSides[idx] = defaultSideForIndex(idx);
     const slot = document.getElementById(`slot-${idx}-wrap`);
     if(slot) {
         slot.className = "p-slot-v7";
-        slot.innerHTML = `<div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>`;
+        slot.innerHTML = `<div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>${renderCreationSideSelector(idx, window._creationSides[idx])}`;
         slot.onclick = () => window.handleCreationSlotClick(idx);
     }
 };
@@ -3334,7 +3493,7 @@ window.shareMatchResultPoster = async (matchId, col) => {
             levelsB: [pLevels[2], pLevels[3]],
             winner: winner,
             sets: sets,
-            club: "PADELUMINATIS CLUB",
+            club: "PADELUMINATIS",
             logoUrl: 'imagenes/Logojafs.png'
         };
 

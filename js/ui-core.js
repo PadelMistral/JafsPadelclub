@@ -105,7 +105,7 @@ function ensureBootLoader() {
           <div class="app-boot-core">
             <div style="position:relative; display:flex; align-items:center; justify-content:center;">
               <div class="app-boot-ring"></div>
-              <img class="app-boot-logo" src="./imagenes/Logojafs.png" alt="Padeluminatis">
+              <img class="app-boot-logo" src="./imagenes/Logojafs.png" alt="JafsPadel">
             </div>
             <div class="app-boot-status">${msg}</div>
           </div>
@@ -935,4 +935,3 @@ export function showSidePreferenceModal() {
 if (typeof window !== 'undefined') {
     window.showSidePreferenceModal = showSidePreferenceModal;
 }
-

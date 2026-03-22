@@ -11,6 +11,7 @@ import { injectHeader, injectNavbar, updateHeader } from "./modules/ui-loader.js
 import { levelFromRating } from "./config/elo-system.js";
 import { renderMatchDetail } from "./match-service.js";
 import { getCoreLevelProgressState } from "./core/core-engine.js";
+import { getFriendlyTeamName } from "./utils/team-utils.js";
 
 let users = [];
 let currentUser = null;
@@ -335,6 +336,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
 
   try {
     const logDoc = logId ? await getDocument("rankingLogs", logId) : null;
+    const match = matchId ? await getMatchById(matchId) : null;
     const detail = logDoc?.details?.puntosDetalle || {};
     const factors = [
       ["Base", detail.base],
@@ -347,11 +349,13 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
       ["Diario", detail.diarioCoach],
       ["Justicia", detail.ajusteJusticia],
     ].filter(([, v]) => v !== undefined && v !== null);
+
     const diff = Number(logDoc?.diff || 0);
     const levelBefore = Number(logDoc?.details?.levelBefore || 0);
     const levelAfter = Number(logDoc?.details?.levelAfter || 0);
     const pointsBefore = Number(logDoc?.details?.pointsBefore);
     const pointsAfter = Number(logDoc?.details?.pointsAfter);
+    
     const beforeProgress = Number.isFinite(pointsBefore)
       ? getCoreLevelProgressState({
           rating: pointsBefore,
@@ -365,16 +369,39 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         })
       : null;
 
+    let matchInfoHtml = "";
+    if (match) {
+        const teamA = getFriendlyTeamName({ teamName: match.teamAName, teamId: match.teamAId, side: "A" });
+        const teamB = getFriendlyTeamName({ teamName: match.teamBName, teamId: match.teamBId, side: "B" });
+        matchInfoHtml = `
+            <div class="rank-break-match">
+                <span class="match-teams">${teamA} <span class="text-primary mx-1">VS</span> ${teamB}</span>
+                <span class="match-sub">${fmtDate(match.fecha)} · ${match.resultado?.sets || match.resultado || 'Sin resultado'}</span>
+            </div>
+        `;
+    }
+
     area.innerHTML = `
       <div class="rank-breakdown-card">
+        ${matchInfoHtml}
         <div class="rank-break-title">Desglose de puntuación</div>
         <div class="rank-break-grid">
           ${factors.map(([k, v]) => `<div class="rank-break-row"><span>${k}</span><b>${Number(v) >= 0 ? "+" : ""}${num(v, 2)}</b></div>`).join("")}
         </div>
+        
         <div class="rank-break-total">
-          <span>Total partido</span>
-          <b class="${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${diff >= 0 ? "+" : ""}${num(diff, 2)}</b>
+          <div class="total-main">
+             <span>Total partido</span>
+             <b class="${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${diff >= 0 ? "+" : ""}${num(diff, 2)}</b>
+          </div>
+          <div class="total-calc">
+             ${Math.round(pointsBefore)} <span class="mx-1 opacity-40">+</span> 
+             <span class="${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${num(diff, 2)}</span>
+             <span class="mx-1 opacity-40">=</span> 
+             <span class="text-white">${Math.round(pointsAfter)} PTS</span>
+          </div>
         </div>
+
         <div class="rank-break-level">Nivel ${levelBefore ? levelBefore.toFixed(2) : "--"} → ${levelAfter ? levelAfter.toFixed(2) : "--"}</div>
         ${
           beforeProgress && afterProgress

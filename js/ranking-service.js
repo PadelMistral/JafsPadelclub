@@ -529,7 +529,8 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const levelBand = getLevelBandByRating(newPoints);
 
         const position = match.posiciones ? match.posiciones[i] : i % 2 === 0 ? "reves" : "drive";
-        const posKey = String(position || "reves").toLowerCase();
+        const rawPosKey = String(position || "reves").toLowerCase();
+        const posKey = rawPosKey.includes("der") ? "drive" : rawPosKey;
         const surface = String(extraMatchData?.surface || match.surface || "indoor").toLowerCase();
         const currentPosElo = Number(player?.elo?.[posKey] || oldPoints);
         const currentSurfElo = Number(player?.elo?.[surface] || oldPoints);
@@ -734,8 +735,8 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
           zeroSumCheck: totalDelta,
           kCombined: round2(kCombined),
           expectedA: round2(expectedA),
-          teamADelta,
-          teamBDelta,
+          teamADelta: totalTeamADelta,
+          teamBDelta: totalTeamBDelta,
           bonusReason,
         },
       };

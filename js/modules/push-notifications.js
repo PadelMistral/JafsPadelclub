@@ -24,6 +24,18 @@ const SW_RETRY_BASE_MS = 350;
 
 let notifPermission =
   typeof Notification !== "undefined" ? Notification.permission : "default";
+
+// Proactive permission tracking
+if (typeof navigator !== "undefined" && navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: "notifications" }).then((perm) => {
+        perm.onchange = () => {
+            notifPermission = Notification.permission;
+            pushLog("info", "permission_changed_proactive", { permission: notifPermission });
+            persistNotifPermissionFlag(notifPermission);
+        };
+    }).catch(() => {});
+}
+
 let oneSignalReady = false;
 let oneSignalInitPromise = null;
 let lastOneSignalLoginUid = null;
@@ -109,34 +121,39 @@ function getWorkerCandidates() {
   const base = getAppBase();
   pushLog("info", "detecting_app_base", { base, pathname: window.location.pathname });
 
-  // Preferred candidate: local Service Worker files in root of the app
-  return [
+  const candidates = [
     {
-      base: base,
-      swPath: `${base}sw.js`,
-      updaterPath: `${base}sw.js`,
+      base,
+      swPath: "./sw.js",
+      updaterPath: "./sw.js",
+      scope: "./",
+    },
+    {
+      base,
+      swPath: getFullUrl("sw.js"),
+      updaterPath: getFullUrl("sw.js"),
       scope: base,
-    }
+    },
+    {
+      base,
+      swPath: "sw.js",
+      updaterPath: "sw.js",
+      scope: "/",
+    },
   ];
+
+  return uniqueBy(candidates, (cfg) => `${cfg.swPath}|${cfg.scope}`);
 }
 
 async function filterReachableWorkerCandidates(candidates = []) {
-  const checks = await Promise.all(
-    candidates.map(async (cfg) => {
-      try {
-        const res = await fetch(cfg.swPath, {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-        });
-        return res.ok ? cfg : null;
-      } catch {
-        return null;
-      }
-    }),
-  );
-  const reachable = checks.filter(Boolean);
-  return reachable.length > 0 ? reachable : candidates;
+  const currentDir = `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, "")}`;
+  return candidates
+    .slice()
+    .sort((a, b) => {
+      const aScore = String(a?.swPath || "").startsWith(currentDir) || String(a?.swPath || "").startsWith("./") ? 1 : 0;
+      const bScore = String(b?.swPath || "").startsWith(currentDir) || String(b?.swPath || "").startsWith("./") ? 1 : 0;
+      return bScore - aScore;
+    });
 }
 
 async function getServiceWorkerDiagnostics() {
@@ -1007,9 +1024,10 @@ export function showNotificationHelpModal() {
  */
 export async function sendExternalPush({ title, message, uids = [], url = "home.html", data = {} }) {
   try {
-    const endpoint = window.__PUSH_API_URL || "/api/send-push";
+    const endpoint = "https://europe-west1-padeluminatis.cloudfunctions.net/sendPush";
     if (window.location.protocol === "file:") return;
 
+    console.log("Enviando push externo via Firebase Functions...");
     const payload = {
       titulo: title,
       mensaje: message,

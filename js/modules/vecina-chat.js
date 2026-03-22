@@ -711,9 +711,9 @@ function _generateResponse(intent, query) {
 
   if (intent === "CMD_APP_CONTEXT") {
     if (currentPersonality === 'vecina') {
-      return R("¡Ay, cari! Padeluminatis es *la* app. Aquí se cuece todo: rankings, retos, cotilleos... ¡Somos {TOTAL_USERS} locos del pádel! Tú estás en nivel {LEVEL}, que no está mal, pero siempre se puede mejorar, ¿eh?");
+      return R("Ay, cari. JafsPadel es la app donde se mueve todo: rankings, retos, resultados y nivel. Somos {TOTAL_USERS} personas jugando y tu vas por nivel {LEVEL}.");
     }
-    return R("Padeluminatis Pro v7. Sistema de gestión deportiva de alto rendimiento. Actualmente monitorizamos a {TOTAL_USERS} jugadores. Tu perfil indica nivel {LEVEL} con ELO {ELO}. La plataforma gestiona Rankings, Retos y Análisis Predictivo.");
+    return R("JafsPadel. Plataforma social para organizar partidos, competir y seguir tu progreso. Ahora mismo hay {TOTAL_USERS} jugadores registrados. Tu perfil indica nivel {LEVEL} con ELO {ELO}.");
   }
 
   if (intent === "CMD_GLOBAL_STATS") {
@@ -1073,7 +1073,7 @@ function _generateResponse(intent, query) {
   if (intent === "CMD_ELO_FORMULA") {
       return currentPersonality === 'vecina'
         ? "Mira, es un lío de matemáticas. Básicamente: si ganas a uno bueno, subes mucho. Si pierdes con uno malo, bajas al sótano. ¡Tú gana y punto!"
-        : "El ELO Padeluminatis utiliza un K-Factor dinámico que evalúa: 1. Diferencia de nivel, 2. Racha actual, 3. Contundencia del resultado (Sets/Juegos).";
+        : "El ELO de JafsPadel utiliza un factor dinamico que evalua diferencia de nivel, racha actual y contundencia del resultado.";
   }
   
   if (intent === "CMD_TUTORIAL") {

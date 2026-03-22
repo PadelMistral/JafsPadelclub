@@ -39,7 +39,7 @@ function getUserDisplayName(p = {}) {
 }
 
 export function teamNameFromPlayers(players = []) {
-  if (!players || !players.length) return "TBD";
+  if (!players || !players.length) return "Equipo pendiente";
   if (players.length === 1) return getUserDisplayName(players[0]);
   const n1 = getUserDisplayName(players[0]);
   const n2 = getUserDisplayName(players[1]);

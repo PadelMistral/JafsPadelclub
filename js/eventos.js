@@ -787,8 +787,8 @@ window.addManualPlayer = async (eventId) => {
 };
 
 window.addManualMatch = async (eventId) => {
-    const equipoA = prompt('Equipo A (nombre):');
-    const equipoB = prompt('Equipo B (nombre):');
+    const equipoA = prompt('Pareja 1 (nombre):');
+    const equipoB = prompt('Pareja 2 (nombre):');
     if (!equipoA || !equipoB) return;
     try {
         await addDocument('eventoPartidos', {

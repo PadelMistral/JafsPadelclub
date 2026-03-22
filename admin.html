@@ -6,7 +6,8 @@
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#020617">
-  <title>Console v9.0 | Padeluminatis Admin</title>
+    <title>Admin | JafsPadel</title>
+  <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="./css/global.css">
@@ -263,7 +264,7 @@
           <!-- SISTEMA -->
           <section id="pane-system" class="admin-pane animate-fade-in">
             <h2 class="pane-title mb-6"><i class="fas fa-terminal mr-2"></i> PANEL DE CONTROL DEL SISTEMA</h2>
-            <div class="system-grid-modern">
+            <div class="admin-ops-grid">
                 <!-- Notificaciones -->
                 <div class="sys-card-v9">
                     <div class="sys-card-head"><i class="fas fa-broadcast-tower"></i> COMUNICADOS GLOBALES</div>
@@ -301,6 +302,25 @@
                             GESTIONAR ENLACES ICS
                         </button>
                         <p class="text-[9px] opacity-40 text-center">Gestiona la vinculación con perfiles de Apoing externos.</p>
+                    </div>
+                </div>
+
+                <div class="sys-card-v9">
+                    <div class="sys-card-head"><i class="fas fa-clock-rotate-left"></i> TRAZABILIDAD ADMIN</div>
+                    <div class="p-4">
+                        <div id="admin-audit-feed" class="audit-feed">
+                            <div class="audit-feed-empty">Cargando historial reciente del panel...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sys-card-v9">
+                    <div class="sys-card-head"><i class="fas fa-file-export"></i> EXPORTACIÓN SEGURA</div>
+                    <div class="p-4 flex-col gap-3">
+                        <button id="btn-export-admin-snapshot" class="btn-glass w-full">
+                            EXPORTAR SNAPSHOT JSON
+                        </button>
+                        <p class="text-[9px] opacity-40 text-center">Descarga un resumen operativo de jugadores, partidos, torneos y trazabilidad para soporte o backup manual.</p>
                     </div>
                 </div>
             </div>
@@ -374,6 +394,10 @@
 
   <script type="module" src="./js/admin.js?v=9.0"></script>
   <script type="module" src="./js/admin-recalc-elo.js"></script>
+  <script type="module">
+    import { initPWAShell } from './js/modules/pwa-shell.js';
+    initPWAShell('admin');
+  </script>
 
 </body>
 

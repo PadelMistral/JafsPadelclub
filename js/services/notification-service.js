@@ -143,7 +143,7 @@ export async function createNotification(
   }
   const targets = Array.isArray(targetUids) ? targetUids : [targetUids];
   const notifType = normalizeType(type);
-  const safeTitle = String(title || "Padeluminatis").trim()
+  const safeTitle = String(title || "JafsPadel").trim()
     .normalize('NFC')
     .slice(0, 120);
   const safeMessage = String(message || "").trim()
@@ -402,7 +402,7 @@ export async function initAutoNotifications(uid) {
       )[0];
     if (newest && !notifiedDuringSession.has(newest.id)) {
       sendPushNotification(
-        newest.titulo || "Padeluminatis",
+        newest.titulo || "JafsPadel",
         newest.mensaje,
         `https://ui-avatars.com/api/?name=${encodeURIComponent(newest.titulo || 'P')}&background=00d4ff&color=fff`,
         { tag: `notif_${newest.id}`, url: newest.enlace || "./home.html" },
@@ -935,7 +935,7 @@ async function checkMorningMatchSummary(uid) {
 
       await createNotification(
         uid,
-        `?? ¡Hoy juegas, ${name}!`,
+        `🎾 ¡Hoy juegas, ${name}!`,
         `Tienes ${matchesToday} partido(s) programado(s) para hoy en la Matrix. ¡A por todas!`,
         "info",
         null,
@@ -970,12 +970,12 @@ async function checkDailySummary(uid) {
       streak: userData.rachaActual || 0,
     };
 
-    let message = `?? Resumen: ${stats.points} ELO | ${stats.wins} victorias`;
-    if (stats.streak >= 3) message += ` | ?? Racha de ${stats.streak}!`;
+    let message = `🎾 Resumen: ${stats.points} ELO | ${stats.wins} victorias`;
+    if (stats.streak >= 3) message += ` | 🔥 Racha de ${stats.streak}!`;
 
     await createNotification(
       uid,
-      `?? Buenos días, ${userData.nombreUsuario?.split(" ")[0] || "Campeón"}`,
+      `🌅 Buenos días, ${userData.nombreUsuario?.split(" ")[0] || "Campeón"}`,
       message,
       "info",
       null,

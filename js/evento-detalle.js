@@ -7,6 +7,7 @@ import { computeGroupTable, generateKnockoutTree, generateRoundRobin } from './e
 import { processMatchResults } from './ranking-service.js';
 import { openResultForm, renderMatchDetail, indexEventUserNames } from './match-service.js';
 import { createNotification } from './services/notification-service.js';
+import { getFriendlyTeamName } from './utils/team-utils.js';
 
 initAppUI('event-detail');
 
@@ -278,7 +279,7 @@ window.openAddTeamModalED = () => {
             <div class="modal-body">
                 <div class="flex-col gap-3">
                     <label class="text-[10px] font-black text-muted uppercase tracking-widest">Nombre del equipo</label>
-                    <input id="new-team-name" class="input" placeholder="Equipo A">
+                    <input id="new-team-name" class="input" placeholder="Nombre de la pareja">
                     <label class="text-[10px] font-black text-muted uppercase tracking-widest mt-2">Jugador 1</label>
                     <select id="new-team-p1" class="input">
                         ${pool.map(p => `<option value="${p.uid}" ${used.has(p.uid) ? 'disabled' : ''}>${escapeHtml(p.name)}${used.has(p.uid) ? ' (ocupado)' : ''}</option>`).join('')}
@@ -795,13 +796,13 @@ function updateMatchesList(pane) {
             </div>
             <div class="match-body-v9">
                 <div class="m-team-v9 ${m.ganadorTeamId === m.teamAId ? 'winner' : ''}">
-                    <span class="team-n-v9">${m.teamAName || 'TBD'}</span>
+                    <span class="team-n-v9">${getFriendlyTeamName({ teamName: m.teamAName, teamId: m.teamAId, side: 'A' })}</span>
                 </div>
                 <div class="m-score-v9">
                      ${played ? (score || 'FINAL') : (m.linkedMatchId ? '<i class="fas fa-link text-[10px] opacity-40"></i>' : '<span class="m-vs-v9">VS</span>')}
                 </div>
                 <div class="m-team-v9 ${m.ganadorTeamId === m.teamBId ? 'winner' : ''}">
-                    <span class="team-n-v9">${m.teamBName || 'TBD'}</span>
+                    <span class="team-n-v9">${getFriendlyTeamName({ teamName: m.teamBName, teamId: m.teamBId, side: 'B' })}</span>
                 </div>
             </div>
             ${m.linkedMatchId || m.fecha ? `
@@ -953,11 +954,11 @@ function renderBracket(pane) {
             html += `
             <div class="bracket-match ${pending ? 'pending' : ''}" ${pending ? '' : `onclick="window.verDetallePartido('${matchData.id || ''}')"`}>
                 <div class="b-team-v9 ${matchData.ganadorTeamId === m.teamAId && played ? 'winner' : ''}">
-                    <span class="b-name-v9">${m.teamAName || 'TBD'}</span>
+                    <span class="b-name-v9">${getFriendlyTeamName({ teamName: m.teamAName, teamId: m.teamAId, side: 'A' })}</span>
                     <span class="b-score-v9">${scoreA}</span>
                 </div>
                 <div class="b-team-v9 ${matchData.ganadorTeamId === m.teamBId && played ? 'winner' : ''}">
-                    <span class="b-name-v9">${m.teamBName || 'TBD'}</span>
+                    <span class="b-name-v9">${getFriendlyTeamName({ teamName: m.teamBName, teamId: m.teamBId, side: 'B' })}</span>
                     <span class="b-score-v9">${scoreB}</span>
                 </div>
                 ${pending ? `<span class="bracket-pending-tag">PENDIENTE</span>` : ""}
@@ -1444,8 +1445,8 @@ window.verDetallePartido = (matchId) => {
         : [...(teamMap.get(match.teamAId)?.playerUids || []), ...(teamMap.get(match.teamBId)?.playerUids || [])];
     const isParticipant = fallbackPlayers.includes(auth.currentUser?.uid);
     const score = typeof match.resultado === 'string' ? match.resultado : (match.resultado?.score || match.resultado?.sets || 'Sin detalle');
-    const teamAName = (match.teamAName || teamMap.get(match.teamAId)?.name || 'TBD');
-    const teamBName = (match.teamBName || teamMap.get(match.teamBId)?.name || 'TBD');
+    const teamAName = getFriendlyTeamName({ teamName: match.teamAName || teamMap.get(match.teamAId)?.name, teamId: match.teamAId, side: 'A' });
+    const teamBName = getFriendlyTeamName({ teamName: match.teamBName || teamMap.get(match.teamBId)?.name, teamId: match.teamBId, side: 'B' });
     
     let actionsHtml = '';
     if (played) {
@@ -1533,11 +1534,11 @@ window.openMatchTeamEditor = (matchId) => {
             </div>
             <div class="modal-body">
                 <div class="flex-col gap-3">
-                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">Equipo A</label>
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">Pareja 1</label>
                     <select id="match-edit-teamA" class="input">
                         ${teams.map(t => `<option value="${t.id}" ${t.id === match.teamAId ? 'selected' : ''}>${escapeHtml(t.name || t.id)}</option>`).join('')}
                     </select>
-                    <label class="text-[10px] font-black text-muted uppercase tracking-widest mt-2">Equipo B</label>
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest mt-2">Pareja 2</label>
                     <select id="match-edit-teamB" class="input">
                         ${teams.map(t => `<option value="${t.id}" ${t.id === match.teamBId ? 'selected' : ''}>${escapeHtml(t.name || t.id)}</option>`).join('')}
                     </select>
@@ -1864,8 +1865,8 @@ window.generarFaseEliminatoria = async (opts = {}) => {
                     sourceB: match.sourceB || null,
                     teamAId: match.teamAId || null,
                     teamBId: match.teamBId || null,
-                    teamAName: match.teamAId ? (teamA?.name || 'TBD') : null,
-                    teamBName: match.teamBId ? (teamB?.name || 'TBD') : null,
+                    teamAName: match.teamAId ? getFriendlyTeamName({ teamName: teamA?.name, teamId: match.teamAId, side: 'A' }) : null,
+                    teamBName: match.teamBId ? getFriendlyTeamName({ teamName: teamB?.name, teamId: match.teamBId, side: 'B' }) : null,
                     playerUids: [
                         ...(teamA?.playerUids || []),
                         ...(teamB?.playerUids || [])
@@ -1986,11 +1987,11 @@ function openBracketPreviewModal(rounds = []) {
             html += `
                 <div class="bracket-match">
                     <div class="b-team-v9">
-                        <span class="b-name-v9">${teamA?.name || 'TBD'}</span>
+                        <span class="b-name-v9">${getFriendlyTeamName({ teamName: teamA?.name, teamId: teamA?.id, side: 'A' })}</span>
                         <span class="b-score-v9">-</span>
                     </div>
                     <div class="b-team-v9">
-                        <span class="b-name-v9">${teamB?.name || 'TBD'}</span>
+                        <span class="b-name-v9">${getFriendlyTeamName({ teamName: teamB?.name, teamId: teamB?.id, side: 'B' })}</span>
                         <span class="b-score-v9">-</span>
                     </div>
                 </div>`;
@@ -2069,8 +2070,8 @@ window.regenerarPartidosLiga = async () => {
                     round: i + 1,
                     teamAId: m.teamAId,
                     teamBId: m.teamBId,
-                    teamAName: teamA.name || 'TBD',
-                    teamBName: teamB.name || 'TBD',
+                    teamAName: getFriendlyTeamName({ teamName: teamA.name, teamId: teamA.id, side: 'A' }),
+                    teamBName: getFriendlyTeamName({ teamName: teamB.name, teamId: teamB.id, side: 'B' }),
                     playerUids: [...(teamA.playerUids || []), ...(teamB.playerUids || [])],
                     estado: 'pendiente',
                     resultado: null,
@@ -2336,7 +2337,7 @@ window.proponerFechaEvento = async (matchId) => {
         return showToast("Sin acceso", "Solo participantes del partido pueden entrar al chat.", "warning");
     }
 
-    const title = `Propuesta: ${(match.teamAName || teamA?.name || "Equipo A")} vs ${(match.teamBName || teamB?.name || "Equipo B")}`;
+    const title = `Propuesta: ${(match.teamAName || teamA?.name || "Pareja 1")} vs ${(match.teamBName || teamB?.name || "Pareja 2")}`;
     let proposalId = null;
     const existing = await getDocs(query(collection(db, "propuestasPartido"), where("eventMatchId", "==", matchId), limit(1)));
     if (!existing.empty) {

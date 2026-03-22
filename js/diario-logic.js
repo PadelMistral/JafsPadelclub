@@ -7,6 +7,7 @@ import {
   updateDocument,
   getDocument,
 } from "./firebase-service.js";
+import { addPlayerHistoryEntry } from "./services/player-history-service.js";
 import {
   doc,
   getDoc,
@@ -658,6 +659,20 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
 
       showToast("GUARDADO", "Análisis sincronizado.", "success");
+      await addPlayerHistoryEntry({
+        uid: currentUser.uid,
+        kind: "diary_entry",
+        title: "Entrada de diario registrada",
+        text: entry.coachNote || entry.memoryNote || entry.lesson || "Nueva reflexion tactica guardada.",
+        tag: "Diario",
+        tone: "diary",
+        matchId: entry.matchId || null,
+        entityId: entry.id || null,
+        meta: {
+          rival: entry.rival || "",
+          nextGoal: entry.nextGoal || ""
+        }
+      }).catch(() => {});
       window.closeWizard();
       showDiaryRecapModal(entry);
       resetWizard();

@@ -74,7 +74,7 @@ function getCurrentPageMeta() {
     const pageMap = {
         'home.html': { id: 'home', subtitle: 'INICIO' },
         'calendario.html': { id: 'calendar', subtitle: 'CALENDARIO' },
-        'diario.html': { id: 'events', subtitle: 'DIARIO' },
+        'diario.html': { id: 'diary', subtitle: 'DIARIO' },
         'ranking-v3.html': { id: 'ranking', subtitle: 'RANKING' },
         'puntosranking.html': { id: 'ranking', subtitle: 'RANKING' },
         'historial.html': { id: 'history', subtitle: 'HISTORIAL' },
@@ -109,7 +109,7 @@ export async function injectHeader(userData = null) {
     header.innerHTML = `
         <div class="header-brand" onclick="window.location.href='home.html'">
             <div class="header-logo">
-                <img src="./imagenes/Logojafs.png" alt="Padeluminatis">
+                <img src="./imagenes/Logojafs.png" alt="JafsPadel">
             </div>
             <div class="header-text">
                 <span class="header-title">PADELUMINATIS</span>
@@ -382,4 +382,3 @@ window.toggleAdminSidebar = () => {
     const sb = document.querySelector('.admin-sidebar');
     if (sb) sb.classList.toggle('active');
 };
-

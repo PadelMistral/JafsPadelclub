@@ -4,22 +4,18 @@
  */
 
 export function getAppBase() {
-    const p = window.location.pathname;
-    const host = window.location.hostname;
-    const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.');
+    const pathname = String(window.location.pathname || "/");
+    const segments = pathname.split("/").filter(Boolean);
+    if (!segments.length) return "/";
 
-    if (isLocal) return '/';
+    const last = segments[segments.length - 1] || "";
+    const hasFile = /\.[a-z0-9]+$/i.test(last);
+    const baseSegments = hasFile ? segments.slice(0, -1) : segments;
+    if (!baseSegments.length) return "/";
 
-    // For GitHub Pages: https://user.github.io/repo-name/index.html
-    // pathname: /repo-name/index.html -> segments: ["repo-name", "index.html"]
-    const segments = p.split('/').filter(Boolean);
-    
-    // If we have at least one segment and it doesn't look like a file (no dot)
-    if (segments.length > 0 && !segments[0].includes('.')) {
-        return `/${segments[0]}/`;
-    }
-
-    return '/';
+    // GitHub Pages and local subfolder hosting both work with the same base rule:
+    // use the directory that contains the current page.
+    return `/${baseSegments.join("/")}/`;
 }
 
 export function getFullUrl(relativePath) {

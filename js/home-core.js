@@ -43,6 +43,8 @@ import {
 } from "./core/core-engine.js";
 import { computeGroupTable } from "./event-tournament-engine.js";
 import { shareMatchResult, shareMatchPoster } from "./utils/share-utils.js";
+import { getFriendlyTeamName, isUnknownTeamName as sharedIsUnknownTeamName } from "./utils/team-utils.js";
+import { scoreMatchForUser } from "./services/matchmaking-service.js";
 
 
 
@@ -52,6 +54,7 @@ let unsubAm = null;
 let unsubRe = null;
 let unsubEv = null;
 let unsubMyEvents = null;
+let unsubClubFeed = null;
 let allMatches = [];
 let myEvents = [];
 let weather = null;
@@ -76,16 +79,46 @@ let proposalChatUnsub = null;
 let activeProposalId = null;
 let activeProposalMeta = null;
 let proposalInlineMode = false;
+let clubFeedItems = [];
+
+function compactHomeSecondarySections() {
+  const detailsBody = document.querySelector(".hv2-secondary-stack");
+  if (!detailsBody || detailsBody.dataset.compacted === "1") return;
+  detailsBody.dataset.compacted = "1";
+
+  const promoSections = Array.from(document.querySelectorAll(".hv2-events-promo"));
+  promoSections.forEach((section) => {
+    const card = section.querySelector(".hv2-promo-card");
+    if (!card) return;
+    detailsBody.appendChild(card);
+    section.classList.add("home-secondary-hidden");
+  });
+
+  const spotlight = document.getElementById("event-spotlight");
+  if (spotlight && !spotlight.classList.contains("hidden")) {
+    spotlight.classList.add("home-secondary-inline");
+    detailsBody.prepend(spotlight);
+  }
+}
+
+function normalizeHomeProductCopy() {
+  const reportTitle = document.querySelector(".hv2-tr-title");
+  if (reportTitle) reportTitle.textContent = "RESUMEN DIARIO";
+  const nexusTitle = document.querySelector(".nexus-title");
+  if (nexusTitle) nexusTitle.textContent = "USUARIOS CONECTADOS";
+  const sectionSummaries = Array.from(document.querySelectorAll(".hv2-collapsible-summary span"));
+  sectionSummaries.forEach((el) => {
+    const text = String(el.textContent || "");
+    if (/Ultimos Cierres|Últimos Cierres/i.test(text)) el.innerHTML = `<i class="fas fa-flag-checkered"></i> Ultimos Resultados`;
+    if (/Mas del Club/i.test(text)) el.innerHTML = `<i class="fas fa-grid-2"></i> Mas opciones`;
+  });
+}
 
 /* Apoing Integration */
 let apoingEvents = [];
 let apoingLastSyncAt = 0;
 const APOING_SYNC_TTL_MS = 300000; // 5 min
-const APOING_PROXY_LIST = [
-  "/api/apoing-ics?url=",
-  "https://api.allorigins.win/raw?url=",
-  "https://corsproxy.io/?",
-];
+const APOING_PROXY_URL = "https://europe-west1-padeluminatis.cloudfunctions.net/getApoingICS?url=";
 const APOING_PROXY_JINA = "https://r.jina.ai/http://";
 
 /* Player cache (names + photos) */
@@ -186,7 +219,9 @@ function applyHomeMatchCache({ complete = false } = {}) {
   const activeTab =
     document.querySelector(".hv2-tab.active")?.dataset.filter || "open";
   renderNextMatch();
+  renderHomeCompactBrief();
   renderEventSpotlight();
+  renderCompetitivePulse();
   maybeCreateEventDayNotice();
   renderMatchesByFilter(activeTab);
   matchLoadFallbackFired = true;
@@ -244,6 +279,36 @@ function getPlayerDisplayName(uid) {
   return playerNameCache.get(uid) || "Jugador";
 }
 
+function getPlayerMeta(uid) {
+  if (!uid) return null;
+  const guest = parseGuestMeta(uid);
+  if (guest) return { nombre: guest.name, nivel: guest.level, posicionPreferida: "flex" };
+  const name = getPlayerDisplayName(uid);
+  const own = uid === currentUser?.uid ? currentUserData : null;
+  if (own) {
+    return {
+      uid,
+      nombre: own.nombreUsuario || own.nombre || name,
+      nivel: Number(own.nivel || 2.5),
+      posicionPreferida: own.posicionPreferida || own.sidePreference || own.posicion || "",
+    };
+  }
+  return {
+    uid,
+    nombre: name,
+    nivel: 2.5,
+    posicionPreferida: "",
+  };
+}
+
+function getMatchmakingContext() {
+  return {
+    historyMatches: dedupeEventLinkedMatches(allMatches)
+      .filter((m) => !isCancelledMatch(m))
+      .filter((m) => isFinishedMatch(m)),
+  };
+}
+
 function getInitials(name = "") {
   return String(name || "")
     .trim()
@@ -280,6 +345,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       await injectHeader(currentUserData);
       injectNavbar("home");
+      compactHomeSecondarySections();
+      normalizeHomeProductCopy();
       renderWelcome();
       bindTabs();
       initWeather();
@@ -328,6 +395,20 @@ document.addEventListener("DOMContentLoaded", () => {
           200,
         );
 
+        unsubClubFeed = await subscribeCol(
+          "playerHistory",
+          async (rows) => {
+            clubFeedItems = (rows || []).slice().sort((a, b) => (toDateSafe(b?.createdAt)?.getTime() || 0) - (toDateSafe(a?.createdAt)?.getTime() || 0));
+            const uids = [...new Set(clubFeedItems.map((item) => item?.uid).filter(Boolean))];
+            await Promise.allSettled(uids.map((uid) => resolvePlayerName(uid)));
+            renderHomeCompactBrief();
+            renderClubFeed();
+          },
+          [],
+          [["createdAt", "desc"]],
+          8,
+        );
+
         // Fetch Apoing
         syncApoingReservations().catch(() => {});
       } catch (err) {
@@ -340,6 +421,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!matchLoadFallbackFired) {
           matchLoadFallbackFired = true;
           renderNextMatch();
+          renderHomeCompactBrief();
+          renderCompetitivePulse();
           renderMatchesByFilter(
             document.querySelector(".hv2-tab.active")?.dataset.filter || "open",
           );
@@ -357,7 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function cleanup() {
-  [unsubAm, unsubRe, unsubEv, unsubMyEvents, unsubNexus].forEach((fn) => {
+  [unsubAm, unsubRe, unsubEv, unsubMyEvents, unsubNexus, unsubClubFeed].forEach((fn) => {
     if (typeof fn === "function")
       try {
         fn();
@@ -368,6 +451,7 @@ function cleanup() {
   unsubEv = null;
   unsubMyEvents = null;
   unsubNexus = null;
+  unsubClubFeed = null;
   allMatches = [];
   loadedCollections = new Set();
   colSignature.clear();
@@ -877,10 +961,401 @@ function computeRecentWinrate(uid, limitMatches = 8) {
   return { uid, name: getPlayerDisplayName(uid), winrate, total: matches.length };
 }
 
+function getMyRelevantMatches() {
+  if (!currentUser?.uid) return [];
+  return dedupeEventLinkedMatches(allMatches)
+    .filter((m) => !isCancelledMatch(m))
+    .filter((m) => isMatchRelevantToMe(m));
+}
+
+function buildPulseActionCard() {
+  const myMatches = getMyRelevantMatches();
+  const now = Date.now();
+  const diaryEntries = Array.isArray(currentUserData?.diario) ? currentUserData.diario : [];
+  const pendingResult = myMatches.filter((m) => {
+    if (isFinishedMatch(m)) return false;
+    const hasResult = Boolean(m?.resultado?.sets || (typeof m?.resultado === "string" && m.resultado.trim()));
+    if (hasResult) return false;
+    const matchTime = toDateSafe(m?.fecha);
+    if (!matchTime) return false;
+    return now - matchTime.getTime() >= RESULT_LOCK_MS;
+  });
+  if (pendingResult.length) {
+    return {
+      tone: "action",
+      eyebrow: "Decision inmediata",
+      tag: "Administra",
+      title: "Cierra tus resultados",
+      copy: `Hay ${pendingResult.length} partido${pendingResult.length === 1 ? "" : "s"} esperando marcador. Si lo registras ahora, el ranking y el historial quedan sincronizados.`,
+      chips: ["ranking al dia", "sin bloqueos", "mejor trazabilidad"],
+      ctaLabel: "Ir a calendario",
+      ctaAction: `window.location.href='calendario.html'`,
+    };
+  }
+
+  const finishedWithResult = myMatches
+    .filter((m) => isFinishedMatch(m))
+    .sort((a, b) => (toDateSafe(b.fecha)?.getTime() || 0) - (toDateSafe(a.fecha)?.getTime() || 0));
+  const missingDiary = finishedWithResult.find((m) => !diaryEntries.some((e) => e.matchId === m.id));
+  if (missingDiary) {
+    const when = toDateSafe(missingDiary.fecha)?.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }) || "reciente";
+    return {
+      tone: "action",
+      eyebrow: "Siguiente mejora",
+      tag: "Diario",
+      title: "Registra tu lectura del partido",
+      copy: `Tu ultimo partido con resultado del ${when} aun no tiene analisis. Guardarlo mejora tu historial, tu perfil y las recomendaciones.`,
+      chips: ["historial", "analisis", "mejor perfil"],
+      ctaLabel: "Abrir diario",
+      ctaAction: `window.location.href='diario.html'`,
+    };
+  }
+
+  const openSuggestions = dedupeEventLinkedMatches(allMatches)
+    .filter((m) => !isCancelledMatch(m))
+    .filter((m) => !isFinishedMatch(m))
+    .filter((m) => !isMatchRelevantToMe(m))
+    .filter((m) => !isEventKnockoutLocked(m))
+    .filter((m) => getNormalizedPlayers(m).filter(Boolean).length < 4)
+    .filter((m) => {
+      const d = toDateSafe(m.fecha);
+      return d && d.getTime() >= now - 5 * 60 * 1000;
+    })
+    .map((m) => ({
+      ...m,
+      __matchFit: scoreMatchForUser(m, currentUserData || currentUser || {}, getPlayerMeta, getMatchmakingContext()),
+    }))
+    .sort((a, b) => Number(b.__matchFit?.total || 0) - Number(a.__matchFit?.total || 0));
+  const top = openSuggestions[0];
+  if (top) {
+    const fit = top.__matchFit || {};
+    const when = toDateSafe(top.fecha)?.toLocaleString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) || "sin fecha";
+    return {
+      tone: "action",
+      eyebrow: "Mejor oportunidad",
+      tag: `${Math.round(fit.total || 0)}% match`,
+      title: "Hay una partida muy encajable",
+      copy: `Se juega ${when} y aparece como ${fit.headline || "buen encaje"} para tu nivel y disponibilidad.`,
+      chips: (fit.reasons || []).slice(0, 3),
+      ctaLabel: "Ver partido",
+      ctaAction: `window.openMatch('${top.id}','${top.col}')`,
+    };
+  }
+
+  return {
+    tone: "action",
+    eyebrow: "Todo en orden",
+    tag: "Estable",
+    title: "Tu panel esta al dia",
+    copy: "No hay tareas criticas pendientes. Es un buen momento para revisar tus partidas, explorar rivales o lanzar una nueva propuesta.",
+    chips: ["sin alertas", "estado limpio", "listo para competir"],
+    ctaLabel: "Ver eventos",
+    ctaAction: `window.location.href='eventos.html'`,
+  };
+}
+
+function buildPulseFormCard() {
+  const myMatches = getMyRelevantMatches();
+  const recentFinished = myMatches
+    .filter((m) => isFinishedMatch(m))
+    .sort((a, b) => (toDateSafe(b.fecha)?.getTime() || 0) - (toDateSafe(a.fecha)?.getTime() || 0))
+    .slice(0, 5);
+  let wins = 0;
+  recentFinished.forEach((m) => {
+    const winner = resolveWinnerTeam(m);
+    const side = getTeamSide(m, currentUser?.uid);
+    if (winner && side && winner === side) wins += 1;
+  });
+  const losses = Math.max(0, recentFinished.length - wins);
+  const winRate = recentFinished.length ? Math.round((wins / recentFinished.length) * 100) : 0;
+  const avgFit = dedupeEventLinkedMatches(allMatches)
+    .filter((m) => !isCancelledMatch(m))
+    .filter((m) => !isFinishedMatch(m))
+    .filter((m) => !isMatchRelevantToMe(m))
+    .filter((m) => getNormalizedPlayers(m).filter(Boolean).length < 4)
+    .map((m) => Number(scoreMatchForUser(m, currentUserData || currentUser || {}, getPlayerMeta, getMatchmakingContext()).total || 0))
+    .slice(0, 8);
+  const avgOpportunity = avgFit.length ? Math.round(avgFit.reduce((a, b) => a + b, 0) / avgFit.length) : 0;
+  const streak = Number(currentUserData?.rachaActual || 0);
+
+  return {
+    tone: "form",
+    eyebrow: "Forma actual",
+    tag: streak > 0 ? `+${streak} racha` : streak < 0 ? `${streak} racha` : "sin racha",
+    title: recentFinished.length ? `${wins}-${losses} en tus ultimos ${recentFinished.length}` : "Todavia sin muestra suficiente",
+    copy: recentFinished.length
+      ? `Tu ventana reciente marca ${winRate}% de victorias. El mercado actual te ofrece oportunidades con un encaje medio del ${avgOpportunity || 0}%.`
+      : "Aun faltan partidos cerrados para medir tendencia competitiva real. En cuanto juegues mas, este bloque empezara a detectar forma y ritmo.",
+    metrics: [
+      { value: `${winRate}%`, label: "win rate corto" },
+      { value: `${avgOpportunity || 0}%`, label: "oportunidad media" },
+    ],
+  };
+}
+
+function buildPulseAgendaCard() {
+  const myMatches = getMyRelevantMatches();
+  const now = Date.now();
+  const nextMine = myMatches
+    .filter((m) => !isFinishedMatch(m))
+    .filter((m) => {
+      const d = toDateSafe(m.fecha);
+      return d && d.getTime() >= now - 10 * 60 * 1000;
+    })
+    .sort((a, b) => (toDateSafe(a.fecha)?.getTime() || 0) - (toDateSafe(b.fecha)?.getTime() || 0))[0];
+  const thisWeek = myMatches.filter((m) => {
+    const d = toDateSafe(m.fecha);
+    if (!d) return false;
+    return d.getTime() >= now && d.getTime() <= now + 7 * 24 * 60 * 60 * 1000;
+  }).length;
+  const openSlots = dedupeEventLinkedMatches(allMatches)
+    .filter((m) => !isCancelledMatch(m))
+    .filter((m) => !isFinishedMatch(m))
+    .filter((m) => !isMatchRelevantToMe(m))
+    .filter((m) => getNormalizedPlayers(m).filter(Boolean).length < 4).length;
+  const when = nextMine
+    ? toDateSafe(nextMine.fecha)?.toLocaleString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : "sin reserva activa";
+
+  return {
+    tone: "agenda",
+    eyebrow: "Agenda competitiva",
+    tag: thisWeek ? `${thisWeek} esta semana` : "semana libre",
+    title: nextMine ? "Tu proxima cita ya esta fijada" : "Aun puedes ocupar huecos clave",
+    copy: nextMine
+      ? `La siguiente partida esta prevista para ${when}. Tienes ${openSlots} huecos abiertos adicionales en la app por si quieres jugar mas.`
+      : `No hay una reserva personal inmediata. Ahora mismo hay ${openSlots} partidos abiertos donde todavia puedes entrar.`,
+    metrics: [
+      { value: nextMine ? when : "--", label: "proximo slot" },
+      { value: `${openSlots}`, label: "huecos abiertos" },
+    ],
+  };
+}
+
+function renderCompetitivePulse() {
+  const container = document.getElementById("home-competitive-pulse");
+  if (!container) return;
+
+  const cards = [buildPulseActionCard(), buildPulseFormCard(), buildPulseAgendaCard()];
+  container.innerHTML = cards.map((card) => {
+    const metrics = Array.isArray(card.metrics) && card.metrics.length
+      ? `<div class="hv2-pulse-metrics">${card.metrics.map((item) => `<div class="hv2-pulse-metric"><b>${item.value}</b><span>${item.label}</span></div>`).join("")}</div>`
+      : `<div class="hv2-pulse-list">${(card.chips || []).map((chip) => `<span class="hv2-pulse-chip">${chip}</span>`).join("")}</div>`;
+    const cta = card.ctaLabel && card.ctaAction
+      ? `<button class="hv2-pulse-cta" onclick="${card.ctaAction}">${card.ctaLabel}<i class="fas fa-chevron-right"></i></button>`
+      : "";
+    return `
+      <article class="hv2-pulse-card is-${card.tone || "action"}">
+        <div class="hv2-pulse-top">
+          <span class="hv2-pulse-eyebrow">${card.eyebrow || "Panel"}</span>
+          <span class="hv2-pulse-tag">${card.tag || "activo"}</span>
+        </div>
+        <div class="hv2-pulse-title">${card.title || "Sin datos"}</div>
+        <div class="hv2-pulse-copy">${card.copy || ""}</div>
+        ${metrics}
+        ${cta}
+      </article>
+    `;
+  }).join("");
+}
+
+function renderHomeCompactBrief() {
+  const container = document.getElementById("home-compact-brief");
+  if (!container) return;
+
+  const myMatches = getMyRelevantMatches();
+  const nextMine = myMatches
+    .filter((m) => !isFinishedMatch(m))
+    .sort((a, b) => (toDateSafe(a.fecha)?.getTime() || 0) - (toDateSafe(b.fecha)?.getTime() || 0))[0];
+  const openSlots = dedupeEventLinkedMatches(allMatches)
+    .filter((m) => !isCancelledMatch(m))
+    .filter((m) => !isFinishedMatch(m))
+    .filter((m) => !isMatchRelevantToMe(m))
+    .filter((m) => getNormalizedPlayers(m).filter(Boolean).length < 4).length;
+  const recentFinished = myMatches.filter((m) => isFinishedMatch(m)).slice(-5);
+  const recentWins = recentFinished.filter((m) => resolveWinnerTeam(m) && resolveWinnerTeam(m) === getTeamSide(m, currentUser?.uid)).length;
+  const winRate = recentFinished.length ? Math.round((recentWins / recentFinished.length) * 100) : 0;
+  const clubMoves = clubFeedItems.slice(0, 6).length;
+  const nextWhen = nextMine
+    ? toDateSafe(nextMine.fecha)?.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : "--";
+
+  container.innerHTML = [
+    {
+      value: nextWhen || "--",
+      label: "Próximo slot",
+      copy: nextMine ? "Tu próxima cita ya está fijada." : "Todavía sin partido reservado.",
+    },
+    {
+      value: `${openSlots}`,
+      label: "Huecos abiertos",
+      copy: openSlots ? "Opciones reales para entrar hoy o esta semana." : "Ahora mismo no hay plazas libres relevantes.",
+    },
+    {
+      value: recentFinished.length ? `${winRate}%` : `${clubMoves}`,
+      label: recentFinished.length ? "Forma reciente" : "Actividad social",
+      copy: recentFinished.length ? "Rendimiento corto de tus últimos cierres." : "Movimientos recientes detectados en el club.",
+    },
+  ].map((item) => `
+    <article class="hv2-brief-card">
+      <span>${item.label}</span>
+      <strong>${item.value}</strong>
+      <p>${item.copy}</p>
+    </article>
+  `).join("");
+}
+
+function renderClubFeedLegacy() {
+  const container = document.getElementById("home-club-feed");
+  if (!container) return;
+  if (!clubFeedItems.length) {
+    container.innerHTML = `<div class="hv2-empty-state"><i class="fas fa-wave-square"></i>La actividad del club aparecera aqui en cuanto empiece a moverse.</div>`;
+    return;
+  }
+
+  const iconByTone = {
+    diary: "fa-book-open",
+    match: "fa-table-tennis-paddle-ball",
+    admin: "fa-shield-halved",
+    elo: "fa-bolt",
+    system: "fa-sparkles",
+  };
+
+  container.innerHTML = clubFeedItems.slice(0, 6).map((item) => {
+    const tone = item?.tone || "system";
+    const icon = iconByTone[tone] || "fa-sparkles";
+    const name = item?.uid === currentUser?.uid
+      ? (currentUserData?.nombreUsuario || currentUserData?.nombre || "Tu")
+      : getPlayerDisplayName(item?.uid);
+    const date = toDateSafe(item?.createdAt);
+    const when = date
+      ? date.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+      : "ahora";
+    return `
+      <article class="hv2-club-card">
+        <div class="hv2-club-icon ${tone}"><i class="fas ${icon}"></i></div>
+        <div class="hv2-club-main">
+          <div class="hv2-club-eyebrow">${item?.tag || "Sistema"} · ${name || "Jugador"}</div>
+          <div class="hv2-club-title">${item?.title || "Cierre reciente"}</div>
+          <div class="hv2-club-text">${item?.text || "Nuevo cierre registrado."}</div>
+        </div>
+        <div class="hv2-club-date">${when}</div>
+      </article>
+    `;
+  }).join("");
+}
+
+function setClubFeedSectionVisible(visible) {
+  const section = document.getElementById("home-club-feed-section");
+  if (!section) return;
+  section.classList.toggle("hidden", !visible);
+}
+
+function buildDerivedClubFeed() {
+  const safeMatches = dedupeEventLinkedMatches(allMatches || []).filter((m) => !isCancelledMatch(m));
+
+  const finished = safeMatches
+    .filter((m) => isFinishedMatch(m))
+    .sort((a, b) => (toDateSafe(b?.fecha)?.getTime() || 0) - (toDateSafe(a?.fecha)?.getTime() || 0))
+    .slice(0, 4)
+    .map((m) => {
+      const players = getNormalizedPlayers(m).map((uid) => getPlayerDisplayName(uid));
+      const teamA = getFriendlyTeamName(m?.teamAName, players.slice(0, 2));
+      const teamB = getFriendlyTeamName(m?.teamBName, players.slice(2, 4));
+      const winner = resolveWinnerTeam(m);
+      const winnerName = winner === "A" ? teamA : winner === "B" ? teamB : "";
+      return {
+        source: "derived",
+        tone: "match",
+        tag: "Cierre",
+        title: winnerName ? `Gano ${winnerName}` : "Partido cerrado",
+        text: `${teamA} vs ${teamB}${getResultSetsString(m) ? ` · ${getResultSetsString(m)}` : ""}`,
+        createdAt: toDateSafe(m?.fecha) || new Date(),
+        matchId: m?.id || null,
+      };
+    });
+
+  const openUpcoming = safeMatches
+    .filter((m) => !isFinishedMatch(m))
+    .filter((m) => getNormalizedPlayers(m).length < 4)
+    .sort((a, b) => (toDateSafe(a?.fecha)?.getTime() || 0) - (toDateSafe(b?.fecha)?.getTime() || 0))
+    .slice(0, 3)
+    .map((m) => {
+      const date = toDateSafe(m?.fecha);
+      const freeSlots = Math.max(0, 4 - getNormalizedPlayers(m).length);
+      return {
+        source: "derived",
+        tone: "system",
+        tag: "Hueco",
+        title: freeSlots > 1 ? `${freeSlots} plazas libres` : "Última plaza libre",
+        text: `${date ? date.toLocaleString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "Próximo turno"} · ${m?.col === "partidosReto" ? "Reto" : m?.col === "eventoPartidos" ? "Torneo" : "Amistoso"}`,
+        createdAt: date || new Date(),
+        matchId: m?.id || null,
+      };
+    });
+
+  return finished;
+}
+
+function renderClubFeed() {
+  const container = document.getElementById("home-club-feed");
+  if (!container) return;
+
+  const iconByTone = {
+    diary: "fa-book-open",
+    match: "fa-table-tennis-paddle-ball",
+    admin: "fa-shield-halved",
+    elo: "fa-bolt",
+    system: "fa-sparkles",
+  };
+
+  const mergedFeed = [...clubFeedItems.filter((item) => ["match", "elo", "admin", "system"].includes(String(item?.tone || "system"))), ...buildDerivedClubFeed()]
+    .filter(Boolean)
+    .sort((a, b) => (toDateSafe(b?.createdAt || b?.fecha)?.getTime() || 0) - (toDateSafe(a?.createdAt || a?.fecha)?.getTime() || 0))
+    .filter((item, index, arr) => {
+      const key = `${item?.uid || "app"}|${item?.matchId || item?.entityId || item?.title}|${item?.title}`;
+      return arr.findIndex((x) => `${x?.uid || "app"}|${x?.matchId || x?.entityId || x?.title}|${x?.title}` === key) === index;
+    })
+    .slice(0, 4);
+
+  if (!mergedFeed.length) {
+    setClubFeedSectionVisible(false);
+    container.innerHTML = `<div class="hv2-empty-state"><i class="fas fa-wave-square"></i>Cuando haya partidos, resultados o movimientos del club, aquí tendrás un resumen útil.</div>`;
+    return;
+  }
+
+  setClubFeedSectionVisible(true);
+  container.innerHTML = mergedFeed.map((item) => {
+    const tone = item?.tone || "system";
+    const icon = iconByTone[tone] || "fa-sparkles";
+    const name = item?.uid === currentUser?.uid
+      ? (currentUserData?.nombreUsuario || currentUserData?.nombre || "Tu")
+      : getPlayerDisplayName(item?.uid);
+    const date = toDateSafe(item?.createdAt || item?.fecha);
+    const when = date
+      ? date.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+      : "ahora";
+    return `
+      <article class="hv2-club-card ${item?.source === "derived" ? "is-derived" : ""}">
+        <div class="hv2-club-icon ${tone}"><i class="fas ${icon}"></i></div>
+        <div class="hv2-club-main">
+          <div class="hv2-club-eyebrow">${item?.tag || "Sistema"} · ${name || "Jugador"}</div>
+          <div class="hv2-club-title">${item?.title || "Cierre reciente"}</div>
+          <div class="hv2-club-text">${item?.text || "Nuevo cierre registrado."}</div>
+        </div>
+        <div class="hv2-club-date">${when}</div>
+      </article>
+    `;
+  }).join("");
+}
+
 /* Notifications */
 function bindNotificationNudge() {
   // Inicializamos recomendaciones por primera vez
   refreshRecommendations();
+  renderHomeCompactBrief();
+  renderCompetitivePulse();
+  renderClubFeed();
 }
 
 function getNormalizedPlayers(match) {
@@ -975,13 +1450,7 @@ function normalizeTeamName(value) {
 }
 
 function isUnknownTeamName(value) {
-  const n = normalizeTeamName(value);
-  if (!n) return true;
-  const compact = n.replace(/\s+/g, "");
-  if (["tbd", "tbd.", "tbd?", "tdb", "?", "unknown"].includes(n)) return true;
-  if (["tbd", "tbd.", "tbd?", "tdb", "tbdvs", "tbdvstbd", "tbdtbd", "unknown"].includes(compact)) return true;
-  if (["desconocido", "desconocidos", "por confirmar", "por definir", "pendiente"].includes(n)) return true;
-  return false;
+  return sharedIsUnknownTeamName(value);
 }
 
 function isTbdMatch(match) {
@@ -1214,14 +1683,12 @@ function renderEventSpotlight() {
         'TBD': 'POR DEFINIR'
       };
       const phasePretty = phaseMap[phaseRaw] || (phaseRaw.includes("KNOCKOUT") ? "ELIMINATORIA" : phaseRaw);
-      const getTeamLabel = (tId, tName, pIds) => {
-        if (tName && String(tName).toUpperCase() !== "TBD" && String(tName).toUpperCase() !== "PENDIENTE") 
-          return String(tName).toUpperCase();
-        if (Array.isArray(pIds) && pIds.length > 0) {
-            return pIds.map(p => getPlayerDisplayName(p).split(" ")[0]).join("/");
-        }
-        return "POR DEFINIR";
-      };
+      const getTeamLabel = (tId, tName, pIds) => getFriendlyTeamName({
+        teamName: tName,
+        teamId: tId,
+        playerNames: Array.isArray(pIds) ? pIds.map((p) => getPlayerDisplayName(p)) : [],
+        side: tId === m.teamAId ? "A" : "B"
+      }).toUpperCase();
       const teamALabel = getTeamLabel(m.teamAId, m.teamAName, m.playerUids?.slice(0,2) || m.jugadores?.slice(0,2));
       const teamBLabel = getTeamLabel(m.teamBId, m.teamBName, m.playerUids?.slice(2,4) || m.jugadores?.slice(2,4));
 
@@ -1568,7 +2035,9 @@ async function mergeMatches(col, list) {
   await preloadPlayerNames(allMatches);
 
   renderNextMatch();
+  renderHomeCompactBrief();
   renderEventSpotlight();
+  renderCompetitivePulse();
   maybeCreateEventDayNotice();
   const activeTab =
     document.querySelector(".hv2-tab.active")?.dataset.filter || "open";
@@ -1818,6 +2287,16 @@ function renderMatchesByFilter(filter) {
         const d = toDateSafe(m.fecha);
         return d && d.getTime() >= now - 5 * 60 * 1000;
       });
+    list = list
+      .map((m) => ({
+        ...m,
+        __matchFit: scoreMatchForUser(m, currentUserData || currentUser || {}, getPlayerMeta, getMatchmakingContext()),
+      }))
+      .sort((a, b) => {
+        const fitDiff = Number(b.__matchFit?.total || 0) - Number(a.__matchFit?.total || 0);
+        if (fitDiff !== 0) return fitDiff;
+        return (toDateSafe(a.fecha)?.getTime() || 0) - (toDateSafe(b.fecha)?.getTime() || 0);
+      });
   } else if (filter === "mine") {
     list = list
       .filter((m) => isMatchRelevantToMe(m))
@@ -1862,6 +2341,7 @@ function renderMatchCard(match, idx = 0) {
   const orgName = match.organizador
     ? getPlayerDisplayName(match.organizador)
     : match.isApoing ? match.owner : null;
+  const fit = match.__matchFit || null;
 
   const playerAvatar = (uid) => {
     if (!uid)
@@ -1886,6 +2366,16 @@ function renderMatchCard(match, idx = 0) {
     const cls = !uid ? "empty" : uid === currentUser?.uid ? "is-me" : "";
     return `<span class="hv2-mc-player ${cls}">${uid ? name : "Libre"}</span>`;
   };
+  const teamALabel = getFriendlyTeamName({
+    teamName: match?.teamAName,
+    playerNames: players.slice(0, 2).map((uid) => (uid ? getPlayerDisplayName(uid) : null)),
+    fallback: "Pareja 1",
+  });
+  const teamBLabel = getFriendlyTeamName({
+    teamName: match?.teamBName,
+    playerNames: players.slice(2, 4).map((uid) => (uid ? getPlayerDisplayName(uid) : null)),
+    fallback: "Pareja 2",
+  });
 
   const hasResult = match.resultado?.sets || match.resultado?.score;
   const resultStr = hasResult ? match.resultado.sets || "" : "";
@@ -1900,6 +2390,12 @@ function renderMatchCard(match, idx = 0) {
           : freeSlots > 0
             ? `<span class="hv2-mc-badge open-badge">${freeSlots} LIBRE</span>`
             : `<span class="hv2-mc-badge full-badge">COMPLETO</span>`;
+  const smartBadge = fit && !isMine && !finished
+    ? `<span class="hv2-mc-smart-badge is-${fit.tone || "soft"}"><strong>${Math.round(fit.total)}% match</strong><small>${fit.headline || "encaje moderado"}</small></span>`
+    : "";
+  const smartDetail = fit && !isMine && !finished && Array.isArray(fit.reasons) && fit.reasons.length
+    ? `<div class="hv2-mc-smart-detail">${fit.reasons.slice(0, 3).map((reason) => `<span>${reason}</span>`).join("")}</div>`
+    : "";
 
   const cardClick = match.isApoing 
     ? `window.openApoingMatch('${match.id}')` 
@@ -1914,13 +2410,14 @@ function renderMatchCard(match, idx = 0) {
           else if (s.b > s.a) setsB++;
       });
       if (setsA !== setsB) {
-          winnerBadge = `<span class="hv2-mc-winner-badge">Ganador: ${setsA > setsB ? 'Equipo A' : 'Equipo B'}</span>`;
+          winnerBadge = `<span class="hv2-mc-winner-badge">Ganador: ${escapeHtml(setsA > setsB ? teamALabel : teamBLabel)}</span>`;
       }
   }
 
   return `
     <div class="hv2-match-card ${isMine ? "mine-card" : ""} ${finished ? "finished-card" : ""} ${match.isApoing ? "apoing-card" : ""}" style="animation-delay:${delay}ms" onclick="${cardClick}">
       ${badge}
+      ${smartBadge}
       <div class="hv2-mc-team">
         <div class="hv2-mc-avatars">${playerAvatar(players[0])}${playerAvatar(players[1])}</div>
         ${pn(players[0])}
@@ -1936,6 +2433,7 @@ function renderMatchCard(match, idx = 0) {
         ${pn(players[2])}
         ${pn(players[3])}
       </div>
+      ${smartDetail}
       ${winnerBadge}
       <button class="hv2-mc-share-btn" onclick="event.stopPropagation(); window.shareMatch('${match.id}', '${match.col}')">
          <i class="fas fa-share-nodes"></i>
@@ -2038,7 +2536,7 @@ window.openNexusModal = () => {
     : '<div class="nexus-modal-empty">No hay usuarios conectados ahora</div>';
 
   const offlineHtml = `
-    <div class="nexus-modal-divider">No conectados —" última actividad (${offlineUsers.length})</div>
+    <div class="nexus-modal-divider">No conectados · última actividad (${offlineUsers.length})</div>
     ${
       offlineUsers.length
         ? offlineUsers
@@ -2169,19 +2667,21 @@ async function getApoingSources() {
 }
 
 async function fetchRawApoingByUrl(url) {
-  for (const proxy of APOING_PROXY_LIST) {
-    try {
-      const target = proxy.includes('allorigins') || proxy.includes('corsproxy') 
-        ? `${proxy}${encodeURIComponent(url)}`
-        : `${proxy}${url.replace(/^https?:\/\//i, "")}`;
-      const resp = await fetch(target);
-      if (resp.ok) return await resp.text();
-    } catch (_) {}
+  try {
+    console.log("Cargando calendario Apoing...");
+    const jinaTarget = `${APOING_PROXY_JINA}${url.replace(/^https?:\/\//i, "")}`;
+    const jinaResp = await fetch(jinaTarget);
+    if (jinaResp.ok) return await jinaResp.text();
+
+    const target = `${APOING_PROXY_URL}${encodeURIComponent(url)}`;
+    const resp = await fetch(target);
+    if (resp.ok) return await resp.text();
+
+    throw new Error(`Apoing fetch failed: ${resp.status}`);
+  } catch (err) {
+    console.warn("Apoing proxy warning:", err);
+    return "";
   }
-  const jinaTarget = `${APOING_PROXY_JINA}${url.replace(/^https?:\/\//i, "")}`;
-  const resp = await fetch(jinaTarget);
-  if (resp.ok) return await resp.text();
-  throw new Error("Apoing fetch failed all proxies");
 }
 
 function parseIcsEvents(icsText = "") {
@@ -2751,8 +3251,8 @@ function updateProposalPreview(propSnap) {
     const teamB = names.slice(2, 4).join(" / ") || "Por definir";
     preview.innerHTML = `
         <div class="text-[9px] uppercase opacity-60 mb-1">Vista previa parejas</div>
-        <div><strong>Equipo A:</strong> ${escapeHtml(teamA)}</div>
-        <div><strong>Equipo B:</strong> ${escapeHtml(teamB)}</div>
+        <div><strong>Pareja 1:</strong> ${escapeHtml(teamA)}</div>
+        <div><strong>Pareja 2:</strong> ${escapeHtml(teamB)}</div>
     `;
 }
 
@@ -2914,7 +3414,7 @@ window.shareMatch = async (matchId, col) => {
             teamB: [pNames[2], pNames[3]],
             winner,
             sets,
-            club: "PADELUMINATIS CLUB",
+            club: "PADELUMINATIS",
             logoUrl: 'imagenes/Logojafs.png'
         };
 
@@ -2937,12 +3437,12 @@ window.shareMatch = async (matchId, col) => {
         text += `⚔️ ${names[0]} / ${names[1]} VS ${names[2]} / ${names[3]}\n`;
     }
     
-    text += `\n¡Entra en Padeluminatis para ver más!`;
+    text += `\nEntra en JafsPadel para ver mas.`;
 
     if (navigator.share) {
         try {
             await navigator.share({
-                title: 'Partido de Padeluminatis',
+                title: 'Partido en JafsPadel',
                 text: text,
                 url: window.location.origin
             });
@@ -2958,5 +3458,3 @@ window.shareMatch = async (matchId, col) => {
         }
     }
 };
-
-

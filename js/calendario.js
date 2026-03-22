@@ -9,6 +9,7 @@ import { initAppUI, showToast, countUp } from './ui-core.js';
 import { renderMatchDetail, renderCreationForm } from './match-service.js';
 import { isExpiredOpenMatch, isFinishedMatch, isCancelledMatch, getMatchPlayers } from "./utils/match-utils.js";
 import { observeCoreSession } from "./core/core-engine.js";
+import { getFriendlyTeamName } from "./utils/team-utils.js";
 
 let currentUser = null;
 let userData = null;
@@ -72,12 +73,7 @@ function apoingLog(step, data = null) {
 }
 
 const DEFAULT_APOING_ICS_URL = ""; // Empty by default now to avoid confusion
-const APOING_PROXY_LIST = [
-    "/api/apoing-ics?url=",
-    "https://api.allorigins.win/raw?url=",
-    "https://corsproxy.io/?",
-    "https://proxy.cors.sh/", // Fallback 3
-];
+const APOING_PROXY_URL = "https://europe-west1-padeluminatis.cloudfunctions.net/getApoingICS?url=";
 const APOING_PROXY_3 = "https://r.jina.ai/http://";
 const APOING_SYNC_TTL_MS = 120000;
 const CALENDAR_CACHE_KEY = "calendar:matches:v1";
@@ -768,29 +764,7 @@ async function fetchApoingIcs(url, timeoutMs = 25000) {
     }
 }
 
-async function fetchRawApoingByUrl(icsUrl) {
-    const isLocalDev = ["127.0.0.1", "localhost"].includes(String(window.location.hostname || "").toLowerCase());
-    const candidates = isLocalDev
-        ? [
-            `${APOING_PROXY_3}${icsUrl.replace(/^https?:\/\//i, "")}`,
-            ...APOING_PROXY_LIST.map(p => `${p}${encodeURIComponent(icsUrl)}`),
-        ]
-        : [
-            `${APOING_PROXY_3}${icsUrl.replace(/^https?:\/\//i, "")}`,
-            ...APOING_PROXY_LIST.map(p => `${p}${encodeURIComponent(icsUrl)}`),
-        ];
-    let lastErr = null;
-    for (const candidate of candidates) {
-        try {
-            apoingLog("ics.fetch.try", { candidate: `${String(candidate).slice(0, 80)}...` });
-            return await fetchApoingIcs(candidate);
-        } catch (e) {
-            apoingLog("ics.fetch.fail", { candidate: `${String(candidate).slice(0, 80)}...`, err: e?.message || String(e) });
-            lastErr = e;
-        }
-    }
-    throw lastErr || new Error("apoing_fetch_failed");
-}
+async function fetchRawApoingByUrl(url) { try { console.log("Cargando calendario Apoing..."); const jinaTarget = `${APOING_PROXY_3}${url.replace(/^https?:\/\/\//i, "")}`; const jinaResp = await fetch(jinaTarget); if (jinaResp.ok) return await jinaResp.text(); const target = `${APOING_PROXY_URL}${encodeURIComponent(url)}`; const resp = await fetch(target); if (resp.ok) return await resp.text(); throw new Error(`Apoing fetch failed: ${resp.status}`); } catch (err) { console.warn("Apoing proxy warning:", err); return ""; } }
 async function syncApoingReservations(force = false) {
     const now = Date.now();
     if (!force && now < apoingNextRetryAt) return;
@@ -1070,7 +1044,7 @@ window.showApoingGuide = () => {
         <div class="flex-col gap-4 p-2">
             <div class="info-box-v7">
                 <i class="fas fa-info-circle"></i>
-                <p class="text-[11px] font-medium leading-relaxed">Padeluminatis sincroniza tus reservas directamente desde Apoing. Necesitas tu enlace <b>.ics</b> personal.</p>
+                <p class="text-[11px] font-medium leading-relaxed">JafsPadel sincroniza tus reservas directamente desde Apoing. Necesitas tu enlace <b>.ics</b> personal.</p>
             </div>
             
             <div class="config-section-v7">
@@ -1298,7 +1272,7 @@ function renderSlot(date, hour) {
                     state = 'cerrada';
                     label = 'BRACKET PENDIENTE';
                     sub = 'Esperando fase de grupos';
-                    ownerSub = `EVENTO: ${shortName(match.teamAName || '?')} VS ${shortName(match.teamBName || '?')}`;
+                    ownerSub = `EVENTO: ${resolveTeamDisplayName(match, 'A')} VS ${resolveTeamDisplayName(match, 'B')}`;
                     extraIcon = '<i class="fas fa-lock text-white/50 absolute top-2 right-2 text-xs"></i>';
                     isLocked = true;
                 } else {
@@ -1308,7 +1282,7 @@ function renderSlot(date, hour) {
                 label = isPlayedEvent ? 'EVENTO JUGADO' : 'PARTIDO EVENTO';
                 const resLabel = match.resultado?.sets || (typeof match.resultado === 'string' ? match.resultado : 'VER RES');
                 sub = isPlayedEvent ? resLabel : (match.phase ? String(match.phase).toUpperCase() : 'TORNEO');
-                ownerSub = `EVENTO: ${shortName(match.teamAName || '?')} VS ${shortName(match.teamBName || '?')}`;
+                ownerSub = `EVENTO: ${resolveTeamDisplayName(match, 'A')} VS ${resolveTeamDisplayName(match, 'B')}`;
                 }
             } else {
             // Private Match Check
@@ -1429,7 +1403,7 @@ function renderSlot(date, hour) {
 
         const isPastEmpty = !match && !apoingEvent && isPast;
         return `
-            <div class="slot-v5 ${state} ${isPast ? 'past' : ''} relative" onclick="handleSlot('${dStr}', '${hour}', '${match?.id || ''}', '${match?.col || ''}', ${isPastEmpty ? 'true' : 'false'})">
+            <div class="slot-v5 ${state} ${match?.eventMatchId || match?.col === 'eventoPartidos' ? 'evento' : ''} ${isPast ? 'past' : ''} relative" onclick="handleSlot('${dStr}', '${hour}', '${match?.id || ''}', '${match?.col || ''}', ${isPastEmpty ? 'true' : 'false'})">
                 ${extraIcon}
                 ${weatherHtml}
                 <span class="slot-chip-v5">${label}</span>
@@ -1443,6 +1417,30 @@ function renderSlot(date, hour) {
     }
 }
 
+
+function resolveTeamDisplayName(match, side) {
+    const rawName = side === 'A' ? (match.teamAName || match.equipoA) : (match.teamBName || match.equipoB);
+    if (!isUnknownTeamName(rawName)) return shortName(rawName);
+
+    // If it's TBD, check if we have player names or UIDs in the match
+    const uids = side === 'A' ? (match.teamAPlayers || match.playerUids?.slice(0, 2)) : (match.teamBPlayers || match.playerUids?.slice(2, 4));
+    
+    if (Array.isArray(uids) && uids.length > 0) {
+        const map = getEventUserNameMap();
+        const names = uids.map(uid => map.get(String(uid)) || "").filter(Boolean);
+        if (names.length > 0) {
+            // Return "Name1 / Name2" or just "Name1"
+            return names.map(n => shortName(n)).join(" / ");
+        }
+    }
+    
+    return getFriendlyTeamName({
+        teamName: rawName,
+        playerUids: Array.isArray(uids) ? uids : [],
+        resolvePlayerName: (uid) => getEventUserNameMap().get(String(uid)) || "",
+        side,
+    });
+}
 
 function shortName(name) {
     if (!name) return "Jugador";
@@ -1842,3 +1840,5 @@ async function handleUrlParams() {
         }
     }
 }
+
+
