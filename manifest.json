@@ -1,18 +1,12 @@
-{
-  "id": "./",
-  "name": "JafsPadel Social",
-  "short_name": "JafsPadel",
-  "description": "Aplicacion social de padel para crear partidos, competir, subir de nivel y gestionar resultados.",
-  "lang": "es-ES",
-  "dir": "ltr",
-  "start_url": "./home.html?source=pwa",
+﻿{
+  "name": "Padeluminatis-Matrix",
+  "short_name": "Padeluminatis",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
-  "background_color": "#08111d",
-  "theme_color": "#08111d",
-  "orientation": "portrait-primary",
-  "categories": ["sports", "productivity", "social"],
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "imagenes/Logojafs.png",
@@ -26,22 +20,6 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ],
-  "shortcuts": [
-    {
-      "name": "Mi panel",
-      "short_name": "Home",
-      "url": "./home.html"
-    },
-    {
-      "name": "Calendario",
-      "short_name": "Partidos",
-      "url": "./calendario.html"
-    },
-    {
-      "name": "Notificaciones",
-      "short_name": "Alertas",
-      "url": "./notificaciones.html"
-    }
   ]
 }
+

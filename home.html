@@ -6,9 +6,8 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#020617">
-    <title>Inicio | JafsPadel</title>
-    <meta name="description" content="Aplicacion social para crear, competir y administrar partidas de padel">
-    <link rel="manifest" href="./manifest.json">
+    <title>Home | Padeluminatis Pro</title>
+    <meta name="description" content="Panel principal de Padeluminatis">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link
@@ -112,7 +111,7 @@
                     <span class="hv2-tr-title">REPORTE TÁCTICO DIARIO</span>
                 </div>
                 <div id="recom-content" class="hv2-tr-content">
-                    Preparando tu resumen...
+                    Sincronizando con la red neuronal...
                 </div>
             </div>
         </section>
@@ -124,7 +123,7 @@
                 <div class="nexus-head">
                     <div class="flex-row items-center gap-2">
                         <div class="nexus-pulse"></div>
-                        <span class="nexus-title">USUARIOS CONECTADOS</span>
+                        <span class="nexus-title">NEXUS ONLINE AHORA</span>
                     </div>
                     <span id="nexus-count" class="nexus-count">0</span>
                 </div>
@@ -144,30 +143,6 @@
             </div>
         </section>
 
-        <section class="animate-up" style="animation-delay:0.085s;">
-            <div id="home-compact-brief" class="hv2-brief-grid">
-                <article class="hv2-brief-card is-loading"></article>
-                <article class="hv2-brief-card is-loading"></article>
-                <article class="hv2-brief-card is-loading"></article>
-            </div>
-        </section>
-
-        <section class="animate-up" style="animation-delay:0.09s;">
-            <details class="hv2-collapsible">
-                <summary class="hv2-collapsible-summary">
-                    <span><i class="fas fa-wave-square"></i> Pulso Competitivo</span>
-                    <i class="fas fa-chevron-down"></i>
-                </summary>
-                <div class="hv2-pulse-shell hv2-collapsible-body">
-                    <div id="home-competitive-pulse" class="hv2-pulse-grid">
-                        <article class="hv2-pulse-card is-loading"></article>
-                        <article class="hv2-pulse-card is-loading"></article>
-                        <article class="hv2-pulse-card is-loading"></article>
-                    </div>
-                </div>
-            </details>
-        </section>
-
         <section id="event-spotlight" class="animate-up hidden" style="animation-delay:0.1s;">
             <div class="hv2-event-spotlight">
                 <div class="hv2-event-head">
@@ -182,12 +157,6 @@
 
         <!-- New: Proponer Partida Card -->
         <section class="animate-up" style="animation-delay:0.11s;">
-            <details class="hv2-collapsible">
-                <summary class="hv2-collapsible-summary">
-                    <span><i class="fas fa-grid-2"></i> Mas opciones</span>
-                    <i class="fas fa-chevron-down"></i>
-                </summary>
-                <div class="hv2-collapsible-body hv2-secondary-stack">
             <div class="hv2-propose-card" onclick="window.openProposeMatchChat()">
                 <div class="hv2-propose-glow"></div>
                 <div class="hv2-propose-content">
@@ -203,37 +172,30 @@
                     </div>
                 </div>
             </div>
-                </div>
-            </details>
         </section>
         <section id="proposal-inline-section" class="hv2-proposal-inline hidden"></section>
 
         <!-- ═══════════════ PARTIDOS — TABS ═══════════════ -->
         <section class="hv2-matches-section animate-up" style="animation-delay:0.12s;">
-            <details class="hv2-collapsible" open>
-                <summary class="hv2-collapsible-summary">
-                    <span><i class="fas fa-table-tennis-paddle-ball"></i> Partidos</span>
-                    <i class="fas fa-chevron-down"></i>
-                </summary>
-                <div class="hv2-collapsible-body">
-                    <div class="hv2-tabs">
-                        <button type="button" class="hv2-tab active" data-filter="open" style="grid-column: span 2;">
-                            <i class="fas fa-door-open"></i> Pistas Abiertas
-                        </button>
-                        <button type="button" class="hv2-tab" data-filter="mine" style="grid-column: span 2;">
-                            <i class="fas fa-user"></i> Mis Partidas
-                        </button>
-                        <button type="button" class="hv2-tab" data-filter="closed" style="grid-column: span 4;">
-                            <i class="fas fa-lock"></i> Cerradas (futuras)
-                        </button>
-                    </div>
-                    <div id="matches-list" class="hv2-matches-grid hv2-matches-scroll">
-                        <div class="hv2-skeleton-row"></div>
-                        <div class="hv2-skeleton-row"></div>
-                        <div class="hv2-skeleton-row"></div>
-                    </div>
-                </div>
-            </details>
+            <div class="hv2-section-head">
+                <span class="hv2-section-title"><i class="fas fa-table-tennis-paddle-ball"></i> Partidos</span>
+            </div>
+            <div class="hv2-tabs">
+                <button type="button" class="hv2-tab active" data-filter="open" style="grid-column: span 2;">
+                    <i class="fas fa-door-open"></i> Pistas Abiertas
+                </button>
+                <button type="button" class="hv2-tab" data-filter="mine" style="grid-column: span 2;">
+                    <i class="fas fa-user"></i> Mis Partidas
+                </button>
+                <button type="button" class="hv2-tab" data-filter="closed" style="grid-column: span 4;">
+                    <i class="fas fa-lock"></i> Cerradas (futuras)
+                </button>
+            </div>
+            <div id="matches-list" class="hv2-matches-grid">
+                <div class="hv2-skeleton-row"></div>
+                <div class="hv2-skeleton-row"></div>
+                <div class="hv2-skeleton-row"></div>
+            </div>
         </section>
 
         <!-- ═══════════════ EVENTOS — PROMOCIÓN ═══════════════ -->
@@ -252,27 +214,11 @@
                 <div class="hv2-promo-icon"><i class="fas fa-table-tennis-paddle-ball"></i></div>
                 <div class="hv2-promo-text">
                     <span class="hv2-promo-title">COMPARADOR DE PALAS</span>
-                    <p class="hv2-promo-desc">Compara y añade tu pala para tener más información y sensaciones de cada
+                    <p class="hv2-promo-desc">Compara y añade tu pala para tener mas información y sensaciones de cada
                         pala</p>
                 </div>
                 <i class="fas fa-chevron-right hv2-promo-arrow"></i>
             </div>
-        </section>
-
-        <section id="home-club-feed-section" class="hv2-matches-section animate-up hidden" style="animation-delay:0.15s;">
-            <details class="hv2-collapsible">
-                <summary class="hv2-collapsible-summary">
-                    <span><i class="fas fa-flag-checkered"></i> Últimos Cierres</span>
-                    <i class="fas fa-chevron-down"></i>
-                </summary>
-                <div class="hv2-collapsible-body">
-                    <div id="home-club-feed" class="hv2-club-feed">
-                        <div class="hv2-club-card is-loading"></div>
-                        <div class="hv2-club-card is-loading"></div>
-                        <div class="hv2-club-card is-loading"></div>
-                    </div>
-                </div>
-            </details>
         </section>
 
     </main>
@@ -306,10 +252,8 @@
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         import { initThemeSystem } from './js/modules/theme-manager.js';
-        import { initPWAShell } from './js/modules/pwa-shell.js';
         initThemeSystem();
         initGalaxyBackground();
-        initPWAShell('home');
     </script>
     <script type="module">
         import { initVecinaChat } from './js/modules/vecina-chat.js?v=6.5';

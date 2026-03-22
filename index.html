@@ -6,8 +6,8 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#020617">
-    <title>Acceso | JafsPadel</title>
-    <meta name="description" content="Accede a JafsPadel y gestiona tus partidos de forma simple">
+    <title>Acceso | Padeluminatis Pro</title>
+    <meta name="description" content="Accede al circuito Padeluminatis">
     <link rel="manifest" href="./manifest.json">
     <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -25,7 +25,7 @@
             <div class="loader-visual">
                 <div class="loader-ring"></div>
                 <div class="loader-ring inner"></div>
-                    <img src="./imagenes/Logojafs.png" class="loader-logo" alt="JafsPadel">
+                <img src="./imagenes/Logojafs.png" class="loader-logo" alt="Padeluminatis">
             </div>
             <div class="loader-text-group">
                 <div id="loader-status" class="loader-status">Iniciando Sincronización</div>
@@ -42,7 +42,7 @@
             <div class="auth-card-glow"></div>
             <div class="auth-header">
                 <div class="auth-logo-box">
-                <img src="./imagenes/Logojafs.png" class="auth-logo" alt="JafsPadel">
+                    <img src="./imagenes/Logojafs.png" class="auth-logo" alt="Padeluminatis">
                 </div>
                 <h1 class="auth-title">ACCESO</h1>
                 <p class="auth-subtitle">Sincroniza tu ficha</p>
@@ -369,10 +369,8 @@
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         import { initThemeSystem } from './js/modules/theme-manager.js';
-        import { initPWAShell } from './js/modules/pwa-shell.js';
         initThemeSystem();
         initGalaxyBackground();
-        initPWAShell('acceso');
     </script>
     <script type="module" src="./js/login.js"></script>
 </body>
