@@ -1,9 +1,8 @@
 // eventos.js — Versión mejorada con aprobación de inscritos y campo repesca
 import { db, auth, observerAuth, getDocument, addDocument, updateDocument, getDocsSafe } from './firebase-service.js';
 import { initAppUI, showToast, showSidePreferenceModal } from './ui-core.js';
-import { openResultForm } from './match-service.js';
 import {
-    collection, getDocs, doc, getDoc, updateDoc, deleteDoc, addDoc,
+    collection, getDocs, doc, updateDoc, deleteDoc, addDoc,
     query, where, orderBy, serverTimestamp, onSnapshot, writeBatch,
     arrayUnion, arrayRemove, increment
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
@@ -18,7 +17,6 @@ let currentFilter = 'all';
 let activeEventId = null;
 let adminTabState = 'players';
 let unsubscribeEvents = null;
-let usersById = new Map();
 
 /* ==================== BOOT ==================== */
 document.addEventListener('DOMContentLoaded', () => {
@@ -33,33 +31,11 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('btn-create-event')?.classList.remove('hidden');
         }
 
-        await preloadUsersForEvents();
         setupFilters();
         setupCreateModal();
         subscribeEvents();
     });
 });
-
-async function preloadUsersForEvents() {
-    try {
-        const snap = await getDocsSafe(collection(db, 'usuarios'));
-        const rows = (snap?.docs || []).map(d => ({ uid: d.id, ...d.data() }));
-        usersById = new Map(rows.map(u => [u.uid, u]));
-    } catch (e) {
-        console.error('Error cargando usuarios eventos:', e);
-    }
-}
-
-function resolveInscritoLabel(ins) {
-    if (!ins) return 'Jugador';
-    const uid = ins.uid || '';
-    const isGuest = ins.invitado === true || String(uid).startsWith('invitado_') || String(uid).startsWith('manual_') || ins.manual === true;
-    if (!isGuest && usersById.has(uid)) {
-        const u = usersById.get(uid);
-        return u.nombreUsuario || u.nombre || u.email || uid;
-    }
-    return ins.nombre || ins.nombreUsuario || uid || 'Invitado';
-}
 
 /* ==================== FILTERS ==================== */
 function setupFilters() {
@@ -146,7 +122,6 @@ function buildEventCard(ev, idx) {
         cancelado: { label: 'CANCELADO', cls: 'state-cancelled' },
     };
     const st = stateMap[ev.estado] || { label: ev.estado || 'BORRADOR', cls: 'state-draft' };
-    const logoUrl = ev.imagen || ev.imageUrl || ev.logoUrl || './imagenes/Logojafs.png';
 
     const deadline = ev.fechaInscripcion?._seconds ? new Date(ev.fechaInscripcion._seconds * 1000) : ev.fechaInscripcion ? new Date(ev.fechaInscripcion) : null;
     const startDate = ev.fechaInicio?._seconds ? new Date(ev.fechaInicio._seconds * 1000) : ev.fechaInicio ? new Date(ev.fechaInicio) : null;
@@ -188,13 +163,7 @@ function buildEventCard(ev, idx) {
         <div class="ev-card-body">
             ${countdown && !countdown.past ? `<div class="ev-countdown ${countdown.urgent ? 'ev-countdown-urgent' : ''}"><i class="fas fa-clock"></i><span>${countdown.text}</span></div>` : ''}
             ${newsStrip}
-                        <div class="ev-card-brand">
-                <div class="ev-card-logo" style="background-image:url('${logoUrl}')"></div>
-                <div class="ev-card-brand-text">
-                    <h3 class="ev-title">${ev.nombre || 'Sin nombre'}</h3>
-                    <div class="ev-brand-sub">Organiza: ${ev.organizadorNombre || 'Club'}</div>
-                </div>
-            </div>
+            <h3 class="ev-title">${ev.nombre || 'Sin nombre'}</h3>
             <p class="ev-desc">${ev.descripcion || ''}</p>
             <div class="ev-stats-grid">
                 <div class="ev-stat"><i class="fas fa-users"></i><span><b>${filled}/${slots}</b> equipos</span></div>
@@ -371,7 +340,7 @@ function buildPlayersList(inscritos) {
         <div class="ev-player-row">
             <span class="ev-player-rank">#${i+1}</span>
             <div class="flex-col flex-1">
-                <span class="font-bold text-[12px]">${resolveInscritoLabel(ins)}</span>
+                <span class="font-bold text-[12px]">${ins.nombre || ins.uid}</span>
                 ${ins.aprobado ? '<span class="text-[10px] text-sport-green">✓ Aprobado</span>' : '<span class="text-[10px] text-warning">⏳ Pendiente</span>'}
             </div>
             <span class="text-[10px] text-muted">${fmtDate(ins.inscritoEn?._seconds ? new Date(ins.inscritoEn._seconds*1000) : new Date())}</span>
@@ -389,14 +358,12 @@ function renderStandingTable(standings) {
     if (!standings.length) return `<p class="text-center text-muted text-[12px] py-8">Clasificación no disponible.</p>`;
     return `
       <div class="ev-standing-table">
-        <div class="ev-standing-head"><span>#</span><span>Pareja</span><span>PJ</span><span>G</span><span>P</span><span>PF</span><span>PC</span><span>DIF</span><span>Pts</span></div>
+        <div class="ev-standing-head"><span>#</span><span>Pareja</span><span>PJ</span><span>G</span><span>P</span><span>Pts</span></div>
         ${standings.map((s, i) => `
         <div class="ev-standing-row ${i < 2 ? 'top' : i < 4 ? 'playoff' : ''}">
           <span class="ev-rank-num">${i+1}</span>
           <span class="ev-team-name">${s.nombre || '-'}</span>
           <span>${s.pj||0}</span><span>${s.ganados||0}</span><span>${s.perdidos||0}</span>
-          <span>${s.puntosGanados||0}</span><span>${s.puntosPerdidos||0}</span>
-          <span>${s.diferencia||0}</span>
           <span class="font-black text-primary">${s.puntos||0}</span>
         </div>`).join('')}
       </div>`;
@@ -484,7 +451,6 @@ async function saveNewEvent() {
     const puntosEmpate = Number(document.getElementById('ev-pts-draw')?.value || 1);
     const puntosDerrota = Number(document.getElementById('ev-pts-loss')?.value || 0);
     const descripcion = document.getElementById('ev-description')?.value.trim() || '';
-    const imagen = document.getElementById('ev-image')?.value.trim() || '';
 
     if (nivelMin && nivelMax && Number(nivelMin) > Number(nivelMax)) {
         showToast('Niveles inválidos', 'El mínimo no puede ser mayor que el máximo.', 'warning');
@@ -497,7 +463,7 @@ async function saveNewEvent() {
 
     try {
         const payload = {
-            nombre, descripcion, imagen: imagen || null, formato, modalidad, companeroObligatorio, plazasMax, premio,
+            nombre, descripcion, formato, modalidad, companeroObligatorio, plazasMax, premio,
             nivelMin: nivelMin ? Number(nivelMin) : null,
             nivelMax: nivelMax ? Number(nivelMax) : null,
             puntosVictoria, puntosEmpate, puntosDerrota,
@@ -606,7 +572,7 @@ function renderAdminPlayers(ev) {
         <div class="ev-admin-player-row">
             <span class="ev-player-rank">#${i+1}</span>
             <div class="flex-col flex-1">
-                <span class="font-bold text-[12px]">${resolveInscritoLabel(ins)}</span>
+                <span class="font-bold text-[12px]">${ins.nombre || ins.uid}</span>
             </div>
             <div class="flex-row gap-1">
                 <button class="btn-micro success" onclick="window.aprobarJugador('${ev.id}','${ins.uid}')"><i class="fas fa-check"></i></button>
@@ -626,7 +592,7 @@ function renderAdminPlayers(ev) {
             <div class="ev-admin-player-row">
                 <span class="ev-player-rank">#${i+1}</span>
                 <div class="flex-col flex-1">
-                    <span class="font-bold text-[12px]">${resolveInscritoLabel(ins)}</span>
+                    <span class="font-bold text-[12px]">${ins.nombre || ins.uid}</span>
                 </div>
                 <button class="btn-micro danger" onclick="window.expulsarJugador('${ev.id}','${ins.uid}')"><i class="fas fa-user-minus"></i></button>
             </div>`).join('') : '<p class="text-muted text-[12px]">No hay aprobados</p>'}
@@ -638,10 +604,6 @@ async function renderAdminMatches(ev) {
     try {
         const snap = await getDocsSafe(query(collection(db, 'eventoPartidos'), where('eventoId', '==', ev.id)));
         const matches = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.round||1) - (b.round||1));
-        const uniqueMatches = Array.from(new Map(matches.map(m => {
-            const key = m.id || m.matchCode || `${m.teamAId || ''}_${m.teamBId || ''}_${m.group || ''}_${m.round || ''}`;
-            return [key, m];
-        })).values());
 
         if (!matches.length) {
             return `
@@ -658,7 +620,7 @@ async function renderAdminMatches(ev) {
             <button class="btn-mini mb-2" onclick="window.addManualMatch('${ev.id}')">
                 <i class="fas fa-plus mr-1"></i> Añadir partido
             </button>
-            ${uniqueMatches.map(m => `
+            ${matches.map(m => `
             <div class="ev-admin-match-row">
                 <div class="flex-col flex-1">
                     <span class="font-bold text-[12px]">${m.teamAName || m.equipoA || '?'} vs ${m.teamBName || m.equipoB || '?'}</span>
@@ -668,9 +630,6 @@ async function renderAdminMatches(ev) {
                     ${m.resultado ? `<span class="text-[11px] font-black text-primary">${m.resultado}</span>` : ''}
                     <button class="btn-micro" onclick="window.editMatchResult('${ev.id}','${m.id}')">
                         <i class="fas fa-pen"></i>
-                    </button>
-                    <button class="btn-micro danger" onclick="window.deleteEventMatch('${ev.id}','${m.id}')">
-                        <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>`).join('')}
@@ -787,8 +746,8 @@ window.addManualPlayer = async (eventId) => {
 };
 
 window.addManualMatch = async (eventId) => {
-    const equipoA = prompt('Pareja 1 (nombre):');
-    const equipoB = prompt('Pareja 2 (nombre):');
+    const equipoA = prompt('Equipo A (nombre):');
+    const equipoB = prompt('Equipo B (nombre):');
     if (!equipoA || !equipoB) return;
     try {
         await addDocument('eventoPartidos', {
@@ -811,21 +770,45 @@ window.addManualMatch = async (eventId) => {
     } catch (e) { showToast('Error', e.message, 'error'); }
 };
 
-window.editMatchResult = async (_eventId, matchId) => {
-    if (!matchId) return;
-    openResultForm(matchId, 'eventoPartidos');
-};
+window.editMatchResult = async (eventId, matchId) => {
+    const resultado = prompt('Introduce el resultado (ej: 6-3 6-4):');
+    if (!resultado) return;
+    const ganador = prompt('¿Quién ganó? (A o B):')?.toUpperCase();
+    if (ganador !== 'A' && ganador !== 'B') { showToast('Ganador inválido', 'Escribe A o B', 'warning'); return; }
 
-window.deleteEventMatch = async (_eventId, matchId) => {
-    if (!confirm('¿Eliminar este partido del evento?')) return;
     try {
-        const snap = await getDoc(doc(db, 'eventoPartidos', matchId));
-        const data = snap.exists() ? snap.data() : null;
-        if (data?.linkedMatchId && data?.linkedMatchCollection) {
-            await deleteDoc(doc(db, data.linkedMatchCollection, data.linkedMatchId));
+        const match = await getDocument('eventoPartidos', matchId);
+        const winnerTeamId = ganador === 'A' ? (match?.teamAId || match?.equipoAUid) : (match?.teamBId || match?.equipoBUid);
+        await updateDoc(doc(db, 'eventoPartidos', matchId), {
+            resultado, ganador, ganadorTeamId: winnerTeamId, estado: 'jugado', updatedAt: serverTimestamp()
+        });
+
+        const ev = allEvents.find(e => e.id === eventId);
+        if (ev && (ev.formato === 'league' || ev.formato === 'league_knockout')) {
+            if (match) {
+                const winnerId = ganador === 'A' ? (match.teamAId || match.equipoAUid) : (match.teamBId || match.equipoBUid);
+                const loserId  = ganador === 'A' ? (match.teamBId || match.equipoBUid) : (match.teamAId || match.equipoAUid);
+                const winnerName = ganador === 'A' ? (match.teamAName || match.equipoA) : (match.teamBName || match.equipoB);
+                const loserName = ganador === 'A' ? (match.teamBName || match.equipoB) : (match.teamAName || match.equipoA);
+                if (winnerId && loserId) {
+                    const winKey = `${eventId}_${winnerId}`;
+                    const loseKey = `${eventId}_${loserId}`;
+                    const batch = writeBatch(db);
+                    batch.set(doc(db, 'eventoClasificacion', winKey), {
+                        eventoId: eventId, uid: winnerId, nombre: winnerName || winnerId,
+                        pj: increment(1), ganados: increment(1), puntos: increment(ev.puntosVictoria || 3)
+                    }, { merge: true });
+                    batch.set(doc(db, 'eventoClasificacion', loseKey), {
+                        eventoId: eventId, uid: loserId, nombre: loserName || loserId,
+                        pj: increment(1), perdidos: increment(1), puntos: increment(ev.puntosDerrota || 0)
+                    }, { merge: true });
+                    await batch.commit();
+                }
+            }
         }
-        await deleteDoc(doc(db, 'eventoPartidos', matchId));
-        showToast('Partido eliminado', '', 'success');
+        showToast('Resultado guardado', '', 'success');
+        const evActual = allEvents.find(e => e.id === eventId);
+        if (evActual) await renderAdminTab(evActual, 'matches');
     } catch (e) {
         showToast('Error', e.message, 'error');
     }
@@ -872,11 +855,3 @@ function parseInvitados(raw) {
         return nombre ? { nombre, nivel: Number.isFinite(nivel) ? nivel : 2.5 } : null;
     }).filter(Boolean);
 }
-
-
-
-
-
-
-
-

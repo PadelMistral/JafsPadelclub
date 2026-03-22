@@ -1,4 +1,4 @@
-// ranking.js - Leaderboard & Points History V5.0 (con desglose detallado CORREGIDO)
+﻿// ranking.js - Leaderboard & Points History V5.0 (con desglose detallado CORREGIDO)
 import { db, auth, getDocument } from "./firebase-service.js";
 import {
   collection,
@@ -17,7 +17,6 @@ import {
   initBackground,
   setupModals,
 } from "./modules/ui-loader.js?v=6.5";
-import { shareMatchResult } from "./utils/share-utils.js";
 import {
   aggregateCoreMonthlyImprovement,
   computeCompetitiveWinrate,
@@ -454,7 +453,7 @@ function renderLeaderboard(
       const photo = u.fotoPerfil || u.fotoURL || "";
       const ps = u.partidosJugados || 0;
       const level = Number(u.nivel || 2.5).toFixed(2);
-      const points = Number(u.puntosRanking || 1000).toFixed(1);
+      const points = Math.round(u.puntosRanking || 1000);
       const movement = Number(movementMap.get(u.id) || 0);
       const division = getCoreDivisionByRating(points);
       const rowRank = Number(u.visualRank || u.rank || i + 1);
@@ -682,7 +681,7 @@ window.loadPointsHistory = async (mode = 'mine') => {
               <span class="history-title">${title} ${matchInfo ? `<span class="history-score">${matchInfo}</span>` : ""} ${levelIcon}</span>
               <span class="history-date">${date || "N/A"} ${isDiary ? `<span class="text-[9px] opacity-60 ml-1">(${log.reason || 'Bonus'})</span>` : ''}</span>
             </div>
-            <span class="history-value">${isWin ? "+" : ""}${Number(log.diff || 0).toFixed(1)}</span>
+            <span class="history-value">${isWin ? "+" : ""}${Number(log.diff || 0)}</span>
           </div>
         `;
       }
@@ -734,15 +733,9 @@ window.showMatchBreakdownV3 = async (logId) => {
   if (!log) return showToast("Error", "No se pudo cargar el detalle del registro.", "error");
 
   // Crear overlay del modal
-  const previousOverlays = Array.from(document.querySelectorAll(".modal-overlay.active"))
-    .filter((el) => !el.classList.contains("modal-stack-front"));
-  previousOverlays.forEach((el) => {
-    el.classList.add("modal-stack-back");
-    el.style.zIndex = "11040";
-  });
   const overlay = document.createElement("div");
-  overlay.className = "modal-overlay active modal-stack-front";
-  overlay.style.zIndex = "12090";
+  overlay.className = "modal-overlay active";
+  overlay.style.zIndex = "999999";
 
   const isDiary = String(log.type || "").startsWith("DIARY_");
   const isPeerDiary = log.type === "DIARY_PEER_BONUS";
@@ -765,19 +758,6 @@ window.showMatchBreakdownV3 = async (logId) => {
     </div>
   `;
   document.body.appendChild(overlay);
-  const cleanupStack = () => previousOverlays.forEach((el) => {
-    el.classList.remove("modal-stack-back");
-    el.style.removeProperty("z-index");
-  });
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) {
-      cleanupStack();
-      overlay.remove();
-    }
-  });
-  overlay.querySelectorAll(".close-btn").forEach((btn) => {
-    btn.addEventListener("click", cleanupStack, { once: true });
-  });
 
   const content = document.getElementById("breakdown-content");
 
@@ -866,9 +846,6 @@ window.showMatchBreakdownV3 = async (logId) => {
     const rival1Name = rival1Data?.nombreUsuario || rival1Data?.nombre || (rivalIds[0]?.startsWith('GUEST_') ? rivalIds[0].split('_')[1] : "Rival 1");
     const rival2Name = rival2Data?.nombreUsuario || rival2Data?.nombre || (rivalIds[1]?.startsWith('GUEST_') ? rivalIds[1].split('_')[1] : "Rival 2");
 
-    const myTeamLabel = [myName, partnerName].filter(Boolean).join(" / ");
-    const rivalTeamLabel = [rival1Name, rival2Name].filter(Boolean).join(" / ");
-
     // Niveles
     const myLevel = myData?.nivel || 2.5;
     const partnerLevel = partnerData?.nivel || 2.5;
@@ -950,9 +927,6 @@ window.showMatchBreakdownV3 = async (logId) => {
             <span class="text-[10px] font-black ${isWin ? 'text-sport-green' : 'text-sport-red'} uppercase tracking-widest">${isWin ? 'VICTORIA' : 'DERROTA'}</span>
             <span class="text-[10px] text-white/40 font-bold uppercase tracking-widest">${date}</span>
           </div>
-          <div class="text-center mb-3">
-            <span class="text-[10px] text-white/55 font-black tracking-[2px]">${myTeamLabel} VS ${rivalTeamLabel}</span>
-          </div>
           <div class="text-center mb-2">
             <span class="text-xs font-bold text-white/60 mb-2 block tracking-[4px]">RESULTADO FINAL</span>
             <span class="text-5xl font-black italic text-white tracking-widest font-mono">${result}</span>
@@ -962,7 +936,7 @@ window.showMatchBreakdownV3 = async (logId) => {
         <!-- Niveles de todos los jugadores -->
         <div class="grid grid-cols-2 gap-3">
           <div class="p-4 bg-white/5 rounded-2xl border border-white/5 flex-col gap-2">
-            <span class="text-[8px] font-black text-muted uppercase tracking-widest">${myTeamLabel}</span>
+            <span class="text-[8px] font-black text-muted uppercase tracking-widest">MI EQUIPO</span>
             <div class="flex-col gap-1">
               <div class="flex-row between">
                 <span class="text-[10px] text-white/40">${myName}</span>
@@ -975,7 +949,7 @@ window.showMatchBreakdownV3 = async (logId) => {
             </div>
           </div>
           <div class="p-4 bg-white/5 rounded-2xl border border-white/5 flex-col gap-2">
-            <span class="text-[8px] font-black text-muted uppercase tracking-widest">${rivalTeamLabel}</span>
+            <span class="text-[8px] font-black text-muted uppercase tracking-widest">EQUIPO RIVAL</span>
             <div class="flex-col gap-1">
               <div class="flex-row between">
                 <span class="text-[10px] text-white/40">${rival1Name}</span>
@@ -1063,43 +1037,11 @@ window.showMatchBreakdownV3 = async (logId) => {
           </div>
         </div>
       </div>
-      <div class="grid grid-cols-2 gap-3 mt-6">
-        <button type="button" id="ranking-share-result-btn" class="btn-premium-v7 w-full py-4 uppercase text-[10px] font-black tracking-[2px] shadow-xl">
-          COMPARTIR
-        </button>
-        <button class="btn-premium-v7 w-full py-4 uppercase text-[10px] font-black tracking-[2px] shadow-xl" onclick="this.closest('.modal-overlay').remove()">
-          CERRAR
-        </button>
-      </div>
+      
+      <button class="btn-premium-v7 w-full py-5 uppercase text-[11px] font-black tracking-[4px] mt-6 shadow-xl" onclick="this.closest('.modal-overlay').remove()">
+        ENTENDIDO
+      </button>
     `;
-
-    const shareBtn = document.getElementById("ranking-share-result-btn");
-    if (shareBtn) {
-      shareBtn.onclick = async () => {
-        shareBtn.disabled = true;
-        shareBtn.textContent = "Generando...";
-        try {
-          const teamA = [myName, partnerName];
-          const teamB = [rival1Name, rival2Name];
-          await shareMatchResult(
-            { sets: result, delta: diff },
-            {
-              winner: isWin ? "A" : "B",
-              teamA,
-              teamB,
-              levelsA: [myLevel, partnerLevel],
-              levelsB: [rival1Level, rival2Level],
-              club: "PADELUMINATIS CLUB",
-            },
-          );
-        } catch (shareError) {
-          console.warn("Share ranking result failed:", shareError);
-        } finally {
-          shareBtn.disabled = false;
-          shareBtn.textContent = "COMPARTIR";
-        }
-      };
-    }
 
   } catch (e) {
     console.error("Error en showMatchBreakdownV3:", e);
@@ -1356,10 +1298,10 @@ async function renderUserDetailedHistory(uid) {
                     
                     <div class="flex-row between items-center pt-2 border-t border-white/5 gap-2">
                         <div class="flex-row gap-4 overflow-hidden">
-                            <button type="button" class="history-result-chip flex-row items-center gap-1 shrink-0" onclick="event.stopPropagation();window.showMatchBreakdownV3('${doc.id}')">
+                            <div class="flex-row items-center gap-1 shrink-0">
                                 <i class="fas fa-trophy text-[9px] ${isWin ? 'text-sport-gold' : 'text-muted'}"></i>
                                 <span class="text-[10px] font-black italic text-white">${result}</span>
-                            </button>
+                            </div>
                             <div class="flex-row items-center gap-2 shrink-0 px-2 py-1 bg-white/5 rounded-full border border-white/5">
                                 <span class="text-[7px] font-black text-muted uppercase">Nivel</span>
                                 <span class="text-[9px] font-black text-white">${lBefore.toFixed(2)}</span>

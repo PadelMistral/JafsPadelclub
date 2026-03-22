@@ -7,11 +7,10 @@ import {
   where,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI } from "./ui-core.js";
-import { injectHeader, injectNavbar, updateHeader } from "./modules/ui-loader.js";
+import { injectHeader, injectNavbar } from "./modules/ui-loader.js";
 import { levelFromRating } from "./config/elo-system.js";
 import { renderMatchDetail } from "./match-service.js";
 import { getCoreLevelProgressState } from "./core/core-engine.js";
-import { getFriendlyTeamName } from "./utils/team-utils.js";
 
 let users = [];
 let currentUser = null;
@@ -72,66 +71,11 @@ async function getMatchById(matchId) {
   return match;
 }
 
-function getTierClass(rank) {
-  if (rank <= 3) return "";
-  if (rank <= 10) return "tier-10";
-  if (rank <= 20) return "tier-20";
-  if (rank <= 30) return "tier-30";
-  if (rank <= 50) return "tier-50";
-  return "tier-low";
-}
-
-function getTierStyle(rank, total) {
-  if (!Number.isFinite(rank) || rank <= 3) return "";
-  let tierSize = 10;
-  let tierIndex = rank - 1;
-  let hueBase = 120;
-  if (rank <= 10) {
-    tierSize = 10;
-    tierIndex = rank - 1;
-    hueBase = 120;
-  } else if (rank <= 20) {
-    tierSize = 10;
-    tierIndex = rank - 11;
-    hueBase = 200;
-  } else if (rank <= 30) {
-    tierSize = 10;
-    tierIndex = rank - 21;
-    hueBase = 270;
-  } else if (rank <= 50) {
-    tierSize = 20;
-    tierIndex = rank - 31;
-    hueBase = 35;
-  } else {
-    tierSize = Math.max(10, total - 50);
-    tierIndex = rank - 51;
-    hueBase = 210;
-  }
-  const t = Math.max(0, Math.min(1, tierIndex / Math.max(1, tierSize - 1)));
-  const sat = rank > 50 ? 40 : 70;
-  const light = rank > 50 ? 55 : 58 + Math.round(10 * (1 - t));
-  const tintOpacity = rank > 50 ? 0.06 : 0.12;
-  const hue = hueBase + Math.round(10 * (1 - t));
-  return `--rank-accent:hsl(${hue} ${sat}% ${light}%); --rank-tint:hsla(${hue} ${sat}% ${light}% / ${tintOpacity});`;
-}
-
 document.addEventListener("DOMContentLoaded", async () => {
   initAppUI("ranking-v3");
   currentUser = auth.currentUser;
-  if (currentUser?.uid) {
-    currentUserData = (await getDocument("usuarios", currentUser.uid)) || {};
-    await injectHeader(currentUserData || {});
-    updateHeader(currentUserData || {});
-  } else {
-    auth.onAuthStateChanged(async (user) => {
-      if (!user?.uid) return;
-      currentUser = user;
-      currentUserData = (await getDocument("usuarios", user.uid)) || {};
-      await injectHeader(currentUserData || {});
-      updateHeader(currentUserData || {});
-      renderTable();
-    });
-  }
+  if (currentUser?.uid) currentUserData = (await getDocument("usuarios", currentUser.uid)) || {};
+  await injectHeader(currentUserData || {});
   injectNavbar("ranking");
   await loadRanking();
 
@@ -206,11 +150,9 @@ function renderTable() {
       else if (rank === 2) rankClass = "rank-silver";
       else if (rank === 3) rankClass = "rank-bronze";
       else if (rank <= 10) rankClass = "rank-elite";
-      const tierClass = getTierClass(rank);
-      const tierStyle = getTierStyle(rank, users.length);
       return `
-        <div class="ranking-card ${rankClass} ${tierClass} ${isMe ? "me" : ""} animate-up"
-             style="animation-delay: ${i * 20}ms; ${tierStyle}"
+        <div class="ranking-card ${rankClass} ${isMe ? "me" : ""} animate-up"
+             style="animation-delay: ${i * 20}ms"
              onclick="window.openRankUserModal('${u.id}')">
           <span class="rank-number-v7 ${rank <= 3 ? "glow" : ""}">${rank}</span>
           ${renderAvatarMarkup(u, "lb-avatar")}
@@ -336,26 +278,21 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
 
   try {
     const logDoc = logId ? await getDocument("rankingLogs", logId) : null;
-    const match = matchId ? await getMatchById(matchId) : null;
     const detail = logDoc?.details?.puntosDetalle || {};
     const factors = [
       ["Base", detail.base],
       ["Dificultad", detail.dificultad],
       ["Racha", detail.racha],
-      ["Sorpresa", detail.sorpresa],
-      ["Skill", detail.skill],
       ["Sets", detail.sets],
       ["Rendimiento", detail.rendimientoBonus],
       ["Diario", detail.diarioCoach],
       ["Justicia", detail.ajusteJusticia],
     ].filter(([, v]) => v !== undefined && v !== null);
-
     const diff = Number(logDoc?.diff || 0);
     const levelBefore = Number(logDoc?.details?.levelBefore || 0);
     const levelAfter = Number(logDoc?.details?.levelAfter || 0);
     const pointsBefore = Number(logDoc?.details?.pointsBefore);
     const pointsAfter = Number(logDoc?.details?.pointsAfter);
-    
     const beforeProgress = Number.isFinite(pointsBefore)
       ? getCoreLevelProgressState({
           rating: pointsBefore,
@@ -369,39 +306,16 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         })
       : null;
 
-    let matchInfoHtml = "";
-    if (match) {
-        const teamA = getFriendlyTeamName({ teamName: match.teamAName, teamId: match.teamAId, side: "A" });
-        const teamB = getFriendlyTeamName({ teamName: match.teamBName, teamId: match.teamBId, side: "B" });
-        matchInfoHtml = `
-            <div class="rank-break-match">
-                <span class="match-teams">${teamA} <span class="text-primary mx-1">VS</span> ${teamB}</span>
-                <span class="match-sub">${fmtDate(match.fecha)} · ${match.resultado?.sets || match.resultado || 'Sin resultado'}</span>
-            </div>
-        `;
-    }
-
     area.innerHTML = `
       <div class="rank-breakdown-card">
-        ${matchInfoHtml}
         <div class="rank-break-title">Desglose de puntuación</div>
         <div class="rank-break-grid">
           ${factors.map(([k, v]) => `<div class="rank-break-row"><span>${k}</span><b>${Number(v) >= 0 ? "+" : ""}${num(v, 2)}</b></div>`).join("")}
         </div>
-        
         <div class="rank-break-total">
-          <div class="total-main">
-             <span>Total partido</span>
-             <b class="${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${diff >= 0 ? "+" : ""}${num(diff, 2)}</b>
-          </div>
-          <div class="total-calc">
-             ${Math.round(pointsBefore)} <span class="mx-1 opacity-40">+</span> 
-             <span class="${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${num(diff, 2)}</span>
-             <span class="mx-1 opacity-40">=</span> 
-             <span class="text-white">${Math.round(pointsAfter)} PTS</span>
-          </div>
+          <span>Total partido</span>
+          <b class="${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${diff >= 0 ? "+" : ""}${num(diff, 2)}</b>
         </div>
-
         <div class="rank-break-level">Nivel ${levelBefore ? levelBefore.toFixed(2) : "--"} → ${levelAfter ? levelAfter.toFixed(2) : "--"}</div>
         ${
           beforeProgress && afterProgress

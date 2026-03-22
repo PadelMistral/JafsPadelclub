@@ -6,7 +6,6 @@ import { analyticsCount, analyticsTiming } from "../core/analytics.js";
 import { rateLimitCheck } from "../core/rate-limit.js";
 import {
   getTopMemoryInsights,
-  primeAIMemory,
   rememberInsight,
   rememberPattern,
 } from "./ai-memory.js";
@@ -74,7 +73,7 @@ function runLocalAIMotor(prompt) {
 
     // Notification Guide
     if (q.includes("notificacion")) {
-      return "📱 Para recibir notificaciones:\n1. Entra en la pantalla Notificaciones.\n2. Si ves 'Activar avisos', pulsa ese botón y acepta.\n3. Si tu móvil las tiene bloqueadas, abre la guía sencilla de esa misma pantalla.\n4. Si ya estaban activas pero fallan, prueba 'Reconectar' o 'Reparar'.";
+      return "📱 Para recibir notificaciones:\n1. Asegúrate de que tu navegador tiene permisos.\n2. En Chrome/Safari, añade la App a tu pantalla de inicio (PWA).\n3. Prueba el botón 'FIX NOTIF' en tu perfil si no te llegan.\n4. Si el sistema dice 'No permitido', refresca y pulsa 'Permitir' cuando aparezca el banner.";
     }
 
     // Apoing Guide
@@ -119,7 +118,7 @@ function runLocalAIMotor(prompt) {
 
     // Events
     if (q.includes("evento") || q.includes("torneo")) {
-      return "🏆 Eventos y Torneos\n\nConsulta la sección 'Eventos' para ver torneos activos, ligas y retos especiales de JafsPadel.\n\n💡 Participar en torneos da puntos extra de ELO y visibilidad en el ranking.";
+      return "🏆 Eventos y Torneos\n\nConsulta la sección 'Eventos' para ver torneos activos, ligas y eventos especiales del circuito Padeluminatis.\n\n💡 Participar en torneos da puntos extra de ELO y visibilidad en el ranking.";
     }
 
     // Level / subir
@@ -129,7 +128,7 @@ function runLocalAIMotor(prompt) {
 
     // ELO system explanation
     if (q.includes("elo") || q.includes("punto") || q.includes("sistema")) {
-      return `📊 Sistema ELO JafsPadel\n\nEl sistema ELO calcula tu puntuacion basandose en:\n\n1️⃣ Resultado: ganar suma puntos y perder resta\n2️⃣ Diferencia de nivel: ganar a rivales mas fuertes suma mas\n3️⃣ Factor K: los primeros partidos tienen mas impacto\n\n• Victoria vs rival mas fuerte: +15 a +25 pts\n• Victoria vs rival similar: +10 a +15 pts\n• Victoria vs rival mas debil: +5 a +10 pts\n• Derrota: se resta de forma proporcional\n\nTu ELO actual: ${user.points} | Racha: ${user.streak > 0 ? '+' : ''}${user.streak}`;
+      return `📊 Sistema ELO Padeluminatis\n\nEl sistema ELO calcula tu puntuación basándose en:\n\n1️⃣ Resultado: Ganar suma puntos, perder resta\n2️⃣ Diferencia de nivel: Ganar a rivales más fuertes suma más\n3️⃣ Factor K: Los primeros partidos tienen más impacto\n\n• Victoria vs rival más fuerte: +15 a +25 pts\n• Victoria vs rival similar: +10 a +15 pts\n• Victoria vs rival más débil: +5 a +10 pts\n• Derrota: Se resta de forma proporcional\n\nTu ELO actual: ${user.points} | Racha: ${user.streak > 0 ? '+' : ''}${user.streak}`;
     }
 
     // Ranks / divisions
@@ -147,7 +146,7 @@ function runLocalAIMotor(prompt) {
       return `🎾 Consejo del Día\n\n${coach.todaySuggestion}\n\n📊 Tu estado: ${user.points} ELO | Racha ${user.streak > 0 ? '+' : ''}${user.streak} | ${stats.playedMatches || 0} partidos\n\n💡 Prueba a preguntar: "Mi resumen", "Rival intel", "Cómo subo de nivel" o "Sistema ELO"`;
     }
 
-    return `🤖 Asistente JafsPadel\n\nTu ELO: ${user.points} | Nivel: ${user.level} | Racha: ${user.streak > 0 ? '+' : ''}${user.streak}\nPartidos: ${stats.playedMatches || 0} jugados | Winrate: ${stats.recentWinRate ? (stats.recentWinRate * 100).toFixed(0) : '0'}%\n\n💡 Comandos disponibles:\n• "Mi resumen" — Estado completo\n• "Ultimo partido" — Analisis del ultimo partido\n• "Rival intel" — Analisis de rivales\n• "Partidos recomendados" — Que partidos te convienen\n• "Sistema ELO" — Como funcionan los puntos\n• "Subir de nivel" — Progresion\n• "Rangos" — Divisiones y colores`;
+    return `🤖 Asistente Padeluminatis\n\nTu ELO: ${user.points} | Nivel: ${user.level} | Racha: ${user.streak > 0 ? '+' : ''}${user.streak}\nPartidos: ${stats.playedMatches || 0} jugados | Winrate: ${stats.recentWinRate ? (stats.recentWinRate * 100).toFixed(0) : '0'}%\n\n💡 Comandos disponibles:\n• "Mi resumen" — Estado completo\n• "Último partido" — Análisis del último partido\n• "Rival intel" — Análisis de rivales\n• "Partidos recomendados" — Qué partidos te convienen\n• "Sistema ELO" — Cómo funcionan los puntos\n• "Subir de nivel" — Progresión\n• "Rangos" — Divisiones y colores`;
   }
 
   return coach.todaySuggestion || coach.preMatchAdvice;
@@ -181,7 +180,6 @@ async function orchestrate({ uid, query = "", match = null, phase = "daily" } = 
   const [context] = await Promise.all([
     loadContext(uid, match),
   ]);
-  await primeAIMemory(uid).catch(() => null);
   const memory = getTopMemoryInsights(uid, 3);
 
   const coach = buildCoachInsights(context);

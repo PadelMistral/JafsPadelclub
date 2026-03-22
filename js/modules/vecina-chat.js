@@ -88,8 +88,6 @@ async function _syncData() {
       usersSnap,
       openAmis,
       openReto,
-      eventMatchSnap,
-      eventsSnap,
       weatherData,
     ] = await Promise.all([
       getDocument("usuarios", uid),
@@ -132,15 +130,6 @@ async function _syncData() {
           limit(10),
         ),
       ),
-      getDocsSafe(
-        query(
-          collection(db, "eventoPartidos"),
-          where("jugadores", "array-contains", uid),
-          orderBy("fecha", "desc"),
-          limit(15),
-        ),
-      ),
-      getDocsSafe(query(collection(db, "eventos"), limit(10))),
       getDetailedWeather(),
     ]);
 
@@ -151,9 +140,12 @@ async function _syncData() {
     DATA_CACHE.user = uData;
     DATA_CACHE.eloHistory = eloSnap.docs.map((d) => d.data());
     DATA_CACHE.matches = [
-      ...matchAmis.docs.map((d) => ({ ...d.data(), id: d.id, _col: "amistoso" })),
+      ...matchAmis.docs.map((d) => ({
+        ...d.data(),
+        id: d.id,
+        _col: "amistoso",
+      })),
       ...matchReto.docs.map((d) => ({ ...d.data(), id: d.id, _col: "reto" })),
-      ...eventMatchSnap.docs.map((d) => ({ ...d.data(), id: d.id, _col: "evento" })),
     ].sort((a, b) => {
       const getT = (x) => {
         try {
@@ -192,7 +184,6 @@ async function _syncData() {
       refreshedAt: new Date().toISOString(),
     };
 
-    DATA_CACHE.currentEvents = eventsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
     DATA_CACHE.lastUpdate = now;
     userData = uData;
 
@@ -711,9 +702,9 @@ function _generateResponse(intent, query) {
 
   if (intent === "CMD_APP_CONTEXT") {
     if (currentPersonality === 'vecina') {
-      return R("Ay, cari. JafsPadel es la app donde se mueve todo: rankings, retos, resultados y nivel. Somos {TOTAL_USERS} personas jugando y tu vas por nivel {LEVEL}.");
+      return R("¡Ay, cari! Padeluminatis es *la* app. Aquí se cuece todo: rankings, retos, cotilleos... ¡Somos {TOTAL_USERS} locos del pádel! Tú estás en nivel {LEVEL}, que no está mal, pero siempre se puede mejorar, ¿eh?");
     }
-    return R("JafsPadel. Plataforma social para organizar partidos, competir y seguir tu progreso. Ahora mismo hay {TOTAL_USERS} jugadores registrados. Tu perfil indica nivel {LEVEL} con ELO {ELO}.");
+    return R("Padeluminatis Pro v7. Sistema de gestión deportiva de alto rendimiento. Actualmente monitorizamos a {TOTAL_USERS} jugadores. Tu perfil indica nivel {LEVEL} con ELO {ELO}. La plataforma gestiona Rankings, Retos y Análisis Predictivo.");
   }
 
   if (intent === "CMD_GLOBAL_STATS") {
@@ -797,15 +788,6 @@ function _generateResponse(intent, query) {
           return `A ver, **${p1.name}** vs **${p2.name}**. Tú tienes ${p1.lastPoints} ELO y él/ella ${p2.elo}. ${diffElo > 0 ? '¡Le llevas ventaja, no me seas flojo!' : '¡Uff, te saca ventaja! Vas a tener que sudar la gota gorda.'} En nivel estáis parecidos: ${p1.level} vs ${p2.level}.`;
       }
       return `Comparativa Técnica: [${p1.name} ELO:${p1.lastPoints} LVL:${p1.level}] VS [${p2.name} ELO:${p2.elo} LVL:${p2.level}]. Diferencial de ELO: ${Math.abs(diffElo)} a favor de ${eloAdv}. Probabilidades tácticas equilibradas.`;
-  }
-
-  if (intent === "CMD_EVENTS") {
-      const active = DATA_CACHE.currentEvents || [];
-      if (!active.length) return currentPersonality === 'vecina' ? "¡Chupaos esa! No hay saraos montados ahora mismo. ¡Toca esperar!" : "El circuito no presenta eventos activos en la fase actual.";
-      const names = active.map(e => (e.nombre || "Evento").toUpperCase()).join(", ");
-      return currentPersonality === 'vecina' 
-        ? `¡Tenemos fiesta! Participas en: **${names}**. Mira bien los horarios no vayas a llegar tarde como siempre.`
-        : `Análisis de Torneos: Detectada participación activa en **${names}**. Revisa el cuadrante en la sección Eventos para optimizar tu agenda táctica.`;
   }
 
   if (intent === "CMD_HISTORY") {
@@ -1073,7 +1055,7 @@ function _generateResponse(intent, query) {
   if (intent === "CMD_ELO_FORMULA") {
       return currentPersonality === 'vecina'
         ? "Mira, es un lío de matemáticas. Básicamente: si ganas a uno bueno, subes mucho. Si pierdes con uno malo, bajas al sótano. ¡Tú gana y punto!"
-        : "El ELO de JafsPadel utiliza un factor dinamico que evalua diferencia de nivel, racha actual y contundencia del resultado.";
+        : "El ELO Padeluminatis utiliza un K-Factor dinámico que evalúa: 1. Diferencia de nivel, 2. Racha actual, 3. Contundencia del resultado (Sets/Juegos).";
   }
   
   if (intent === "CMD_TUTORIAL") {
@@ -1345,7 +1327,6 @@ export function initVecinaChat() {
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_APOING_NEXT','Apoing')"><i class="fas fa-link"></i><span>Apoing</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_WEATHER_TODAY','Clima Hoy')"><i class="fas fa-cloud-sun"></i><span>Hoy</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_WEATHER_TOMORROW','Clima Mañana')"><i class="fas fa-cloud-rain"></i><span>Mañana</span></button>
-                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_EVENTS','Torneos')"><i class="fas fa-trophy"></i><span>Eventos</span></button>
                     </div>
                 </div>
                 <details class="ai-cmd-details mb-3">
@@ -1373,7 +1354,6 @@ export function initVecinaChat() {
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_WEATHER_TODAY','Clima hoy')">Clima hoy</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_WEATHER_TOMORROW','Clima mañana')">Clima mañana</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_APOING_NEXT','Apoing')">Apoing</button>
-                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_EVENTS','Mis Eventos')">Mis Eventos</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_APP_HELP','Ayuda App')">Ayuda app</button>
                     </div>
                 </details>
