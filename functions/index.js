@@ -1,6 +1,5 @@
-const admin = require("firebase-admin");
+﻿const admin = require("firebase-admin");
 const { logger } = require("firebase-functions");
-const { onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 
@@ -199,7 +198,7 @@ exports.sendFirestoreNotificationPush = onDocumentCreated(
       return;
     }
 
-    const title = String(n.titulo || n.title || "JafsPadel");
+    const title = String(n.titulo || n.title || "Padeluminatis");
     const body = String(n.mensaje || n.message || "Nueva notificación");
     const url = buildAbsoluteUrl(n.enlace || n.data?.url || "home.html");
     const type = String(n.tipo || n.type || "info");
@@ -291,76 +290,3 @@ exports.sendFirestoreNotificationPush = onDocumentCreated(
     }
   },
 );
-
-exports.getApoingICS = onRequest(
-  {
-    region: "europe-west1",
-    cors: true,
-  },
-  async (req, res) => {
-    try {
-      const url = req.query.url;
-      if (!url) return res.status(400).send("Missing URL");
-
-      logger.info("Fetching Apoing ICS", { url });
-      const response = await fetch(url);
-      const data = await response.text();
-
-      res.set("Access-Control-Allow-Origin", "*");
-      res.set("Content-Type", "text/plain");
-      res.status(200).send(data);
-    } catch (error) {
-      logger.error("Error fetching ICS", { error: error.message, url: req.query.url });
-      res.status(500).send("Error fetching ICS");
-    }
-  },
-);
-
-exports.sendPush = onRequest(
-  {
-    region: "europe-west1",
-    cors: true,
-  },
-  async (req, res) => {
-    if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
-    try {
-      const { titulo, mensaje, externalIds = [], url = "home.html", data = {} } = req.body || {};
-      if (!titulo || !mensaje) return res.status(400).send("Missing field");
-
-      const appId = String(process.env.ONESIGNAL_APP_ID || "").trim();
-      const apiKey = String(process.env.ONESIGNAL_REST_API_KEY || "").trim();
-      if (!appId || !apiKey) return res.status(500).send("Missing OneSignal config");
-
-      const payload = {
-        app_id: appId,
-        target_channel: "push",
-        headings: { es: String(titulo), en: String(titulo) },
-        contents: { es: String(mensaje), en: String(mensaje) },
-        data: { ...data },
-        url,
-      };
-
-      if (Array.isArray(externalIds) && externalIds.length) {
-        payload.include_aliases = { external_id: externalIds };
-      } else {
-        payload.included_segments = ["All"];
-      }
-
-      const response = await fetch("https://api.onesignal.com/notifications", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          Authorization: `Basic ${apiKey}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const out = await response.json().catch(() => ({}));
-      res.status(response.status).json(out);
-    } catch (err) {
-      logger.error("sendPush failed", { error: err.message });
-      res.status(500).send("Internal server error");
-    }
-  },
-);
-;

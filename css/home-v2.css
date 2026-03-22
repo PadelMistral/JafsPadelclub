@@ -5,12 +5,6 @@
 .home-page {
   padding-bottom: 120px;
   font-family: "Inter", "Rajdhani", sans-serif;
-  display: grid;
-  gap: 12px;
-}
-
-.home-page > * {
-  min-width: 0;
 }
 
 body.home-booting > :not(#home-entry-overlay) {
@@ -119,14 +113,14 @@ body.home-booting {
     rgba(4, 10, 24, 0.97)
   );
   border: 1px solid rgba(0, 212, 255, 0.12);
-  border-radius: 24px;
+  border-radius: 28px;
   padding: 0;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   position: relative;
   overflow: hidden;
   box-shadow:
-    0 10px 32px rgba(0, 0, 0, 0.34),
+    0 12px 40px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .hv2-welcome-glow {
@@ -146,7 +140,7 @@ body.home-booting {
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px 0;
+  padding: 12px 18px 0;
   position: relative;
   z-index: 2;
 }
@@ -208,16 +202,15 @@ body.home-booting {
 .hv2-player-row {
   display: flex;
   align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  padding: 22px 18px 18px;
+  gap: 24px;
+  padding: 32px 24px 24px;
   position: relative;
   z-index: 2;
 }
 .hv2-avatar-wrap {
   position: relative;
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   flex-shrink: 0;
   cursor: pointer;
 }
@@ -334,13 +327,6 @@ body.home-booting {
   margin-top: 8px;
   flex-wrap: wrap;
 }
-
-.hv2-hud-bar > *,
-.hv2-player-row > *,
-.hv2-stats-bar > *,
-.hv2-collapsible-summary > * {
-  min-width: 0;
-}
 .hv2-rank-chip {
   font-size: 11px;
   font-weight: 900;
@@ -374,8 +360,8 @@ body.home-booting {
 .hv2-stats-bar {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  padding: 6px 16px 14px;
+  gap: 12px;
+  padding: 10px 22px 28px;
   position: relative;
   z-index: 2;
 }
@@ -383,11 +369,11 @@ body.home-booting {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 8px 4px 8px;
+  gap: 4px;
+  padding: 12px 4px 10px;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 16px;
+  border-radius: 18px;
   position: relative;
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -402,31 +388,17 @@ body.home-booting {
 /* Integrated Tactical Report */
 .hv2-tactical-report-integrated {
   margin: 0;
-  padding: 0 16px 14px;
+  padding: 0 22px 22px;
   background: transparent;
   border: none;
   position: relative;
   z-index: 2;
 }
-
-.hv2-secondary-stack {
-  display: grid;
-  gap: 10px;
-}
-
-.home-secondary-hidden {
-  display: none !important;
-}
-
-.home-secondary-inline {
-  display: block !important;
-  margin: 0 0 2px;
-}
 .hv2-tr-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 .hv2-tr-head i {
   font-size: 14px;
@@ -441,17 +413,17 @@ body.home-booting {
   color: rgba(255, 255, 255, 0.5);
 }
 .hv2-tr-content {
-  font-size: 11px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.9);
-  line-height: 1.42;
+  line-height: 1.5;
   font-style: italic;
   font-weight: 500;
 }
 .hv2-tr-line {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.78);
-  line-height: 1.38;
-  margin-top: 4px;
+  line-height: 1.45;
+  margin-top: 6px;
   font-style: normal;
 }
 .hv2-xp-stat::before {
@@ -882,301 +854,6 @@ body.home-booting {
 }
 
 /* ═══════════════ MATCHES SECTION ═══════════════ */
-.hv2-pulse-shell {
-  background:
-    radial-gradient(circle at top right, rgba(34, 211, 238, 0.12), transparent 38%),
-    linear-gradient(180deg, rgba(8, 18, 35, 0.9), rgba(9, 17, 30, 0.74));
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 24px;
-  padding: 16px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 22px 60px rgba(2, 6, 23, 0.22);
-}
-
-.hv2-pulse-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.hv2-pulse-card {
-  position: relative;
-  min-height: 148px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.025)),
-    rgba(15, 23, 42, 0.62);
-  overflow: hidden;
-}
-
-.hv2-pulse-card::before {
-  content: "";
-  position: absolute;
-  inset: auto -20% -48% auto;
-  width: 130px;
-  height: 130px;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(0, 212, 255, 0.18), transparent 72%);
-  pointer-events: none;
-}
-
-.hv2-pulse-card.is-action::before {
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.16), transparent 72%);
-}
-
-.hv2-pulse-card.is-form::before {
-  background: radial-gradient(circle, rgba(245, 158, 11, 0.18), transparent 72%);
-}
-
-.hv2-pulse-card.is-agenda::before {
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.18), transparent 72%);
-}
-
-.hv2-pulse-card.is-loading {
-  min-height: 142px;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.03) 25%,
-    rgba(255, 255, 255, 0.07) 50%,
-    rgba(255, 255, 255, 0.03) 75%
-  );
-  background-size: 220% 100%;
-  animation: hv2-shimmer 1.5s infinite;
-}
-
-.hv2-pulse-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.hv2-pulse-eyebrow {
-  font-size: 0.65rem;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(191, 219, 254, 0.72);
-}
-
-.hv2-pulse-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 0.64rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.84);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.hv2-pulse-title {
-  font-family: "Rajdhani", sans-serif;
-  font-size: 1.18rem;
-  font-weight: 800;
-  line-height: 1;
-  color: #f8fafc;
-}
-
-.hv2-pulse-copy {
-  font-size: 0.82rem;
-  line-height: 1.55;
-  color: rgba(226, 232, 240, 0.78);
-}
-
-.hv2-pulse-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.hv2-pulse-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 4px 9px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  color: rgba(241, 245, 249, 0.84);
-}
-
-.hv2-pulse-metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.hv2-pulse-metric {
-  padding: 10px 12px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.hv2-pulse-metric b {
-  display: block;
-  font-size: 1rem;
-  font-weight: 900;
-  color: #f8fafc;
-}
-
-.hv2-pulse-metric span {
-  display: block;
-  margin-top: 3px;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.88);
-}
-
-.hv2-pulse-cta {
-  margin-top: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 42px;
-  padding: 11px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(0, 212, 255, 0.24);
-  background: linear-gradient(135deg, rgba(2, 132, 199, 0.24), rgba(6, 182, 212, 0.16));
-  color: #eff6ff;
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease;
-}
-
-.hv2-pulse-cta:hover {
-  transform: translateY(-1px);
-  border-color: rgba(103, 232, 249, 0.38);
-  background: linear-gradient(135deg, rgba(2, 132, 199, 0.32), rgba(6, 182, 212, 0.22));
-}
-
-.hv2-club-feed {
-  display: grid;
-  gap: 10px;
-}
-
-.hv2-club-card {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 10px;
-  align-items: start;
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-  box-shadow: 0 12px 26px rgba(2, 6, 23, 0.14);
-}
-
-.hv2-club-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(0, 212, 255, 0.2);
-  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
-}
-
-.hv2-club-card.is-derived {
-  background:
-    radial-gradient(circle at top right, rgba(0, 212, 255, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
-}
-
-.hv2-club-card.is-loading {
-  min-height: 72px;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.03) 25%,
-    rgba(255, 255, 255, 0.07) 50%,
-    rgba(255, 255, 255, 0.03) 75%
-  );
-  background-size: 220% 100%;
-  animation: hv2-shimmer 1.5s infinite;
-}
-
-.hv2-club-icon {
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  background: rgba(0, 212, 255, 0.1);
-  border: 1px solid rgba(0, 212, 255, 0.14);
-  color: #7dd3fc;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-}
-
-.hv2-club-icon.diary {
-  color: #d9ff6b;
-  background: rgba(198, 255, 0, 0.1);
-  border-color: rgba(198, 255, 0, 0.16);
-}
-
-.hv2-club-icon.match {
-  color: #86efac;
-  background: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.18);
-}
-
-.hv2-club-icon.admin {
-  color: #fca5a5;
-  background: rgba(248, 113, 113, 0.1);
-  border-color: rgba(248, 113, 113, 0.18);
-}
-
-.hv2-club-main {
-  min-width: 0;
-}
-
-.hv2-club-eyebrow {
-  font-size: 0.62rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.88);
-}
-
-.hv2-club-title {
-  margin-top: 2px;
-  font-size: 0.8rem;
-  font-weight: 800;
-  color: #f8fafc;
-}
-
-.hv2-club-text {
-  margin-top: 4px;
-  font-size: 0.71rem;
-  line-height: 1.42;
-  color: rgba(226, 232, 240, 0.76);
-}
-
-.hv2-club-date {
-  font-size: 0.64rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.72);
-  white-space: nowrap;
-  padding-top: 2px;
-}
-
 .hv2-matches-section {
   background: rgba(10, 20, 40, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1243,65 +920,9 @@ body.home-booting {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.hv2-matches-scroll {
   max-height: 460px;
   overflow-y: auto;
   padding-right: 6px;
-  scrollbar-gutter: stable;
-}
-
-#home-club-feed-section.hidden {
-  display: none;
-}
-
-@media (max-width: 900px) {
-  .home-page {
-    gap: 12px;
-  }
-
-  .hv2-pulse-shell,
-  .hv2-matches-section,
-  .hv2-event-spotlight,
-  .hv2-promo-card,
-  .hv2-propose-card {
-    border-radius: 20px;
-  }
-
-  .hv2-pulse-shell,
-  .hv2-matches-section {
-    padding: 13px;
-  }
-
-  .hv2-club-card {
-    grid-template-columns: auto 1fr;
-    gap: 9px;
-  }
-
-  .hv2-club-date {
-    grid-column: 2;
-    padding-top: 0;
-  }
-
-  .hv2-pulse-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .hv2-pulse-card {
-    min-height: 132px;
-    padding: 12px;
-  }
-
-  .hv2-brief-grid {
-    gap: 8px;
-  }
-
-  .hv2-brief-card {
-    min-height: 88px;
-    padding: 12px;
-  }
 }
 
 .hv2-matches-grid::-webkit-scrollbar {
@@ -1319,7 +940,7 @@ body.home-booting {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px 46px;
+  padding: 12px 14px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 16px;
@@ -1441,130 +1062,6 @@ body.home-booting {
   border-color: rgba(249, 115, 22, 0.35);
   color: #fb923c;
 }
-.hv2-mc-smart-badge {
-  position: absolute;
-  top: 6px;
-  left: 8px;
-  max-width: calc(100% - 126px);
-  display: inline-flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 5px 8px;
-  border-radius: 12px;
-  border: 1px solid rgba(127, 255, 212, 0.3);
-  background: rgba(127, 255, 212, 0.1);
-  color: #dffef3;
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  line-height: 1.2;
-}
-.hv2-mc-smart-badge strong {
-  font-size: 10px;
-}
-.hv2-mc-smart-badge small {
-  font-size: 8px;
-  color: rgba(223, 254, 243, 0.72);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.hv2-mc-smart-badge.is-strong {
-  border-color: rgba(34, 197, 94, 0.38);
-  background: rgba(34, 197, 94, 0.14);
-  color: #f0fff6;
-}
-.hv2-mc-smart-badge.is-good {
-  border-color: rgba(127, 255, 212, 0.32);
-  background: rgba(127, 255, 212, 0.12);
-}
-.hv2-mc-smart-badge.is-soft {
-  border-color: rgba(96, 165, 250, 0.28);
-  background: rgba(96, 165, 250, 0.12);
-  color: #e8f3ff;
-}
-.hv2-mc-smart-badge.is-neutral {
-  border-color: rgba(148, 163, 184, 0.24);
-  background: rgba(148, 163, 184, 0.12);
-  color: #e2e8f0;
-}
-.hv2-mc-smart-detail {
-  position: absolute;
-  left: 8px;
-  right: 48px;
-  bottom: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.hv2-mc-smart-detail span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(241, 245, 249, 0.82);
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.hv2-brief-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.hv2-brief-card {
-  min-height: 78px;
-  padding: 11px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.hv2-brief-card.is-loading {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.02) 25%,
-    rgba(255, 255, 255, 0.06) 50%,
-    rgba(255, 255, 255, 0.02) 75%
-  );
-  background-size: 200% 100%;
-  animation: hv2-shimmer 1.5s infinite;
-}
-
-.hv2-brief-card strong {
-  font-family: "Rajdhani", sans-serif;
-  font-size: 18px;
-  font-weight: 900;
-  color: #fff;
-}
-
-.hv2-brief-card span {
-  font-size: 8px;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.hv2-brief-card p {
-  margin: 0;
-  font-size: 9px;
-  line-height: 1.3;
-  color: rgba(255, 255, 255, 0.64);
-}
 
 /* Skeleton */
 .hv2-skeleton-row {
@@ -1600,66 +1097,6 @@ body.home-booting {
   font-size: 24px;
   margin-bottom: 8px;
   opacity: 0.5;
-}
-
-.hv2-collapsible {
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(5, 11, 24, 0.72);
-  overflow: hidden;
-}
-
-.hv2-collapsible-summary {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 14px;
-  cursor: pointer;
-  min-height: 48px;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #fff;
-}
-
-.hv2-collapsible-summary::-webkit-details-marker {
-  display: none;
-}
-
-.hv2-collapsible-summary span {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.hv2-collapsible-summary span i {
-  color: var(--primary, #00d4ff);
-}
-
-.hv2-collapsible-summary > i {
-  opacity: 0.65;
-  transition: transform 0.2s ease;
-}
-
-.hv2-collapsible[open] .hv2-collapsible-summary > i {
-  transform: rotate(180deg);
-}
-
-.hv2-collapsible-body {
-  padding: 0 10px 10px;
-}
-
-.hv2-pulse-shell,
-.hv2-collapsible {
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
-}
-
-.hv2-propose-card,
-.hv2-promo-card {
-  border-radius: 18px;
 }
 
 /* ═══════════════ AI FAB ═══════════════ */
@@ -2579,15 +2016,6 @@ body.home-booting {
   .hv2-hud-weather {
     justify-self: end;
   }
-
-  .hv2-player-row {
-    align-items: flex-start;
-  }
-
-  .hv2-player-info {
-    width: 100%;
-    padding-left: 0;
-  }
 }
 
 .hv2-event-spotlight {
@@ -2817,12 +2245,6 @@ body.home-booting {
 }
 
 @media (max-width: 640px) {
-  .hv2-pulse-grid {
-    grid-template-columns: 1fr;
-  }
-  .hv2-pulse-metrics {
-    grid-template-columns: 1fr 1fr;
-  }
   .hv2-event-spotlight {
     padding: 12px;
     border-radius: 14px;
@@ -3316,80 +2738,3 @@ body.home-booting {
     font-size: 12px;
 }
 
-@media (max-width: 640px) {
-    .home-page {
-        gap: 12px;
-    }
-
-    .hv2-brief-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .hv2-welcome {
-        border-radius: 22px;
-    }
-
-    .hv2-hud-bar {
-        grid-template-columns: 1fr auto auto;
-        padding: 10px 14px 0;
-    }
-
-    .hv2-hud-clock {
-        grid-column: 1 / -1;
-        justify-content: space-between;
-    }
-
-    .hv2-player-row {
-        gap: 14px;
-        padding: 20px 16px 16px;
-    }
-
-    .hv2-avatar-wrap {
-        width: 62px;
-        height: 62px;
-    }
-
-    .hv2-name {
-        font-size: clamp(1.6rem, 9vw, 2.3rem);
-        white-space: normal;
-        overflow-wrap: anywhere;
-    }
-
-    .hv2-greeting {
-        letter-spacing: 3px;
-        margin-bottom: 4px;
-    }
-
-    .hv2-stats-bar {
-        gap: 8px;
-        padding: 0 12px 12px;
-    }
-
-    .hv2-tr-head,
-    .hv2-tr-content {
-        padding-left: 14px;
-        padding-right: 14px;
-    }
-
-    .hv2-collapsible-summary {
-        padding: 11px 13px;
-    }
-
-    .hv2-collapsible-summary span {
-        font-size: 0.84rem;
-    }
-
-    .hv2-hud-weather {
-        min-width: 0;
-    }
-
-    .hv2-matches-scroll {
-        max-height: min(49dvh, 360px);
-        padding-right: 4px;
-    }
-
-    .hv2-propose-card,
-    .hv2-promo-card {
-        border-radius: 16px;
-    }
-}
