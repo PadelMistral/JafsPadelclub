@@ -328,6 +328,60 @@ h1, h2, h3, h4, .pane-title, .kpi-value, .ua-name {
 
 .modal-title-v9 { font-family: 'Space Grotesk', sans-serif; font-weight: 800; text-transform: uppercase; color: var(--admin-primary); }
 
+.admin-confirm-card {
+  width: min(92vw, 430px);
+  padding: 24px;
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.96));
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+  display: grid;
+  gap: 14px;
+  text-align: center;
+}
+
+.admin-confirm-card__icon {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--admin-primary);
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.12);
+}
+
+.admin-confirm-card__icon.is-danger {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.22);
+  box-shadow: 0 0 24px rgba(239, 68, 68, 0.12);
+}
+
+.admin-confirm-card__title {
+  margin: 0;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.admin-confirm-card__copy {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.admin-confirm-card__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 /* Tables */
 .table-card { border-radius: 20px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); overflow: hidden; }
 .premium-table { width: 100%; border-collapse: collapse; }
@@ -373,3 +427,47 @@ h1, h2, h3, h4, .pane-title, .kpi-value, .ua-name {
 
 
 .hidden { display: none !important; }
+.admin-shell,
+.admin-panel,
+.admin-card,
+.modal-card {
+  scroll-margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .admin-shell,
+  .admin-grid,
+  .admin-ops-grid {
+    gap: 10px;
+  }
+
+  .admin-panel,
+  .admin-card,
+  .admin-confirm-card {
+    border-radius: 18px;
+    box-shadow: 0 16px 34px rgba(2, 6, 23, 0.14);
+  }
+
+  .admin-panel,
+  .admin-card {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-panel,
+  .admin-card {
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .admin-actions,
+  .admin-form-grid,
+  .admin-grid {
+    gap: 8px;
+  }
+
+  .admin-confirm-card {
+    width: min(420px, calc(100vw - 18px));
+  }
+}
