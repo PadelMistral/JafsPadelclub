@@ -1,4 +1,4 @@
-﻿import {
+import {
   auth,
   db,
   subscribeDoc,
@@ -1158,18 +1158,39 @@ document.addEventListener("DOMContentLoaded", () => {
     const countLabel = document.getElementById("achv-count-label");
     if (!grid) return;
 
+    const played = Number(user?.partidosJugados || 0);
+    const wins = Number(user?.victorias || 0);
+    const winrate = computeCompetitiveWinrate(wins, played);
+    const diary = Array.isArray(user?.diario) ? user.diario : [];
+    const now = Date.now();
+    const recentDiaryCount = diary.filter((e) => {
+      const d = new Date(e?.fecha || "");
+      if (!Number.isFinite(d?.getTime?.())) return false;
+      return now - d.getTime() <= 30 * 24 * 60 * 60 * 1000;
+    }).length;
+
     const rules = [
       { id: 'first_win', name: 'PRIMERA SANGRE', icon: 'fa-bolt', desc: 'Gana tu primer partido', check: u => u.victorias > 0, tier: 'bronze' },
       { id: 'streak_3', name: 'EN RACHA', icon: 'fa-fire', desc: '3 victorias seguidas', check: u => u.rachaActual >= 3, tier: 'silver' },
-      { id: 'centurion', name: 'CENTURIÓN', icon: 'fa-trophy', desc: 'Gana 100 partidos', check: u => u.victorias >= 100, tier: 'gold' },
+      { id: 'streak_5', name: 'INVICTO', icon: 'fa-shield', desc: '5 victorias seguidas', check: u => u.rachaActual >= 5, tier: 'gold' },
+      { id: 'streak_10', name: 'LEYENDA', icon: 'fa-fire', desc: '10 victorias seguidas', check: u => u.rachaActual >= 10, tier: 'gold' },
+      { id: 'veteran_50', name: 'VETERANO', icon: 'fa-medal', desc: 'Juega 50 partidos', check: () => played >= 50, tier: 'silver' },
+      { id: 'veteran_200', name: 'MARATON', icon: 'fa-award', desc: 'Juega 200 partidos', check: () => played >= 200, tier: 'gold' },
+      { id: 'winrate_60', name: 'DOMINADOR', icon: 'fa-bullseye', desc: 'Winrate >= 60% (min 20 partidos)', check: () => played >= 20 && winrate >= 60, tier: 'silver' },
+      { id: 'winrate_75', name: 'IMPLACABLE', icon: 'fa-skull', desc: 'Winrate >= 75% (min 30 partidos)', check: () => played >= 30 && winrate >= 75, tier: 'gold' },
+      { id: 'centurion', name: 'CENTURION', icon: 'fa-trophy', desc: 'Gana 100 partidos', check: u => u.victorias >= 100, tier: 'gold' },
       { id: 'bagel', name: 'THE BAGEL', icon: 'fa-bread-slice', desc: 'Gana un set 6-0', check: u => u.stats?.bagels > 0, tier: 'silver' },
-      { id: 'gear_fan', name: 'ARMERÍA', icon: 'fa-tags', desc: 'Registra 3 palas', check: u => u.palas?.length >= 3, tier: 'bronze' },
-      { id: 'diario_master', name: 'ANALISTA', icon: 'fa-book', desc: '5 entradas de diario', check: u => u.diario?.length >= 5, tier: 'silver' }
+      { id: 'gear_fan', name: 'ARMERIA', icon: 'fa-tags', desc: 'Registra 3 palas', check: u => u.palas?.length >= 3, tier: 'bronze' },
+      { id: 'diario_master', name: 'ANALISTA', icon: 'fa-book', desc: '5 entradas de diario', check: u => u.diario?.length >= 5, tier: 'silver' },
+      { id: 'diario_month', name: 'CRONISTA', icon: 'fa-pen', desc: '3 entradas de diario en 30 dias', check: () => recentDiaryCount >= 3, tier: 'bronze' },
+      { id: 'net_king', name: 'REY DE LA RED', icon: 'fa-crown', desc: 'Disponible cuando midamos puntos ganados en red', check: () => false, tier: 'silver', locked: true },
+      { id: 'mvp_month', name: 'MVP DEL MES', icon: 'fa-star', desc: 'Disponible cuando exista evaluacion mensual', check: () => false, tier: 'gold', locked: true }
     ];
 
     let unlockedCount = 0;
     grid.innerHTML = rules.map(r => {
-      const isUnlocked = r.check(user);
+      const isLocked = r.locked === true;
+      const isUnlocked = !isLocked && r.check(user);
       if (isUnlocked) unlockedCount++;
       return `
         <div class="ach-item-v9 ${isUnlocked ? 'active' : ''} ${r.tier}" title="${r.desc}">
@@ -1178,7 +1199,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${isUnlocked ? '<div class="ach-check"><i class="fas fa-check"></i></div>' : ''}
             </div>
             <span class="ach-lbl-v9">${r.name}</span>
-            <span class="ach-sub-v9">${isUnlocked ? "DESBLOQUEADO" : "PENDIENTE"}</span>
+            <span class="ach-sub-v9">${isLocked ? "PROXIMAMENTE" : (isUnlocked ? "DESBLOQUEADO" : "PENDIENTE")}</span>
         </div>
       `;
     }).join('');

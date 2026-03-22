@@ -1,11 +1,12 @@
-// evento-detalle.js — Vista detallada del evento con panel organizador completo y modal para añadir jugador
+// evento-detalle.js —" Vista detallada del evento con panel organizador completo y modal para añadir jugador
 import { db, auth, observerAuth, getDocument } from './firebase-service.js';
 import { initAppUI, showToast, showSidePreferenceModal } from './ui-core.js';
-import { doc, onSnapshot, collection, query, where, updateDoc, deleteDoc, getDocs, serverTimestamp, addDoc, arrayUnion, arrayRemove, increment, writeBatch, getDoc } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import { doc, onSnapshot, collection, query, where, orderBy, limit, updateDoc, deleteDoc, getDocs, serverTimestamp, addDoc, arrayUnion, arrayRemove, increment, writeBatch, getDoc } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { injectHeader, injectNavbar } from './modules/ui-loader.js';
 import { computeGroupTable, generateKnockoutTree, generateRoundRobin } from './event-tournament-engine.js';
 import { processMatchResults } from './ranking-service.js';
-import { openResultForm } from './match-service.js';
+import { openResultForm, renderMatchDetail, indexEventUserNames } from './match-service.js';
+import { createNotification } from './services/notification-service.js';
 
 initAppUI('event-detail');
 
@@ -18,6 +19,8 @@ let eventMatches = [];
 let unsubMatches = null;
 let myTeam = null;
 let registeredUsers = [];
+let registeredUsersById = new Map();
+let userLevelUnsubs = new Map();
 
 // Mapa de formatos para mostrar etiquetas amigables
 const formatLabels = {
@@ -32,6 +35,23 @@ const getInitials = (name) => {
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     return name.substring(0, 2).toUpperCase();
 };
+
+function parseGuestMeta(uid) {
+    if (!uid) return null;
+    const s = String(uid);
+    if (!s.startsWith("GUEST_") && !s.startsWith("invitado_") && !s.startsWith("manual_")) return null;
+    const parts = s.split("_");
+    if (parts.length >= 4) {
+        const levelRaw = parts[parts.length - 2];
+        const level = parseFloat(levelRaw);
+        const nameRaw = parts.slice(1, parts.length - 2).join(" ");
+        const name = nameRaw.replace(/_/g, " ").trim() || "Invitado";
+        return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+    }
+    const name = (parts[1] || "Invitado").replace(/_/g, " ").trim() || "Invitado";
+    const level = parseFloat(parts[2]);
+    return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+}
 
 
 if (!eventId) window.location.replace('eventos.html');
@@ -57,9 +77,88 @@ async function loadRegisteredUsers() {
     try {
         const snapshot = await getDocs(collection(db, 'usuarios'));
         registeredUsers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+        registeredUsersById = new Map(registeredUsers.map(u => [u.uid, u]));
     } catch (e) {
         console.error('Error cargando usuarios:', e);
     }
+}
+
+function syncParticipantUserListeners(inscritos = []) {
+    const uids = (inscritos || [])
+        .map((i) => (typeof i === "string" ? i : i?.uid))
+        .filter((uid) => uid && !String(uid).startsWith("GUEST_") && !String(uid).startsWith("invitado_") && !String(uid).startsWith("manual_"));
+    const nextSet = new Set(uids);
+    // remove old listeners
+    userLevelUnsubs.forEach((unsub, uid) => {
+        if (!nextSet.has(uid)) {
+            try { if (typeof unsub === "function") unsub(); } catch {}
+            userLevelUnsubs.delete(uid);
+        }
+    });
+    // add new listeners
+    uids.forEach((uid) => {
+        if (userLevelUnsubs.has(uid)) return;
+        const unsub = onSnapshot(doc(db, "usuarios", uid), (snap) => {
+            if (!snap.exists()) return;
+            const data = snap.data() || {};
+            const prev = registeredUsersById.get(uid) || { uid };
+            const next = { ...prev, ...data, uid };
+            registeredUsersById.set(uid, next);
+            registeredUsers = registeredUsers.map((u) => (u.uid === uid ? next : u));
+            const pane = document.getElementById('pane-participantes');
+            if (pane && !pane.classList.contains('hidden')) renderParticipantes(pane);
+        });
+        userLevelUnsubs.set(uid, unsub);
+    });
+}
+
+function resolveParticipantData(p) {
+    if (!p) return { uid: '', name: 'Jugador', level: 2.5, photo: '', isGuest: false };
+    
+    // Normalize p if it is a string
+    const uid = (typeof p === 'string') ? p : (p.uid || '');
+    const data = (typeof p === 'object') ? p : {};
+    
+    const sUid = String(uid);
+    let isGuest = data.invitado === true || 
+                  data.manual === true || 
+                  sUid.startsWith('GUEST_') || 
+                  sUid.startsWith('invitado_') || 
+                  sUid.startsWith('manual_');
+    if (registeredUsersById.has(uid)) isGuest = false;
+
+    if (isGuest) {
+        const meta = parseGuestMeta(sUid);
+        const name = data.nombre || data.nombreUsuario || meta?.name || sUid || 'Invitado';
+        const level = Number(data.nivel || meta?.level || 2.5);
+        return {
+            uid: sUid,
+            name,
+            level,
+            photo: data.fotoPerfil || data.fotoURL || './imagenes/Logojafs.png',
+            isGuest: true
+        };
+    }
+
+    if (registeredUsersById.has(uid)) {
+        const u = registeredUsersById.get(uid);
+        const lvl = Number(u.nivel ?? 2.5);
+        return {
+            uid,
+            name: u.nombreUsuario || u.nombre || u.email || uid,
+            level: Number.isFinite(lvl) ? lvl : 2.5,
+            photo: u.fotoPerfil || u.fotoURL || u.photoURL || '',
+            isGuest: false
+        };
+    }
+
+    return {
+        uid,
+        name: data.nombre || data.nombreUsuario || uid || 'Jugador',
+        level: Number(data.nivel ?? 2.5),
+        photo: data.fotoPerfil || data.fotoURL || '',
+        isGuest: false
+    };
 }
 
 function setupAddPlayerModal() {
@@ -108,6 +207,7 @@ function setupAddPlayerModal() {
                 pairCode,
                 inscritoEn: new Date().toISOString(),
                 manual: true,
+                invitado: false,
                 aprobado: true
             });
         } else {
@@ -124,6 +224,7 @@ function setupAddPlayerModal() {
                 pairCode,
                 inscritoEn: new Date().toISOString(),
                 manual: true,
+                invitado: true,
                 aprobado: true
             });
         }
@@ -131,6 +232,12 @@ function setupAddPlayerModal() {
 }
 
 async function addPlayerToEvent(playerData) {
+    if (!canOrganizar()) return showToast('Sin permisos', 'Solo organizador/admin puede añadir', 'error');
+    const ev = currentEvent;
+    if (!ev) return;
+    if ((ev.inscritos || []).some(i => i.uid === playerData.uid)) {
+        return showToast('Duplicado', 'Ese jugador ya está inscrito', 'warning');
+    }
     try {
         await updateDoc(doc(db, 'eventos', eventId), {
             inscritos: arrayUnion(playerData)
@@ -143,6 +250,73 @@ async function addPlayerToEvent(playerData) {
         showToast('Error', e.message, 'error');
     }
 }
+
+function getApprovedInscritos() {
+    const ev = currentEvent;
+    return (ev?.inscritos || []).filter(i => i.aprobado === true);
+}
+
+window.openAddPlayerModalED = () => {
+    document.getElementById('modal-add-player-detalle')?.classList.add('active');
+};
+
+window.openAddTeamModalED = () => {
+    if (!canOrganizar()) return;
+    const ev = currentEvent;
+    if (!ev) return;
+    const pool = getApprovedInscritos().map((p) => resolveParticipantData(p));
+    const used = new Set((ev.teams || []).flatMap(t => t.playerUids || []));
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active modal-stack-front';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:460px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Crear equipo</h3>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="flex-col gap-3">
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">Nombre del equipo</label>
+                    <input id="new-team-name" class="input" placeholder="Equipo A">
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest mt-2">Jugador 1</label>
+                    <select id="new-team-p1" class="input">
+                        ${pool.map(p => `<option value="${p.uid}" ${used.has(p.uid) ? 'disabled' : ''}>${escapeHtml(p.name)}${used.has(p.uid) ? ' (ocupado)' : ''}</option>`).join('')}
+                    </select>
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest mt-2">Jugador 2</label>
+                    <select id="new-team-p2" class="input">
+                        ${pool.map(p => `<option value="${p.uid}" ${used.has(p.uid) ? 'disabled' : ''}>${escapeHtml(p.name)}${used.has(p.uid) ? ' (ocupado)' : ''}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="flex-row gap-2 mt-4">
+                    <button class="btn btn-ghost w-full" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+                    <button class="btn btn-primary w-full" onclick="window.saveNewTeamED()">Crear</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+};
+
+window.saveNewTeamED = async () => {
+    const ev = currentEvent;
+    if (!ev) return;
+    const p1 = document.getElementById('new-team-p1')?.value || '';
+    const p2 = document.getElementById('new-team-p2')?.value || '';
+    if (!p1 || !p2 || p1 === p2) return showToast('Equipo inválido', 'Selecciona dos jugadores distintos', 'warning');
+    const used = new Set((ev.teams || []).flatMap(t => t.playerUids || []));
+    if (used.has(p1) || used.has(p2)) return showToast('Jugador en otro equipo', 'No puedes duplicar jugadores', 'warning');
+    const name = document.getElementById('new-team-name')?.value?.trim() || `Equipo ${String((ev.teams || []).length + 1).padStart(2, '0')}`;
+    const id = `team_${Date.now()}`;
+    const newTeam = { id, name, playerUids: [p1, p2] };
+    try {
+        await updateDoc(doc(db, 'eventos', eventId), { teams: [...(ev.teams || []), newTeam], updatedAt: serverTimestamp() });
+        showToast('Equipo creado', name, 'success');
+        document.querySelectorAll('.modal-overlay').forEach(o => o.classList.contains('modal-stack-front') && o.remove());
+    } catch (e) {
+        showToast('Error', e.message, 'error');
+    }
+};
 
 function canOrganizar() {
     return currentUserData?.rol === 'Admin' ||
@@ -162,6 +336,8 @@ function subscribeEvent() {
     onSnapshot(doc(db, 'eventos', eventId), (s) => {
         if (!s.exists()) return window.location.replace('eventos.html');
         currentEvent = { id: s.id, ...s.data() };
+        indexEventUserNames(currentEvent);
+        syncParticipantUserListeners(currentEvent?.inscritos || []);
         if (isInscribed()) {
             const teams = currentEvent.teams || [];
             myTeam = teams.find(t => t.playerUids?.includes(currentUser.uid));
@@ -206,12 +382,20 @@ function bindTabs() {
 
 function renderPage() {
     const ev = currentEvent || {};
+        const heroImg = ev.imagen || ev.imageUrl || ev.logoUrl || './imagenes/Logojafs.png';
+    const heroBg = document.getElementById('ed-hero-bg');
+    if (heroBg) heroBg.style.backgroundImage = `url('${heroImg}')`;
     document.getElementById('ed-hero-content').innerHTML = `
-        <div class="ed-badge ${ev.formato === 'knockout' ? 'knockout' : 'league'}">
-            <i class="fas fa-trophy"></i> ${formatLabels[ev.formato] || 'Evento'}
+        <div class="ed-hero-top">
+            <div class="ed-hero-logo" style="background-image:url('${heroImg}')"></div>
+            <div class="ed-hero-title-wrap">
+                <div class="ed-badge ${ev.formato === 'knockout' ? 'knockout' : 'league'}">
+                    <i class="fas fa-trophy"></i> ${formatLabels[ev.formato] || 'Evento'}
+                </div>
+                <h1 class="ed-title">${ev.nombre || 'Evento'}</h1>
+                <div class="ed-organizer">Organiza: ${ev.organizadorNombre || 'Club'}</div>
+            </div>
         </div>
-        <h1 class="ed-title">${ev.nombre || 'Evento'}</h1>
-        <div class="ed-organizer">Organiza: ${ev.organizadorNombre || 'Club'}</div>
     `;
 
     const aprobados = (ev.inscritos || []).filter(i => i.aprobado === true).length;
@@ -334,60 +518,74 @@ function renderParticipantes(pane) {
     const aprobados = inscritos.filter(i => i.aprobado === true);
     const pendientes = inscritos.filter(i => i.aprobado !== true);
 
+    const renderRow = (p, isPending = false) => {
+        const info = resolveParticipantData(p);
+        const uid = p?.uid || p;
+        const initials = getInitials(info.name);
+        return `
+            <div class="participant-row ${isPending ? 'pending' : ''}">
+                <div class="participant-left">
+                    <span class="participant-initials">${initials}</span>
+                    <div class="participant-meta">
+                        <div class="participant-name">${escapeHtml(info.name)}</div>
+                        <div class="participant-sub">
+                            ${info.isGuest ? 'Invitado' : 'Registrado'}
+                            ${isPending ? ' · Pendiente' : ''}
+                        </div>
+                    </div>
+                </div>
+                <div class="participant-right">
+                    ${canOrganizar() ? `
+                        <div class="participant-level-edit">
+                            <input type="number" step="0.1" min="1" max="7" value="${Number(info.level || 2.5).toFixed(1)}" id="participant-level-${uid}" class="input input-guest-level">
+                            <button class="btn-guest-save" onclick="window.editarNivelParticipante('${eventId}','${uid}')">Guardar</button>
+                        </div>
+                    ` : `
+                        <span class="participant-level">LVL ${Number(info.level || 2.5).toFixed(1)}</span>
+                    `}
+                    ${canOrganizar() ? `
+                        <div class="participant-actions">
+                            ${isPending ? `<button class="btn-aprobar-v9" onclick="window.aprobarJugador('${eventId}','${uid}')"><i class="fas fa-check"></i></button>` : ''}
+                            <button class="btn-expulsar-v9" onclick="window.expulsarJugador('${eventId}','${uid}')"><i class="fas fa-user-slash"></i></button>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    };
+
     let html = `
         <div class="ed-info-card bg-transparent border-none p-0">
             <h3 class="ed-info-title mb-4"><i class="fas fa-users"></i> Guerreros Confirmados (${aprobados.length})</h3>
-            <div class="participant-grid-v9">
-                ${aprobados.map(p => `
-                    <div class="p-card-v9">
-                        <div class="p-card-status"></div>
-                        <div class="p-card-avatar">
-                            <div class="p-card-initials">${getInitials(p.nombre)}</div>
-                        </div>
-                        <span class="p-card-name">${escapeHtml(p.nombre)}</span>
-                        <span class="p-card-level">LVL ${Number(p.nivel || 2.5).toFixed(1)}</span>
-                        ${canOrganizar() ? `<button class="btn-expulsar-v9" onclick="window.expulsarJugador('${ev.id}', '${p.uid}')"><i class="fas fa-user-minus"></i></button>` : ''}
-                    </div>
-                `).join('')}
+            <div class="participant-list">
+                ${aprobados.length ? aprobados.map(p => renderRow(p, false)).join('') : `<div class="empty-state">No hay jugadores confirmados.</div>`}
             </div>
         </div>
     `;
 
-    if (canOrganizar() && pendientes.length) {
+    if (pendientes.length) {
         html += `
-            <div class="ed-info-card mt-8">
-                <h3 class="ed-info-title"><i class="fas fa-user-clock text-amber-500"></i> Solicitudes Pendientes (${pendientes.length})</h3>
-                <div class="participant-grid-v9">
-                    ${pendientes.map((p, idx) => `
-                        <div class="p-card-v9">
-                            <div class="p-card-status pending"></div>
-                            <div class="p-card-initials bg-amber-500/10 text-amber-500">${getInitials(p.nombre)}</div>
-                            <span class="p-card-name">${escapeHtml(p.nombre)}</span>
-                            <span class="p-card-level">Lvl ${p.nivel || '?'}</span>
-                            <div class="flex-row gap-1 mt-3">
-                                <button class="btn btn-success btn-xs" onclick="window.aprobarJugador(${inscritos.indexOf(p)})"><i class="fas fa-check"></i></button>
-                                <button class="btn btn-danger btn-xs" onclick="window.expulsarJugador('${ev.id}', '${p.uid}')"><i class="fas fa-times"></i></button>
-                            </div>
-                        </div>
-                    `).join('')}
+            <div class="ed-info-card bg-transparent border-none p-0 mt-6">
+                <h3 class="ed-info-title mb-4"><i class="fas fa-user-clock"></i> Pendientes (${pendientes.length})</h3>
+                <div class="participant-list">
+                    ${pendientes.map(p => renderRow(p, true)).join('')}
                 </div>
             </div>
         `;
     }
+
     pane.innerHTML = html;
 }
 
-
 function renderClasificacion(pane) {
     const ev = currentEvent;
-    const teams = ev.teams || [];
-    if (!teams.length) {
-        pane.innerHTML = '<div class="empty-state">No hay equipos formados aún.</div>';
+    if (!ev) {
+        pane.innerHTML = '<div class="empty-state">No hay clasificación disponible.</div>';
         return;
     }
-
+    const cfg = { win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0 };
+    const teams = Array.isArray(ev.teams) ? ev.teams : [];
     const teamMap = new Map(teams.map(t => [t.id, t]));
-    const cfg = { win: Number(ev.puntosVictoria || 3), draw: Number(ev.puntosEmpate || 1), loss: Number(ev.puntosDerrota || 0) };
 
     if (ev.formato === 'league') {
         const table = computeGroupTable(eventMatches.filter(m => m.phase === 'league'), teams, cfg);
@@ -406,7 +604,6 @@ function renderClasificacion(pane) {
         pane.innerHTML = '<div class="empty-state">No hay clasificación para este formato.</div>';
     }
 }
-
 function tableHtml(title, rows, teamMap, myTeam) {
     return `
         <div class="ed-info-card" style="margin-bottom:12px;">
@@ -417,7 +614,7 @@ function tableHtml(title, rows, teamMap, myTeam) {
             <div class="table-wrap">
                 <table class="ed-standing-table">
                     <thead>
-                        <tr><th>#</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>Pts</th></tr>
+                        <tr><th>#</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>PF</th><th>PC</th><th>DIF</th><th>Pts</th></tr>
                     </thead>
                     <tbody>
                         ${rows.map((r, i) => {
@@ -434,9 +631,12 @@ function tableHtml(title, rows, teamMap, myTeam) {
                                     ${elimStn}
                                 </td>
                                 <td>${r.pj}</td>
-                                <td class="text-green-400/80">${r.g}</td>
+                                <td class="win-cell">${r.g}</td>
                                 <td class="text-white/40">${r.e}</td>
-                                <td class="text-red-400/80">${r.p}</td>
+                                <td class="loss-cell">${r.p}</td>
+                                <td>${r.pf || 0}</td>
+                                <td>${r.pc || 0}</td>
+                                <td>${r.dif || 0}</td>
                                 <td class="pts-cell"><strong>${r.pts}</strong></td>
                             </tr>`;
                         }).join('')}
@@ -451,19 +651,106 @@ function renderMatches(pane) {
         pane.innerHTML = `<div class="empty-state">No hay partidos generados.</div>`;
         return;
     }
+    const searchVal = window._matchFilter || '';
+    const isSpecialFilter = searchVal === 'mis-partidos';
+    pane.innerHTML = `
+        <div class="matches-filter-bar-v9">
+            <div class="mf-search">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Buscar equipo o grupo..." value="${isSpecialFilter ? '' : searchVal}" oninput="window.setMatchFilter(this.value, true)">
+            </div>
+            <button class="mf-btn ${isSpecialFilter ? 'active' : ''}" onclick="window.setMatchFilter('${isSpecialFilter ? '' : 'mis-partidos'}')">
+                <i class="fas fa-user"></i> ${isSpecialFilter ? 'Todos' : 'Mis Partidos'}
+            </button>
+        </div>
+        <div class="matches-list" id="matches-list-body"></div>
+    `;
+    updateMatchesList(pane);
+}
+
+function updateMatchesList(pane) {
+    const listEl = pane.querySelector('#matches-list-body') || pane;
+    const teamMap = new Map((currentEvent?.teams || []).map(t => [t.id, t]));
+    const normalizeTeamName = (value) => String(value || '').trim().toLowerCase();
+    const isUnknownTeamName = (value) => {
+        const n = normalizeTeamName(value);
+        if (!n) return true;
+        const compact = n.replace(/\s+/g, '');
+        if (['tbd', 'tbd.', 'tbd?', 'tdb', '?', 'unknown'].includes(n)) return true;
+        if (['tbd', 'tbd.', 'tbd?', 'tdb', 'tbdvs', 'tbdvstbd', 'tbdtbd', 'unknown'].includes(compact)) return true;
+        if (['desconocido', 'desconocidos', 'por confirmar', 'por definir', 'pendiente'].includes(n)) return true;
+        return false;
+    };
+    const getRealPlayerCount = (match) => {
+        const players = (match?.jugadores || match?.playerUids || []).filter(Boolean);
+        return players.filter((p) => !String(p).startsWith('GUEST_')).length;
+    };
+    const isTbdMatch = (match) => {
+        const noPlayers = getRealPlayerCount(match) === 0;
+        const isTbd = isUnknownTeamName(match?.teamAName || match?.equipoA) && 
+                      isUnknownTeamName(match?.teamBName || match?.equipoB);
+        return noPlayers && isTbd;
+    };
+    const enrichMatch = (m) => {
+        const teamA = teamMap.get(m.teamAId);
+        const teamB = teamMap.get(m.teamBId);
+        const teamAName = (!m.teamAName || isUnknownTeamName(m.teamAName)) && teamA?.name ? teamA.name : m.teamAName;
+        const teamBName = (!m.teamBName || isUnknownTeamName(m.teamBName)) && teamB?.name ? teamB.name : m.teamBName;
+        const playerUids = Array.isArray(m.playerUids) && m.playerUids.length
+            ? m.playerUids
+            : [...(teamA?.playerUids || []), ...(teamB?.playerUids || [])];
+        return { ...m, teamAName, teamBName, playerUids };
+    };
+    const buildEventSlotKey = (match) => {
+        if (!match?.fecha || !match?.eventoId) return null;
+        const d = match.fecha?.toDate ? match.fecha.toDate() : new Date(match.fecha);
+        if (Number.isNaN(d?.getTime?.())) return null;
+        const when = `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}-${d.getHours()}-${d.getMinutes()}`;
+        const court = String(match?.courtType || match?.pista || match?.court || 'unknown').toLowerCase();
+        const eventId = String(match?.eventoId || '');
+        return `${eventId}|${court}|${when}`;
+    };
+    const pickBetter = (a, b) => {
+        const aCount = getRealPlayerCount(a);
+        const bCount = getRealPlayerCount(b);
+        if (aCount !== bCount) return aCount > bCount ? a : b;
+        const aTbd = isTbdMatch(a);
+        const bTbd = isTbdMatch(b);
+        if (aTbd !== bTbd) return aTbd ? b : a;
+        const aPlayed = !!a?.resultado?.sets || String(a?.estado || '').toLowerCase() === 'jugado';
+        const bPlayed = !!b?.resultado?.sets || String(b?.estado || '').toLowerCase() === 'jugado';
+        if (aPlayed !== bPlayed) return aPlayed ? a : b;
+        return a;
+    };
     const currentUid = auth.currentUser?.uid;
     const searchVal = window._matchFilter || '';
     const isSpecialFilter = searchVal === 'mis-partidos';
     const filterQuery = isSpecialFilter ? '' : searchVal.toLowerCase();
     
     const phaseWeights = { league: 1, group: 1, knockout: 2, semi: 3, final: 4 };
+    const groupsComplete = areGroupsComplete(currentEvent, eventMatches);
+    const myGroup = (() => {
+        if (!myTeam || !currentEvent?.groups) return null;
+        const found = Object.entries(currentEvent.groups).find(([, ids]) => Array.isArray(ids) && ids.includes(myTeam.id));
+        return found ? found[0] : null;
+    })();
 
-    const filtered = [...eventMatches].filter(m => {
+    const normalizedMatches = eventMatches.map(enrichMatch);
+    const filtered = [...normalizedMatches].filter(m => {
+        if (isTbdMatch(m)) return false;
+        if (!groupsComplete && (m.phase === 'knockout' || m.phase === 'semi' || m.phase === 'final')) return false;
         // Essential: Orphan filter
         if (m.phase === 'league' || m.phase === 'group') {
             const ta = currentEvent.teams?.find(t => t.id === m.teamAId);
             const tb = currentEvent.teams?.find(t => t.id === m.teamBId);
             if (!ta && !tb) return false;
+        }
+
+        // Hide knockout for non-organizers (shown in bracket only)
+        if (!canOrganizar() && (m.phase === 'knockout' || m.phase === 'semi' || m.phase === 'final')) return false;
+        // Non-organizer: show only group matches from user's group (if groups exist)
+        if (!canOrganizar() && (m.phase === 'group' || m.phase === 'league')) {
+            if (currentEvent?.formato !== 'league' && myGroup && m.group && m.group !== myGroup) return false;
         }
         
         // Custom filters
@@ -483,56 +770,47 @@ function renderMatches(pane) {
         if (wA !== wB) return wA - wB;
         return (a.round || 0) - (b.round || 0);
     });
+    const uniqueSorted = Array.from(sorted.reduce((acc, m) => {
+        const slotKey = buildEventSlotKey(m);
+        const baseKey = m.id || m.matchCode || `${m.teamAId || ''}_${m.teamBId || ''}_${m.group || ''}_${m.round || ''}`;
+        const key = slotKey || baseKey;
+        const existing = acc.get(key);
+        acc.set(key, existing ? pickBetter(existing, m) : m);
+        return acc;
+    }, new Map()).values());
 
-    pane.innerHTML = `
-        <div class="matches-filter-bar-v9">
-            <div class="mf-search">
-                <i class="fas fa-search"></i>
-                <input type="text" placeholder="Buscar equipo o grupo..." value="${isSpecialFilter ? '' : searchVal}" oninput="window.setMatchFilter(this.value)">
+    listEl.innerHTML = uniqueSorted.map(m => {
+        const isMy = m.playerUids?.includes(currentUid);
+        let played = m.estado === 'jugado';
+        let score = typeof m.resultado === 'string'
+            ? m.resultado
+            : (m.resultado?.sets || m.resultado?.score || '');
+
+        return `
+        <div class="match-card match-court-bg-v7 ${isMy ? 'my-match' : ''} ${played ? 'jugado' : ''}" onclick="window.verDetallePartido('${m.id}')">
+            ${isMy && !played ? '<div class="absolute -top-1 -right-1 p-2 bg-primary/20 rounded-bl-xl"><i class="fas fa-star text-[8px] text-primary"></i></div>' : ''}
+            <div class="match-header">
+                <span>${matchPhaseLabel(m)}</span>
+                <span>${m.fecha ? new Date(m.fecha?.toDate ? m.fecha.toDate() : m.fecha).toLocaleDateString('es-ES', {hour:'2-digit', minute:'2-digit'}) : 'Fecha por decidir'}</span>
             </div>
-            <button class="mf-btn ${isSpecialFilter ? 'active' : ''}" onclick="window.setMatchFilter('${isSpecialFilter ? '' : 'mis-partidos'}')">
-                <i class="fas fa-user"></i> ${isSpecialFilter ? 'Todos' : 'Mis Partidos'}
-            </button>
-        </div>
-        <div class="matches-list">
-            ${sorted.map(m => {
-                const isMy = m.playerUids?.includes(currentUid);
-                let played = m.estado === 'jugado';
-                let score = m.resultado?.score || (typeof m.resultado === 'string' ? m.resultado : '0-0');
-                
-                // Real-time sync if there is a linked match
-                if (!played && m.linkedMatchId) {
-                    // We don't fetch from here to avoid loops, but we can check if data was updated in allMatches if we had it
-                    // The sync logic in match-service should have pushed the result update to m.resultado
-                }
-
-                return `
-                <div class="match-card match-court-bg-v7 ${isMy ? 'my-match' : ''} ${played ? 'jugado' : ''}" onclick="window.verDetallePartido('${m.id}')">
-                    ${isMy && !played ? '<div class="absolute -top-1 -right-1 p-2 bg-primary/20 rounded-bl-xl"><i class="fas fa-star text-[8px] text-primary"></i></div>' : ''}
-                    <div class="match-header">
-                        <span>${matchPhaseLabel(m)}</span>
-                        <span>${m.fecha ? new Date(m.fecha?.toDate ? m.fecha.toDate() : m.fecha).toLocaleDateString('es-ES', {hour:'2-digit', minute:'2-digit'}) : 'Fecha por decidir'}</span>
-                    </div>
-                    <div class="match-body-v9">
-                        <div class="m-team-v9 ${m.ganadorTeamId === m.teamAId ? 'winner' : ''}">
-                            <span class="team-n-v9">${m.teamAName || 'TBD'}</span>
-                        </div>
-                        <div class="m-score-v9">
-                             ${played ? score : (m.linkedMatchId ? '<i class="fas fa-link text-[10px] opacity-40"></i>' : '<span class="m-vs-v9">VS</span>')}
-                        </div>
-                        <div class="m-team-v9 ${m.ganadorTeamId === m.teamBId ? 'winner' : ''}">
-                            <span class="team-n-v9">${m.teamBName || 'TBD'}</span>
-                        </div>
-                    </div>
-                    ${m.linkedMatchId && !played ? `
-                        <div class="mt-3 py-1 px-3 bg-white/5 rounded-lg text-center text-[8px] font-black tracking-widest text-[#abc]">
-                            VINCULADO AL CALENDARIO
-                        </div>
-                    ` : ''}
-                </div>`;
-            }).join('')}
-
+            <div class="match-body-v9">
+                <div class="m-team-v9 ${m.ganadorTeamId === m.teamAId ? 'winner' : ''}">
+                    <span class="team-n-v9">${m.teamAName || 'TBD'}</span>
+                </div>
+                <div class="m-score-v9">
+                     ${played ? (score || 'FINAL') : (m.linkedMatchId ? '<i class="fas fa-link text-[10px] opacity-40"></i>' : '<span class="m-vs-v9">VS</span>')}
+                </div>
+                <div class="m-team-v9 ${m.ganadorTeamId === m.teamBId ? 'winner' : ''}">
+                    <span class="team-n-v9">${m.teamBName || 'TBD'}</span>
+                </div>
+            </div>
+            ${m.linkedMatchId || m.fecha ? `
+                <div class="mt-3 py-1 px-3 bg-white/5 rounded-lg text-center text-[8px] font-black tracking-widest text-[#abc]">
+                    VINCULADO AL CALENDARIO
+                </div>
+            ` : ''}
         </div>`;
+    }).join('') || `<div class="empty-state">No hay partidos con ese filtro.</div>`;
 }
 
 function matchPhaseLabel(m) {
@@ -547,12 +825,111 @@ function matchPhaseLabel(m) {
     return (m.phase || 'PARTIDO').toUpperCase();
 }
 
+function areGroupsComplete(ev, matches) {
+    if (!ev || !Array.isArray(matches)) return false;
+    const groupMatches = matches.filter(m => m.phase === 'group' || m.phase === 'league');
+    if (!groupMatches.length) return false;
+    return groupMatches.every(m => m.estado === 'jugado' || m.resultado?.sets || m.resultado?.score || m.ganadorTeamId);
+}
+
+// Modal to select teams that advance to the next phase.
+window.openAdvancePhaseModal = () => {
+    if (!canOrganizar()) return;
+    const ev = currentEvent;
+    if (!ev) return;
+
+    const nDefault = Number(ev.equiposPorGrupo || 2);
+    const groups = ev.groups || {};
+    const teamMap = new Map((ev.teams || []).map(t => [t.id, t]));
+    const cfg = { win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0 };
+    const preSelected = new Set();
+
+    Object.keys(groups).forEach(g => {
+        const teamIds = groups[g] || [];
+        const groupTeams = teamIds.map(id => teamMap.get(id)).filter(Boolean);
+        const groupMatches = eventMatches.filter(m => (m.phase === 'group' || m.phase === 'league') && m.group === g);
+        const table = computeGroupTable(groupMatches, groupTeams, cfg);
+        table.slice(0, nDefault).forEach(r => preSelected.add(r.teamId));
+    });
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:520px;">
+            <div class="modal-header">
+                <h3 class="modal-title">PASAR A SIGUIENTE FASE</h3>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">Equipos que pasan por grupo</label>
+                    <input type="number" id="adv-pass-count" class="input w-full mt-2" value="${nDefault}" min="1" max="8">
+                </div>
+                <div class="flex-col gap-3 max-h-[50vh] overflow-y-auto custom-scroll">
+                    ${Object.keys(groups).map(g => {
+                        const teamIds = groups[g] || [];
+                        return `
+                        <div class="p-3 rounded-xl border border-white/10 bg-white/5">
+                            <div class="text-[10px] font-black text-primary uppercase tracking-widest mb-2">Grupo ${g}</div>
+                            <div class="grid grid-cols-2 gap-2">
+                                ${teamIds.map(id => {
+                                    const t = teamMap.get(id);
+                                    if (!t) return '';
+                                    const checked = preSelected.has(id) ? 'checked' : '';
+                                    return `
+                                        <label class="flex-row items-center gap-2 text-[10px] font-bold text-white/80">
+                                            <input type="checkbox" class="adv-team-check" value="${id}" ${checked}>
+                                            <span>${t.name || t.nombre || t.id}</span>
+                                        </label>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+                <div class="flex-row gap-2 mt-4">
+                    <button class="btn btn-ghost w-full" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+                    <button class="btn btn-primary w-full" onclick="window.confirmAdvancePhase()">Avanzar</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+window.confirmAdvancePhase = () => {
+        const nPasan = parseInt(document.getElementById('adv-pass-count')?.value || `${nDefault}`, 10);
+        const selectedTeamIds = Array.from(overlay.querySelectorAll('.adv-team-check:checked')).map(i => i.value);
+        overlay.remove();
+        window.generarFaseEliminatoria({ nPasan, selectedTeamIds });
+    };
+};
+
+function isKnockoutPhaseMatch(match = {}) {
+    const phase = String(match.phase || "").toLowerCase();
+    return ["knockout", "semi", "semis", "semifinal", "final", "cuartos", "quarter"].includes(phase);
+}
+
+function isGroupPhaseMatch(match = {}, ev = null) {
+    const phase = String(match.phase || "").toLowerCase();
+    if (["group", "liga", "league", "grupos"].includes(phase)) return true;
+    if (!phase && (ev?.formato === "groups" || ev?.formato === "league")) return true;
+    return false;
+}
+
+function hasMatchResult(match) {
+    if (!match) return false;
+    if (typeof match.resultado === "string") return match.resultado.trim().length > 0;
+    if (typeof match?.resultado?.sets === "string") return match.resultado.sets.trim().length > 0;
+    return false;
+}
+
 function renderBracket(pane) {
     if (!currentEvent.bracket || !currentEvent.bracket.length) {
         pane.innerHTML = `<div class="empty-state">Aún no se ha generado el bracket de eliminatorias.</div>`;
         return;
     }
 
+    const groupsComplete = areGroupsComplete(currentEvent, eventMatches);
     let html = `<div class="bracket-container"><div class="bracket">`;
     const rounds = currentEvent.bracket;
 
@@ -571,9 +948,10 @@ function renderBracket(pane) {
             const scoreParts = resultStr.split(' '); // Take the first set or the whole string and try to show it nicely
             const scoreA = matchData.ganadorTeamId === m.teamAId ? 'Ganador' : (resultStr ? 'Perdedor' : '');
             const scoreB = matchData.ganadorTeamId === m.teamBId ? 'Ganador' : (resultStr ? 'Perdedor' : '');
+            const pending = isKnockoutPhaseMatch(matchData) && !groupsComplete;
 
             html += `
-            <div class="bracket-match" onclick="window.verDetallePartido('${matchData.id || ''}')">
+            <div class="bracket-match ${pending ? 'pending' : ''}" ${pending ? '' : `onclick="window.verDetallePartido('${matchData.id || ''}')"`}>
                 <div class="b-team-v9 ${matchData.ganadorTeamId === m.teamAId && played ? 'winner' : ''}">
                     <span class="b-name-v9">${m.teamAName || 'TBD'}</span>
                     <span class="b-score-v9">${scoreA}</span>
@@ -582,6 +960,7 @@ function renderBracket(pane) {
                     <span class="b-name-v9">${m.teamBName || 'TBD'}</span>
                     <span class="b-score-v9">${scoreB}</span>
                 </div>
+                ${pending ? `<span class="bracket-pending-tag">PENDIENTE</span>` : ""}
             </div>`;
         });
         html += `</div>`;
@@ -592,6 +971,7 @@ function renderBracket(pane) {
 
 function renderOrganizador(pane) {
     const ev = currentEvent;
+    const groupsComplete = areGroupsComplete(ev, eventMatches);
     pane.innerHTML = `
         <div class="admin-panel compact-v9" style="padding-top:10px;">
             <div class="org-header-v9">
@@ -612,6 +992,26 @@ function renderOrganizador(pane) {
                     <label><i class="fas fa-star"></i> Pts/Victoria</label>
                     <input type="number" id="org-pts-win" class="input" value="${ev.puntosVictoria || 3}">
                 </div>
+                <div class="org-card-v9">
+                    <label><i class="fas fa-handshake"></i> Pts/Empate</label>
+                    <input type="number" id="org-pts-draw" class="input" value="${Number(ev.puntosEmpate || 1)}">
+                </div>
+                <div class="org-card-v9">
+                    <label><i class="fas fa-xmark"></i> Pts/Derrota</label>
+                    <input type="number" id="org-pts-loss" class="input" value="${Number(ev.puntosDerrota || 0)}">
+                </div>
+                <div class="org-card-v9">
+                    <label><i class="fas fa-arrow-right-to-bracket"></i> Clasifican por grupo</label>
+                    <input type="number" id="org-adv-per-group" class="input" value="${Number(ev.equiposPorGrupo || 2)}" min="1" max="8">
+                </div>
+                <div class="org-card-v9">
+                    <label><i class="fas fa-sitemap"></i> Sembrado bracket</label>
+                    <select id="org-bracket-seeding" class="input">
+                        <option value="random" ${ev.bracketSeeding === 'random' ? 'selected' : ''}>Sorteo</option>
+                        <option value="cross" ${ev.bracketSeeding === 'cross' ? 'selected' : ''}>A1 vs B4, A2 vs B3</option>
+                        <option value="rank" ${ev.bracketSeeding === 'rank' ? 'selected' : ''}>Ranking global</option>
+                    </select>
+                </div>
             </div>
 
             <div class="org-actions-v9">
@@ -626,12 +1026,32 @@ function renderOrganizador(pane) {
                         <i class="fas fa-sync-alt"></i> Fix Grupos
                     </button>
                 </div>
+                <button class="btn btn-ghost btn-sm w-full mt-2" onclick="window.simularBracketEvento()">
+                    <i class="fas fa-eye"></i> Simular Bracket
+                </button>
+                <button class="btn btn-ghost btn-sm w-full mt-2" onclick="window.validateBracketED()">
+                    <i class="fas fa-shield-check"></i> Validar Bracket
+                </button>
+                ${groupsComplete ? `
+                    <button class="btn btn-success btn-sm w-full mt-2" onclick="window.openAdvancePhaseModal()">
+                        <i class="fas fa-forward"></i> Pasar a siguiente fase
+                    </button>
+                ` : `
+                    <div class="text-[10px] text-muted mt-2 text-center">Termina todos los partidos de grupo para avanzar de fase.</div>
+                `}
             </div>
 
             <div class="org-section-v9">
                 <h4><i class="fas fa-edit"></i> Grupos y Equipos</h4>
+                <div class="flex-row gap-2 mt-2">
+                    <button class="btn btn-primary btn-sm flex-1" onclick="window.openAddPlayerModalED()">
+                        <i class="fas fa-user-plus"></i> Añadir jugador
+                    </button>
+                    <button class="btn btn-ghost btn-sm flex-1" onclick="window.openAddTeamModalED()">
+                        <i class="fas fa-people-group"></i> Crear equipo
+                    </button>
+                </div>
                 <div id="group-editor-container" class="mt-2"></div>
-                <button class="btn btn-primary btn-sm w-full mt-3" onclick="window.guardarGrupos()">Guardar Estructura</button>
             </div>
 
             <div class="org-danger-zone-v9">
@@ -664,7 +1084,21 @@ function renderGroupEditor(ev) {
         const teamIdsInGroup = groups[g] || [];
         const teamsInGroup = teams.filter(t => teamIdsInGroup.includes(t.id));
         teamsInGroup.forEach(t => {
-            html += `<div class="group-team-edit">${escapeHtml(t.name)} <button class="btn-micro" onclick="window.moverEquipo('${t.id}', '${g}', '')"><i class="fas fa-arrow-right"></i></button></div>`;
+            const memberNames = (t.playerUids || [])
+                .map((uid) => resolveParticipantData({ uid }).name)
+                .filter(Boolean)
+                .join(' · ');
+            html += `<div class="group-team-edit">
+                <div class="flex-col">
+                    <span>${escapeHtml(t.name)}</span>
+                    <span class="text-[9px] opacity-60">${escapeHtml(memberNames || 'Sin jugadores')}</span>
+                </div>
+                <div class="flex-row gap-2">
+                    <button class="btn-micro" onclick="window.openTeamEditor('${t.id}')"><i class="fas fa-user-pen"></i></button>
+                    <button class="btn-micro" onclick="window.moverEquipo('${t.id}', '${g}', '')"><i class="fas fa-arrow-right"></i></button>
+                    <button class="btn-micro danger" onclick="window.deleteTeamED('${t.id}')"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>`;
         });
         html += '</div>';
     });
@@ -674,11 +1108,20 @@ function renderGroupEditor(ev) {
     if (unassigned.length) {
         html += '<div class="group-edit-box"><h5>Sin grupo</h5>';
         unassigned.forEach(t => {
-            html += `<div class="group-team-edit">${escapeHtml(t.name)} 
+            const memberNames = (t.playerUids || [])
+                .map((uid) => resolveParticipantData({ uid }).name)
+                .filter(Boolean)
+                .join(' · ');
+            html += `<div class="group-team-edit">
+                <div class="flex-col">
+                    <span>${escapeHtml(t.name)}</span>
+                    <span class="text-[9px] opacity-60">${escapeHtml(memberNames || 'Sin jugadores')}</span>
+                </div>
                 <select onchange="window.moverEquipo('${t.id}', '', this.value)">
                     <option value="">Mover a...</option>
                     ${groupKeys.map(g => `<option value="${g}">Grupo ${g}</option>`).join('')}
                 </select>
+                <button class="btn-micro danger" onclick="window.deleteTeamED('${t.id}')"><i class="fas fa-trash"></i></button>
             </div>`;
         });
         html += '</div>';
@@ -713,6 +1156,135 @@ window.guardarMovimiento = async (teamId, newGroup) => {
     }
 };
 
+window.deleteTeamED = async (teamId) => {
+    if (!canOrganizar()) return;
+    if (!confirm('¿Eliminar este equipo y sus partidos?')) return;
+    const ev = currentEvent;
+    if (!ev) return;
+    try {
+        const teams = (ev.teams || []).filter(t => t.id !== teamId);
+        const groups = { ...(ev.groups || {}) };
+        Object.keys(groups).forEach((g) => {
+            groups[g] = (groups[g] || []).filter(id => id !== teamId);
+        });
+        await updateDoc(doc(db, 'eventos', eventId), { teams, groups, updatedAt: serverTimestamp() });
+
+        const matchesToDelete = eventMatches.filter(m => m.teamAId === teamId || m.teamBId === teamId);
+        await Promise.all(matchesToDelete.map(async (m) => {
+            await deleteDoc(doc(db, 'eventoPartidos', m.id));
+            if (m.linkedMatchId && m.linkedMatchCollection) {
+                await deleteDoc(doc(db, m.linkedMatchCollection, m.linkedMatchId));
+            }
+        }));
+        showToast('Equipo eliminado', '', 'success');
+    } catch (e) {
+        showToast('Error', e.message, 'error');
+    }
+};
+
+// Team editor: reassign players inside a team with validation.
+window.openTeamEditor = (teamId) => {
+    if (!canOrganizar()) return;
+    const ev = currentEvent;
+    const team = (ev?.teams || []).find(t => t.id === teamId);
+    if (!team) return;
+    const inscritos = Array.isArray(ev.inscritos) ? ev.inscritos : [];
+    const basePool = inscritos.map(i => {
+        const info = resolveParticipantData(i);
+        return { uid: info.uid, name: info.name };
+    }).filter(i => i.uid);
+
+    // Ensure current players are in the pool
+    (team.playerUids || []).forEach(uid => {
+        if (uid && !basePool.some(p => p.uid === uid)) {
+            basePool.push({ uid, name: uid });
+        }
+    });
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active modal-stack-front';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:460px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar equipo · ${escapeHtml(team.name || team.id)}</h3>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="flex-col gap-3">
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">Jugador 1</label>
+                    <select id="team-edit-p1" class="input">
+                        ${basePool.map(p => `<option value="${p.uid}" ${p.uid === team.playerUids?.[0] ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+                    </select>
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest mt-2">Jugador 2</label>
+                    <select id="team-edit-p2" class="input">
+                        ${basePool.map(p => `<option value="${p.uid}" ${p.uid === team.playerUids?.[1] ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="flex-row gap-2 mt-4">
+                    <button class="btn btn-ghost w-full" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+                    <button class="btn btn-primary w-full" onclick="window.saveTeamEdit('${teamId}')">Guardar</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+};
+
+// Persist team changes and propagate to event matches (and linked calendar matches).
+window.saveTeamEdit = async (teamId) => {
+    if (!currentEvent) return;
+    const sel1 = document.getElementById('team-edit-p1')?.value || '';
+    const sel2 = document.getElementById('team-edit-p2')?.value || '';
+    if (!sel1 || !sel2 || sel1 === sel2) {
+        showToast('Equipo inválido', 'Selecciona dos jugadores distintos', 'warning');
+        return;
+    }
+
+    const teams = currentEvent.teams || [];
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+    const otherTeams = teams.filter(t => t.id !== teamId);
+    const occupied = new Set(otherTeams.flatMap(t => t.playerUids || []));
+    if (occupied.has(sel1) || occupied.has(sel2)) {
+        showToast('Jugador en otro equipo', 'No puedes duplicar jugadores entre equipos', 'warning');
+        return;
+    }
+
+    const updatedTeams = teams.map(t => {
+        if (t.id !== teamId) return t;
+        return { ...t, playerUids: [sel1, sel2] };
+    });
+
+    try {
+        await updateDoc(doc(db, 'eventos', eventId), { teams: updatedTeams, updatedAt: serverTimestamp() });
+
+        // Sync event matches that reference this team
+        const matchesToUpdate = eventMatches.filter(m => m.teamAId === teamId || m.teamBId === teamId);
+        await Promise.all(matchesToUpdate.map(async (m) => {
+            const teamA = updatedTeams.find(t => t.id === m.teamAId);
+            const teamB = updatedTeams.find(t => t.id === m.teamBId);
+            const playerUids = [...(teamA?.playerUids || []), ...(teamB?.playerUids || [])];
+            await updateDoc(doc(db, 'eventoPartidos', m.id), {
+                playerUids,
+                updatedAt: serverTimestamp()
+            });
+            if (m.linkedMatchId && m.linkedMatchCollection) {
+                await updateDoc(doc(db, m.linkedMatchCollection, m.linkedMatchId), {
+                    jugadores: playerUids,
+                    equipoA: teamA?.playerUids || [],
+                    equipoB: teamB?.playerUids || [],
+                    updatedAt: serverTimestamp()
+                });
+            }
+        }));
+
+        showToast('Equipo actualizado', '', 'success');
+        document.querySelectorAll('.modal-overlay').forEach(o => o.classList.contains('modal-stack-front') && o.remove());
+    } catch (e) {
+        showToast('Error', e.message, 'error');
+    }
+};
+
 window.guardarGrupos = async () => {
     showToast('Grupos guardados', '', 'success');
 };
@@ -731,9 +1303,20 @@ window.abrirEvento = async () => {
 window.guardarConfigOrganizador = async () => {
     const estado = document.getElementById('org-ev-state').value;
     const ptsWin = Number(document.getElementById('org-pts-win').value);
+    const ptsDraw = Number(document.getElementById('org-pts-draw').value);
+    const ptsLoss = Number(document.getElementById('org-pts-loss').value);
+    const advPerGroup = Number(document.getElementById('org-adv-per-group').value || 2);
+    const bracketSeeding = document.getElementById('org-bracket-seeding')?.value || 'random';
     try {
-        await updateDoc(doc(db, 'eventos', eventId), { estado: estado, puntosVictoria: ptsWin });
-        showToast('Configuración guardada', '', 'success');
+        await updateDoc(doc(db, 'eventos', eventId), { 
+            estado: estado, 
+            puntosVictoria: ptsWin,
+            puntosEmpate: ptsDraw,
+            puntosDerrota: ptsLoss,
+            equiposPorGrupo: advPerGroup,
+            bracketSeeding
+        });
+        showToast('Configuraci?n guardada', '', 'success');
     } catch (e) {
         showToast('Error', e.message, 'error');
     }
@@ -771,6 +1354,24 @@ window.deleteEvent = async () => {
 };
 
 window.editarResultado = async (matchId) => {
+    console.log("[EventoDetalle] editarResultado", { matchId });
+    const match = eventMatches.find(m => m.id === matchId);
+    console.log("[EventoDetalle] match found", match);
+    if (match && !match.fecha) {
+        const dateStr = prompt('Indica la fecha (YYYY-MM-DD):', new Date().toISOString().slice(0, 10));
+        const hour = prompt('Indica la hora (HH:MM):', '19:00');
+        if (dateStr && hour) {
+            const combinedDate = new Date(`${dateStr}T${hour}`);
+            if (!Number.isNaN(combinedDate.getTime())) {
+                await updateDoc(doc(db, 'eventoPartidos', matchId), {
+                    fecha: combinedDate,
+                    updatedAt: serverTimestamp()
+                });
+                console.log("[EventoDetalle] fecha actualizada", { matchId, combinedDate });
+            }
+        }
+    }
+    console.log("[EventoDetalle] abriendo form resultado", { matchId });
     openResultForm(matchId, 'eventoPartidos');
 };
 
@@ -836,25 +1437,47 @@ window.verDetallePartido = (matchId) => {
     const modal = document.getElementById('modal-match-detail-ed');
     if (!modal) return;
     
+    const teamMap = new Map((currentEvent?.teams || []).map(t => [t.id, t]));
     const played = match.estado === 'jugado';
-    const isParticipant = (match.playerUids || []).includes(auth.currentUser?.uid);
+    const fallbackPlayers = Array.isArray(match.playerUids) && match.playerUids.length
+        ? match.playerUids
+        : [...(teamMap.get(match.teamAId)?.playerUids || []), ...(teamMap.get(match.teamBId)?.playerUids || [])];
+    const isParticipant = fallbackPlayers.includes(auth.currentUser?.uid);
     const score = typeof match.resultado === 'string' ? match.resultado : (match.resultado?.score || match.resultado?.sets || 'Sin detalle');
+    const teamAName = (match.teamAName || teamMap.get(match.teamAId)?.name || 'TBD');
+    const teamBName = (match.teamBName || teamMap.get(match.teamBId)?.name || 'TBD');
     
     let actionsHtml = '';
-    if (canOrganizar() || (isParticipant && !played)) {
+    if (played) {
         actionsHtml = `
             <div class="flex-col gap-2 mt-4">
-                <button class="btn btn-primary btn-sm w-full" onclick="window.abrirProgramacionCalendarioED('${match.id}')">
-                    <i class="fas fa-calendar-plus mr-2"></i> PROGRAMAR FECHA/CALENDARIO
-                </button>
-                <button class="btn btn-success btn-sm w-full" onclick="window.editarResultado('${match.id}'); document.getElementById('modal-match-detail-ed').classList.remove('active');">
-                    <i class="fas fa-check-circle mr-2"></i> ANOTAR RESULTADO
+                <button class="btn btn-primary btn-sm w-full" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;" onclick="window.shareMatchResultPoster?.('${match.id}', 'eventoPartidos')">
+                    <i class="fas fa-share-nodes mr-2"></i> COMPARTIR CARTEL PNG
                 </button>
                 ${canOrganizar() ? `
                     <button class="btn btn-ghost btn-sm w-full text-red-400 opacity-60 mt-2" onclick="window.reiniciarPartido('${match.id}')">
                         <i class="fas fa-rotate-left mr-2"></i> RESETEAR PARTIDO
                     </button>
                 ` : ''}
+            </div>
+        `;
+    } else if (canOrganizar() || isParticipant) {
+        actionsHtml = `
+            <div class="flex-col gap-2 mt-4">
+                <button class="btn btn-primary btn-sm w-full" style="background: linear-gradient(90deg, #818cf8, #6366f1) !important;" onclick="window.proponerFechaEvento('${match.id}')">
+                    <i class="fas fa-comments-alt mr-2"></i> PROPONER FECHA / CHAT
+                </button>
+                ${canOrganizar() ? `
+                <button class="btn btn-ghost btn-sm w-full" onclick="window.openMatchTeamEditor('${match.id}')">
+                    <i class="fas fa-people-arrows mr-2"></i> EDITAR EQUIPOS
+                </button>` : ''}
+                <button class="btn btn-success btn-sm w-full" onclick="window.editarResultado('${match.id}'); document.getElementById('modal-match-detail-ed').classList.remove('active');">
+                    <i class="fas fa-check-circle mr-2"></i> ANOTAR RESULTADO
+                </button>
+                ${!match.fecha ? `
+                <button class="btn btn-primary btn-sm w-full" onclick="window.vincularPartidoCalendario('${match.id}')" style="background: rgba(255,255,255,0.05) !important;">
+                    <i class="fas fa-calendar-plus mr-2"></i> VINCULAR A CALENDARIO
+                </button>` : ''}
             </div>
         `;
     }
@@ -870,12 +1493,12 @@ window.verDetallePartido = (matchId) => {
                     <div class="flex-row between items-center py-4 px-2 bg-white/5 rounded-2xl border border-white/5">
                         <div class="flex-col items-center flex-1">
                             <span class="text-[10px] text-muted font-bold mb-1">EQUIPO A</span>
-                            <span class="text-white font-black text-center text-sm">${escapeHtml(match.teamAName || 'TBD')}</span>
+                            <span class="text-white font-black text-center text-sm">${escapeHtml(teamAName)}</span>
                         </div>
                         <div class="px-4 text-primary font-black text-xl italic">${played ? score : 'VS'}</div>
                         <div class="flex-col items-center flex-1">
                             <span class="text-[10px] text-muted font-bold mb-1">EQUIPO B</span>
-                            <span class="text-white font-black text-center text-sm">${escapeHtml(match.teamBName || 'TBD')}</span>
+                            <span class="text-white font-black text-center text-sm">${escapeHtml(teamBName)}</span>
                         </div>
                     </div>
 
@@ -892,6 +1515,134 @@ window.verDetallePartido = (matchId) => {
         </div>
     `;
     modal.classList.add('active');
+};
+
+window.openMatchTeamEditor = (matchId) => {
+    if (!canOrganizar()) return;
+    const match = eventMatches.find(m => m.id === matchId);
+    if (!match) return;
+    const teams = currentEvent?.teams || [];
+    if (!teams.length) return showToast('Sin equipos', 'No hay equipos creados', 'warning');
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active modal-stack-front';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:460px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar equipos del partido</h3>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="flex-col gap-3">
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">Equipo A</label>
+                    <select id="match-edit-teamA" class="input">
+                        ${teams.map(t => `<option value="${t.id}" ${t.id === match.teamAId ? 'selected' : ''}>${escapeHtml(t.name || t.id)}</option>`).join('')}
+                    </select>
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest mt-2">Equipo B</label>
+                    <select id="match-edit-teamB" class="input">
+                        ${teams.map(t => `<option value="${t.id}" ${t.id === match.teamBId ? 'selected' : ''}>${escapeHtml(t.name || t.id)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="flex-row gap-2 mt-4">
+                    <button class="btn btn-ghost w-full" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+                    <button class="btn btn-primary w-full" onclick="window.saveMatchTeamEdit('${matchId}')">Guardar</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+};
+
+window.saveMatchTeamEdit = async (matchId) => {
+    const match = eventMatches.find(m => m.id === matchId);
+    if (!match) return;
+    const teamAId = document.getElementById('match-edit-teamA')?.value || '';
+    const teamBId = document.getElementById('match-edit-teamB')?.value || '';
+    if (!teamAId || !teamBId || teamAId === teamBId) {
+        return showToast('Equipos inválidos', 'Selecciona dos equipos distintos', 'warning');
+    }
+    const conflict = eventMatches.find(m =>
+        m.id !== matchId &&
+        m.phase === match.phase &&
+        Number(m.round || 0) === Number(match.round || 0) &&
+        (m.teamAId === teamAId || m.teamBId === teamAId || m.teamAId === teamBId || m.teamBId === teamBId)
+    );
+    if (conflict) {
+        return showToast('Conflicto', 'Ese equipo ya está asignado en otro partido de la misma ronda.', 'error');
+    }
+    const teamA = (currentEvent?.teams || []).find(t => t.id === teamAId);
+    const teamB = (currentEvent?.teams || []).find(t => t.id === teamBId);
+    if (!teamA || !teamB) return;
+    const playerUids = [...(teamA.playerUids || []), ...(teamB.playerUids || [])].filter(Boolean);
+    try {
+        await updateDoc(doc(db, 'eventoPartidos', matchId), {
+            teamAId,
+            teamBId,
+            teamAName: teamA.name || '',
+            teamBName: teamB.name || '',
+            playerUids,
+            updatedAt: serverTimestamp()
+        });
+        if (match.linkedMatchId && match.linkedMatchCollection) {
+            await updateDoc(doc(db, match.linkedMatchCollection, match.linkedMatchId), {
+                jugadores: playerUids,
+                equipoA: teamA.playerUids || [],
+                equipoB: teamB.playerUids || [],
+                eventTeamAId: teamAId,
+                eventTeamBId: teamBId,
+                eventTeamAName: teamA.name || '',
+                eventTeamBName: teamB.name || '',
+                updatedAt: serverTimestamp()
+            });
+        }
+        showToast('Partido actualizado', '', 'success');
+        document.querySelectorAll('.modal-overlay').forEach(o => o.classList.contains('modal-stack-front') && o.remove());
+    } catch (e) {
+        showToast('Error', e.message, 'error');
+    }
+};
+
+window.validateBracketED = () => {
+    if (!canOrganizar()) return;
+    const rounds = currentEvent?.bracket || [];
+    if (!rounds.length) return showToast('Bracket vacío', 'No hay bracket generado', 'warning');
+
+    const issues = [];
+    rounds.forEach((round, ri) => {
+        const used = new Map();
+        round.forEach((bm) => {
+            const match = eventMatches.find(m => m.matchCode === bm.matchCode) || bm;
+            const a = match.teamAId || bm.teamAId;
+            const b = match.teamBId || bm.teamBId;
+            if (a) {
+                if (used.has(a)) issues.push(`Ronda ${ri + 1}: equipo ${a} repetido`);
+                used.set(a, true);
+            }
+            if (b) {
+                if (used.has(b)) issues.push(`Ronda ${ri + 1}: equipo ${b} repetido`);
+                used.set(b, true);
+            }
+        });
+    });
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active modal-stack-front';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:480px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Validación de Bracket</h3>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+            </div>
+            <div class="modal-body">
+                ${issues.length ? `
+                    <div class="text-[11px] text-sport-red mb-2">Se detectaron ${issues.length} conflictos</div>
+                    <div class="flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scroll">
+                        ${issues.map(i => `<div class="p-2 rounded-lg bg-white/5 border border-white/10 text-[10px]">${i}</div>`).join('')}
+                    </div>
+                ` : `<div class="text-[11px] text-sport-green">No se detectaron conflictos. Bracket OK.</div>`}
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
 };
 
 window.abrirProgramacionCalendarioED = (matchId) => {
@@ -951,10 +1702,10 @@ window.confirmarProgramacionCalendarioED = async (matchId) => {
             updatedAt: serverTimestamp()
         });
         
-        // 2. Add to calendar (partidosAmistosos) if fully decided
-        if (match.playerUids && match.playerUids.length >= 2) {
-             const col = "partidosAmistosos";
-             const matchData = {
+        // 2. Add or update calendar (partidosAmistosos) if fully decided
+        if (match.playerUids && match.playerUids.length >= 4) {
+            const col = "partidosAmistosos";
+            const matchData = {
                 creador: auth.currentUser.uid,
                 organizerId: auth.currentUser.uid,
                 fecha: combinedDate,
@@ -968,13 +1719,21 @@ window.confirmarProgramacionCalendarioED = async (matchId) => {
                 eventoId: match.eventoId,
                 eventMatchId: match.id,
                 phase: match.phase || '',
-                type: 'evento'
-             };
-             const newMatchRef = await addDoc(collection(db, col), matchData);
-             await updateDoc(doc(db, 'eventoPartidos', matchId), {
-                 linkedMatchId: newMatchRef.id,
-                 linkedMatchCollection: col
-             });
+                type: 'evento',
+                eventTeamAId: match.teamAId || null,
+                eventTeamBId: match.teamBId || null,
+                eventTeamAName: match.teamAName || '',
+                eventTeamBName: match.teamBName || ''
+            };
+            if (match.linkedMatchId && match.linkedMatchCollection) {
+                await updateDoc(doc(db, match.linkedMatchCollection, match.linkedMatchId), matchData);
+            } else {
+                const newMatchRef = await addDoc(collection(db, col), matchData);
+                await updateDoc(doc(db, 'eventoPartidos', matchId), {
+                    linkedMatchId: newMatchRef.id,
+                    linkedMatchCollection: col
+                });
+            }
         }
         
         hideLoading();
@@ -986,7 +1745,7 @@ window.confirmarProgramacionCalendarioED = async (matchId) => {
     }
 };
 
-window.generarFaseEliminatoria = async () => {
+window.generarFaseEliminatoria = async (opts = {}) => {
     if (!canOrganizar()) return;
     const ev = currentEvent;
     
@@ -995,29 +1754,39 @@ window.generarFaseEliminatoria = async () => {
         return;
     }
 
-    const pasanPorGrupo = prompt('¿Cuántos equipos pasan por grupo a la siguiente fase?', ev.equiposPorGrupo || 2);
-    if (!pasanPorGrupo) return;
-    const nPasan = parseInt(pasanPorGrupo);
+    const manualIds = Array.isArray(opts.selectedTeamIds) ? opts.selectedTeamIds.filter(Boolean) : null;
+    let nPasan = Number.isFinite(Number(opts.nPasan)) ? parseInt(opts.nPasan) : null;
+    if (!nPasan) {
+        const pasanPorGrupo = prompt('¿Cuántos equipos pasan por grupo a la siguiente fase?', ev.equiposPorGrupo || 2);
+        if (!pasanPorGrupo) return;
+        nPasan = parseInt(pasanPorGrupo);
+    }
 
     const groupsKeys = Object.keys(ev.groups || {});
     let clasificados = [];
     let eliminados = [];
     const teamMap = new Map((ev.teams || []).map(t => [t.id, t]));
 
-    groupsKeys.forEach(g => {
-        const teamIds = ev.groups[g] || [];
-        const teamsEnGrupo = teamIds.map(id => teamMap.get(id));
-        const groupMatches = eventMatches.filter(m => m.phase === 'group' && m.group === g);
-        const tabla = computeGroupTable(groupMatches, teamsEnGrupo, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
-        
-        tabla.forEach((fila, idx) => {
-            if (idx < nPasan) {
-                clasificados.push(teamMap.get(fila.teamId));
-            } else {
-                eliminados.push(teamMap.get(fila.teamId));
-            }
+    if (manualIds && manualIds.length) {
+        clasificados = manualIds.map(id => teamMap.get(id)).filter(Boolean);
+        const allIds = (ev.teams || []).map(t => t.id);
+        eliminados = allIds.filter(id => !manualIds.includes(id)).map(id => teamMap.get(id)).filter(Boolean);
+    } else {
+        groupsKeys.forEach(g => {
+            const teamIds = ev.groups[g] || [];
+            const teamsEnGrupo = teamIds.map(id => teamMap.get(id));
+            const groupMatches = eventMatches.filter(m => m.phase === 'group' && m.group === g);
+            const tabla = computeGroupTable(groupMatches, teamsEnGrupo, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+            
+            tabla.forEach((fila, idx) => {
+                if (idx < nPasan) {
+                    clasificados.push(teamMap.get(fila.teamId));
+                } else {
+                    eliminados.push(teamMap.get(fila.teamId));
+                }
+            });
         });
-    });
+    }
 
     if (clasificados.length < 2) {
         showToast('Error', 'No hay suficientes equipos clasificados para generar eliminatorias', 'error');
@@ -1039,11 +1808,45 @@ window.generarFaseEliminatoria = async () => {
                  batch.delete(doc(db, 'eventoPartidos', m.id));
              });
              await batch.commit();
+        }        const seedingMode = ev.bracketSeeding || 'random';
+        let seededTeams = clasificados.filter(Boolean);
+
+        if (!manualIds || !manualIds.length) {
+            if (seedingMode === 'cross' && groupsKeys.length === 2) {
+                const gA = groupsKeys[0];
+                const gB = groupsKeys[1];
+                const teamsA = (ev.groups[gA] || []).map(id => teamMap.get(id)).filter(Boolean);
+                const teamsB = (ev.groups[gB] || []).map(id => teamMap.get(id)).filter(Boolean);
+                const matchesA = eventMatches.filter(m => m.phase === 'group' && m.group === gA);
+                const matchesB = eventMatches.filter(m => m.phase === 'group' && m.group === gB);
+                const tablaA = computeGroupTable(matchesA, teamsA, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+                const tablaB = computeGroupTable(matchesB, teamsB, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+                const aTop = tablaA.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
+                const bTop = tablaB.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
+                const order = [];
+                for (let i = 0; i < nPasan; i++) {
+                    const a = aTop[i];
+                    const b = bTop[nPasan - 1 - i];
+                    if (a && b) order.push(a, b);
+                }
+                for (let i = 0; i < nPasan; i++) {
+                    const b = bTop[i];
+                    const a = aTop[nPasan - 1 - i];
+                    if (a && b) order.push(b, a);
+                }
+                seededTeams = order.filter(Boolean);
+            } else if (seedingMode === 'rank') {
+                const groupMatches = eventMatches.filter(m => m.phase === 'group');
+                const tabla = computeGroupTable(groupMatches, seededTeams, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+                seededTeams = tabla.map(r => teamMap.get(r.teamId)).filter(Boolean);
+            }
         }
 
-        const bracketRounds = generateKnockoutTree(clasificados, ev.id + '_fase2_new');
-        
-        const partidosRef = collection(db, 'eventoPartidos');
+        const bracketRounds = generateKnockoutTree(
+            seededTeams,
+            ev.id + '_fase2_new',
+            { shuffle: seedingMode === 'random' && !(manualIds && manualIds.length) }
+        );const partidosRef = collection(db, 'eventoPartidos');
         for (let r = 0; r < bracketRounds.length; r++) {
             const round = bracketRounds[r];
             for (let s = 0; s < round.length; s++) {
@@ -1084,6 +1887,120 @@ window.generarFaseEliminatoria = async () => {
     }
 };
 
+window.simularBracketEvento = async () => {
+    if (!canOrganizar()) return;
+    const ev = currentEvent;
+    if (!ev) return;
+    if (ev.formato === 'league') {
+        showToast('Atención', 'Este formato es de liga, no tiene eliminatorias', 'info');
+        return;
+    }
+
+    const nPasan = Number(ev.equiposPorGrupo || 2);
+    const groupsKeys = Object.keys(ev.groups || {});
+    const teamMap = new Map((ev.teams || []).map(t => [t.id, t]));
+    let clasificados = [];
+
+    groupsKeys.forEach(g => {
+        const teamIds = ev.groups[g] || [];
+        const teamsEnGrupo = teamIds.map(id => teamMap.get(id));
+        const groupMatches = eventMatches.filter(m => m.phase === 'group' && m.group === g);
+        const tabla = computeGroupTable(groupMatches, teamsEnGrupo, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+        tabla.forEach((fila, idx) => {
+            if (idx < nPasan) clasificados.push(teamMap.get(fila.teamId));
+        });
+    });
+
+    if (clasificados.length < 2) {
+        showToast('Error', 'No hay suficientes equipos clasificados para simular', 'error');
+        return;
+    }
+
+    const seedingMode = ev.bracketSeeding || 'random';
+    let seededTeams = clasificados.filter(Boolean);
+    if (seedingMode === 'cross' && groupsKeys.length === 2) {
+        const gA = groupsKeys[0];
+        const gB = groupsKeys[1];
+        const teamsA = (ev.groups[gA] || []).map(id => teamMap.get(id)).filter(Boolean);
+        const teamsB = (ev.groups[gB] || []).map(id => teamMap.get(id)).filter(Boolean);
+        const matchesA = eventMatches.filter(m => m.phase === 'group' && m.group === gA);
+        const matchesB = eventMatches.filter(m => m.phase === 'group' && m.group === gB);
+        const tablaA = computeGroupTable(matchesA, teamsA, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+        const tablaB = computeGroupTable(matchesB, teamsB, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+        const aTop = tablaA.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
+        const bTop = tablaB.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
+        const order = [];
+        for (let i = 0; i < nPasan; i++) {
+            const a = aTop[i];
+            const b = bTop[nPasan - 1 - i];
+            if (a && b) order.push(a, b);
+        }
+        for (let i = 0; i < nPasan; i++) {
+            const b = bTop[i];
+            const a = aTop[nPasan - 1 - i];
+            if (a && b) order.push(b, a);
+        }
+        seededTeams = order.filter(Boolean);
+    } else if (seedingMode === 'rank') {
+        const groupMatches = eventMatches.filter(m => m.phase === 'group');
+        const tabla = computeGroupTable(groupMatches, seededTeams, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+        seededTeams = tabla.map(r => teamMap.get(r.teamId)).filter(Boolean);
+    }
+
+    const rounds = generateKnockoutTree(
+        seededTeams,
+        ev.id + '_preview',
+        { shuffle: seedingMode === 'random' }
+    );
+    openBracketPreviewModal(rounds);
+};
+
+function openBracketPreviewModal(rounds = []) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:900px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Simulación de Bracket</h3>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">×</button>
+            </div>
+            <div class="modal-body scroll-y" style="max-height:75vh;">
+                <div class="bracket-container" id="bracket-preview-body"></div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    const body = overlay.querySelector("#bracket-preview-body");
+    if (!body) return;
+    if (!rounds.length) {
+        body.innerHTML = `<div class="empty-state">No hay bracket para simular.</div>`;
+        return;
+    }
+    let html = `<div class="bracket">`;
+    rounds.forEach((round, i) => {
+        const label = i === rounds.length - 1 ? "Final" : (i === rounds.length - 2 ? "Semifinal" : `Ronda ${i + 1}`);
+        html += `<div class="bracket-round"><div class="bracket-round-label">${label}</div>`;
+        round.forEach((m) => {
+            const teamA = currentEvent?.teams?.find(t => t.id === m.teamAId);
+            const teamB = currentEvent?.teams?.find(t => t.id === m.teamBId);
+            html += `
+                <div class="bracket-match">
+                    <div class="b-team-v9">
+                        <span class="b-name-v9">${teamA?.name || 'TBD'}</span>
+                        <span class="b-score-v9">-</span>
+                    </div>
+                    <div class="b-team-v9">
+                        <span class="b-name-v9">${teamB?.name || 'TBD'}</span>
+                        <span class="b-score-v9">-</span>
+                    </div>
+                </div>`;
+        });
+        html += `</div>`;
+    });
+    html += `</div>`;
+    body.innerHTML = html;
+}
+
 window.reiniciarPartido = async (matchId) => {
     if (!confirm('¿Reiniciar este partido? Se borrará el resultado.')) return;
     try {
@@ -1108,26 +2025,31 @@ window.regenerarPartidosLiga = async () => {
         return;
     }
 
-    if (!confirm('Esto ELIMINARÁ todos los partidos pendientes de fase liga y los volverá a crear según los grupos actuales. ¿Continuar?')) return;
+    if (!confirm('Esto ELIMINARÁ todos los partidos de liga/grupo del evento (incluidos vínculos) y los volverá a crear. ¿Continuar?')) return;
 
     try {
         showToast('Procesando...', 'Regenerando partidos de liga', 'info');
         const partidosRef = collection(db, 'eventoPartidos');
         
-        // delete all pending league/group matches for this event
-        const q = query(partidosRef, where('eventoId', '==', ev.id), where('estado', '==', 'pendiente'));
+        // delete all league/group matches for this event
+        const q = query(partidosRef, where('eventoId', '==', ev.id));
         const snap = await getDocs(q);
         
         const batch = writeBatch(db);
-        let deletedCount = 0;
+        const toDelete = [];
         snap.docs.forEach(d => {
             const m = d.data();
             if (m.phase === 'league' || m.phase === 'group') {
+                toDelete.push({ id: d.id, ...m });
                 batch.delete(doc(db, 'eventoPartidos', d.id));
-                deletedCount++;
             }
         });
         await batch.commit();
+        for (const m of toDelete) {
+            if (m.linkedMatchId && m.linkedMatchCollection) {
+                await deleteDoc(doc(db, m.linkedMatchCollection, m.linkedMatchId));
+            }
+        }
 
         const teamMap = new Map(ev.teams.map(t => [t.id, t]));
         for (const [groupName, teamIds] of Object.entries(ev.groups)) {
@@ -1158,7 +2080,7 @@ window.regenerarPartidosLiga = async () => {
                 });
             }
         }
-        showToast('ÉXITO', 'Partidos regenerados correctamente', 'success');
+        showToast('—XITO', 'Partidos regenerados correctamente', 'success');
     } catch (e) {
         console.error(e);
         showToast('Error', e.message, 'error');
@@ -1188,10 +2110,94 @@ window.expulsarJugador = async (eventId, uid) => {
     const entry = ev.inscritos?.find(i => i.uid === uid);
     if (!entry) return;
     try {
-        await updateDoc(doc(db, 'eventos', eventId), { inscritos: arrayRemove(entry) });
+        const updatedTeams = (ev.teams || []).map(t => {
+            if (!Array.isArray(t.playerUids)) return t;
+            if (!t.playerUids.includes(uid)) return t;
+            const nextUids = t.playerUids.map(p => (p === uid ? null : p));
+            return { ...t, playerUids: nextUids };
+        });
+
+        await updateDoc(doc(db, 'eventos', eventId), { inscritos: arrayRemove(entry), teams: updatedTeams });
+
+        const impactedTeamIds = new Set(updatedTeams.filter(t => (t.playerUids || []).includes(null) || (t.playerUids || []).includes(uid)).map(t => t.id));
+        const matchesToUpdate = eventMatches.filter(m => impactedTeamIds.has(m.teamAId) || impactedTeamIds.has(m.teamBId));
+        await Promise.all(matchesToUpdate.map(async (m) => {
+            const teamA = updatedTeams.find(t => t.id === m.teamAId);
+            const teamB = updatedTeams.find(t => t.id === m.teamBId);
+            const playerUids = [...(teamA?.playerUids || []), ...(teamB?.playerUids || [])].filter(Boolean);
+            await updateDoc(doc(db, 'eventoPartidos', m.id), {
+                playerUids,
+                updatedAt: serverTimestamp()
+            });
+            if (m.linkedMatchId && m.linkedMatchCollection) {
+                await updateDoc(doc(db, m.linkedMatchCollection, m.linkedMatchId), {
+                    jugadores: playerUids,
+                    equipoA: teamA?.playerUids || [],
+                    equipoB: teamB?.playerUids || [],
+                    updatedAt: serverTimestamp()
+                });
+            }
+        }));
         showToast('Jugador eliminado', '', 'info');
     } catch (e) {
         showToast('Error', e.message, 'error');
+    }
+};
+
+window.editarNivelInvitado = async (eventId, uid) => {
+    const ev = currentEvent;
+    if (!ev || !uid) return;
+    const input = document.getElementById(`guest-level-${uid}`);
+    const raw = input?.value;
+    const nivel = Number(raw);
+    if (!Number.isFinite(nivel) || nivel < 1 || nivel > 7) {
+        return showToast('Nivel inválido', 'Introduce un nivel entre 1.0 y 7.0', 'warning');
+    }
+    const inscritos = ev.inscritos || [];
+    const index = inscritos.findIndex(i => i.uid === uid);
+    if (index === -1) return;
+    const updated = [...inscritos];
+    updated[index] = { ...updated[index], nivel };
+    try {
+        await updateDoc(doc(db, 'eventos', eventId), { inscritos: updated });
+        showToast('Nivel actualizado', `Invitado ahora en nivel ${nivel.toFixed(1)}`, 'success');
+    } catch (e) {
+        console.error(e);
+        showToast('Error', e.message || 'No se pudo actualizar el nivel', 'error');
+    }
+};
+
+window.editarNivelParticipante = async (eventId, uid) => {
+    const ev = currentEvent;
+    if (!ev || !uid) return;
+    const input = document.getElementById(`participant-level-${uid}`);
+    const raw = input?.value;
+    const nivel = Number(raw);
+    if (!Number.isFinite(nivel) || nivel < 1 || nivel > 7) {
+        return showToast('Nivel inválido', 'Introduce un nivel entre 1.0 y 7.0', 'warning');
+    }
+    const inscritos = ev.inscritos || [];
+    const index = inscritos.findIndex(i => i.uid === uid);
+    if (index === -1) return;
+    const updated = [...inscritos];
+    updated[index] = { ...updated[index], nivel };
+    try {
+        await updateDoc(doc(db, 'eventos', eventId), { inscritos: updated });
+        if (registeredUsersById.has(uid)) {
+            await updateDoc(doc(db, 'usuarios', uid), { nivel });
+            const prev = registeredUsersById.get(uid);
+            if (prev) {
+                const next = { ...prev, nivel };
+                registeredUsersById.set(uid, next);
+                registeredUsers = registeredUsers.map(u => u.uid === uid ? next : u);
+            }
+        }
+        const pane = document.getElementById('pane-participantes');
+        if (pane && !pane.classList.contains('hidden')) renderParticipantes(pane);
+        showToast('Nivel actualizado', `Nivel ${nivel.toFixed(1)}`, 'success');
+    } catch (e) {
+        console.error(e);
+        showToast('Error', e.message || 'No se pudo actualizar el nivel', 'error');
     }
 };
 
@@ -1280,10 +2286,21 @@ function fmtDate(d) {
     const date = d.toDate ? d.toDate() : new Date(d);
     return isNaN(date) ? '-' : date.toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
-window.setMatchFilter = (f) => {
+function formatChatTime(ts) {
+    if (!ts) return "";
+    const d = ts?.toDate ? ts.toDate() : new Date(ts);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+}
+window.setMatchFilter = (f, silent = false) => {
     window._matchFilter = f;
     const pane = document.getElementById('pane-partidos');
-    if (pane) renderMatches(pane);
+    if (!pane) return;
+    if (silent) {
+        updateMatchesList(pane);
+        return;
+    }
+    renderMatches(pane);
 };
 
 function escapeHtml(s) {
@@ -1296,3 +2313,135 @@ function escapeHtml(s) {
         return m;
     });
 }
+
+
+let proposalChatUnsubED = null;
+window.proponerFechaEvento = async (matchId) => {
+    const match = eventMatches.find(m => m.id === matchId);
+    if (!match) return;
+    const teamMap = new Map((currentEvent?.teams || []).map(t => [t.id, t]));
+    const teamA = teamMap.get(match.teamAId);
+    const teamB = teamMap.get(match.teamBId);
+    const players = (match.playerUids && match.playerUids.length)
+        ? match.playerUids
+        : [...(teamA?.playerUids || []), ...(teamB?.playerUids || [])];
+    const participantUids = players.filter((uid) => uid && !String(uid).startsWith("GUEST_") && !String(uid).startsWith("invitado_") && !String(uid).startsWith("manual_"));
+    const participantNames = participantUids.map((uid) => {
+        const reg = registeredUsersById.get(uid);
+        if (reg) return reg.nombreUsuario || reg.nombre || reg.email || uid;
+        const ins = (currentEvent?.inscritos || []).find((i) => i.uid === uid);
+        return ins?.nombre || ins?.nombreUsuario || uid;
+    });
+    if (!canOrganizar() && !participantUids.includes(currentUser?.uid)) {
+        return showToast("Sin acceso", "Solo participantes del partido pueden entrar al chat.", "warning");
+    }
+
+    const title = `Propuesta: ${(match.teamAName || teamA?.name || "Equipo A")} vs ${(match.teamBName || teamB?.name || "Equipo B")}`;
+    let proposalId = null;
+    const existing = await getDocs(query(collection(db, "propuestasPartido"), where("eventMatchId", "==", matchId), limit(1)));
+    if (!existing.empty) {
+        const docRef = existing.docs[0];
+        proposalId = docRef.id;
+    } else {
+        const ref = await addDoc(collection(db, "propuestasPartido"), {
+            title,
+            createdBy: currentUser?.uid || null,
+            participantUids,
+            participantNames,
+            status: "open",
+            eventId: currentEvent?.id || null,
+            eventMatchId: matchId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        proposalId = ref.id;
+    }
+
+    let modal = document.getElementById("modal-proposal-chat-ed");
+    if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "modal-proposal-chat-ed";
+        modal.className = "modal-overlay active";
+        document.body.appendChild(modal);
+        modal.addEventListener("click", (e) => {
+            if (e.target === modal) modal.classList.remove("active");
+        });
+    }
+    modal.classList.add("active");
+    modal.innerHTML = `
+        <div class="modal-card glass-strong slide-up" style="max-width: 520px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Chat de Propuesta</h3>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').classList.remove('active')">×</button>
+            </div>
+            <div class="modal-body p-4 flex-col gap-3">
+                <div class="text-[10px] uppercase tracking-widest font-black text-primary">${title}</div>
+                <div id="proposal-chat-list-ed" class="proposal-chat-list"></div>
+                <div class="proposal-chat-input">
+                    <input id="proposal-chat-text-ed" class="input" placeholder="Escribe tu propuesta...">
+                    <button class="btn-confirm-v7" id="proposal-send-btn-ed">Enviar</button>
+                </div>
+                <div class="flex-row gap-2">
+                    <button class="btn-ghost w-full" onclick="window.vincularPartidoCalendario('${matchId}')">Vincular al calendario</button>
+                    <button class="btn-ghost w-full" onclick="this.closest('.modal-overlay').classList.remove('active')">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const chatList = modal.querySelector("#proposal-chat-list-ed");
+    if (typeof proposalChatUnsubED === "function") proposalChatUnsubED();
+    proposalChatUnsubED = onSnapshot(
+        query(collection(db, "propuestasPartido", proposalId, "chat"), orderBy("createdAt", "asc")),
+        (snap) => {
+            if (!chatList) return;
+            chatList.innerHTML = snap.docs.map((d) => {
+                const m = d.data() || {};
+                const isMe = m.uid === currentUser?.uid;
+                return `
+                    <div class="proposal-msg ${isMe ? "me" : ""}">
+                        <div class="proposal-msg-meta">${m.name || "Jugador"} · ${formatChatTime(m.createdAt)}</div>
+                        <div class="proposal-msg-text">${escapeHtml(m.text || "")}</div>
+                    </div>
+                `;
+            }).join("") || `<div class="text-[10px] opacity-50">Sin mensajes todavía.</div>`;
+            chatList.scrollTop = chatList.scrollHeight;
+        },
+    );
+
+    modal.querySelector("#proposal-send-btn-ed")?.addEventListener("click", async () => {
+        const input = modal.querySelector("#proposal-chat-text-ed");
+        const text = input?.value?.trim();
+        if (!text) return;
+        input.value = "";
+        try {
+            const name = currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador";
+            await addDoc(collection(db, "propuestasPartido", proposalId, "chat"), {
+                uid: currentUser.uid,
+                name,
+                text,
+                createdAt: serverTimestamp(),
+            });
+            const targets = participantUids.filter((uid) => uid && uid !== currentUser.uid);
+            if (targets.length) {
+                await createNotification(
+                    targets,
+                    "Mensaje de propuesta",
+                    `Tienes un mensaje en: ${title}`,
+                    "proposal_message",
+                    "home.html",
+                    { type: "proposal_message", proposalId, dedupId: `proposal_msg_${proposalId}_${Date.now()}` },
+                );
+            }
+        } catch (e) {
+            showToast("Error", "No se pudo enviar el mensaje.", "error");
+        }
+    });
+};
+
+window.vincularPartidoCalendario = (matchId) => {
+    window.location.href = `calendario.html?vincularMatchId=${matchId}`;
+};
+
+
+

@@ -64,6 +64,11 @@ function buildHeaderAvatarMarkup(userData = null) {
     return `<img src="${photo}" alt="Perfil" id="header-avatar-img">`;
 }
 
+function isAdminUser(userData) {
+    const role = String(userData?.rol || userData?.role || "").toLowerCase();
+    return role.includes("admin") || (auth.currentUser?.email === "Juanan221091@gmail.com");
+}
+
 function getCurrentPageMeta() {
     const currentPage = (window.location.pathname.split('/').pop() || 'home.html').toLowerCase();
     const pageMap = {
@@ -89,6 +94,9 @@ function getCurrentPageMeta() {
  */
 export async function injectHeader(userData = null) {
     if (isPublicPage() || document.querySelector('.app-header')) return;
+    if (!userData && auth.currentUser?.uid) {
+        try { userData = await getDocument("usuarios", auth.currentUser.uid); } catch (_) {}
+    }
     
     const header = document.createElement('header');
     header.className = 'app-header';
@@ -96,7 +104,7 @@ export async function injectHeader(userData = null) {
     const pageMeta = getCurrentPageMeta();
     
     // Check Admin rights locally
-    const isAdmin = userData?.rol === 'Admin' || (auth.currentUser?.email === 'Juanan221091@gmail.com');
+    const isAdmin = isAdminUser(userData);
     
     header.innerHTML = `
         <div class="header-brand" onclick="window.location.href='home.html'">
@@ -162,9 +170,20 @@ export function updateHeader(userData) {
         container.innerHTML = buildHeaderAvatarMarkup(userData);
         
         // Show/Hide admin link based on current data
+        const isAdmin = isAdminUser(userData);
         if (roleLink) {
-            const isAdmin = userData.rol === 'Admin' || (auth.currentUser?.email === 'Juanan221091@gmail.com');
             roleLink.style.display = isAdmin ? 'flex' : 'none';
+        } else if (isAdmin) {
+            const actions = document.querySelector('.header-actions');
+            if (actions) {
+                const node = document.createElement('div');
+                node.className = 'header-admin';
+                node.id = 'admin-header-link';
+                node.title = 'Panel Admin';
+                node.innerHTML = '<i class=\"fas fa-shield-halved\"></i>';
+                node.onclick = () => { window.location.href = 'admin.html'; };
+                actions.prepend(node);
+            }
         }
     }
 }
@@ -183,7 +202,7 @@ export async function injectNavbar(activePage) {
         ranking: `<i class="fa-solid fa-ranking-star"></i>`,
         calendar: `<i class="fa-solid fa-calendar-day"></i>`,
         events: `<i class="fa-solid fa-book-open-reader"></i>`,
-        history: `<i class="fa-solid fa-clock-rotate-left"></i>`
+        history: `<i class="fa-solid fa-medal"></i>`
     };
 
     const currentFromPath = getCurrentPageMeta().id;
@@ -191,9 +210,9 @@ export async function injectNavbar(activePage) {
 
     const items = [
         { id: 'home', icon: icons.home, label: 'Inicio', link: 'home.html', color: '#2bbcff' },
-        { id: 'ranking', icon: icons.ranking, label: 'Ranking', link: 'ranking-v3.html', color: '#eab308' },
+        { id: 'ranking', icon: icons.ranking, label: 'Ranking', link: 'ranking-v3.html', color: '#93ea08' },
         { id: 'calendar', icon: icons.calendar, label: 'Calendario', link: 'calendario.html', center: true },
-        { id: 'diary', icon: icons.events, label: 'Diario', link: 'diario.html', color: '#ff00ff' },
+        { id: 'diary', icon: icons.events, label: 'Diario', link: 'diario.html', color: '#ae00ff' },
         { id: 'events', icon: icons.history, label: 'Eventos', link: 'eventos.html', color: '#c6ff00' }
     ];
 
@@ -363,3 +382,4 @@ window.toggleAdminSidebar = () => {
     const sb = document.querySelector('.admin-sidebar');
     if (sb) sb.classList.toggle('active');
 };
+

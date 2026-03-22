@@ -113,8 +113,8 @@ function getWorkerCandidates() {
   return [
     {
       base: base,
-      swPath: `${base}OneSignalSDKWorker.js`,
-      updaterPath: `${base}OneSignalSDKUpdaterWorker.js`,
+      swPath: `${base}sw.js`,
+      updaterPath: `${base}sw.js`,
       scope: base,
     }
   ];
@@ -146,12 +146,12 @@ async function getServiceWorkerDiagnostics() {
   const regs = await navigator.serviceWorker.getRegistrations().catch(() => []);
   const appShell =
     regs.find((r) => String(r?.active?.scriptURL || r?.installing?.scriptURL || "").includes("/sw.js")) || null;
-  const oneSignal =
-    regs.find((r) => String(r?.active?.scriptURL || r?.installing?.scriptURL || "").includes("OneSignalSDKWorker.js")) || null;
+  // Now they are unified
+  const oneSignal = appShell;
 
   const appScope = appShell?.scope || null;
   const oneSignalScope = oneSignal?.scope || null;
-  const conflict = Boolean(appScope && oneSignalScope && appScope === oneSignalScope);
+  const conflict = false; // Unified worker so no scope conflicts
   return { regs, appShell, oneSignal, conflict };
 }
 
@@ -302,7 +302,7 @@ async function ensureOneSignalInitialized() {
         await retryWithBackoff(async () => {
           await oneSignalExec(async (OneSignal) => {
             await OneSignal.init({
-              appId: "ce289ac1-60a6-4277-94d0-4d3765e197c3",
+              appId: appId,
               safari_web_id: "web.onesignal.auto.10a9c80d-13fc-463d-9d41-3838ae45a6c3",
               notifyButton: { enable: false },
               serviceWorkerParam: { scope: cfg.scope },
@@ -1043,7 +1043,8 @@ export async function cleanupStaleServiceWorkers() {
             'legacy-sw.js',
             '/JafsPadelclub/',
             '/JafPadel/',
-            'OneSignalSDKWorker.js' // We'll re-register correctly
+            'OneSignalSDKWorker.js', // Remove all legacy traces of this separated file
+            'OneSignalSDKUpdaterWorker.js'
         ];
 
         for (const reg of regs) {
@@ -1100,3 +1101,4 @@ export async function runPushDiagnostics() {
     console.groupEnd();
     return status;
 }
+

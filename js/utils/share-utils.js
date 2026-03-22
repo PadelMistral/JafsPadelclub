@@ -71,17 +71,6 @@ export async function generateMatchShareImage(analysis, matchData = {}) {
 
     const teamA = (matchData.teamA || []).map(p => (typeof p === 'object' ? p.name : p)).filter(Boolean);
     const teamB = (matchData.teamB || []).map(p => (typeof p === 'object' ? p.name : p)).filter(Boolean);
-    const winnerKey = String(matchData.winner || "").toUpperCase();
-    const teamAIsWinner = winnerKey === "A" || winnerKey === "1";
-    const teamBIsWinner = winnerKey === "B" || winnerKey === "2";
-
-    roundRect(ctx, 110, 610, 360, 180, 26, teamAIsWinner ? 'rgba(184,255,0,0.08)' : 'rgba(255,255,255,0.03)');
-    roundRect(ctx, 610, 610, 360, 180, 26, teamBIsWinner ? 'rgba(184,255,0,0.08)' : 'rgba(255,255,255,0.03)');
-    ctx.strokeStyle = teamAIsWinner ? 'rgba(184,255,0,0.32)' : 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(110, 610, 360, 180);
-    ctx.strokeStyle = teamBIsWinner ? 'rgba(184,255,0,0.32)' : 'rgba(255,255,255,0.08)';
-    ctx.strokeRect(610, 610, 360, 180);
 
     // Team A column
     ctx.textAlign = 'right';
@@ -89,7 +78,7 @@ export async function generateMatchShareImage(analysis, matchData = {}) {
     const levelsA = matchData.levelsA || [];
     teamA.forEach((name, i) => {
         const y = 680 + (i * 70);
-        ctx.fillStyle = teamAIsWinner ? '#f4ffd0' : 'rgba(255,255,255,0.85)';
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
         ctx.fillText(String(name).toUpperCase(), 440, y);
         if (levelsA[i]) {
             ctx.fillStyle = '#b8ff00';
@@ -111,7 +100,7 @@ export async function generateMatchShareImage(analysis, matchData = {}) {
     const levelsB = matchData.levelsB || [];
     teamB.forEach((name, i) => {
         const y = 680 + (i * 70);
-        ctx.fillStyle = teamBIsWinner ? '#f4ffd0' : 'rgba(255,255,255,0.85)';
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
         ctx.fillText(String(name).toUpperCase(), 640, y);
         if (levelsB[i]) {
             ctx.fillStyle = '#b8ff00';
@@ -135,7 +124,7 @@ export async function shareMatchResult(analysis, matchData) {
         const blob = await (await fetch(dataUrl)).blob();
         const file = new File([blob], 'mision_padel.png', { type: 'image/png' });
         try {
-            await navigator.share({ title: 'Mi resultado JafsPadel', text: `Mision completada. ${analysis.delta >= 0 ? 'Gane' : 'Perdi'} ${Math.abs(analysis.delta)} puntos.`, files: [file] });
+            await navigator.share({ title: 'Mi Resultado Padeluminatis', text: `Misión completada. ${analysis.delta >= 0 ? 'Gané' : 'Perdí'} ${Math.abs(analysis.delta)} puntos.`, files: [file] });
             return true;
         } catch (e) { downloadDataUrl(dataUrl, 'mision_padel.png'); }
     } else { downloadDataUrl(dataUrl, 'mision_padel.png'); }

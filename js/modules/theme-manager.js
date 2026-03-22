@@ -1,32 +1,32 @@
-﻿// js/modules/theme-manager.js - Theme System V7.0
-// Sistema de temas con 8 identidades visuales únicas
+// js/modules/theme-manager.js - Theme System V3.0
+// 12 immersive visual identities with rich transitions
 
-const THEMES = ['galactic', 'winter', 'ocean', 'arcade', 'minimal', 'neon', 'matrix', 'sunset', 'elegant'];
+const THEMES = [
+  'galactic', 'neon', 'matrix', 'sunset', 'elegant',
+  'ocean', 'minimal', 'winter', 'arcade',
+  'cherry', 'emerald', 'lava'
+];
 const STORAGE_KEY = 'padeluminatis_theme';
 
-/**
- * Theme metadata for UI display
- */
 const THEME_DATA = [
-    { id: 'galactic', name: 'Galáctica', icon: '🌌', desc: 'Espacial y neón' },
-    { id: 'winter', name: 'Invierno', icon: '❄️', desc: 'Frío y cristalino' },
-    { id: 'ocean', name: 'Océano', icon: '🌊', desc: 'Profundidades marinas' },
-    { id: 'arcade', name: 'Arcade', icon: '🕹️', desc: 'Retro gaming' },
-    { id: 'minimal', name: 'Minimal', icon: '⬜', desc: 'Limpio y moderno' },
-    { id: 'neon', name: 'Cyber', icon: '⚡', desc: 'Neón futurista' },
-    { id: 'matrix', name: 'Circuito', icon: '🧬', desc: 'Códigos del Circuito' },
-    { id: 'sunset', name: 'Sunset', icon: '🌅', desc: 'Atardecer cálido' },
-    { id: 'elegant', name: 'Elegante', icon: '✨', desc: 'Lujo dorado' }
+    { id: 'galactic',  name: 'Galáctica',    icon: '🌌', color: '#00d4ff', desc: 'Espacial & Neón' },
+    { id: 'neon',      name: 'Cyber Neón',   icon: '⚡', color: '#00ff9f', desc: 'Cyberpunk eléctrico' },
+    { id: 'matrix',    name: 'Matrix',       icon: '🧬', color: '#00ff41', desc: 'Código digital' },
+    { id: 'sunset',    name: 'Sunset',       icon: '🌅', color: '#ff6b35', desc: 'Atardecer vibrante' },
+    { id: 'elegant',   name: 'Elegante',     icon: '✨', color: '#d4a848', desc: 'Oro y lujo' },
+    { id: 'ocean',     name: 'Océano',       icon: '🌊', color: '#06b6d4', desc: 'Profundidad marina' },
+    { id: 'minimal',   name: 'Minimal',      icon: '◻️', color: '#e2e8f0', desc: 'Oscuro limpio' },
+    { id: 'winter',    name: 'Invierno',     icon: '❄️', color: '#60a5fa', desc: 'Hielo cristalino' },
+    { id: 'arcade',    name: 'Arcade',       icon: '🕹️', color: '#ff00ff', desc: 'Retro pixel' },
+    { id: 'cherry',    name: 'Sakura',       icon: '🌸', color: '#f472b6', desc: 'Rosa suave' },
+    { id: 'emerald',   name: 'Esmeralda',    icon: '💎', color: '#34d399', desc: 'Verde premium' },
+    { id: 'lava',      name: 'Volcán',       icon: '🌋', color: '#ef4444', desc: 'Fuego intenso' },
 ];
 
-/**
- * Initialize theme system - call on every page load
- */
 export function initThemeSystem() {
     const savedTheme = localStorage.getItem(STORAGE_KEY) || 'galactic';
     applyTheme(savedTheme, false);
     
-    // Listen for theme changes from other tabs
     window.addEventListener('storage', (e) => {
         if (e.key === STORAGE_KEY && e.newValue) {
             applyTheme(e.newValue, false);
@@ -34,54 +34,33 @@ export function initThemeSystem() {
     });
 }
 
-/**
- * Apply a theme to the document
- * @param {string} themeName - Theme identifier
- * @param {boolean} save - Whether to persist to localStorage
- */
 export function applyTheme(themeName, save = true) {
     if (!THEMES.includes(themeName)) themeName = 'galactic';
     
-    // Add transition class for smooth theme change
     document.documentElement.classList.add('theme-transitioning');
-    
-    // Apply the theme
     document.documentElement.setAttribute('data-theme', themeName);
     
-    if (save) {
-        localStorage.setItem(STORAGE_KEY, themeName);
-    }
+    // Update meta theme-color for browser chrome
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const td = THEME_DATA.find(t => t.id === themeName);
+    if (meta && td) meta.setAttribute('content', td.color === '#e2e8f0' ? '#111318' : '#050a18');
     
-    // Update selector UI if present
+    if (save) localStorage.setItem(STORAGE_KEY, themeName);
     updateSelectorUI(themeName);
     
-    // Remove transition class after animation
     setTimeout(() => {
         document.documentElement.classList.remove('theme-transitioning');
-    }, 500);
-    
+    }, 600);
 }
 
-/**
- * Get current theme
- * @returns {string} Current theme identifier
- */
 export function getCurrentTheme() {
     return localStorage.getItem(STORAGE_KEY) || 'galactic';
 }
 
-/**
- * Get all available themes with metadata
- * @returns {Array} Array of theme objects
- */
 export function getAvailableThemes() {
     return THEME_DATA;
 }
 
-/**
- * Update the visual state of the theme selector
- * @param {string} activeTheme - Currently active theme
- */
 function updateSelectorUI(activeTheme) {
     const options = document.querySelectorAll('.theme-option');
     options.forEach(opt => {
@@ -90,10 +69,6 @@ function updateSelectorUI(activeTheme) {
     });
 }
 
-/**
- * Render the theme selector component
- * @param {string} containerId - ID of container element
- */
 export function renderThemeSelector(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -107,20 +82,15 @@ export function renderThemeSelector(containerId) {
                      data-theme="${t.id}"
                      onclick="window.setTheme('${t.id}')"
                      title="${t.desc}">
-                    <div class="theme-preview ${t.id}">${t.icon}</div>
+                    <div class="theme-preview-dot" style="background: ${t.color}; box-shadow: 0 0 12px ${t.color}40;"></div>
+                    <span class="theme-icon">${t.icon}</span>
                     <span class="theme-name">${t.name}</span>
                 </div>
             `).join('')}
         </div>
     `;
     
-    // Expose global function for onclick handlers
     window.setTheme = (theme) => {
         applyTheme(theme);
     };
 }
-
-
-
-
-

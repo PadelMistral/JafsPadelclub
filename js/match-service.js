@@ -6,11 +6,16 @@
  * Fully aligned with Premium V7 "Ultra Vibrant" aesthetics.
  */
 
-import { db, getDocument, subscribeDoc, auth } from './firebase-service.js';
+import { db, getDocument, subscribeDoc, auth, storage } from './firebase-service.js';
 import { 
     doc, getDoc, getDocs, collection, deleteDoc, onSnapshot, runTransaction,
-    query, orderBy, where, limit, addDoc, updateDoc, serverTimestamp 
+    query, orderBy, where, limit, addDoc, updateDoc, setDoc, serverTimestamp, Timestamp 
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import {
+    ref,
+    uploadBytes,
+    getDownloadURL
+} from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-storage.js';
 import { triggerFeedback, handleOperationError, FEEDBACK } from './modules/feedback-system.js';
 import { showToast } from './ui-core.js'; // Keep for legacy/direct use if needed
 import { processMatchResults, parseMatchResult } from './ranking-service.js';
@@ -32,6 +37,13 @@ import { getDivisionByRating } from "./config/elo-system.js";
 */
 
 let apoingStyleInjected = false;
+const eventDocCache = new Map();
+async function getEventDocCached(eventId) {
+    if (!eventId) return null;
+    const ev = await getDocument("eventos", eventId);
+    if (ev) eventDocCache.set(eventId, ev);
+    return ev || eventDocCache.get(eventId) || null;
+}
 function ensureApoingStyles() {
     if (apoingStyleInjected || document.getElementById('apoing-link-style')) return;
     const style = document.createElement('style');
@@ -65,6 +77,86 @@ function ensureApoingStyles() {
     `;
     document.head.appendChild(style);
     apoingStyleInjected = true;
+}
+
+function parseGuestMeta(uid) {
+    if (!uid) return null;
+    const s = String(uid);
+    if (!s.startsWith('GUEST_') && !s.startsWith('invitado_') && !s.startsWith('manual_')) return null;
+    const parts = s.split('_');
+    if (parts.length >= 4) {
+        const levelRaw = parts[parts.length - 2];
+        const level = parseFloat(levelRaw);
+        const nameRaw = parts.slice(1, parts.length - 2).join(' ');
+        const name = nameRaw.replace(/_/g, ' ').trim() || 'Invitado';
+        return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+    }
+    const name = (parts[1] || 'Invitado').replace(/_/g, ' ').trim() || 'Invitado';
+    const level = parseFloat(parts[2]);
+    return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+}
+
+function getEventUserNameMap() {
+    if (!window.__eventUserNameMap) window.__eventUserNameMap = new Map();
+    return window.__eventUserNameMap;
+}
+
+function getEventUserMetaMap() {
+    if (!window.__eventUserMetaMap) window.__eventUserMetaMap = new Map();
+    return window.__eventUserMetaMap;
+}
+
+export function indexEventUserNames(eventDoc) {
+    if (!eventDoc) return;
+    const map = getEventUserNameMap();
+    const metaMap = getEventUserMetaMap();
+    const inscritos = Array.isArray(eventDoc.inscritos) ? eventDoc.inscritos : [];
+    inscritos.forEach((i) => {
+        const uid = i?.uid;
+        const name = i?.nombre || i?.nombreUsuario;
+        if (uid && name) map.set(String(uid), String(name));
+        if (uid) {
+            metaMap.set(String(uid), {
+                name: name || String(uid),
+                level: Number(i?.nivel || 2.5),
+                photo: i?.fotoPerfil || i?.fotoURL || "",
+            });
+        }
+    });
+    const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
+    teams.forEach((t) => {
+        const players = Array.isArray(t?.players) ? t.players : [];
+        players.forEach((p) => {
+            const uid = p?.uid || p?.id;
+            const name = p?.nombre || p?.nombreUsuario;
+            if (uid && name) map.set(String(uid), String(name));
+            if (uid) {
+                metaMap.set(String(uid), {
+                    name: name || String(uid),
+                    level: Number(p?.nivel || 2.5),
+                    photo: p?.fotoPerfil || p?.fotoURL || "",
+                });
+            }
+        });
+    });
+}
+
+function getEventUserName(uid) {
+    if (!uid) return null;
+    try {
+        return getEventUserNameMap().get(String(uid)) || null;
+    } catch {
+        return null;
+    }
+}
+
+function getEventUserMeta(uid) {
+    if (!uid) return null;
+    try {
+        return getEventUserMetaMap().get(String(uid)) || null;
+    } catch {
+        return null;
+    }
 }
 
 function renderApoingLink(cta = "Comprobar reserva en Apoing", extraClass = "") {
@@ -140,15 +232,31 @@ async function showPostMatchSummaryModal(rankingSync = {}, matchId = null) {
               </div>
               <div class="pm-bar"><div id="pm-prog-bar" class="pm-bar-fill"></div></div>
             </div>
-            <div class="pm-foot">
+            <div class="pm-foot flex-wrap">
               <span class="pm-chip" style="color:${division.color};border-color:${division.color}66"><i class="fas ${division.icon}"></i> ${division.label}</span>
-              <button class="pm-btn" id="pm-continue-btn">CONTINUAR</button>
+              <div class="flex gap-2">
+                <button class="pm-btn" id="pm-share-btn" style="background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.3); color: #00d4ff;">
+                  <i class="fas fa-share-nodes"></i> ALARDEAR
+                </button>
+                <button class="pm-btn" id="pm-continue-btn">CONTINUAR</button>
+              </div>
             </div>
           </div>
         `;
         document.body.appendChild(overlay);
         const bar = overlay.querySelector("#pm-prog-bar");
         setTimeout(() => { if (bar) bar.style.width = `${prog}%`; }, 60);
+
+        overlay.querySelector("#pm-share-btn")?.addEventListener("click", async () => {
+             const btn = overlay.querySelector("#pm-share-btn");
+             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> GENERANDO...';
+             try {
+                 const { shareMatchResult } = await import('./utils/share-utils.js');
+                 await shareMatchResult(analysis, { matchId });
+             } catch(e) { console.error("Share failed", e); }
+             btn.innerHTML = '<i class="fas fa-share-nodes"></i> ALARDEAR';
+        });
+
         overlay.querySelector("#pm-continue-btn")?.addEventListener("click", () => {
             overlay.remove();
             resolve();
@@ -175,26 +283,221 @@ function getMatchDate(match) {
     return Number.isFinite(d?.getTime?.()) ? d : null;
 }
 
+function hasMatchResult(match) {
+    if (!match) return false;
+    if (typeof match.resultado === "string") return match.resultado.trim().length > 0;
+    if (typeof match?.resultado?.sets === "string") return match.resultado.sets.trim().length > 0;
+    return false;
+}
+
 function getFilledPlayers(match) {
-    return (match?.jugadores || []).filter((id) => id).length;
+    return getMatchPlayers(match).filter((id) => id).length;
 }
 
 function canReportResultNow(match) {
     const date = getMatchDate(match);
     if (!date) return false;
-    if (getFilledPlayers(match) < MAX_PLAYERS) return false;
+    // For event matches, allow reporting once the match time has passed (no 90min wait)
+    const isEventMatch = !!match?.eventoId || match?._col === 'eventoPartidos';
+    // Count players from both jugadores and playerUids
+    const filledPlayers = getFilledPlayers(match);
+    const filledFromUids = Array.isArray(match?.playerUids) ? match.playerUids.filter(Boolean).length : 0;
+    const hasEnoughPlayers = filledPlayers >= MAX_PLAYERS || filledFromUids >= MAX_PLAYERS;
+    if (!hasEnoughPlayers) return false;
+    if (isEventMatch) return Date.now() >= date.getTime();
     return Date.now() >= (date.getTime() + MATCH_DURATION_MS);
 }
 
 function autoMarkPlayedIfNeeded(matchData) {
     if (!matchData) return matchData;
     const state = String(matchData.estado || "").toLowerCase();
-    const blocked = state === "cancelado" || state === "anulado" || state === "jugado" || state === "jugada";
-    if (blocked || matchData.resultado?.sets) return matchData;
-    if (!canReportResultNow(matchData)) return matchData;
-    // Server-side scheduler is the source of truth for estado="jugada".
-    // We only mirror the expected state in UI to avoid client-driven writes.
-    return { ...matchData, estado: "jugada" };
+    const blocked = state === "cancelado" || state === "anulado" || state === "jugado";
+    if (blocked || hasMatchResult(matchData)) return matchData;
+    return matchData;
+}
+
+const MATCH_MEDIA_LIMIT = 12;
+const MATCH_MEDIA_MAX_MB = 12;
+const MATCH_MEDIA_MAX_VIDEO_SEC = 10;
+
+function getPlayerPoints(p) {
+    const raw = p?.points ?? p?.puntosRanking ?? p?.elo ?? 1000;
+    return Number.isFinite(raw) ? Number(raw) : 1000;
+}
+
+function computeBalanceSuggestion(players = []) {
+    if (!players || players.length < 4) return null;
+    if (!players[0] || !players[1] || !players[2] || !players[3]) return null;
+
+    const baseA = (getPlayerPoints(players[0]) + getPlayerPoints(players[1])) / 2;
+    const baseB = (getPlayerPoints(players[2]) + getPlayerPoints(players[3])) / 2;
+    const baseDiff = baseA - baseB;
+    const absBase = Math.abs(baseDiff);
+
+    let best = { diff: absBase, fromIdx: null, toIdx: null };
+    const swaps = [
+        [0, 2],
+        [0, 3],
+        [1, 2],
+        [1, 3],
+    ];
+    swaps.forEach(([a, b]) => {
+        const tmp = [...players];
+        const t = tmp[a]; tmp[a] = tmp[b]; tmp[b] = t;
+        const aAvg = (getPlayerPoints(tmp[0]) + getPlayerPoints(tmp[1])) / 2;
+        const bAvg = (getPlayerPoints(tmp[2]) + getPlayerPoints(tmp[3])) / 2;
+        const diff = Math.abs(aAvg - bAvg);
+        if (diff < best.diff) best = { diff, fromIdx: a, toIdx: b, newDiff: aAvg - bAvg };
+    });
+
+    if (absBase < 120) return null;
+    if (best.fromIdx === null || best.diff >= absBase - 40) return null;
+    return {
+        fromIdx: best.fromIdx,
+        toIdx: best.toIdx,
+        newDiff: best.newDiff || 0,
+    };
+}
+
+async function getMatchWatchDoc(matchId, uid) {
+    if (!matchId || !uid) return null;
+    const snap = await getDocs(query(collection(db, 'matchWatchers'), where('matchId', '==', matchId), where('uid', '==', uid), limit(1)));
+    if (snap.empty) return null;
+    const d = snap.docs[0];
+    return { id: d.id, ...d.data() };
+}
+
+async function toggleMatchWatch(matchId, col, uid) {
+    if (!matchId || !uid) return false;
+    const existing = await getMatchWatchDoc(matchId, uid);
+    if (existing?.id) {
+        await deleteDoc(doc(db, 'matchWatchers', existing.id));
+        return false;
+    }
+    await addDoc(collection(db, 'matchWatchers'), {
+        matchId,
+        matchCollection: col || '',
+        uid,
+        createdAt: serverTimestamp(),
+    });
+    return true;
+}
+
+async function notifyMatchWatchers(matchId, matchDate, col, excludeUids = []) {
+    if (!matchId) return;
+    const snap = await getDocs(query(collection(db, 'matchWatchers'), where('matchId', '==', matchId), limit(80)));
+    if (snap.empty) return;
+    const when = matchDate ? matchDate.toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'proximamente';
+    const targets = snap.docs
+        .map(d => d.data()?.uid)
+        .filter(uid => uid && !excludeUids.includes(uid));
+    if (targets.length) {
+        await createNotification(
+            targets,
+            'Plaza liberada',
+            `Se libero una plaza para el partido del ${when}.`,
+            'match_opened',
+            'calendario.html',
+            { type: 'match_opened', matchId, matchCollection: col, dedupId: `slot_open_${matchId}` }
+        );
+    }
+    await Promise.all(snap.docs.map(d => deleteDoc(d.ref).catch(() => {})));
+}
+
+async function fetchMatchMedia(matchId) {
+    if (!matchId) return [];
+    try {
+        const snap = await getDocs(
+            query(
+                collection(db, 'matchMedia'),
+                where('matchId', '==', matchId),
+                orderBy('createdAt', 'desc'),
+                limit(MATCH_MEDIA_LIMIT)
+            )
+        );
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+        const code = String(e?.code || '').toLowerCase();
+        if (!code.includes('failed-precondition') && !code.includes('missing-index')) {
+            throw e;
+        }
+        const snap = await getDocs(
+            query(
+                collection(db, 'matchMedia'),
+                where('matchId', '==', matchId),
+                limit(MATCH_MEDIA_LIMIT)
+            )
+        );
+        const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return rows.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+    }
+}
+
+async function getUserMatchMedia(matchId, uid) {
+    if (!matchId || !uid) return null;
+    const snap = await getDocs(query(collection(db, 'matchMedia'), where('matchId', '==', matchId), where('createdBy', '==', uid), limit(1)));
+    if (snap.empty) return null;
+    const d = snap.docs[0];
+    return { id: d.id, ...d.data() };
+}
+
+async function uploadMatchMediaFile({ matchId, matchCollection, uid, file }) {
+    const ext = (file?.name || '').split('.').pop() || 'bin';
+    const safeExt = ext.replace(/[^a-z0-9]/gi, '').slice(0, 6) || 'bin';
+    const path = `matches/${matchId}/${uid}/${Date.now()}.${safeExt}`;
+    const sRef = ref(storage, path);
+    await uploadBytes(sRef, file);
+    const url = await getDownloadURL(sRef);
+    const mediaType = file.type && file.type.startsWith('video') ? 'video' : 'image';
+    const docRef = await addDoc(collection(db, 'matchMedia'), {
+        matchId,
+        matchCollection: matchCollection || '',
+        url,
+        type: mediaType,
+        createdBy: uid,
+        createdAt: serverTimestamp(),
+        size: file.size || 0,
+        name: file.name || '',
+    });
+    return { id: docRef.id, url, type: mediaType };
+}
+
+async function validateMatchMediaFile(file) {
+    if (!file) return { ok: false, reason: 'Archivo invalido.' };
+    const sizeMb = (file.size || 0) / (1024 * 1024);
+    if (sizeMb > MATCH_MEDIA_MAX_MB) return { ok: false, reason: `Maximo ${MATCH_MEDIA_MAX_MB}MB.` };
+    if (file.type.startsWith('video')) {
+        const url = URL.createObjectURL(file);
+        try {
+            const duration = await new Promise((resolve) => {
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.onloadedmetadata = () => resolve(video.duration || 0);
+                video.onerror = () => resolve(0);
+                video.src = url;
+            });
+            if (duration > MATCH_MEDIA_MAX_VIDEO_SEC) return { ok: false, reason: `Maximo ${MATCH_MEDIA_MAX_VIDEO_SEC}s.` };
+        } finally {
+            URL.revokeObjectURL(url);
+        }
+    }
+    return { ok: true };
+}
+
+function renderMatchMediaItem(item) {
+    if (!item?.url) return '';
+    if (item.type === 'video') {
+        return `
+            <div class="match-media-item">
+                <video controls preload="metadata" src="${item.url}"></video>
+            </div>
+        `;
+    }
+    return `
+        <div class="match-media-item">
+            <img src="${item.url}" alt="media">
+        </div>
+    `;
 }
 
 
@@ -215,16 +518,136 @@ function getEventLinkValue() {
     if (parts.length < 2) return null;
     return { eventoId: parts[0], eventMatchId: parts[1], phase: parts[2] || '' };
 }
+function resolveEventTeamMap(eventDoc) {
+    const teams = Array.isArray(eventDoc?.teams) ? eventDoc.teams : [];
+    return new Map(teams.map(t => [t.id, t]));
+}
+
+function resolveMyTeamId(eventDoc, uid) {
+    if (!eventDoc || !uid) return null;
+    const teams = Array.isArray(eventDoc?.teams) ? eventDoc.teams : [];
+    const team = teams.find(t => Array.isArray(t?.playerUids) && t.playerUids.includes(uid));
+    return team?.id || null;
+}
+
+function resolveMyGroup(eventDoc, myTeamId) {
+    if (!eventDoc || !myTeamId) return null;
+    const groups = eventDoc.groups || {};
+    const found = Object.entries(groups).find(([, ids]) => Array.isArray(ids) && ids.includes(myTeamId));
+    return found ? found[0] : null;
+}
+
+function isEventMatchPlayed(m) {
+    const state = String(m?.estado || '').toLowerCase();
+    return state === 'jugado' || !!m?.resultado || !!m?.ganadorTeamId;
+}
+
+function resolveEventPlayersForMatch(eventDoc, match) {
+    if (eventDoc && (match?.teamAId || match?.teamBId)) {
+        const map = resolveEventTeamMap(eventDoc);
+        const teamA = map.get(match.teamAId);
+        const teamB = map.get(match.teamBId);
+        const players = [
+            ...(teamA?.playerUids || []),
+            ...(teamB?.playerUids || []),
+        ];
+        if (players.length) return players;
+    }
+    return Array.isArray(match?.playerUids) ? match.playerUids : [];
+}
+
+function normalizeTeamName(value) {
+    return String(value || "").trim().toLowerCase();
+}
+
+function isUnknownTeamName(value) {
+    const n = normalizeTeamName(value);
+    if (!n) return true;
+    const compact = n.replace(/\s+/g, "");
+    if (["tbd", "tbd.", "tbd?", "tdb", "?", "unknown"].includes(n)) return true;
+    if (["tbd", "tbd.", "tbd?", "tdb", "tbdvs", "tbdvstbd", "tbdtbd", "unknown"].includes(compact)) return true;
+    if (["desconocido", "desconocidos", "por confirmar", "por definir", "pendiente"].includes(n)) return true;
+    return false;
+}
 
 async function loadEventLinkOptions(dateStr, hour, uid) {
     const sel = document.getElementById('inp-event-link');
     if (!sel || !uid) return;
     sel.innerHTML = `<option value="">Buscando tus partidos de evento...</option>`;
     try {
+        let rows = [];
+        const eventDocs = new Map();
+
         const snap = await getDocs(query(collection(db, 'eventoPartidos'), where('playerUids', 'array-contains', uid), limit(300)));
-        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        window._pendingEventMatches = rows
-            .filter((m) => String(m.estado || '') !== 'jugado' && !m.linkedMatchId) // Filter out already linked ones
+        rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        if (!rows.length) {
+            const evSnap = await getDocs(collection(db, 'eventos'));
+            const evs = evSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            const myEvents = evs.filter((ev) => {
+                const inTeams = Array.isArray(ev?.teams) && ev.teams.some((t) => Array.isArray(t?.playerUids) && t.playerUids.includes(uid));
+                const inInscritos = Array.isArray(ev?.inscritos) && ev.inscritos.includes(uid);
+                return inTeams || inInscritos;
+            });
+            myEvents.forEach((ev) => eventDocs.set(ev.id, ev));
+            if (myEvents.length) {
+                const matchSnaps = await Promise.all(
+                    myEvents.map((ev) => getDocs(query(collection(db, 'eventoPartidos'), where('eventoId', '==', ev.id), limit(400))))
+                );
+                rows = matchSnaps.flatMap((s) => s.docs.map((d) => ({ id: d.id, ...d.data() })));
+            }
+        }
+
+        const eventIds = [...new Set(rows.map(r => r.eventoId).filter(Boolean))];
+        await Promise.all(eventIds.map(async (id) => {
+            if (eventDocs.has(id)) return;
+            const evSnap = await getDoc(doc(db, 'eventos', id));
+            if (evSnap.exists()) eventDocs.set(id, { id, ...evSnap.data() });
+        }));
+
+        const matchesByEvent = new Map();
+        rows.forEach((m) => {
+            const list = matchesByEvent.get(m.eventoId) || [];
+            list.push(m);
+            matchesByEvent.set(m.eventoId, list);
+        });
+
+        const pending = [];
+        matchesByEvent.forEach((list, eventId) => {
+            const ev = eventDocs.get(eventId);
+            const myTeamId = resolveMyTeamId(ev, uid);
+            if (!myTeamId) return;
+            const myGroup = resolveMyGroup(ev, myTeamId);
+            const faced = new Set();
+            list.forEach((m) => {
+                if (!isEventMatchPlayed(m)) return;
+                if (m.teamAId === myTeamId && m.teamBId) faced.add(m.teamBId);
+                if (m.teamBId === myTeamId && m.teamAId) faced.add(m.teamAId);
+            });
+            const seenOpponents = new Set();
+            list.forEach((m) => {
+                if (isEventMatchPlayed(m)) return;
+                if (m.linkedMatchId) return;
+                if (!m.teamAId || !m.teamBId) return;
+                if (m.teamAId !== myTeamId && m.teamBId !== myTeamId) return;
+                const opponentId = m.teamAId === myTeamId ? m.teamBId : m.teamAId;
+                if (!opponentId) return;
+                if (faced.has(opponentId)) return;
+                const phase = String(m.phase || '').toLowerCase();
+                const isGroupStage = phase === 'group' || phase === 'league';
+                if (myGroup && isGroupStage && String(m.group || '') !== String(myGroup)) return;
+                if (seenOpponents.has(opponentId)) return;
+                seenOpponents.add(opponentId);
+                const teamMap = resolveEventTeamMap(ev);
+                const teamA = teamMap.get(m.teamAId);
+                const teamB = teamMap.get(m.teamBId);
+                const teamAName = (!m.teamAName || isUnknownTeamName(m.teamAName)) && teamA?.name ? teamA.name : m.teamAName;
+                const teamBName = (!m.teamBName || isUnknownTeamName(m.teamBName)) && teamB?.name ? teamB.name : m.teamBName;
+                pending.push({ ...m, teamAName, teamBName, _eventDoc: ev, _myTeamId: myTeamId, _opponentId: opponentId });
+            });
+        });
+
+        window._pendingEventMatches = pending
             .sort((a, b) => String(a.phase || '').localeCompare(String(b.phase || '')));
 
         if (window._pendingEventMatches.length === 0) {
@@ -236,7 +659,8 @@ async function loadEventLinkOptions(dateStr, hour, uid) {
 
         const options = window._pendingEventMatches.map((m) => {
             const phase = String(m.phase || 'evento').toUpperCase();
-            const label = `${phase} · ${m.teamAName || 'Equipo A'} VS ${m.teamBName || 'Equipo B'}`;
+            const groupTag = m.group ? ` · GRUPO ${String(m.group).toUpperCase()}` : '';
+            const label = `${phase}${groupTag} · ${m.teamAName || 'Equipo A'} VS ${m.teamBName || 'Equipo B'}`;
             return `<option value="${m.eventoId}|${m.id}|${m.phase || ''}">${label}</option>`;
         });
 
@@ -248,18 +672,18 @@ async function loadEventLinkOptions(dateStr, hour, uid) {
             const parts = val.split('|');
             const emId = parts[1];
             const em = window._pendingEventMatches.find(x => x.id === emId);
-            if (em && Array.isArray(em.playerUids)) {
-                // Auto-fill players
-                const jugs = [...em.playerUids];
+            if (em) {
+                const players = resolveEventPlayersForMatch(em._eventDoc, em);
+                const jugs = [...players];
                 while(jugs.length < 4) jugs.push(null);
                 window._initialJugadores = jugs;
                 for(let i=0; i<4; i++) {
                     window.renderUserInCreationSlot(i, jugs[i]);
                 }
-                showToast("Sincronización", "Jugadores del evento cargados en los huecos", "info");
+                showToast("Sincronizacion", "Jugadores del evento cargados en los huecos", "info");
             }
         };
-        
+
         const info = document.getElementById('event-link-help');
         if (info) info.textContent = `Tienes ${window._pendingEventMatches.length} partidos de evento pendientes para vincular.`;
 
@@ -278,9 +702,9 @@ window.renderUserInCreationSlot = async (idx, uid) => {
     let u = window.psUsersCache?.find(x => x.id === uid);
     if (!u) {
         try {
-            if (uid.startsWith('GUEST_')) {
-                const parts = uid.split('_');
-                u = { id: uid, nombreUsuario: parts[1] + ' (Inv)', nivel: parseFloat(parts[2]), fotoPerfil: './imagenes/Logojafs.png' };
+            const guest = parseGuestMeta(uid);
+            if (guest) {
+                u = { id: uid, nombreUsuario: `${guest.name} (Inv)`, nivel: guest.level, fotoPerfil: './imagenes/Logojafs.png' };
             } else {
                 const d = await getDoc(doc(db, 'usuarios', uid));
                 u = d.exists() ? { id: d.id, ...d.data() } : null;
@@ -292,25 +716,107 @@ window.renderUserInCreationSlot = async (idx, uid) => {
     }
 };
 
-async function syncLinkedEventMatchFromRegularMatch(matchId, col, resultStr) {
+export async function syncLinkedEventMatchFromRegularMatch(matchId, col, resultStr) {
     try {
         const mSnap = await getDoc(doc(db, col, matchId));
         if (!mSnap.exists()) return;
         const m = mSnap.data() || {};
         const eventMatchId = m.eventMatchId || m?.eventLink?.eventMatchId;
         if (!eventMatchId) return;
+        const evRef = doc(db, 'eventoPartidos', eventMatchId);
+        const evSnap = await getDoc(evRef);
+        const evMatch = evSnap.exists() ? evSnap.data() : {};
+        const alreadyProcessed = String(evMatch?.standingsProcessedResult || '') === String(resultStr || '');
         const parsed = parseMatchResult(resultStr);
-        const winnerTeamId = parsed.winnerTeam === 'A' ? m.eventTeamAId : m.eventTeamBId;
+        const winnerTeamId = parsed.winnerTeam === 'A'
+            ? (m.eventTeamAId || evMatch?.teamAId)
+            : (m.eventTeamBId || evMatch?.teamBId);
         if (!winnerTeamId) return;
-        await updateDoc(doc(db, 'eventoPartidos', eventMatchId), {
+        await updateDoc(evRef, {
             resultado: resultStr,
             ganadorTeamId: winnerTeamId,
+            ganador: parsed.winnerTeam,
             estado: 'jugado',
             linkedMatchId: matchId,
             linkedMatchCollection: col,
+            standingsProcessedResult: resultStr,
+            standingsProcessedAt: alreadyProcessed ? (evMatch?.standingsProcessedAt || serverTimestamp()) : serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
+        if (!alreadyProcessed) {
+            const eventId = evMatch?.eventoId || m?.eventoId || null;
+            const teamAId = evMatch?.teamAId || m?.eventTeamAId || null;
+            const teamBId = evMatch?.teamBId || m?.eventTeamBId || null;
+            const loserTeamId = winnerTeamId === teamAId ? teamBId : teamAId;
+            const winnerName = winnerTeamId === teamAId ? (evMatch?.teamAName || m?.eventTeamAName) : (evMatch?.teamBName || m?.eventTeamBName);
+            const loserName = loserTeamId === teamAId ? (evMatch?.teamAName || m?.eventTeamAName) : (evMatch?.teamBName || m?.eventTeamBName);
+            if (eventId && winnerTeamId && loserTeamId) {
+                await applyEventStandingsUpdate(eventId, teamAId, teamBId, winnerTeamId, loserTeamId, winnerName, loserName, parsed);
+            }
+        }
     } catch (_) {}
+}
+
+// Update event standings (eventoClasificacion) when a linked event match is resolved.
+async function applyEventStandingsUpdate(eventId, teamAId, teamBId, winnerTeamId, loserTeamId, winnerName, loserName, parsed = null) {
+    try {
+        const evSnap = await getDoc(doc(db, 'eventos', eventId));
+        const ev = evSnap.exists() ? evSnap.data() : {};
+        const canUpdateStandings =
+            auth.currentUser?.email === "Juanan221091@gmail.com" ||
+            ev?.organizadorId === auth.currentUser?.uid ||
+            ev?.organizerId === auth.currentUser?.uid ||
+            ev?.createdBy === auth.currentUser?.uid;
+        if (!canUpdateStandings) return;
+        const ptsWin = Number(ev?.puntosVictoria || 2);
+        const ptsLoss = Number(ev?.puntosDerrota || 1);
+
+        const winRef = doc(db, 'eventoClasificacion', `${eventId}_${winnerTeamId}`);
+        const loseRef = doc(db, 'eventoClasificacion', `${eventId}_${loserTeamId}`);
+        const [winSnap, loseSnap] = await Promise.all([getDoc(winRef), getDoc(loseRef)]);
+        const winData = winSnap.exists() ? winSnap.data() : {};
+        const loseData = loseSnap.exists() ? loseSnap.data() : {};
+
+        const teamAGames = Number(parsed?.teamAGames || 0);
+        const teamBGames = Number(parsed?.teamBGames || 0);
+        const winnerIsA = winnerTeamId && teamAId ? winnerTeamId === teamAId : false;
+        const winGamesFor = winnerIsA ? teamAGames : teamBGames;
+        const winGamesAgainst = winnerIsA ? teamBGames : teamAGames;
+        const loseGamesFor = winnerIsA ? teamBGames : teamAGames;
+        const loseGamesAgainst = winnerIsA ? teamAGames : teamBGames;
+
+        const winPF = Number(winData.puntosGanados || 0) + winGamesFor;
+        const winPA = Number(winData.puntosPerdidos || 0) + winGamesAgainst;
+        const losePF = Number(loseData.puntosGanados || 0) + loseGamesFor;
+        const losePA = Number(loseData.puntosPerdidos || 0) + loseGamesAgainst;
+
+        await Promise.all([
+            setDoc(winRef, {
+                eventoId: eventId,
+                uid: winnerTeamId,
+                nombre: winnerName || winData.nombre || winnerTeamId,
+                pj: Number(winData.pj || 0) + 1,
+                ganados: Number(winData.ganados || 0) + 1,
+                puntos: Number(winData.puntos || 0) + ptsWin,
+                puntosGanados: winPF,
+                puntosPerdidos: winPA,
+                diferencia: winPF - winPA,
+            }, { merge: true }),
+            setDoc(loseRef, {
+                eventoId: eventId,
+                uid: loserTeamId,
+                nombre: loserName || loseData.nombre || loserTeamId,
+                pj: Number(loseData.pj || 0) + 1,
+                perdidos: Number(loseData.perdidos || 0) + 1,
+                puntos: Number(loseData.puntos || 0) + ptsLoss,
+                puntosGanados: losePF,
+                puntosPerdidos: losePA,
+                diferencia: losePF - losePA,
+            }, { merge: true }),
+        ]);
+    } catch (e) {
+        console.warn("applyEventStandingsUpdate failed", e);
+    }
 }
 
 /**
@@ -399,9 +905,9 @@ window.executeCreateMatch = async (dateStr, hour) => {
         if (validPlayers.length === MAX_PLAYERS) {
             try {
                 const profiles = await Promise.all(jugs.map(async uid => {
-                    if (uid.startsWith('GUEST_')) {
-                        const parts = uid.split('_');
-                        return { id: uid, puntosRanking: 1000, nivel: parseFloat(parts[2]) || 2.5 }; 
+                    const guest = parseGuestMeta(uid);
+                    if (guest) {
+                        return { id: uid, puntosRanking: 1000, nivel: guest.level || 2.5 }; 
                     }
                     const d = await getDoc(doc(db, 'usuarios', uid));
                     return d.exists() ? d.data() : { puntosRanking: 1000, nivel: 2.5 };
@@ -451,15 +957,20 @@ window.executeCreateMatch = async (dateStr, hour) => {
         }
 
         if (targets.length > 0) {
-            const notifType = visibility === 'private' ? 'private_invite' : 'match_opened';
+            const isReto = type === 'reto';
+            const notifType = visibility === 'private'
+                ? (isReto ? 'new_challenge' : 'private_invite')
+                : (isReto ? 'new_challenge' : 'match_opened');
             const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
             const time = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-            const notifMsg = visibility === 'private'
-                ? `${creatorName} te invitó a una partida privada el ${day} a las ${time}.`
-                : `${creatorName} creó una partida para el ${day} a las ${time}.`;
+            const notifMsg = isReto
+                ? `${creatorName} te ha retado para el ${day} a las ${time}.`
+                : (visibility === 'private'
+                    ? `${creatorName} te invito a una partida privada el ${day} a las ${time}.`
+                    : `${creatorName} creo una partida para el ${day} a las ${time}.`);
             await createNotification(
                 targets,
-                "¡Padeluminatis!",
+                "Padeluminatis",
                 notifMsg,
                 notifType,
                 'calendario.html',
@@ -489,8 +1000,9 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         matchDetailUnsub = null;
     }
     ensureApoingStyles();
-    const isReto = type ? type.toLowerCase().includes('reto') : false;
-    const col = isReto ? 'partidosReto' : 'partidosAmistosos';
+    const isEventType = type === 'eventoPartidos' || String(type || '').toLowerCase().includes('evento');
+    const isReto = !isEventType && type ? type.toLowerCase().includes('reto') : false;
+    const col = isEventType ? 'eventoPartidos' : (isReto ? 'partidosReto' : 'partidosAmistosos');
     
     window._currentMatchId = matchId;
     window._currentMatchCol = col;
@@ -504,12 +1016,30 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         }
         m = autoMarkPlayedIfNeeded(m);
 
-        const isParticipant = !!viewerUid && (m.jugadores?.includes(viewerUid) || m.playerUids?.includes(viewerUid));
+        const isParticipant = !!viewerUid && isUserInMatch(m, viewerUid);
         const isAdmin = viewerData?.rol === 'Admin' || auth.currentUser?.email === 'Juanan221091@gmail.com';
         const isOrganizer = !!viewerUid && (m.organizerId === viewerUid || m.creador === viewerUid || isAdmin);
+        const matchState = String(m.estado || '').toLowerCase();
+        const isPlayed = hasMatchResult(m) || matchState === 'cancelado' || matchState === 'anulado';
         const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
-        const playerIds = Array.isArray(m.jugadores) && m.jugadores.length > 0 ? m.jugadores : (Array.isArray(m.playerUids) ? m.playerUids : []);
+        let playerIds = Array.isArray(m.jugadores) && m.jugadores.length > 0 ? m.jugadores : (Array.isArray(m.playerUids) ? m.playerUids : []);
+        if (isEventType && m.eventoId) {
+            const ev = await getEventDocCached(m.eventoId);
+            if (ev) {
+                indexEventUserNames(ev);
+                const eventPlayers = resolveEventPlayersForMatch(ev, m);
+                if (eventPlayers && eventPlayers.length) playerIds = eventPlayers;
+            }
+        }
+        const matchForActions = { ...m, jugadores: playerIds };
         const players = await Promise.all([0, 1, 2, 3].map(i => getPlayerData(playerIds[i])));
+        const balanceSuggestion = computeBalanceSuggestion(players);
+        const watchDoc = viewerUid ? await getMatchWatchDoc(matchId, viewerUid) : null;
+        const isWatching = !!watchDoc;
+        const mediaItems = await fetchMatchMedia(matchId);
+        const userMediaCount = viewerUid
+            ? mediaItems.filter((m) => m?.createdBy === viewerUid).length
+            : 0;
 
         const renderSlimPlayer = (p, rev = false) => {
             const name = p?.name || 'LIBRE';
@@ -574,7 +1104,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                                 <div class="w-1 h-3 bg-primary rounded-full"></div>
                                 <span class="text-[10px] font-black uppercase tracking-widest opacity-80">Alineación</span>
                              </div>
-                             ${isReto ? '<span class="text-[8px] font-black text-sport-gold border border-sport-gold/30 px-2 py-0.5 rounded-full">⚡ RANKED</span>' : '<span class="text-[8px] font-black opacity-30">AMISTOSO</span>'}
+                             ${isReto ? '<span class="text-[8px] font-black text-sport-gold border border-sport-gold/30 px-2 py-0.5 rounded-full">ES RANKED</span>' : '<span class="text-[8px] font-black opacity-30">AMISTOSO</span>'}
                         </div>
                         
                         <div class="players-grid-read relative z-10">
@@ -605,7 +1135,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     </div>
 
                     <div class="actions-grid-v7">
-                        ${renderMatchActions(m, isParticipant, isOrganizer, isAdmin, viewerUid || '', matchId, col)}
+                        ${renderMatchActions(matchForActions, isParticipant, isOrganizer, isAdmin, viewerUid || '', matchId, col)}
                     </div>
                 </div>
             `;
@@ -621,8 +1151,18 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         const p1 = Math.min(Math.max(50 + (diff * 20), 10), 90);
         const p2 = 100 - p1;
 
-        const creatorSnap = await getDoc(doc(db, "usuarios", m.creador));
-        const cName = creatorSnap.exists() ? (creatorSnap.data().nombreUsuario || creatorSnap.data().nombre) : 'Jugador';
+        let cName = "Jugador";
+        if (m.creador) {
+            const creatorSnap = await getDoc(doc(db, "usuarios", m.creador));
+            if (creatorSnap.exists()) {
+                cName = creatorSnap.data().nombreUsuario || creatorSnap.data().nombre || cName;
+            }
+        } else if (m.organizerId) {
+            const orgSnap = await getDoc(doc(db, "usuarios", m.organizerId));
+            if (orgSnap.exists()) {
+                cName = orgSnap.data().nombreUsuario || orgSnap.data().nombre || cName;
+            }
+        }
 
         let eloBreakdownHtml = '';
         if (m.resultado?.sets) {
@@ -672,6 +1212,51 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
             }
         }
 
+        const realPlayerCount = playerIds.filter(Boolean).length;
+        const isFull = realPlayerCount >= MAX_PLAYERS;
+        const balanceHtml = balanceSuggestion ? `
+            <div class="balance-suggest-card">
+                <div class="balance-head">
+                    <span class="balance-title">Sugerencia de balanceo IA</span>
+                    <span class="balance-pill">JUSTO</span>
+                </div>
+                <p>Para un partido mas justo, sugerimos que <b>${players[balanceSuggestion.fromIdx]?.name}</b> cambie con <b>${players[balanceSuggestion.toIdx]?.name}</b>.</p>
+                ${isOrganizer ? `<button class="btn-balance-apply" data-from="${balanceSuggestion.fromIdx}" data-to="${balanceSuggestion.toIdx}"><i class="fas fa-exchange-alt"></i> Aplicar cambio</button>` : `<span class="balance-note">Solo el organizador puede aplicar el cambio.</span>`}
+            </div>
+        ` : '';
+        const watchHtml = (!isParticipant && isFull) ? `
+            <div class="match-watch-card">
+                <div class="watch-left">
+                    <span class="watch-title">Partido completo</span>
+                    <span class="watch-sub">Activa aviso si se libera una plaza.</span>
+                </div>
+                <button id="btn-watch-slot" class="btn-watch-slot ${isWatching ? 'active' : ''}">
+                    <i class="fas fa-bell"></i> ${isWatching ? 'Aviso activo' : 'Avisame'}
+                </button>
+            </div>
+        ` : '';
+        const mediaItemsHtml = mediaItems.length ? mediaItems.map(renderMatchMediaItem).join('') : `<div class="match-media-empty">Sin recuerdos aun.</div>`;
+        const maxMediaPerUser = 3;
+        const canUploadMedia = isParticipant && isPlayed && userMediaCount < maxMediaPerUser;
+        const mediaHtml = `
+            <div class="match-media-card">
+                <div class="match-media-head">
+                    <span class="match-media-title">Galeria de match</span>
+                    <span class="match-media-pill">${mediaItems.length} items</span>
+                </div>
+                <div class="match-media-grid">${mediaItemsHtml}</div>
+                ${canUploadMedia ? `
+                    <div class="match-media-upload">
+                        <input type="file" id="match-media-input" accept="image/*,video/mp4,video/webm" hidden>
+                        <button id="btn-match-media-upload" class="btn-match-media-upload">
+                            <i class="fas fa-cloud-upload-alt"></i> Subir foto o video
+                        </button>
+                        <span class="match-media-hint">Max ${MATCH_MEDIA_MAX_VIDEO_SEC}s video o ${MATCH_MEDIA_MAX_MB}MB. (${userMediaCount}/${maxMediaPerUser})</span>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
         container.innerHTML = `
             <div class="match-detail-v7 animate-up">
                 <div class="detail-hero-v7 flex-col center">
@@ -683,7 +1268,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     <span class="hero-time-v7">${date.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})}</span>
                     <div class="hero-date-v7">
                         ${date.toLocaleDateString('es-ES', {weekday:'long', day:'numeric'}).toUpperCase()}
-                        <span class="dash">—</span>
+                        <span class="dash">—"</span>
                         ${date.toLocaleDateString('es-ES', {month:'long'}).toUpperCase()}
                     </div>
                     <div class="mt-4 opacity-80 scale-90">${weatherHtml}</div>
@@ -717,6 +1302,8 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                             <div class="prob-fill t2" style="width: ${p2}%"></div>
                         </div>
                     </div>
+                    ${balanceHtml}
+                    ${watchHtml}
 
                     <div class="apoing-link-wrap mb-4">
                         ${renderApoingLink("Gestionar partida en Apoing", "text-orange-300 border-orange-400/40 bg-orange-500/10")}
@@ -758,8 +1345,13 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     ` : ''}
 
                     <div class="actions-grid-v7 flex-col gap-3">
-                        ${renderMatchActions(m, isParticipant, isOrganizer, isAdmin, viewerUid || '', matchId, col)}
+                    ${renderMatchActions(matchForActions, isParticipant, isOrganizer, isAdmin, viewerUid || '', matchId, col)}
                     </div>
+                    ${!isPlayed ? `
+                        <div class="match-social-actions">
+                            <button id="pm-share-poster-btn" class="pm-btn pm-btn-ghost"><i class="fas fa-share-nodes"></i> Compartir cartel</button>
+                        </div>
+                    ` : ''}
                     <div class="mt-3 p-2 rounded-xl border border-white/10 bg-white/5">
                         <div class="flex-row between items-center gap-2">
                             <span class="text-[9px] font-black uppercase tracking-widest text-primary">Consejo IA</span>
@@ -767,6 +1359,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         </div>
                         <p id="ai-coach-match-output" class="text-[10px] text-white/75 mt-2">Pulsa generar para obtener consejo pre/post partido.</p>
                     </div>
+                    ${mediaHtml}
                 </div>
 
                 <div id="md-tab-breakdown" class="md-tab-panel hidden">
@@ -816,6 +1409,87 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     aiBtn.disabled = false;
                 }
             };
+        }
+        const balanceBtn = document.querySelector('.btn-balance-apply');
+        if (balanceBtn) {
+            balanceBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const fromIdx = Number(balanceBtn.dataset.from);
+                const toIdx = Number(balanceBtn.dataset.to);
+                if (Number.isFinite(fromIdx) && Number.isFinite(toIdx)) {
+                    window.executeMatchAction('swap', matchId, col, { from: fromIdx, to: toIdx });
+                }
+            });
+        }
+        const watchBtn = document.getElementById('btn-watch-slot');
+        if (watchBtn && viewerUid) {
+            watchBtn.addEventListener('click', async () => {
+                watchBtn.disabled = true;
+                try {
+                    const active = await toggleMatchWatch(matchId, col, viewerUid);
+                    watchBtn.classList.toggle('active', active);
+                    watchBtn.innerHTML = `<i class=\"fas fa-bell\"></i> ${active ? 'Aviso activo' : 'Avisame'}`;
+                } catch (_) {}
+                watchBtn.disabled = false;
+            });
+        }
+        const sharePosterBtn = document.getElementById('pm-share-poster-btn');
+        if (sharePosterBtn) {
+            sharePosterBtn.addEventListener('click', async () => {
+                sharePosterBtn.disabled = true;
+                sharePosterBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
+                try {
+                    const { shareMatchPoster } = await import('./utils/share-utils.js');
+                    const formatPosterName = (p) => {
+                        const rawName = (p?.name || '').trim();
+                        if (!rawName || rawName.toLowerCase() === 'desconocido') return null;
+                        return rawName;
+                    };
+                    const getLvl = (p) => Number.isFinite(p?.level) ? Number(p.level) : null;
+                    let teamA = [formatPosterName(players[0]), formatPosterName(players[1])].filter(Boolean);
+                    let teamB = [formatPosterName(players[2]), formatPosterName(players[3])].filter(Boolean);
+                    let levelsA = [getLvl(players[0]), getLvl(players[1])].filter(v => v !== null);
+                    let levelsB = [getLvl(players[2]), getLvl(players[3])].filter(v => v !== null);
+                    if (!teamA.length && (m?.teamAName || m?.equipoA)) teamA = [String(m.teamAName || m.equipoA)];
+                    if (!teamB.length && (m?.teamBName || m?.equipoB)) teamB = [String(m.teamBName || m.equipoB)];
+                    const when = date.toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+                    await shareMatchPoster({ title: 'PROXIMO PARTIDO', teamA, teamB, levelsA, levelsB, when, club: 'PADELUMINATIS CLUB' });
+                } catch (e) {
+                    console.error('Share poster failed', e);
+                }
+                sharePosterBtn.disabled = false;
+                sharePosterBtn.innerHTML = '<i class="fas fa-share-nodes"></i> Compartir cartel';
+            });
+        }
+        const mediaBtn = document.getElementById('btn-match-media-upload');
+        const mediaInput = document.getElementById('match-media-input');
+        if (mediaBtn && mediaInput && viewerUid) {
+            mediaBtn.addEventListener('click', () => mediaInput.click());
+            mediaInput.addEventListener('change', async () => {
+                const file = mediaInput.files?.[0];
+                if (!file) return;
+                const check = await validateMatchMediaFile(file);
+                if (!check.ok) {
+                    showToast('Media', check.reason || 'Archivo no valido', 'warning');
+                    mediaInput.value = '';
+                    return;
+                }
+                mediaBtn.disabled = true;
+                mediaBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subiendo...';
+                try {
+                    await uploadMatchMediaFile({ matchId, matchCollection: col, uid: viewerUid, file });
+                    showToast('Media', 'Subida completada', 'success');
+                    const fresh = await getDocument(col, matchId);
+                    render(fresh);
+                } catch (e) {
+                    console.error('upload media failed', e);
+                    showToast('Media', 'No se pudo subir', 'error');
+                } finally {
+                    mediaBtn.disabled = false;
+                    mediaBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Subir foto o video';
+                    mediaInput.value = '';
+                }
+            });
         }
         if (isParticipant) initMatchChat(matchId, col);
     };
@@ -889,7 +1563,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                 </div>
 
                 <!-- Alineación -->
-                <span class="cfg-label-v7">FORMACIÓN TÁCTICA</span>
+                <span class="cfg-label-v7">FORMACIÓN TúCTICA</span>
                 <div class="court-container-v7 mb-4">
                     <div class="court-schema-v7" style="padding: 20px 10px; min-height: 220px;">
                         <div class="court-net"></div>
@@ -965,7 +1639,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                     </label>
                 </div>
 
-                <button class="btn-confirm-v7 w-full" onclick="executeCreateMatch('${dateStr}', '${hour}')">
+                <button class="btn-confirm-v7 mission-btn w-full" onclick="executeCreateMatch('${dateStr}', '${hour}')">
                     <div class="flex-row center gap-3">
                         <span class="t-main" style="letter-spacing: 2px;">DESPLEGAR MISIÓN</span>
                         <i class="fas fa-location-arrow"></i>
@@ -1035,7 +1709,7 @@ async function renderCreationSlot(idx, preUid, currentUser, userData, label = ""
     const teamColor = isTeamA ? 'var(--primary)' : 'var(--secondary)';
     
     if (p) {
-        const name = uid === currentUser.uid ? 'TÚ' : p.name;
+        const name = uid === currentUser.uid ? 'Tú' : p.name;
         return `
             <div class="p-slot-v7 active" id="slot-${idx}-wrap">
                 <div class="p-img-box" style="border-color:${teamColor}">
@@ -1059,16 +1733,52 @@ async function renderCreationSlot(idx, preUid, currentUser, userData, label = ""
  * @private
  */
 async function getPlayerData(uid) {
-    if (!uid) return { name: 'Vacío', photo: `https://ui-avatars.com/api/?name=V&background=random&color=fff`, level: 2.5, id: null };
-    if (uid.startsWith('GUEST_')) {
-        const parts = uid.split('_');
-        return { name: parts[1] || 'Invitado', level: parseFloat(parts[2] || 2.5), id: uid, isGuest: true, photo: `./imagenes/Logojafs.png` };
+    const fallback = { name: 'Vacío', photo: `https://ui-avatars.com/api/?name=V&background=random&color=fff`, level: 2.5, id: null, points: 1000 };
+    if (!uid) return fallback;
+    
+    // Normalize UID to string just in case
+    const sUid = String(uid);
+    const eventName = getEventUserName(sUid);
+    const eventMeta = getEventUserMeta(sUid);
+    
+    // Robust Guest Detection
+    const guestMeta = parseGuestMeta(sUid);
+    if (guestMeta) {
+        const name = eventMeta?.name || eventName || guestMeta.name || 'Invitado';
+        const level = Number.isFinite(eventMeta?.level) ? eventMeta.level : (Number.isFinite(guestMeta.level) ? guestMeta.level : 2.5);
+        const photo = eventMeta?.photo || `./imagenes/Logojafs.png`;
+        return { name, level, id: sUid, isGuest: true, photo, points: 1000 };
     }
-    const d = await getDocument('usuarios', uid);
-    if (!d) return { name: 'Desconocido', photo: `https://ui-avatars.com/api/?name=D&background=random&color=fff`, level: 2.5, id: uid }; 
-    const name = d.nombreUsuario || d.nombre || 'Jugador';
-    const photo = d.fotoPerfil || d.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
-    return { name, photo, level: d.nivel || 2.5, id: uid };
+
+    const cached = Array.isArray(window.psUsersCache) ? window.psUsersCache.find(x => x && x.id === sUid) : null;
+    if (cached) {
+        const name = cached.nombreUsuario || cached.nombre || 'Jugador';
+        const photo = cached.fotoPerfil || cached.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+        return { name, photo, level: cached.nivel || 2.5, id: sUid, points: cached.puntosRanking || 1000 };
+    }
+
+    try {
+        const d = await getDocument('usuarios', sUid);
+        if (!d) {
+            if (eventMeta) {
+                const name = eventMeta.name || eventName || 'Jugador';
+                const photo = eventMeta.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+                return { name, photo, level: eventMeta.level || 2.5, id: sUid, points: 1000 };
+            }
+            return { ...fallback, name: eventName || 'Jugador', id: sUid };
+        }
+        const name = d.nombreUsuario || d.nombre || 'Jugador';
+        const photo = d.fotoPerfil || d.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+        return { name, photo, level: d.nivel || 2.5, id: sUid, points: d.puntosRanking || 1000 };
+    } catch(e) {
+        console.warn("getPlayerData failed for", sUid, e);
+        if (eventMeta) {
+            const name = eventMeta.name || eventName || 'Jugador';
+            const photo = eventMeta.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+            return { name, photo, level: eventMeta.level || 2.5, id: sUid, points: 1000 };
+        }
+        return { ...fallback, name: eventName || 'Jugador', id: sUid };
+    }
 }
 
 /**
@@ -1082,9 +1792,10 @@ function renderPlayerSlot(p, idx, options = {}) {
     
     if (p) {
         const photo = p.photo || p.fotoPerfil || p.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random&color=fff`;
+        const pid = String(p.id || "");
         return `
             <div class="p-slot-v7 pointer" 
-                 onclick="${mid && !p.id.startsWith('GUEST_') ? `window.viewProfile('${p.id}')` : ''}">
+                 onclick="${mid && pid && !pid.startsWith('GUEST_') ? `window.viewProfile('${pid}')` : ''}">
                 <div class="p-img-box" style="border-color:${teamColor}">
                     <img src="${photo}">
                 </div>
@@ -1108,16 +1819,72 @@ function renderPlayerSlot(p, idx, options = {}) {
     `;
 }
 
+function normalizePlayerList(list) {
+    if (!Array.isArray(list)) return [];
+    return list
+        .map((p) => {
+            if (typeof p === "string") return p;
+            if (typeof p === "number") return String(p);
+            return p?.uid || p?.id || p?.userId || null;
+        })
+        .filter(Boolean);
+}
+
+function getMatchPlayers(match) {
+    if (!match) return [];
+    const jugs = normalizePlayerList(match.jugadores);
+    if (jugs.length) return jugs;
+    const uids = normalizePlayerList(match.playerUids);
+    if (uids.length) return uids;
+    const teamA = normalizePlayerList(match.equipoA);
+    const teamB = normalizePlayerList(match.equipoB);
+    const merged = [...teamA, ...teamB].filter(Boolean);
+    if (merged.length) return merged;
+    const players = normalizePlayerList(match.players);
+    if (players.length) return players;
+    const ids = normalizePlayerList(match.playerIds);
+    if (ids.length) return ids;
+    return [];
+}
+
+function isUserInMatch(match, uid) {
+    if (!uid || !match) return false;
+    if (match.creador === uid || match.organizerId === uid) return true;
+    if (getMatchPlayers(match).includes(uid)) return true;
+    // Also check playerUids directly (used by eventoPartidos)
+    if (Array.isArray(match.playerUids) && match.playerUids.includes(uid)) return true;
+    // Check team arrays
+    if (Array.isArray(match.equipoA) && match.equipoA.includes(uid)) return true;
+    if (Array.isArray(match.equipoB) && match.equipoB.includes(uid)) return true;
+    const invited = normalizePlayerList(match.invitedUsers);
+    return invited.includes(uid);
+}
+
 /**
  * Determines available actions for a match.
  */
 function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col) {
-    const realPlayerCount = (m.jugadores || []).filter(v => v).length;
-    const hasResult = !!m.resultado?.sets;
+    const realPlayerCount = getMatchPlayers(m).filter(v => v).length;
+    const hasResult = hasMatchResult(m);
     const matchState = String(m.estado || '').toLowerCase();
     const isPlayed = hasResult || matchState === 'cancelado' || matchState === 'anulado';
     const canReportNow = canReportResultNow(m);
-    if (isPlayed) return `<button class="btn-confirm-v7 opacity-80" onclick="openResultForm('${id}', '${col}')"><span class="t-main">SOLO LECTURA</span><i class="fas fa-eye"></i></button>`;
+    if (isPlayed) {
+        const btnAdmin = isAdmin 
+            ? `<button class="btn-confirm-v7" onclick="openResultForm('${id}', '${col}')"><span class="t-main">EDITAR RESULTADO</span><i class="fas fa-pen"></i></button>`
+            : `<button class="btn-confirm-v7 opacity-80" onclick="openResultForm('${id}', '${col}')"><span class="t-main">SOLO LECTURA</span><i class="fas fa-eye"></i></button>`;
+        
+        return `
+            <div class="flex-col gap-2 w-full">
+                ${btnAdmin}
+                <button class="btn-confirm-v7" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-top: 8px;" onclick="window.shareMatchResultPoster?.('${id}', '${col}')">
+                    <span class="t-main">COMPARTIR RESULTADO</span>
+                    <i class="fas fa-share-nodes"></i>
+                </button>
+            </div>
+        `;
+    }
+
 
     let actionsHtml = '';
     
@@ -1174,7 +1941,7 @@ function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col
             </div>
             ${realPlayerCount === MAX_PLAYERS ? `
                 ${canReportNow || isAdmin ? `
-                    <button class="btn-confirm-v7 mt-2" onclick="openResultForm('${id}', '${col}')">
+                    <button class="btn-confirm-v7 btn-report-result mt-2" onclick="openResultForm('${id}', '${col}')">
                         <span class="t-main">REPORTAR RESULTADO</span>
                         <i class="fas fa-flag-checkered"></i>
                     </button>
@@ -1199,8 +1966,8 @@ window.startSwapMode = async (mid, col) => {
     const match = await getDocument(col, mid);
     if (!match) return;
     const isOrganizer = match.organizerId === myUid || match.creador === myUid || isAdmin;
-    const isParticipant = (match.jugadores || []).includes(myUid);
-    const isPlayed = !!match.resultado?.sets || String(match.estado || '').toLowerCase() === 'cancelado' || String(match.estado || '').toLowerCase() === 'anulado';
+    const isParticipant = isUserInMatch(match, myUid);
+    const isPlayed = hasMatchResult(match) || String(match.estado || '').toLowerCase() === 'cancelado' || String(match.estado || '').toLowerCase() === 'anulado';
     if (isPlayed || canReportResultNow(match)) {
         showToast("BLOQUEADO", "No se puede cambiar posición en un partido finalizado.", "warning");
         return;
@@ -1287,7 +2054,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
         const isAdmin = (await getDocument('usuarios', user.uid))?.rol === 'Admin' || user.email === 'Juanan221091@gmail.com';
         const isOrganizer = m.organizerId === user.uid || m.creador === user.uid || isAdmin;
         const mState = String(m.estado || '').toLowerCase();
-        const isPlayed = !!m.resultado?.sets || mState === 'cancelado' || mState === 'anulado';
+        const isPlayed = hasMatchResult(m) || mState === 'cancelado' || mState === 'anulado';
         const isPastKickoff = Number.isFinite(matchDate?.getTime?.()) && Date.now() > matchDate.getTime();
         const timeLockedActions = ['join', 'add', 'swap'];
         if (isPastKickoff && !isPlayed && timeLockedActions.includes(action)) {
@@ -1350,7 +2117,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 } catch(err) {}
                 
                 // Match Filled Notification
-                const others = jugs.filter(uid => uid !== user.uid && !uid.startsWith('GUEST_'));
+                const others = jugs.filter(uid => uid && uid !== user.uid && !(typeof uid === 'string' && uid.startsWith('GUEST_')));
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
                 const time = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
                 await createNotification(
@@ -1390,7 +2157,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 }
 
                 jugs[idx] = null;
-                const activeJugs = jugs.filter(id => id && !id.startsWith('GUEST_'));
+                const activeJugs = jugs.filter(id => id && !(typeof id === 'string' && id.startsWith('GUEST_')));
                 
                 if (activeJugs.length === 0 && jugs.filter(id => id).length === 0) {
                     await deleteDoc(ref);
@@ -1403,6 +2170,9 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                         equipoA: [jugs[0], jugs[1]],
                         equipoB: [jugs[2], jugs[3]]
                     });
+                    if (wasFull && jugs.filter(id => id).length < MAX_PLAYERS) {
+                        await notifyMatchWatchers(id, matchDate, col, [user.uid]);
+                    }
 
                     if (wasFull) {
                         try {
@@ -1413,7 +2183,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                     
                     const meDoc = await getDocument('usuarios', user.uid);
                     const leaveName = meDoc?.nombreUsuario || meDoc?.nombre || 'Un jugador';
-                    const stillInMatch = jugs.filter(id => id && id !== user.uid && !id.startsWith('GUEST_'));
+                    const stillInMatch = jugs.filter(id => id && id !== user.uid && !(typeof id === 'string' && id.startsWith('GUEST_')));
                     if (stillInMatch.length > 0) {
                         const leaveDay = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
                         await createNotification(
@@ -1435,7 +2205,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
             
             if (confirm("¿Abortar misión?")) {
-                const others = jugs.filter(uid => uid !== user.uid && !uid.startsWith('GUEST_'));
+                const others = jugs.filter(uid => uid && uid !== user.uid && !(typeof uid === 'string' && uid.startsWith('GUEST_')));
                 const adminDoc = await getDocument('usuarios', user.uid);
                 const adminName = adminDoc?.nombreUsuario || adminDoc?.nombre || 'El organizador';
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
@@ -1455,6 +2225,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
         else if (action === 'remove') {
             if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
             
+            const wasFull = jugs.filter(id => id).length === MAX_PLAYERS;
             const removedUid = jugs[extra.idx];
             if (removedUid && !removedUid.startsWith('GUEST_')) {
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
@@ -1477,7 +2248,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
 
             // If we removed the creator, reassign or handle it
             if (extra.idx === 0) {
-                 const newCreator = jugs.find(j => j && !j.startsWith('GUEST_'));
+                 const newCreator = jugs.find(j => j && !(typeof j === 'string' && j.startsWith('GUEST_')));
                  if (newCreator) {
                      updates.creador = newCreator;
                      updates.organizerId = newCreator;
@@ -1486,6 +2257,9 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             }
 
             await updateDoc(ref, updates);
+            if (wasFull && jugs.filter(id => id).length < MAX_PLAYERS) {
+                await notifyMatchWatchers(id, matchDate, col, [removedUid || user.uid]);
+            }
             hideLoading();
             triggerFeedback({title: "ELIMINADO", msg: "Jugador expulsado", type: "info"});
         }
@@ -1524,7 +2298,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
              }
              jugs = addResult.players || jugs;
              
-             if (!extra.uid.startsWith('GUEST_')) {
+             if (typeof extra.uid === 'string' && !extra.uid.startsWith('GUEST_')) {
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
                 const currentPlayers = jugs.filter(id => id).length;
                 await createNotification(
@@ -1684,50 +2458,249 @@ async function resolveMentionTargets(matchId, col, text, senderUid) {
 
 async function getPlayerName(uid) {
     if (!uid) return 'Anónimo';
-    if (uid.startsWith('GUEST_')) return uid.split('_')[1];
+    const eventName = getEventUserName(uid);
+    if (eventName) return eventName;
+    const g = parseGuestMeta(uid);
+    if (g) return g.name;
+    if (uid.startsWith('invitado_') || uid.startsWith('manual_')) {
+        const token = uid.split('_')[1];
+        return token && Number.isNaN(Number(token)) ? token : 'Invitado';
+    }
     const d = await getDocument('usuarios', uid);
     return d?.nombreUsuario || d?.nombre || 'Jugador';
 }
 
 window.closeMatchModal = () => {
     document.getElementById('modal-match')?.classList.remove('active');
+    document.getElementById('modal-result-form')?.classList.remove('active');
     if (typeof matchDetailUnsub === "function") {
         try { matchDetailUnsub(); } catch (_) {}
         matchDetailUnsub = null;
     }
 };
 
-export const openResultForm = async (id, col) => {
-    // Try to find a suitable area, or creating one if needed for the modal to work
+// Ensure there's a usable modal container for the result form on any page.
+function ensureResultModalArea() {
     let area = document.getElementById('match-detail-area');
-    if (!area) {
-        // Fallback for pages like event-detail that might use a different modal id
-        const parentModal = document.getElementById('modal-match') || document.getElementById('modal-match-detail-ed');
-        if (parentModal) {
-            area = parentModal.querySelector('.modal-body') || parentModal;
-        }
+    if (area) {
+        // Make sure the parent modal is visible
+        const parentModal = area.closest('.modal-overlay');
+        if (parentModal) parentModal.classList.add('active');
+        return area;
     }
+
+    // Try existing modal-match first (calendar page)
+    let modal = document.getElementById('modal-match');
+    if (modal) {
+        modal.classList.add('active');
+        area = modal.querySelector('#match-detail-area') || modal.querySelector('.modal-body');
+        if (area) return area;
+    }
+
+    // Always create a fresh dedicated modal for the result form
+    // This prevents conflicts with evento-detalle's modal-match-detail-ed
+    const existingResultModal = document.getElementById('modal-result-form');
+    if (existingResultModal) existingResultModal.remove();
+
+    modal = document.createElement('div');
+    modal.id = 'modal-result-form';
+    modal.className = 'modal-overlay active';
+    modal.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:480px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-titulo">REGISTRAR RESULTADO</h3>
+                <button class="close-btn" onclick="document.getElementById('modal-result-form').classList.remove('active')">×</button>
+            </div>
+            <div class="modal-body scroll-y" id="match-detail-area" style="max-height: 80vh;"></div>
+        </div>
+    `;
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('active');
+    });
+    document.body.appendChild(modal);
+
+    return document.getElementById('match-detail-area');
+}
+
+function extractSetScores(resultStr = "") {
+    const matches = String(resultStr || "").match(/\d+\s*-\s*\d+/g) || [];
+    return matches.map((m) => m.replace(/\s+/g, ""));
+}
+
+function safeParseMatchResult(resultStr = "") {
+    try {
+        return parseMatchResult(resultStr);
+    } catch {
+        return null;
+    }
+}
+
+function buildStandingsDelta(parsed, winnerIsA, ptsWin, ptsLoss) {
+    return {
+        a: {
+            pj: 1,
+            ganados: winnerIsA ? 1 : 0,
+            perdidos: winnerIsA ? 0 : 1,
+            puntos: winnerIsA ? ptsWin : ptsLoss,
+            pg: parsed.teamAGames,
+            pp: parsed.teamBGames,
+        },
+        b: {
+            pj: 1,
+            ganados: winnerIsA ? 0 : 1,
+            perdidos: winnerIsA ? 1 : 0,
+            puntos: winnerIsA ? ptsLoss : ptsWin,
+            pg: parsed.teamBGames,
+            pp: parsed.teamAGames,
+        },
+    };
+}
+
+async function adminOverrideMatchResult(matchDoc, col, resultStr) {
+    const matchId = matchDoc?.id;
+    if (!matchId) return { success: false, error: "missing_match_id" };
+
+    const parsedNew = parseMatchResult(resultStr);
+    const winnerIsA = parsedNew.winnerTeam === "A";
+    const teamAId = matchDoc.teamAId || matchDoc.equipoAUid || null;
+    const teamBId = matchDoc.teamBId || matchDoc.equipoBUid || null;
+    const eventId = matchDoc.eventoId || matchDoc.eventId || null;
+
+    const updatePayload = {
+        estado: "jugado",
+        resultado: { sets: resultStr },
+        ...(teamAId && teamBId ? { ganadorTeamId: winnerIsA ? teamAId : teamBId, ganador: winnerIsA ? "A" : "B" } : {}),
+        standingsProcessedAt: serverTimestamp(),
+        standingsProcessedResult: resultStr,
+        updatedAt: serverTimestamp(),
+    };
+
+    if (col !== "eventoPartidos" || !eventId || !teamAId || !teamBId) {
+        await updateDoc(doc(db, col, matchId), updatePayload);
+        return { success: true, skippedRanking: true };
+    }
+
+    const ev = await getDocument("eventos", eventId);
+    const ptsWin = Number(ev?.puntosVictoria || 2);
+    const ptsLoss = Number(ev?.puntosDerrota || 1);
+    const prevRaw = matchDoc?.standingsProcessedResult || matchDoc?.resultado?.sets || "";
+    const prevParsed = prevRaw && prevRaw !== resultStr ? safeParseMatchResult(prevRaw) : null;
+    const prevWinnerIsA = prevParsed ? prevParsed.winnerTeam === "A" : null;
+
+    const nextDelta = buildStandingsDelta(parsedNew, winnerIsA, ptsWin, ptsLoss);
+    const prevDelta = prevParsed ? buildStandingsDelta(prevParsed, prevWinnerIsA, ptsWin, ptsLoss) : null;
+
+    const applyDelta = (base, delta) => {
+        const pj = Math.max(0, Number(base.pj || 0) + Number(delta.pj || 0));
+        const ganados = Math.max(0, Number(base.ganados || 0) + Number(delta.ganados || 0));
+        const perdidos = Math.max(0, Number(base.perdidos || 0) + Number(delta.perdidos || 0));
+        const puntos = Math.max(0, Number(base.puntos || 0) + Number(delta.puntos || 0));
+        const puntosGanados = Math.max(0, Number(base.puntosGanados || 0) + Number(delta.pg || 0));
+        const puntosPerdidos = Math.max(0, Number(base.puntosPerdidos || 0) + Number(delta.pp || 0));
+        const diferencia = puntosGanados - puntosPerdidos;
+        return { pj, ganados, perdidos, puntos, puntosGanados, puntosPerdidos, diferencia };
+    };
+
+    await runTransaction(db, async (tx) => {
+        const aKey = `${eventId}_${teamAId}`;
+        const bKey = `${eventId}_${teamBId}`;
+        const aRef = doc(db, "eventoClasificacion", aKey);
+        const bRef = doc(db, "eventoClasificacion", bKey);
+        const aSnap = await tx.get(aRef);
+        const bSnap = await tx.get(bRef);
+        const aData = aSnap.exists() ? aSnap.data() : {};
+        const bData = bSnap.exists() ? bSnap.data() : {};
+
+        const deltaA = { ...nextDelta.a };
+        const deltaB = { ...nextDelta.b };
+        if (prevDelta) {
+            deltaA.pj -= prevDelta.a.pj;
+            deltaA.ganados -= prevDelta.a.ganados;
+            deltaA.perdidos -= prevDelta.a.perdidos;
+            deltaA.puntos -= prevDelta.a.puntos;
+            deltaA.pg -= prevDelta.a.pg;
+            deltaA.pp -= prevDelta.a.pp;
+
+            deltaB.pj -= prevDelta.b.pj;
+            deltaB.ganados -= prevDelta.b.ganados;
+            deltaB.perdidos -= prevDelta.b.perdidos;
+            deltaB.puntos -= prevDelta.b.puntos;
+            deltaB.pg -= prevDelta.b.pg;
+            deltaB.pp -= prevDelta.b.pp;
+        }
+
+        const aNext = applyDelta(aData, deltaA);
+        const bNext = applyDelta(bData, deltaB);
+
+        tx.set(
+            aRef,
+            {
+                eventoId: eventId,
+                uid: teamAId,
+                nombre: matchDoc.teamAName || matchDoc.equipoA || aData.nombre || teamAId,
+                ...aNext,
+            },
+            { merge: true },
+        );
+        tx.set(
+            bRef,
+            {
+                eventoId: eventId,
+                uid: teamBId,
+                nombre: matchDoc.teamBName || matchDoc.equipoB || bData.nombre || teamBId,
+                ...bNext,
+            },
+            { merge: true },
+        );
+
+        tx.update(doc(db, col, matchId), updatePayload);
+    });
+
+    return { success: true, skippedRanking: true };
+}
+
+export const openResultForm = async (id, col) => {
+    const area = ensureResultModalArea();
     if (!area) return;
     
     ensureApoingStyles();
+    console.log("[ResultForm] open", { id, col });
     const meUid = auth.currentUser?.uid;
     const matchDoc = await getDocument(col, id);
     if (!matchDoc) {
         showToast("ERROR", "No se pudo cargar el partido.", "error");
         return;
     }
-    const players = Array.isArray(matchDoc?.jugadores) ? matchDoc.jugadores : (Array.isArray(matchDoc?.playerUids) ? matchDoc.playerUids : []);
+    console.log("[ResultForm] matchDoc loaded", matchDoc);
+    let players = Array.isArray(matchDoc?.jugadores) ? matchDoc.jugadores : (Array.isArray(matchDoc?.playerUids) ? matchDoc.playerUids : []);
+    
+    if (col === 'eventoPartidos' && matchDoc?.eventoId) {
+        const evSnap = await getDocument('eventos', matchDoc.eventoId);
+        if (evSnap) {
+            indexEventUserNames(evSnap);
+            players = resolveEventPlayersForMatch(evSnap, matchDoc);
+            console.log("[ResultForm] event players resolved", { players, eventoId: matchDoc.eventoId });
+        }
+    }
+
     const meData = meUid ? await getDocument("usuarios", meUid) : null;
     const isAdmin = meData?.rol === "Admin" || auth.currentUser?.email === "Juanan221091@gmail.com";
-    const isParticipant = !!meUid && players.includes(meUid);
-    const hasResult = !!matchDoc?.resultado?.sets;
+    const isParticipant = !!meUid && (players.includes(meUid) || (matchDoc.creador === meUid) || (matchDoc.organizadorId === meUid));
+    const hasResult = hasMatchResult(matchDoc);
     const state = String(matchDoc?.estado || "").toLowerCase();
     const isPlayed = hasResult || state === "cancelado" || state === "anulado";
+    const allowAdminEdit = isAdmin === true;
+    const resultReadRaw = matchDoc?.resultado?.sets || (typeof matchDoc?.resultado === "string" ? matchDoc.resultado : "");
+    const resultRead = resultReadRaw || 'Sin resultado';
+    let parsed = null;
+    try {
+        if (resultReadRaw) parsed = parseMatchResult(resultReadRaw);
+    } catch (e) {
+        console.warn("[ResultForm] parseMatchResult failed (read-only)", e, { resultReadRaw });
+    }
+    const winA = parsed ? parsed.winnerTeam === 'A' : null;
 
-    if (isPlayed) {
-        const resultRead = matchDoc?.resultado?.sets || 'Sin resultado';
-        const parsed = parseMatchResult(resultRead);
-        const winA = parsed.winnerTeam === 'A';
+    if (isPlayed && !allowAdminEdit) {
         
         area.innerHTML = `
             <div class="booking-hub-v7 animate-up p-3 max-w-sm mx-auto">
@@ -1737,7 +2710,7 @@ export const openResultForm = async (id, col) => {
                 </div>
 
                 <div class="flex-row items-stretch gap-2 mb-6">
-                     <div class="flex-1 flex-col items-center p-4 rounded-2xl border ${winA ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/3 opacity-60'}">
+                     <div class="flex-1 flex-col items-center p-4 rounded-2xl border ${winA === null ? 'border-white/10 bg-white/3' : winA ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/3 opacity-60'}">
                         <span class="text-[8px] font-black text-muted uppercase mb-2">Equipo A</span>
                         ${winA ? '<span class="text-[10px] font-bold text-primary mb-2"><i class="fas fa-trophy mr-1"></i> GANADOR</span>' : ''}
                         <div class="flex-row gap-1">
@@ -1750,9 +2723,9 @@ export const openResultForm = async (id, col) => {
                         <span class="text-xl font-black italic text-muted">VS</span>
                      </div>
 
-                     <div class="flex-1 flex-col items-center p-4 rounded-2xl border ${!winA ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/3 opacity-60'}">
+                     <div class="flex-1 flex-col items-center p-4 rounded-2xl border ${winA === null ? 'border-white/10 bg-white/3' : !winA ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/3 opacity-60'}">
                         <span class="text-[8px] font-black text-muted uppercase mb-2">Equipo B</span>
-                        ${!winA ? '<span class="text-[10px] font-bold text-primary mb-2"><i class="fas fa-trophy mr-1"></i> GANADOR</span>' : ''}
+                        ${winA === null ? '' : !winA ? '<span class="text-[10px] font-bold text-primary mb-2"><i class="fas fa-trophy mr-1"></i> GANADOR</span>' : ''}
                         <div class="flex-row gap-1">
                             <div class="w-8 h-8 rounded-full bg-white/10 border border-white/10 overflow-hidden"><img src="https://ui-avatars.com/api/?name=B1&background=random" class="w-full h-full object-cover"></div>
                             <div class="w-8 h-8 rounded-full bg-white/10 border border-white/10 overflow-hidden"><img src="https://ui-avatars.com/api/?name=B2&background=random" class="w-full h-full object-cover"></div>
@@ -1775,8 +2748,9 @@ export const openResultForm = async (id, col) => {
         return;
     }
 
+    const adminEditMode = isPlayed && allowAdminEdit;
+
     if (!isParticipant && !isAdmin) {
-        const resultRead = matchDoc?.resultado?.sets || 'Aún sin resultado';
         area.innerHTML = `
             <div class="booking-hub-v7 animate-up p-3 max-w-sm mx-auto">
                 <h3 class="hub-title-v7 text-center mb-4">Resultado del Partido</h3>
@@ -1833,7 +2807,8 @@ export const openResultForm = async (id, col) => {
     }
 
     // Fetch player names for MVP selection
-    const playerNames = await Promise.all(players.map(async (uid) => {
+    const playersResolved = Array.isArray(players) && players.length ? players : [];
+    const playerNames = await Promise.all(playersResolved.map(async (uid) => {
         if (!uid) return { id: null, name: 'Vacío' };
         const name = await getPlayerName(uid);
         return { id: uid, name };
@@ -1843,6 +2818,10 @@ export const openResultForm = async (id, col) => {
     area.innerHTML = `
         <div class="booking-hub-v7 animate-up p-2 max-w-sm mx-auto">
             <h3 class="hub-title-v7 text-center mb-6">Resultados</h3>
+            ${adminEditMode ? `
+            <div class="mb-4 p-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 text-[10px] text-amber-300 font-bold uppercase tracking-widest text-center">
+                Modo Admin · Edición de resultado
+            </div>` : ''}
             <div class="flex-col gap-4 mb-6">
                 ${[1, 2, 3].map(i => `
                     <div class="range-box-v7 justify-between" id="set-row-${i}">
@@ -1873,6 +2852,17 @@ export const openResultForm = async (id, col) => {
         </div>
     `;
 
+    const existingSets = extractSetScores(resultReadRaw);
+    if (existingSets.length) {
+        existingSets.slice(0, 3).forEach((setStr, idx) => {
+            const parts = setStr.split("-");
+            const s1 = document.getElementById(`s${idx + 1}-1`);
+            const s2 = document.getElementById(`s${idx + 1}-2`);
+            if (s1) s1.value = parts[0] || '';
+            if (s2) s2.value = parts[1] || '';
+        });
+    }
+
     window.checkSets = () => {
         const s1_1 = parseInt(document.getElementById('s1-1').value) || 0;
         const s1_2 = parseInt(document.getElementById('s1-2').value) || 0;
@@ -1895,6 +2885,9 @@ export const openResultForm = async (id, col) => {
             }
         }
     };
+    if (existingSets.length) {
+        window.checkSets();
+    }
 
     document.getElementById('btn-save-res').onclick = async () => {
         const saveBtn = document.getElementById('btn-save-res');
@@ -1909,6 +2902,9 @@ export const openResultForm = async (id, col) => {
         }
         
         if (res.length < 2) return showToast("INCOMPLETO", "Se requieren al menos 2 sets", "warning");
+        if (res.some(r => String(r) === "0-0")) {
+            return showToast("RESULTADO INVÁLIDO", "No puedes registrar sets 0-0. Introduce marcadores reales.", "warning");
+        }
 
         const resultT0 = performance.now();
         try {
@@ -1919,11 +2915,31 @@ export const openResultForm = async (id, col) => {
             showToast("Guardando...", "Registrando resultado oficial del partido.", "info");
             const resultStr = res.join(' ');
             const mvpId = document.getElementById('mvp-select')?.value || null;
+            const adminOverride = adminEditMode && matchDoc?.rankingProcessedAt != null;
             
+            if (adminOverride) {
+                console.log("[ResultForm] admin override", { id, col, resultStr });
+                await adminOverrideMatchResult({ id, ...matchDoc }, col, resultStr);
+                await syncLinkedEventMatchFromRegularMatch(id, col, resultStr);
+                showToast("RESULTADO ACTUALIZADO", "Edición admin aplicada.", "success");
+                window.closeMatchModal();
+                return;
+            }
+
             // We only call processMatchResults, it will handle estado: 'jugado' atomically
             const rankingSync = await processMatchResults(id, col, resultStr, { mvpId });
             if (!rankingSync?.success) {
-                throw new Error(rankingSync?.error || 'ranking-sync-failed');
+                const rawErr = rankingSync?.error || 'ranking-sync-failed';
+                console.warn("[ResultForm] ranking error", { id, col, rawErr });
+                const friendly = String(rawErr || '').includes("Match or players invalid")
+                    ? "No se pudo procesar: faltan jugadores confirmados (equipos incompletos)."
+                    : String(rawErr || '').includes("Teams incomplete")
+                        ? "No se pudo procesar: equipos incompletos en el evento."
+                        : String(rawErr || '').includes("permission")
+                            ? "No tienes permisos para registrar este resultado."
+                            : "No se pudo procesar el resultado. Intenta de nuevo en unos minutos.";
+                showToast("RESULTADO NO GUARDADO", friendly, "error");
+                throw new Error(rawErr);
             }
             await syncLinkedEventMatchFromRegularMatch(id, col, resultStr);
             const meData = await getDocument('usuarios', auth.currentUser.uid);
@@ -2237,5 +3253,102 @@ window.removeUserFromNew = (idx) => {
         slot.className = "p-slot-v7";
         slot.innerHTML = `<div class="p-img-box empty"><i class="fas fa-plus text-muted"></i></div>`;
         slot.onclick = () => window.handleCreationSlotClick(idx);
+    }
+};
+
+export async function createLinkedMatchFromEvent(eventMatchId, slotDate) {
+    const ref = doc(db, 'eventoPartidos', eventMatchId);
+    const safeDate = slotDate instanceof Date ? slotDate : new Date(slotDate);
+    await updateDoc(ref, {
+        fecha: Timestamp.fromDate(safeDate),
+        estado: 'abierto'
+    });
+}
+
+
+
+
+
+
+
+
+window.shareMatchResultPoster = async (matchId, col) => {
+    try {
+        const { getDocument } = await import('./firebase-service.js');
+        const m = await getDocument(col, matchId);
+        if (!m) return;
+        
+        const { shareMatchResult } = await import('./utils/share-utils.js');
+        const { resolveWinnerTeam } = await import('./utils/match-utils.js');
+
+        // Get players and resolve names/levels asynchronously
+        let players = [];
+        if (window.getNormalizedPlayers) {
+            players = window.getNormalizedPlayers(m);
+        } else {
+            players = (m.jugadores || m.playerUids || m.players || []).filter(Boolean);
+        }
+
+        const resolvePlayerInfo = async (uid) => {
+            if (!uid) return { name: "LIBRE", level: 2.5 };
+            
+            // Try to find name and level
+            let name = "Jugador";
+            let level = 2.5;
+
+            // Global helpers if available
+            if (window.resolvePlayerName) {
+                name = await window.resolvePlayerName(uid);
+            } else if (window.getPlayerDisplayName) {
+                name = window.getPlayerDisplayName(uid);
+            }
+
+            // Get level from meta or firestore
+            const guest = String(uid).startsWith("GUEST_") || String(uid).startsWith("invitado_");
+            if (guest && window.parseGuestMeta) {
+                const gm = window.parseGuestMeta(uid);
+                if (gm) level = gm.level;
+            } else {
+                try {
+                    const uDoc = await getDocument("usuarios", uid);
+                    if (uDoc) level = uDoc.nivel || uDoc.level || 2.5;
+                } catch(e){}
+            }
+
+            return { name: String(name), level };
+        };
+
+        const playerInfos = await Promise.all(players.map(uid => resolvePlayerInfo(uid)));
+        const pNames = playerInfos.map(i => i.name);
+        const pLevels = playerInfos.map(i => i.level);
+
+        const sets = (m.resultado?.sets || (typeof m.resultado === "string" ? m.resultado : "PARTIDO FINALIZADO"));
+        const winner = resolveWinnerTeam(m);
+        
+        const metadata = {
+            players: pNames,
+            levels: pLevels,
+            teamA: [pNames[0], pNames[1]],
+            teamB: [pNames[2], pNames[3]],
+            levelsA: [pLevels[0], pLevels[1]],
+            levelsB: [pLevels[2], pLevels[3]],
+            winner: winner,
+            sets: sets,
+            club: "PADELUMINATIS CLUB",
+            logoUrl: 'imagenes/Logojafs.png'
+        };
+
+
+        
+        const analysis = {
+            sets: sets,
+            delta: 0,
+            pointsAfter: "CONFIRMADAS",
+            levelBand: "MISION CUMPLIDA"
+        };
+        
+        await shareMatchResult(analysis, metadata);
+    } catch (e) {
+        console.error("Poster share failed", e);
     }
 };

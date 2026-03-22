@@ -163,8 +163,9 @@ export function generateRoundRobin(teamIds = []) {
   return matches;
 }
 
-export function generateKnockoutTree(teams = [], seed = "") {
-  const shuffled = shuffleSeeded(teams, `${seed}_ko`);
+export function generateKnockoutTree(teams = [], seed = "", opts = {}) {
+  const doShuffle = opts?.shuffle !== false;
+  const shuffled = doShuffle ? shuffleSeeded(teams, `${seed}_ko`) : [...teams];
   const size = Math.pow(2, Math.ceil(Math.log2(Math.max(2, shuffled.length))));
   const padded = [...shuffled];
   while (padded.length < size) padded.push(null);
@@ -201,21 +202,53 @@ export function computeGroupTable(matches = [], teams = [], cfg = {}) {
   const draw = cfg.draw ?? 1;
   const loss = cfg.loss ?? 0;
 
-  const table = new Map(teams.map(t => [t.id, { teamId: t.id, teamName: t.name, pj:0, g:0, e:0, p:0, pts:0 }]));
+  const table = new Map(teams.map(t => [t.id, { teamId: t.id, teamName: t.name, pj:0, g:0, e:0, p:0, pts:0, pf:0, pc:0, dif:0 }]));
 
-  matches.filter(m => m.estado === 'jugado').forEach(m => {
+  matches.filter(m => {
+    const s = String(m.estado || "").toLowerCase();
+    return s === 'jugado' || s === 'finalizado' || s === 'jugada';
+  }).forEach(m => {
     const a = table.get(m.teamAId);
     const b = table.get(m.teamBId);
     if (!a || !b) return;
 
     a.pj++; b.pj++;
-    if (m.ganadorTeamId === m.teamAId) {
+
+    const rawResult = typeof m.resultado === 'string' ? m.resultado : (m.resultado?.sets || '');
+    // Support formats like "6-4 7-5" or "6/4 7/6" or "6-4, 7-5"
+    const pairs = String(rawResult || '').match(/\d+[\s/-]\d+/g) || [];
+    let gamesA = 0;
+    let gamesB = 0;
+    let setsA = 0;
+    let setsB = 0;
+    pairs.forEach((s) => {
+      const parts = s.split(/[\s/-]/).map(Number);
+      if (parts.length !== 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return;
+      gamesA += parts[0];
+      gamesB += parts[1];
+      if (parts[0] > parts[1]) setsA += 1;
+      else if (parts[1] > parts[0]) setsB += 1;
+    });
+    
+    let winnerTeamId = m.ganadorTeamId || m.winnerTeamId || (m.resultado?.ganador === 1 ? m.teamAId : m.resultado?.ganador === 2 ? m.teamBId : null);
+    if (!winnerTeamId && setsA !== setsB) {
+      winnerTeamId = setsA > setsB ? m.teamAId : m.teamBId;
+    }
+
+
+    if (winnerTeamId === m.teamAId) {
         a.g++; b.p++; a.pts += win; b.pts += loss;
-    } else if (m.ganadorTeamId === m.teamBId) {
+    } else if (winnerTeamId === m.teamBId) {
         b.g++; a.p++; b.pts += win; a.pts += loss;
     } else {
         a.e++; b.e++; a.pts += draw; b.pts += draw;
     }
+    a.pf += gamesA;
+    a.pc += gamesB;
+    b.pf += gamesB;
+    b.pc += gamesA;
+    a.dif = a.pf - a.pc;
+    b.dif = b.pf - b.pc;
   });
 
   return [...table.values()].sort((x, y) => (y.pts - x.pts) || (y.g - x.g) || (x.p - y.p));

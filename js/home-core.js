@@ -4,19 +4,29 @@ import {
   collection,
   getDocs,
   query,
+  where,
   orderBy,
   limit,
   addDoc,
+  doc,
+  deleteDoc,
+  onSnapshot,
+  setDoc,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
-import { initAppUI } from "./ui-core.js";
+import { initAppUI, showToast } from "./ui-core.js";
 import { injectHeader, injectNavbar } from "./modules/ui-loader.js";
 import { renderMatchDetail } from "./match-service.js";
+import { createNotification } from "./services/notification-service.js";
 import {
   isCancelledMatch,
   isFinishedMatch,
   toDateSafe,
+  getResultSetsString,
+  resolveWinnerTeam,
+  getMatchPlayers,
 } from "./utils/match-utils.js";
+import { RESULT_LOCK_MS } from "./config/match-constants.js";
 import { getDetailedWeather } from "./external-data.js";
 import { analyticsTiming } from "./core/analytics.js";
 import {
@@ -31,6 +41,10 @@ import {
   queryCoreAI,
   startCorePresence,
 } from "./core/core-engine.js";
+import { computeGroupTable } from "./event-tournament-engine.js";
+import { shareMatchResult, shareMatchPoster } from "./utils/share-utils.js";
+
+
 
 let currentUser = null;
 let currentUserData = null;
@@ -52,15 +66,147 @@ let nexusOnlineUsers = [];
 let nexusAllUsers = [];
 let homeEntryOverlayInterval = null;
 let homeEntryOverlayValue = 0;
+const HOME_MATCH_CACHE_KEY = "home:matches:v1";
+let showHomeWelcome = false;
+let unsubEventStandings = null;
+let activeEventStandingsId = null;
+let proposalUsersCache = [];
+let proposalListUnsub = null;
+let proposalChatUnsub = null;
+let activeProposalId = null;
+let activeProposalMeta = null;
+let proposalInlineMode = false;
+
+/* Apoing Integration */
+let apoingEvents = [];
+let apoingLastSyncAt = 0;
+const APOING_SYNC_TTL_MS = 300000; // 5 min
+const APOING_PROXY_LIST = [
+  "/api/apoing-ics?url=",
+  "https://api.allorigins.win/raw?url=",
+  "https://corsproxy.io/?",
+];
+const APOING_PROXY_JINA = "https://r.jina.ai/http://";
 
 /* Player cache (names + photos) */
 const playerNameCache = new Map();
 const playerPhotoCache = new Map();
+const eventDocCache = new Map();
+
+function getEventUserNameMap() {
+  if (!window.__eventUserNameMap) window.__eventUserNameMap = new Map();
+  return window.__eventUserNameMap;
+}
+
+function indexEventUserNames(eventDoc) {
+  if (!eventDoc) return;
+  const map = getEventUserNameMap();
+  const inscritos = Array.isArray(eventDoc.inscritos) ? eventDoc.inscritos : [];
+  inscritos.forEach((i) => {
+    const uid = i?.uid;
+    const name = i?.nombre || i?.nombreUsuario;
+    if (uid && name) {
+        map.set(String(uid), String(name));
+        if (!playerNameCache.has(uid)) playerNameCache.set(uid, name);
+    }
+  });
+  const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
+  teams.forEach((t) => {
+    const players = Array.isArray(t?.players) ? t.players : [];
+    players.forEach((p) => {
+      const uid = p?.uid || p?.id;
+      const name = p?.nombre || p?.nombreUsuario;
+      if (uid && name) {
+          map.set(String(uid), String(name));
+          if (!playerNameCache.has(uid)) playerNameCache.set(uid, name);
+      }
+    });
+  });
+}
+
+function getEventUserName(uid) {
+  if (!uid) return null;
+  try {
+    return getEventUserNameMap().get(String(uid)) || null;
+  } catch {
+    return null;
+  }
+}
+
+function parseGuestMeta(uid) {
+  if (!uid) return null;
+  const s = String(uid);
+  if (!s.startsWith("GUEST_") && !s.startsWith("invitado_") && !s.startsWith("manual_")) return null;
+  const parts = s.split("_");
+  if (parts.length >= 4) {
+    const levelRaw = parts[parts.length - 2];
+    const level = parseFloat(levelRaw);
+    const nameRaw = parts.slice(1, parts.length - 2).join(" ");
+    const name = nameRaw.replace(/_/g, " ").trim() || "Invitado";
+    return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+  }
+  const name = (parts[1] || "Invitado").replace(/_/g, " ").trim() || "Invitado";
+  const level = parseFloat(parts[2]);
+  return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+}
+
+function normalizeMatchForCache(match) {
+  const d = toDateSafe(match?.fecha);
+  return {
+    ...match,
+    fecha: d ? d.toISOString() : match?.fecha || null,
+  };
+}
+
+function saveHomeMatchCache() {
+  try {
+    const payload = {
+      updatedAt: Date.now(),
+      matches: Array.isArray(allMatches) ? allMatches.map(normalizeMatchForCache) : [],
+    };
+    localStorage.setItem(HOME_MATCH_CACHE_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+function loadHomeMatchCache() {
+  try {
+    const raw = localStorage.getItem(HOME_MATCH_CACHE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data?.matches)) return false;
+    allMatches = data.matches;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function applyHomeMatchCache({ complete = false } = {}) {
+  if (!loadHomeMatchCache()) return false;
+  const activeTab =
+    document.querySelector(".hv2-tab.active")?.dataset.filter || "open";
+  renderNextMatch();
+  renderEventSpotlight();
+  maybeCreateEventDayNotice();
+  renderMatchesByFilter(activeTab);
+  matchLoadFallbackFired = true;
+  if (complete) {
+    if (!homeLoadMeasured) {
+      homeLoadMeasured = true;
+      analyticsTiming("home.ttv_ms", performance.now() - homeBootStart);
+    }
+    completeHomeEntryOverlay();
+  }
+  return true;
+}
 
 async function resolvePlayerName(uid) {
   if (!uid) return null;
-  if (String(uid).startsWith("GUEST_"))
-    return String(uid).split("_")[1] || "Invitado";
+  const eventName = getEventUserName(uid);
+  if (eventName) return eventName;
+  const sUid = String(uid);
+  const guestMeta = parseGuestMeta(sUid);
+  if (guestMeta) return guestMeta.name || "Invitado";
   if (playerNameCache.has(uid)) return playerNameCache.get(uid);
   try {
     const doc = await getDocument("usuarios", uid);
@@ -77,7 +223,7 @@ async function resolvePlayerName(uid) {
 async function preloadPlayerNames(matches) {
   const uids = new Set();
   matches.forEach((m) =>
-    (m.jugadores || []).forEach((uid) => {
+    getNormalizedPlayers(m).forEach((uid) => {
       if (uid && !String(uid).startsWith("GUEST_") && !playerNameCache.has(uid))
         uids.add(uid);
     }),
@@ -88,10 +234,13 @@ async function preloadPlayerNames(matches) {
 
 function getPlayerDisplayName(uid) {
   if (!uid) return "LIBRE";
-  if (String(uid).startsWith("GUEST_"))
-    return String(uid).split("_")[1] || "INV";
+  const sUid = String(uid);
+  const eventName = getEventUserName(sUid);
+  if (eventName) return eventName;
+  const guestMeta = parseGuestMeta(sUid);
+  if (guestMeta) return guestMeta.name || "Invitado";
   if (uid === currentUser?.uid)
-    return currentUserData?.nombreUsuario || currentUserData?.nombre || "TÚ";
+    return currentUserData?.nombreUsuario || currentUserData?.nombre || "Tú";
   return playerNameCache.get(uid) || "Jugador";
 }
 
@@ -106,6 +255,12 @@ function getInitials(name = "") {
 }
 /* Init */
 document.addEventListener("DOMContentLoaded", () => {
+  showHomeWelcome = shouldShowHomeWelcome();
+  if (!showHomeWelcome) {
+    const overlay = document.getElementById("home-entry-overlay");
+    if (overlay) overlay.classList.add("hidden");
+    document.body.classList.remove("home-booting");
+  }
   initAppUI("home");
   observeCoreSession({
     onSignedOut: () => {
@@ -116,7 +271,13 @@ document.addEventListener("DOMContentLoaded", () => {
       cleanup();
       currentUser = user;
       currentUserData = userDoc || {};
-      beginHomeEntryOverlay(currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador");
+      if (showHomeWelcome) {
+        beginHomeEntryOverlay(currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador");
+      } else {
+        const overlay = document.getElementById("home-entry-overlay");
+        if (overlay) overlay.classList.add("hidden");
+        document.body.classList.remove("home-booting");
+      }
       await injectHeader(currentUserData);
       injectNavbar("home");
       renderWelcome();
@@ -126,7 +287,9 @@ document.addEventListener("DOMContentLoaded", () => {
       initNexus(); // New: Nexus Online
       bindNotificationNudge();
       checkSystemAlerts(userDoc);
-      checkHomeNotices(); // Added this line
+      checkHomeNotices();
+      initProposeMatch();
+      applyHomeMatchCache({ complete: navigator.onLine === false });
 
       // Loading matches with safety fallback
       try {
@@ -164,11 +327,15 @@ document.addEventListener("DOMContentLoaded", () => {
           [["createdAt", "desc"]],
           200,
         );
+
+        // Fetch Apoing
+        syncApoingReservations().catch(() => {});
       } catch (err) {
         console.error("Match loading error:", err);
+        applyHomeMatchCache({ complete: true });
       }
 
-      // Final fallback to ensure UI isn't stuck
+      // Final fallback to ensure UI isn't stuck and Today notice shows
       setTimeout(() => {
         if (!matchLoadFallbackFired) {
           matchLoadFallbackFired = true;
@@ -178,7 +345,10 @@ document.addEventListener("DOMContentLoaded", () => {
           );
           completeHomeEntryOverlay();
         }
+        // Force check for today's match even if cache was used
+        maybeCreateEventDayNotice();
       }, 3500);
+
 
       window.getAICoachContext = () =>
         getCoreAIContext({ uid: currentUser.uid });
@@ -227,7 +397,7 @@ function renderWelcome() {
 
   const el = (id) => document.getElementById(id);
   if (el("user-name")) el("user-name").textContent = name.toUpperCase();
-  if (el("welcome-points")) el("welcome-points").textContent = String(pts);
+  if (el("welcome-points")) el("welcome-points").textContent = Number(pts).toFixed(1);
   if (el("welcome-level")) el("welcome-level").textContent = lvl;
   if (el("stat-streak"))
     el("stat-streak").textContent = (streak > 0 ? "+" : "") + streak;
@@ -331,38 +501,58 @@ async function checkHomeNotices() {
 
     const notices = [];
     const now = new Date();
+    const myMatches = allMatches.filter((m) => {
+        const players = getNormalizedPlayers(m);
+        return players.includes(currentUser.uid) && !isCancelledMatch(m);
+    });
 
     // 1. Matches Today
-    const todayMatches = allMatches.filter((m) => {
+    const todayMatches = myMatches.filter((m) => {
         const fecha = toDateSafe(m?.fecha);
         if (!fecha) return false;
         return (
             fecha.getDate() === now.getDate() &&
             fecha.getMonth() === now.getMonth() &&
             fecha.getFullYear() === now.getFullYear() &&
-            (m.jugadores || []).includes(currentUser.uid) &&
             !isFinishedMatch(m) &&
             !isCancelledMatch(m)
         );
     });
 
-    if (todayMatches.length > 0) {
-        notices.push({
+    // 1. Today Match - Handled by maybeCreateEventDayNotice directly for premium view
+
+
+    // 2. Pending Result
+    const pendingResult = myMatches.filter((m) => {
+        if (isFinishedMatch(m)) return false;
+        const hasResult = Boolean(m?.resultado?.sets || (typeof m?.resultado === "string" && m.resultado.trim()));
+        if (hasResult) return false;
+        const matchTime = toDateSafe(m?.fecha);
+        if (!matchTime) return false;
+        return (now.getTime() - matchTime.getTime()) >= RESULT_LOCK_MS;
+    });
+
+    if (pendingResult.length > 0) {
+        notices.unshift({
             type: 'game',
-            title: '¡HOY JUEGAS!',
-            message: `Tienes ${todayMatches.length} ${todayMatches.length > 1 ? 'partidos' : 'partido'} programado para hoy. ¡A por todas!`,
+            title: 'RESULTADO PENDIENTE',
+            message: `Tienes ${pendingResult.length} ${pendingResult.length > 1 ? 'partidos' : 'partido'} esperando resultado. Regístralo ahora.`,
             action: () => window.location.href = 'calendario.html'
         });
     }
 
-    // 2. Pending Diary
-    const lastMatches = window.__lastMatchesParticipated || [];
+    // 3. Pending Diary
     const diaryEntries = d.diario || [];
-    const missingDiary = lastMatches.filter(m => {
-        const matchTime = m.fecha?.toDate?.() || new Date(m.fecha);
+    const finishedWithResult = myMatches.filter((m) => {
+        const hasResult = Boolean(m?.resultado?.sets || (typeof m?.resultado === "string" && m.resultado.trim()));
+        return hasResult || isFinishedMatch(m);
+    });
+    const missingDiary = finishedWithResult.filter((m) => {
+        const matchTime = toDateSafe(m?.fecha);
+        if (!matchTime) return false;
         const isOldEnough = (now - matchTime) > 2 * 60 * 60 * 1000; // 2h after match
         if (!isOldEnough) return false;
-        return !diaryEntries.some(e => e.matchId === m.id);
+        return !diaryEntries.some((e) => e.matchId === m.id);
     });
 
     if (missingDiary.length > 0) {
@@ -530,7 +720,7 @@ async function checkSystemAlerts(userData) {
         d.getDate() === now.getDate() &&
         d.getMonth() === now.getMonth() &&
         d.getFullYear() === now.getFullYear() &&
-        (m.jugadores || []).includes(currentUser.uid)
+        getNormalizedPlayers(m).includes(currentUser.uid)
       );
     })
     .sort((a, b) => toDateSafe(a.fecha) - toDateSafe(b.fecha));
@@ -553,7 +743,7 @@ async function checkSystemAlerts(userData) {
   const lastPlayed = allMatches
     .filter((m) => {
       return (
-        isFinishedMatch(m) && (m.jugadores || []).includes(currentUser.uid)
+        isFinishedMatch(m) && getNormalizedPlayers(m).includes(currentUser.uid)
       );
     })
     .sort((a, b) => toDateSafe(b.fecha) - toDateSafe(a.fecha))[0];
@@ -590,69 +780,101 @@ function refreshRecommendations() {
   const recomEl = document.getElementById("recom-content");
   if (!recomEl) return;
 
-  const recs = [];
+  const now = Date.now();
+  const pts = Number(currentUserData?.puntosRanking || 1000);
+  const lvl = Number(currentUserData?.nivel || 2.5).toFixed(2);
+  const streak = Number(currentUserData?.rachaActual || 0);
+  const myMatches = allMatches.filter((m) => getNormalizedPlayers(m).includes(currentUser?.uid));
+  const nextMatch = myMatches
+    .filter((m) => !isFinishedMatch(m) && !isCancelledMatch(m))
+    .filter((m) => toDateSafe(m.fecha)?.getTime() >= now - 10 * 60 * 1000)
+    .sort((a, b) => toDateSafe(a.fecha) - toDateSafe(b.fecha))[0];
+  const lastMatch = myMatches
+    .filter((m) => isFinishedMatch(m))
+    .sort((a, b) => toDateSafe(b.fecha) - toDateSafe(a.fecha))[0];
 
-  // Clima
-  if (typeof weather !== "undefined" && weather?.current) {
-    const code = weather.current.weather_code || 0;
-    const wind = weather.current.wind_speed_10m || 0;
-    if (code <= 1)
-      recs.push(
-        "☀️ Hoy el tiempo es soleado, ideal para un partido exterior. ¡Aprovecha!",
-      );
-    else if (code > 50)
-      recs.push(
-        "☔ Parece que va a llover. Intenta buscar partidos en pistas cubiertas (Indoor).",
-      );
+  const lines = [];
+  lines.push(`Estado actual: ELO ${Number(pts).toFixed(1)} · Nivel ${lvl} · Racha ${streak >= 0 ? '+' : ''}${streak}.`);
 
-    if (wind > 15) {
-      recs.push(
-        `🌬️ Viento fuerte hoy (${wind} km/h). Ten cuidado con los globos largos y ajusta tu posicionamiento al viento.`,
-      );
+  if (nextMatch) {
+    const d = toDateSafe(nextMatch.fecha);
+    const when = d ? d.toLocaleString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "sin fecha";
+    const opponentIds = getOpponentIds(nextMatch, currentUser?.uid);
+    const oppNames = opponentIds.map((id) => getPlayerDisplayName(id)).filter(Boolean).join(" y ");
+    lines.push(`Próximo partido: ${when} vs ${oppNames || "rival por definir"}.`);
+    const oppStats = opponentIds.map((id) => computeRecentWinrate(id, 8)).filter(Boolean);
+    if (oppStats.length) {
+      const best = oppStats.sort((a, b) => a.winrate - b.winrate)[0];
+      lines.push(`Rival en foco: ${best.name} con ${best.winrate}% de victorias en sus últimos ${best.total} partidos.`);
     }
+  } else {
+    lines.push("No hay próximo partido confirmado. Programa uno para seguir sumando ritmo.");
   }
 
-  // Partidos
-  if (typeof allMatches !== "undefined" && allMatches.length > 0) {
-    const now = new Date();
-    const todayMatches = allMatches.filter((m) => {
-      let d = toDateSafe(m.fecha);
-      if (!d) return false;
-      return (
-        d.getDate() === now.getDate() &&
-        d.getMonth() === now.getMonth() &&
-        d.getFullYear() === now.getFullYear()
-      );
-    });
-    if (todayMatches.length > 0) {
-      recs.push(
-        `🎾 Hoy hay mucho movimiento en la red. Hay ${todayMatches.length} partidos programados hoy. ¿Ya tienes el tuyo?`,
-      );
-    }
+  if (lastMatch) {
+    const d = toDateSafe(lastMatch.fecha);
+    const when = d ? d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }) : "fecha desconocida";
+    const sets = getResultSetsString(lastMatch) || "sin marcador";
+    const winner = resolveWinnerTeam(lastMatch);
+    const mySide = getTeamSide(lastMatch, currentUser?.uid);
+    const resultLabel = winner ? (winner === mySide ? "victoria" : "derrota") : "resultado parcial";
+    const teamA = getTeamNames(lastMatch, "A");
+    const teamB = getTeamNames(lastMatch, "B");
+    lines.push(`último partido (${when}): ${teamA} vs ${teamB} · ${sets} · ${resultLabel}.`);
   }
 
-  // Tips tácticos
-  recs.push(
-    "🔥 Mejora tu derecha: mantén la pala alta en la red y flexiona bien las piernas al defender el fondo de pista.",
-  );
-  recs.push(
-    '🧠 Recuerda comunicarte constantemente con tu compañero: "Mía", "Tuya", "Corto", "Largo". La comunicación gana partidos.',
-  );
-  recs.push(
-    '💪 Después de un buen partido, pasa por "DIARIO" y apunta tus sensaciones para sumar puntos VIP a tu ranking.',
-  );
-  recs.push(
-    "🏆 Analiza a tus posibles rivales antes de entrar a pista y crea una táctica. Piensa dónde están sus puntos débiles.",
-  );
+  const diaryEntries = currentUserData?.diario || [];
+  if (lastMatch && !diaryEntries.some((e) => e.matchId === lastMatch.id)) {
+    lines.push("Diario pendiente: registra tus sensaciones del último partido para mejorar tu perfil táctico.");
+  }
 
-  const idx = Math.floor(Math.random() * recs.length);
-  recomEl.innerHTML = `<span class="animate-fade-in inline-block">${recs[idx]}</span>`;
+  recomEl.innerHTML = lines.map((l) => `<div class="hv2-tr-line">${l}</div>`).join("");
 
   // Cambiar recomendación cada pocos segundos de forma cíclica
   if (!window._recomCycleInit) {
     window._recomCycleInit = true;
-    setInterval(refreshRecommendations, 12000);
+    setInterval(refreshRecommendations, 20000);
   }
+}
+
+function getTeamSide(match, uid) {
+  const players = getNormalizedPlayers(match);
+  if (!uid) return null;
+  if (players.slice(0, 2).includes(uid)) return 1;
+  if (players.slice(2, 4).includes(uid)) return 2;
+  return null;
+}
+
+function getOpponentIds(match, uid) {
+  const players = getNormalizedPlayers(match);
+  if (!uid) return [];
+  if (players.slice(0, 2).includes(uid)) return players.slice(2, 4).filter(Boolean);
+  if (players.slice(2, 4).includes(uid)) return players.slice(0, 2).filter(Boolean);
+  return [];
+}
+
+function getTeamNames(match, side = "A") {
+  const players = getNormalizedPlayers(match);
+  const ids = side === "A" ? players.slice(0, 2) : players.slice(2, 4);
+  const names = ids.map((id) => getPlayerDisplayName(id)).filter(Boolean);
+  return names.length ? names.join(" & ") : "Equipo";
+}
+
+function computeRecentWinrate(uid, limitMatches = 8) {
+  if (!uid) return null;
+  const matches = allMatches
+    .filter((m) => isFinishedMatch(m) && getNormalizedPlayers(m).includes(uid))
+    .sort((a, b) => toDateSafe(b.fecha) - toDateSafe(a.fecha))
+    .slice(0, limitMatches);
+  if (!matches.length) return null;
+  let wins = 0;
+  matches.forEach((m) => {
+    const winner = resolveWinnerTeam(m);
+    const side = getTeamSide(m, uid);
+    if (winner && side && winner === side) wins += 1;
+  });
+  const winrate = Math.round((wins / matches.length) * 100);
+  return { uid, name: getPlayerDisplayName(uid), winrate, total: matches.length };
 }
 
 /* Notifications */
@@ -662,17 +884,173 @@ function bindNotificationNudge() {
 }
 
 function getNormalizedPlayers(match) {
-  if (Array.isArray(match?.jugadores) && match.jugadores.length) {
-    return [...match.jugadores];
-  }
-  if (Array.isArray(match?.playerUids) && match.playerUids.length) {
-    return [...new Set(match.playerUids)].slice(0, 4);
-  }
-  return [];
+  const players = getMatchPlayers(match);
+  if (!players.length) return [];
+  return [...new Set(players)].slice(0, 4);
 }
 
 function isEventMatch(match) {
-  return String(match?.col || "") === "eventoPartidos";
+  return (
+    String(match?.col || "") === "eventoPartidos" ||
+    Boolean(match?.eventMatchId || match?.eventoId || match?.eventLink?.eventoId)
+  );
+}
+
+function isKnockoutPhaseMatch(match = {}) {
+  const phase = String(match.phase || "").toLowerCase();
+  return ["knockout", "semi", "semis", "semifinal", "final", "cuartos", "quarter"].includes(phase);
+}
+
+function isGroupPhaseMatch(match = {}, ev = null) {
+  const phase = String(match.phase || "").toLowerCase();
+  if (["group", "liga", "league", "grupos"].includes(phase)) return true;
+  if (!phase && (ev?.formato === "groups" || ev?.formato === "league")) return true;
+  return false;
+}
+
+function isEventGroupsComplete(eventId) {
+  if (!eventId) return true;
+  const ev = eventDocCache.get(eventId) || null;
+  const matches = allMatches.filter((m) => getEventIdFromMatch(m) === eventId);
+  const groupMatches = matches.filter((m) => isGroupPhaseMatch(m, ev));
+  if (!groupMatches.length) return true;
+  return groupMatches.every((m) => isFinishedMatch(m));
+}
+
+function isEventKnockoutLocked(match) {
+  if (!isEventMatch(match)) return false;
+  if (!isKnockoutPhaseMatch(match)) return false;
+  const eventId = getEventIdFromMatch(match);
+  return !isEventGroupsComplete(eventId);
+}
+
+function isMatchRelevantToMe(match) {
+  if (!currentUser?.uid) return false;
+  
+  // 0. Handle Apoing directly
+  if (match.isApoing) {
+    return match.sourceUid === currentUser.uid;
+  }
+
+  // 1. Check direct UIDs
+  if (getNormalizedPlayers(match).includes(currentUser.uid)) return true;
+  
+  // 2. Check team membership (for event matches)
+  if (myEvents.length > 0) {
+    const myTeamIds = myEvents.flatMap(ev => {
+      const t = getMyTeamFromEvent(ev);
+      return t ? [t.id] : [];
+    });
+    if (myTeamIds.includes(match?.teamAId) || myTeamIds.includes(match?.teamBId)) return true;
+  }
+  
+  return false;
+}
+
+function getEventIdFromMatch(match) {
+  return (
+    match?.eventoId ||
+    match?.eventId ||
+    match?.eventLink?.eventoId ||
+    null
+  );
+}
+
+function buildEventSlotKey(match) {
+  const d = toDateSafe(match?.fecha);
+  if (!d) return null;
+  const when = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}-${d.getMinutes()}`;
+  const court = String(match?.courtType || match?.pista || match?.court || "unknown").toLowerCase();
+  const eventId = String(match?.eventoId || match?.eventId || match?.eventLink?.eventoId || "");
+  return `${eventId}|${court}|${when}`;
+}
+
+function getRealPlayerCount(match) {
+  const players = (match?.jugadores || match?.playerUids || []).filter(Boolean);
+  return players.filter((p) => !String(p).startsWith("GUEST_")).length;
+}
+
+function normalizeTeamName(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isUnknownTeamName(value) {
+  const n = normalizeTeamName(value);
+  if (!n) return true;
+  const compact = n.replace(/\s+/g, "");
+  if (["tbd", "tbd.", "tbd?", "tdb", "?", "unknown"].includes(n)) return true;
+  if (["tbd", "tbd.", "tbd?", "tdb", "tbdvs", "tbdvstbd", "tbdtbd", "unknown"].includes(compact)) return true;
+  if (["desconocido", "desconocidos", "por confirmar", "por definir", "pendiente"].includes(n)) return true;
+  return false;
+}
+
+function isTbdMatch(match) {
+  const noPlayers = getRealPlayerCount(match) === 0;
+  const isTbd = isUnknownTeamName(match?.teamAName || match?.equipoA) &&
+    isUnknownTeamName(match?.teamBName || match?.equipoB);
+  return noPlayers && isTbd;
+}
+
+function pickBestMatch(a, b) {
+  const aCount = getRealPlayerCount(a);
+  const bCount = getRealPlayerCount(b);
+  if (aCount !== bCount) return aCount > bCount ? a : b;
+
+  const aIsEvent = String(a?.col || "") === "eventoPartidos";
+  const bIsEvent = String(b?.col || "") === "eventoPartidos";
+  if (aIsEvent !== bIsEvent) return aIsEvent ? b : a;
+
+  const aTbd = isTbdMatch(a);
+  const bTbd = isTbdMatch(b);
+  if (aTbd !== bTbd) return aTbd ? b : a;
+
+  const aPlayed = !!a?.resultado?.sets || String(a?.estado || "").toLowerCase() === "jugado";
+  const bPlayed = !!b?.resultado?.sets || String(b?.estado || "").toLowerCase() === "jugado";
+  if (aPlayed !== bPlayed) return aPlayed ? a : b;
+
+  return a;
+}
+
+function dedupeEventSlots(list = []) {
+  const map = new Map();
+  list.forEach((m) => {
+    const key = buildEventSlotKey(m);
+    if (!key) {
+      const fallbackKey = `${m?.col || ""}:${m?.id || ""}`;
+      map.set(fallbackKey, m);
+      return;
+    }
+    if (!map.has(key)) {
+      map.set(key, m);
+      return;
+    }
+    const prev = map.get(key);
+    map.set(key, pickBestMatch(prev, m));
+  });
+  return Array.from(map.values());
+}
+
+// Remove duplicates when an event match is linked to a calendar match.
+function dedupeEventLinkedMatches(list = []) {
+  const linkedEventIds = new Set(
+    list
+      .filter((m) => String(m.col || "") !== "eventoPartidos" && m.eventMatchId)
+      .map((m) => String(m.eventMatchId)),
+  );
+  const seen = new Set();
+  const filtered = list.filter((m) => {
+    if (String(m.col || "") === "eventoPartidos") {
+      const id = String(m.id || "");
+      if (linkedEventIds.has(id) || m.linkedMatchId) return false;
+    }
+    const key = m.eventMatchId
+      ? `eventlink:${m.eventMatchId}`
+      : `${m.col || ""}:${m.id || ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return dedupeEventSlots(filtered);
 }
 
 function mergeMyEvents(list = []) {
@@ -680,22 +1058,27 @@ function mergeMyEvents(list = []) {
   myEvents = (list || [])
     .filter((ev) => Array.isArray(ev?.inscritos) && ev.inscritos.some((i) => i?.uid === currentUser.uid))
     .filter((ev) => !["finalizado", "cancelado"].includes(String(ev?.estado || "").toLowerCase()));
+  myEvents.forEach((ev) => indexEventUserNames(ev));
   renderEventSpotlight();
   maybeCreateEventDayNotice();
 }
 
 function toDateMs(value) {
   const d = toDateSafe(value);
-  return d ? d.getTime() : 0;
+  return d ? d.getTime() : Infinity;
 }
 
 function getMineUpcomingEventMatches() {
   const now = Date.now();
-  return allMatches
+  return dedupeEventLinkedMatches(allMatches)
     .filter((m) => isEventMatch(m))
-    .filter((m) => (m.jugadores || []).includes(currentUser?.uid))
+    .filter((m) => isMatchRelevantToMe(m))
     .filter((m) => !isFinishedMatch(m) && !isCancelledMatch(m))
-    .filter((m) => toDateMs(m.fecha) >= now - 10 * 60 * 1000)
+    .filter((m) => m.fecha && !isTbdMatch(m))
+    .filter((m) => {
+      const d = toDateSafe(m.fecha);
+      return d && d.getTime() >= now - 10 * 60 * 1000;
+    })
     .sort((a, b) => toDateMs(a.fecha) - toDateMs(b.fecha));
 }
 
@@ -718,10 +1101,97 @@ function renderEventSpotlight() {
   const cards = [];
   if (nextEvent) {
     const inscritos = Array.isArray(nextEvent.inscritos) ? nextEvent.inscritos.length : 0;
+    const myTeam = getMyTeamFromEvent(nextEvent);
+
+    let partnerId = myTeam?.playerUids?.find((id) => id && id !== currentUser?.uid) || null;
+    let partnerName = partnerId ? getPlayerDisplayName(partnerId) : null;
+
+    if (!partnerId && Array.isArray(nextEvent.inscritos)) {
+         const myInscription = nextEvent.inscritos.find(i => i.uid === currentUser?.uid);
+         if (myInscription?.pairCode) {
+             const partnerInscription = nextEvent.inscritos.find(i => i.uid !== currentUser?.uid && i.pairCode === myInscription.pairCode);
+             if (partnerInscription) {
+                 partnerId = partnerInscription.uid;
+                 partnerName = partnerInscription.nombre || getPlayerDisplayName(partnerId);
+             }
+         }
+    }
+    partnerName = partnerName || "Pendiente asignar";
+
+    const myTeamFromEvent = getMyTeamFromEvent(nextEvent);
+    const myGroup = myTeamFromEvent
+      ? Object.entries(nextEvent.groups || {}).find(([, ids]) => ids?.includes(myTeamFromEvent.id))?.[0]
+      : null;
+
+    const eventMatches = dedupeEventLinkedMatches(allMatches).filter(
+      (m) => isEventMatch(m) && getEventIdFromMatch(m) === nextEvent.id,
+    );
+    
+    const groupMatches = eventMatches.filter((m) => {
+      if (!isGroupPhaseMatch(m, nextEvent)) return false;
+      if (myGroup && m.group) return String(m.group) === String(myGroup);
+      return true;
+    });
+
+    // Find team matches by ID if generated, or just by player UIDs if still in pool
+    const teamMatches = myTeamFromEvent?.id
+      ? groupMatches.filter((m) => m.teamAId === myTeamFromEvent.id || m.teamBId === myTeamFromEvent.id)
+      : groupMatches.filter((m) => getNormalizedPlayers(m).includes(currentUser?.uid));
+
+    const totalTeam = teamMatches.length;
+    const playedTeam = teamMatches.filter((m) => isFinishedMatch(m)).length;
+    const pendingTeam = totalTeam - playedTeam;
+    const totalEvent = groupMatches.length;
+    const playedEvent = groupMatches.filter((m) => isFinishedMatch(m)).length;
+    const teamPct = totalTeam ? Math.round((playedTeam / totalTeam) * 100) : 0;
+    const eventPct = totalEvent ? Math.round((playedEvent / totalEvent) * 100) : 0;
+
+
     cards.push(`
-      <div class="hv2-event-chip">
-        <div class="hv2-event-chip-title">${(nextEvent.nombre || "Evento").toUpperCase()}</div>
-        <div class="hv2-event-chip-sub">Estado: ${String(nextEvent.estado || "inscripcion").toUpperCase()} · ${inscritos}/${Number(nextEvent.plazasMax || 16)} inscritos</div>
+      <div class="hv2-event-chip premium-v2">
+        <div class="hv2-event-chip-header">
+           <div class="hv2-event-chip-title">${(nextEvent.nombre || "Evento").toUpperCase()}</div>
+           <div class="hv2-event-chip-tag">${String(nextEvent.estado || "inscripcion").toUpperCase()}</div>
+        </div>
+        
+        <div class="hv2-event-chip-sub">
+          <i class="fas fa-users-viewfinder mr-1"></i> ${inscritos}/${Number(nextEvent.plazasMax || 16)} Plazas confirmadas
+        </div>
+
+        <div class="hv2-event-meta-grid">
+          <div class="hv2-meta-item">
+            <span class="hv2-meta-label">Compañero/a</span>
+            <div class="hv2-meta-val-wrap">
+              <i class="fas fa-user-friends text-primary"></i>
+              <span class="hv2-meta-value">${partnerName}</span>
+            </div>
+          </div>
+          <div class="hv2-meta-item">
+            <span class="hv2-meta-label">Tu Grupo</span>
+            <div class="hv2-meta-val-wrap">
+              <i class="fas fa-layer-group text-primary"></i>
+              <span class="hv2-meta-value">${myGroup ? `GRUPO ${myGroup}` : 'POR ASIGNAR'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hv2-event-progress-section">
+          <div class="hv2-progress-row">
+            <div class="hv2-progress-head">
+              <span>Progreso de tu equipo</span>
+              <span>${playedTeam}/${totalTeam || 0}</span>
+            </div>
+            <div class="hv2-progress-bar main"><span style="width:${teamPct}%"></span></div>
+          </div>
+        </div>
+
+        <div id="event-standings-slot" class="hv2-event-standings-container"></div>
+        
+        <div class="hv2-event-actions mt-3">
+           <a href="evento-detalle.html?id=${nextEvent.id}" class="btn-event-enter">
+              VER PANEL COMPLETO <i class="fas fa-chevron-right ml-1"></i>
+           </a>
+        </div>
       </div>
     `);
   }
@@ -732,10 +1202,45 @@ function renderEventSpotlight() {
       const when = d
         ? d.toLocaleString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
         : "Sin fecha";
+      const estado = String(m.estado || "pendiente").toUpperCase();
+      const result = m.resultado?.sets ? ` · ${m.resultado.sets}` : "";
+      const phaseRaw = String(m.phase || "evento").toUpperCase();
+      const phaseMap = {
+        'GROUP': 'FASE DE GRUPOS',
+        'LEAGUE': 'LIGA',
+        'KNOCKOUT': 'ELIMINATORIA',
+        'SEMI': 'SEMIFINAL',
+        'FINAL': 'GRAN FINAL',
+        'TBD': 'POR DEFINIR'
+      };
+      const phasePretty = phaseMap[phaseRaw] || (phaseRaw.includes("KNOCKOUT") ? "ELIMINATORIA" : phaseRaw);
+      const getTeamLabel = (tId, tName, pIds) => {
+        if (tName && String(tName).toUpperCase() !== "TBD" && String(tName).toUpperCase() !== "PENDIENTE") 
+          return String(tName).toUpperCase();
+        if (Array.isArray(pIds) && pIds.length > 0) {
+            return pIds.map(p => getPlayerDisplayName(p).split(" ")[0]).join("/");
+        }
+        return "POR DEFINIR";
+      };
+      const teamALabel = getTeamLabel(m.teamAId, m.teamAName, m.playerUids?.slice(0,2) || m.jugadores?.slice(0,2));
+      const teamBLabel = getTeamLabel(m.teamBId, m.teamBName, m.playerUids?.slice(2,4) || m.jugadores?.slice(2,4));
+
       cards.push(`
-        <div class="hv2-event-chip" onclick="window.openMatch('${m.id}','${m.col}')">
-          <div class="hv2-event-chip-title">PARTIDO EVENTO · ${String(m.phase || "evento").toUpperCase()}</div>
-          <div class="hv2-event-chip-sub">${m.teamAName || "TBD"} vs ${m.teamBName || "TBD"} · ${when}</div>
+        <div class="hv2-event-chip premium-v2 tournament-match" onclick="window.openMatch('${m.id}','${m.col}')">
+          <div class="hv2-event-chip-header">
+            <div class="hv2-event-chip-title">PARTIDO DE TORNEO</div>
+            <div class="hv2-event-chip-tag phase">${phasePretty}</div>
+          </div>
+          <div class="hv2-event-chip-sub mt-2">
+            <div class="flex-row items-center justify-between">
+               <span class="text-white font-bold">${teamALabel} <span class="text-primary italic">vs</span> ${teamBLabel}</span>
+               <span class="text-[10px] text-white/40">${when}</span>
+            </div>
+          </div>
+          <div class="hv2-event-chip-footer mt-2 pt-2 border-t border-white/5 flex between items-center">
+             <span class="text-[9px] font-black tracking-widest text-[#abc]">${estado}${result}</span>
+             <i class="fas fa-chevron-right text-primary text-[10px]"></i>
+          </div>
         </div>
       `);
     });
@@ -749,7 +1254,120 @@ function renderEventSpotlight() {
   }
 
   body.innerHTML = cards.join("");
+  if (nextEvent) {
+    renderEventStandings(nextEvent);
+  }
 }
+
+function getMyTeamFromEvent(eventDoc) {
+  if (!eventDoc || !currentUser?.uid) return null;
+  const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
+  return teams.find((t) => Array.isArray(t?.playerUids) && t.playerUids.includes(currentUser.uid)) || null;
+}
+
+function getMyGroupFromEvent(eventDoc, teamId) {
+  if (!eventDoc || !teamId) return null;
+  const groups = eventDoc.groups || {};
+  const found = Object.entries(groups).find(([, ids]) => Array.isArray(ids) && ids.includes(teamId));
+  return found ? found[0] : null;
+}
+
+async function renderEventStandings(eventDoc) {
+  const slot = document.getElementById("event-standings-slot");
+  if (!slot || !eventDoc?.id) return;
+  const myTeam = getMyTeamFromEvent(eventDoc);
+  const myTeamId = myTeam?.id || null;
+  const myGroup = getMyGroupFromEvent(eventDoc, myTeamId);
+
+  try {
+    const cfg = { 
+      win: eventDoc.puntosVictoria || 3, 
+      draw: eventDoc.puntosEmpate || 1, 
+      loss: eventDoc.puntosDerrota || 0 
+    };
+    
+    // Use the matches we already have in allMatches for this event, but deduplicated
+    const deduped = dedupeEventLinkedMatches(allMatches);
+    const eventMatches = deduped.filter(m => isEventMatch(m) && getEventIdFromMatch(m) === eventDoc.id);
+    const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
+
+    
+    let computedRows = [];
+    if (eventDoc.formato === 'league') {
+        computedRows = computeGroupTable(eventMatches.filter(m => m.phase === 'league' || !m.phase), teams, cfg);
+    } else {
+        // Group phase (filter by my group if available)
+        const g = myGroup;
+        const gTeams = g ? (eventDoc.groups?.[g] || []).map(tid => teams.find(t => t.id === tid)).filter(Boolean) : teams;
+        computedRows = computeGroupTable(eventMatches.filter(m => m.group === g), gTeams, cfg);
+    }
+
+    renderStandingsRows(computedRows, eventDoc, myTeamId, myGroup, slot);
+  } catch (e) {
+    console.error("renderEventStandings fail:", e);
+    slot.innerHTML += `<div class="hv2-event-standings-empty">No se pudo calcular la clasificación.</div>`;
+  }
+}
+
+
+function renderStandingsRows(rowsIn, eventDoc, myTeamId, myGroup, slot) {
+  let rows = Array.isArray(rowsIn) ? rowsIn.slice() : [];
+  rows.sort((a,b) => {
+    const ptsA = a.pts ?? a.puntos ?? 0;
+    const ptsB = b.pts ?? b.puntos ?? 0;
+    const difA = a.dif ?? a.diferencia ?? 0;
+    const difB = b.dif ?? b.diferencia ?? 0;
+    return ptsB - ptsA || difB - difA;
+  });
+  
+  const title = myGroup ? `Clasificación Grupo ${String(myGroup).toUpperCase()}` : "Clasificación General";
+  
+  let html = `
+    <div class="hv2-standings-header">
+      <span class="hv2-standings-title">${title}</span>
+    </div>
+    <div class="hv2-standings-table-mini">
+      <div class="hv2-std-head">
+        <span class="pos">#</span>
+        <span class="team">EQUIPO</span>
+        <span class="pj">PJ</span>
+        <span class="pts">PTS</span>
+      </div>
+      <div class="hv2-std-body">
+  `;
+
+  const memberIds = myGroup && eventDoc.groups?.[myGroup] ? eventDoc.groups[myGroup] : [];
+  
+  // If we have a group, we filter rows by that group
+  let displayRows = rows;
+  if (myGroup && memberIds.length) {
+    displayRows = rows.filter(r => memberIds.includes(r.uid || r.teamId));
+  }
+
+  if (!displayRows.length) {
+    html += `<div class="hv2-event-standings-empty">La clasificación se actualizará al registrar resultados.</div>`;
+  } else {
+    displayRows.forEach((r, i) => {
+      const isMine = (r.uid || r.teamId) === myTeamId;
+      const teamObj = (eventDoc.teams || []).find(t => t.id === (r.uid || r.teamId));
+      const teamName = teamObj?.nombre || teamObj?.name || r.nombre || r.teamName || "Equipo";
+      
+      html += `
+        <div class="hv2-std-row ${isMine ? 'mine' : ''}">
+          <span class="pos">${i + 1}</span>
+          <span class="team">${teamName}</span>
+          <span class="pj">${r.pj ?? 0}</span>
+          <span class="pts">${r.pts ?? r.puntos ?? 0}</span>
+        </div>
+
+      `;
+    });
+  }
+
+  html += `</div></div>`;
+  slot.innerHTML = html;
+}
+
 
 async function createSelfNoticeOnce(key, title, message, link = "home.html", data = {}) {
   if (!currentUser?.uid) return;
@@ -783,6 +1401,9 @@ async function createSelfNoticeOnce(key, title, message, link = "home.html", dat
   } catch (_) {}
 }
 
+
+
+
 function sameDay(a, b) {
   return (
     a.getDate() === b.getDate() &&
@@ -795,21 +1416,125 @@ function maybeCreateEventDayNotice() {
   const next = getMineUpcomingEventMatches()[0];
   const d = toDateSafe(next?.fecha);
   if (!next || !d) return;
-  if (!sameDay(d, new Date())) return;
-  const key = `event_today:${next.id}:${new Date().toISOString().slice(0, 10)}`;
-  const msg = `Hoy juegas partido de evento a las ${d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}.`;
-  createSelfNoticeOnce(key, "Partido de evento hoy", msg, `evento-detalle.html?id=${next.eventoId || ""}&tab=partidos`, {
-    type: "event_match_today",
-    matchId: next.id,
-    eventId: next.eventoId || null,
-  });
+
+  const today = new Date();
+  if (!sameDay(d, today)) return;
+
+  const key = `event_today_premium_v3:${next.id}:${today.toISOString().slice(0, 10)}`;
+  try {
+    if (localStorage.getItem(key)) return;
+  } catch {}
+
+  const diffMs = d.getTime() - today.getTime();
+  const diffH = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+  
+  const players = getNormalizedPlayers(next);
+  const n = (idx) => String(getPlayerDisplayName(players[idx]) || "Pendiente");
+
+  // Pre-load levels if available
+  const getLvl = (idx) => {
+      const uid = players[idx];
+      if (!uid) return "";
+      if (String(uid).startsWith("GUEST_")) {
+          const m = parseGuestMeta(uid);
+          return m ? `NV ${m.level.toFixed(1)}` : "";
+      }
+      return ""; // Profile levels need async fetch, omitting for sync modal for now
+  };
+
+  const modal = document.createElement("div");
+  modal.className = "event-day-alert";
+  modal.style.zIndex = "20000";
+  modal.innerHTML = `
+    <div class="eda-card animate-scale-in">
+      <div class="eda-glow"></div>
+      <div class="eda-icon"><i class="fas fa-rocket"></i></div>
+      <div class="eda-title">¡HOY JUEGAS!</div>
+      <div class="eda-match-info">
+        <div class="eda-match-players">
+           <div class="eda-team-col">
+              <div class="eda-p-name">${n(0)}</div>
+              <div class="eda-p-name">${n(1)}</div>
+           </div>
+           <div class="eda-vs-badge">VS</div>
+           <div class="eda-team-col">
+              <div class="eda-p-name">${n(2)}</div>
+              <div class="eda-p-name">${n(3)}</div>
+           </div>
+        </div>
+        <div class="eda-venue-info" style="font-size:11px; opacity:0.6; margin-top:14px; text-transform:uppercase; letter-spacing:1.2px; font-weight:800; display:flex; align-items:center; justify-content:center; gap:10px;">
+           <span><i class="fas fa-clock text-primary mr-1"></i> ${d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
+           <span style="opacity:0.3">|</span>
+           <span><i class="fas fa-map-marker-alt text-primary mr-1"></i> PISTA RESERVADA</span>
+        </div>
+      </div>
+      <div class="eda-msg">Faltan <span>${diffH} HORAS</span> para el enfrentamiento.</div>
+      <div class="eda-actions">
+        <button class="btn-eda-share" id="eda-btn-download">
+           <i class="fas fa-file-image mr-2"></i> DESCARGAR CARTEL PNG
+        </button>
+         <button class="btn-premium-v7" style="border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:#fff; font-size:10px;" id="eda-btn-share">
+           <i class="fas fa-share-nodes mr-2"></i> COMPARTIR POR REDES
+        </button>
+        <button class="btn-eda-close" id="close-eda">CERRAR PANEL</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const prepareMetadata = () => {
+    const pNames = players.map(uid => getPlayerDisplayName(uid));
+    const levels = players.map(uid => {
+        const u = playerNameCache.get(uid); 
+        return currentUserData?.uid === uid ? Number(currentUserData.nivel || 2.5) : 2.5; 
+    });
+    return {
+      title: "PARTIDO DE HOY",
+      when: d.toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }),
+      teamA: [pNames[0], pNames[1]],
+      teamB: [pNames[2], pNames[3]],
+      levelsA: [levels[0], levels[1]],
+      levelsB: [levels[2], levels[3]],
+      club: "PADELUMINATIS CLUB"
+    };
+  };
+  
+  modal.querySelector("#eda-btn-download").onclick = async () => {
+     await shareMatchPoster(prepareMetadata());
+  };
+
+  modal.querySelector("#eda-btn-share").onclick = async () => {
+     window.shareMatch(next.id, next.col);
+  };
+  
+  modal.querySelector("#close-eda").onclick = () => {
+    modal.remove();
+    localStorage.setItem(key, "1");
+  };
 }
+
+
+
 
 /* Match data */
 async function mergeMatches(col, list) {
   const sig = JSON.stringify(list.map((m) => m.id + m.estado));
   if (colSignature.get(col) === sig) return;
   colSignature.set(col, sig);
+
+  if (col === "eventoPartidos") {
+    const eventIds = [...new Set(list.map((m) => m.eventoId || m.eventId).filter(Boolean))];
+    await Promise.allSettled(
+      eventIds.map(async (eid) => {
+        if (eventDocCache.has(eid)) return;
+        const ev = await getDocument("eventos", eid);
+        if (ev) {
+          eventDocCache.set(eid, ev);
+          indexEventUserNames(ev);
+        }
+      }),
+    );
+  }
 
   allMatches = [
     ...allMatches.filter((m) => m.col !== col),
@@ -831,7 +1556,7 @@ async function mergeMatches(col, list) {
     const finished = isFinishedMatch(m);
     if (finished) return true;
     const date = toDateSafe(m.fecha);
-    if (!date) return false;
+    if (!date) return true; // KEEP match if no date (usually pending event match)
     if (date.getTime() < now - 15 * 60 * 1000) return false;
     return true;
   });
@@ -848,12 +1573,26 @@ async function mergeMatches(col, list) {
   const activeTab =
     document.querySelector(".hv2-tab.active")?.dataset.filter || "open";
   renderMatchesByFilter(activeTab);
+  saveHomeMatchCache();
 
   if (!homeLoadMeasured && loadedCollections.size >= 1) {
     homeLoadMeasured = true;
     analyticsTiming("home.ttv_ms", performance.now() - homeBootStart);
     completeHomeEntryOverlay();
   }
+}
+
+function shouldShowHomeWelcome() {
+  try {
+    const keys = ["show_home_welcome", "home_entry_welcome"];
+    for (const key of keys) {
+      if (sessionStorage.getItem(key)) {
+        sessionStorage.removeItem(key);
+        return true;
+      }
+    }
+  } catch {}
+  return false;
 }
 
 function beginHomeEntryOverlay(name = "Jugador") {
@@ -914,10 +1653,18 @@ function renderNextMatch() {
   if (!box) return;
   const now = Date.now();
   const mine = allMatches
-    .filter((m) => (m.jugadores || []).includes(currentUser?.uid))
+    .filter((m) => isMatchRelevantToMe(m))
+    .filter((m) => !isEventKnockoutLocked(m))
     .filter((m) => !isCancelledMatch(m) && !isFinishedMatch(m))
-    .filter((m) => toDateSafe(m.fecha).getTime() >= now - 10 * 60 * 1000) // strict future
-    .sort((a, b) => toDateSafe(a.fecha) - toDateSafe(b.fecha));
+    .filter((m) => {
+      const d = toDateSafe(m.fecha);
+      return d && d.getTime() >= now - 10 * 60 * 1000;
+    }) // strict future
+    .sort((a, b) => {
+      const da = toDateSafe(a.fecha);
+      const db = toDateSafe(b.fecha);
+      return (da?.getTime() || 0) - (db?.getTime() || 0);
+    });
 
   const next = mine[0];
   if (!next) {
@@ -926,7 +1673,7 @@ function renderNextMatch() {
   }
 
   const date = toDateSafe(next.fecha);
-  const players = [...(next.jugadores || [])];
+  const players = [...getNormalizedPlayers(next)];
   while (players.length < 4) players.push(null);
 
   const isEvent = isEventMatch(next);
@@ -974,7 +1721,7 @@ function renderNextMatch() {
     const isMe = uid === currentUser?.uid;
     const teamCls = team === "a" ? "is-team-a" : "is-team-b";
     const cls = !uid ? "empty" : isMe ? "is-me" : teamCls;
-    return `<span class="hv2-sb-player-name ${cls}">${uid ? name : isEvent ? "TBD" : "LIBRE"}</span>`;
+    return `<span class="hv2-sb-player-name ${cls}">${uid ? name : isEvent ? "POR DEFINIR" : "LIBRE"}</span>`;
   };
 
   box.innerHTML = `
@@ -1013,7 +1760,9 @@ function renderNextMatch() {
       </div>
     </div>
   `;
+  maybeCreateEventDayNotice(); // Reinforce when scoreboard renders
 }
+
 
 /* Match list */
 function renderMatchesByFilter(filter) {
@@ -1025,19 +1774,53 @@ function renderMatchesByFilter(filter) {
   }
 
   const now = Date.now();
-  let list = [...allMatches].filter((m) => !isCancelledMatch(m));
+  
+  // Merge Apoing events into matches list
+  const apoingMatches = apoingEvents.filter(ev => {
+    // Filter out Apoing events that match an existing match in my collections
+    const startTime = ev.dtStart.getTime();
+    const overlaps = allMatches.some(m => {
+        const d = toDateSafe(m.fecha);
+        if (!d) return false;
+        // Increase tolerance to 120 min to avoid any double booking
+        return Math.abs(d.getTime() - startTime) < 120 * 60 * 1000;
+    });
+
+    return !overlaps;
+  }).map(ev => ({
+
+    id: `apoing_${ev.uid || Math.random()}`,
+    col: "apoing",
+    fecha: ev.dtStart,
+    jugadores: [ev.sourceUid, null, null, null],
+    summary: ev.summary,
+    isApoing: true,
+    sourceUid: ev.sourceUid,
+    sourceName: ev.sourceName || "Jugador Apoing",
+    owner: ev.owner || "Jugador"
+  }));
+
+
+  let list = dedupeEventLinkedMatches([...allMatches, ...apoingMatches])
+    .filter((m) => !isCancelledMatch(m))
+    .filter((m) => !isEventKnockoutLocked(m))
+    .filter((m) => {
+      if (isEventMatch(m) && !m.fecha) return false;
+      return true;
+    });
 
   if (filter === "open") {
     list = list
       .filter((m) => !isFinishedMatch(m))
-      .filter((m) => (m.jugadores || []).filter(Boolean).length < 4)
+      .filter((m) => getNormalizedPlayers(m).filter(Boolean).length < 4)
+      .filter((m) => !isTbdMatch(m))
       .filter((m) => {
         const d = toDateSafe(m.fecha);
         return d && d.getTime() >= now - 5 * 60 * 1000;
       });
   } else if (filter === "mine") {
     list = list
-      .filter((m) => (m.jugadores || []).includes(currentUser?.uid))
+      .filter((m) => isMatchRelevantToMe(m))
       .filter((m) => !isFinishedMatch(m))
       .filter((m) => {
         const d = toDateSafe(m.fecha);
@@ -1046,7 +1829,7 @@ function renderMatchesByFilter(filter) {
   } else if (filter === "closed") {
     list = list
       .filter((m) => !isFinishedMatch(m))
-      .filter((m) => (m.jugadores || []).filter(Boolean).length >= 4)
+      .filter((m) => getNormalizedPlayers(m).filter(Boolean).length >= 4)
       .filter((m) => {
         const d = toDateSafe(m.fecha);
         return d && d.getTime() > now;
@@ -1068,17 +1851,17 @@ function renderMatchesByFilter(filter) {
 function renderMatchCard(match, idx = 0) {
   const date = toDateSafe(match.fecha);
   if (!date) return "";
-  const players = [...(match.jugadores || [])];
+  const players = [...getNormalizedPlayers(match)];
   while (players.length < 4) players.push(null);
   const isEvent = isEventMatch(match);
   const isReto = String(match.col || "").includes("Reto");
-  const isMine = (match.jugadores || []).includes(currentUser?.uid);
+  const isMine = getNormalizedPlayers(match).includes(currentUser?.uid) || (match.isApoing && match.sourceUid === currentUser?.uid);
   const finished = isFinishedMatch(match);
   const freeSlots = isEvent ? 0 : players.filter((p) => !p).length;
   const delay = Math.min(300, idx * 40);
   const orgName = match.organizador
     ? getPlayerDisplayName(match.organizador)
-    : null;
+    : match.isApoing ? match.owner : null;
 
   const playerAvatar = (uid) => {
     if (!uid)
@@ -1108,16 +1891,35 @@ function renderMatchCard(match, idx = 0) {
   const resultStr = hasResult ? match.resultado.sets || "" : "";
   const badge = finished
     ? `<span class="hv2-mc-badge ${hasResult ? "closed-badge" : "pending-badge"}">${hasResult ? "CERRADO " + resultStr : "PENDIENTE"}</span>`
-    : isEvent
-      ? `<span class="hv2-mc-badge open-badge">EVENTO${match.phase ? ` · ${String(match.phase).toUpperCase()}` : ""}</span>`
-      : isReto
-        ? `<span class="hv2-mc-badge reto-badge">RETO</span>`
-        : freeSlots > 0
-          ? `<span class="hv2-mc-badge open-badge">${freeSlots} LIBRE</span>`
-          : `<span class="hv2-mc-badge full-badge">COMPLETO</span>`;
+    : match.isApoing
+      ? `<span class="hv2-mc-badge apoing-badge">APOING</span>`
+      : isEvent
+        ? `<span class="hv2-mc-badge open-badge">EVENTO${match.phase ? ` · ${String(match.phase).toUpperCase()}` : ""}</span>`
+        : isReto
+          ? `<span class="hv2-mc-badge reto-badge">RETO</span>`
+          : freeSlots > 0
+            ? `<span class="hv2-mc-badge open-badge">${freeSlots} LIBRE</span>`
+            : `<span class="hv2-mc-badge full-badge">COMPLETO</span>`;
+
+  const cardClick = match.isApoing 
+    ? `window.openApoingMatch('${match.id}')` 
+    : `window.openMatch('${match.id}','${match.col}')`;
+
+  let winnerBadge = "";
+  if (finished && hasResult) {
+      const sets = Array.isArray(match.resultado?.setsArray) ? match.resultado.setsArray : [];
+      let setsA = 0, setsB = 0;
+      sets.forEach(s => {
+          if (s.a > s.b) setsA++;
+          else if (s.b > s.a) setsB++;
+      });
+      if (setsA !== setsB) {
+          winnerBadge = `<span class="hv2-mc-winner-badge">Ganador: ${setsA > setsB ? 'Equipo A' : 'Equipo B'}</span>`;
+      }
+  }
 
   return `
-    <div class="hv2-match-card ${isMine ? "mine-card" : ""} ${finished ? "finished-card" : ""}" style="animation-delay:${delay}ms" onclick="window.openMatch('${match.id}','${match.col}')">
+    <div class="hv2-match-card ${isMine ? "mine-card" : ""} ${finished ? "finished-card" : ""} ${match.isApoing ? "apoing-card" : ""}" style="animation-delay:${delay}ms" onclick="${cardClick}">
       ${badge}
       <div class="hv2-mc-team">
         <div class="hv2-mc-avatars">${playerAvatar(players[0])}${playerAvatar(players[1])}</div>
@@ -1125,7 +1927,7 @@ function renderMatchCard(match, idx = 0) {
         ${pn(players[1])}
       </div>
       <div class="hv2-mc-center">
-        <span class="hv2-mc-vs">VS</span>
+        <span class="hv2-mc-vs">${match.isApoing ? "<i class='fas fa-calendar-check text-orange-400'></i>" : "VS"}</span>
         <span class="hv2-mc-time">${date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
         <span class="hv2-mc-date">${date.toLocaleDateString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit" })}</span>
       </div>
@@ -1134,8 +1936,13 @@ function renderMatchCard(match, idx = 0) {
         ${pn(players[2])}
         ${pn(players[3])}
       </div>
+      ${winnerBadge}
+      <button class="hv2-mc-share-btn" onclick="event.stopPropagation(); window.shareMatch('${match.id}', '${match.col}')">
+         <i class="fas fa-share-nodes"></i>
+      </button>
     </div>
   `;
+
 }
 
 /* Match modal */
@@ -1221,7 +2028,7 @@ window.openNexusModal = () => {
             ${photo ? `<img src="${photo}" alt="${name}" onerror="this.outerHTML='<span class=&quot;nexus-initials&quot;>${initials}</span>'">` : `<span class="nexus-initials">${initials}</span>`}
           </div>
           <div class="nexus-modal-info">
-            <span class="nexus-modal-name">${isMe ? "TÚ" : name}</span>
+            <span class="nexus-modal-name">${isMe ? "Tú" : name}</span>
             <span class="nexus-modal-meta">Conectado ahora</span>
           </div>
         </div>
@@ -1231,7 +2038,7 @@ window.openNexusModal = () => {
     : '<div class="nexus-modal-empty">No hay usuarios conectados ahora</div>';
 
   const offlineHtml = `
-    <div class="nexus-modal-divider">No conectados — última actividad (${offlineUsers.length})</div>
+    <div class="nexus-modal-divider">No conectados —" última actividad (${offlineUsers.length})</div>
     ${
       offlineUsers.length
         ? offlineUsers
@@ -1250,7 +2057,7 @@ window.openNexusModal = () => {
                   </div>
                   <div class="nexus-modal-info">
                     <span class="nexus-modal-name">${name}</span>
-                    <span class="nexus-modal-meta">Último acceso: ${lastTxt}</span>
+                    <span class="nexus-modal-meta">último acceso: ${lastTxt}</span>
                   </div>
                 </div>
               `;
@@ -1265,20 +2072,18 @@ window.openNexusModal = () => {
   modal.classList.add("active");
 };
 window.openMatch = (id, col) => {
-  if (String(col || "") === "eventoPartidos") {
-    const row = allMatches.find(
-      (m) => m.id === id && String(m.col || "") === "eventoPartidos",
-    );
-    if (row?.eventoId) {
-      window.location.href = `evento-detalle.html?id=${row.eventoId}&tab=partidos`;
-      return;
-    }
-  }
   const modal = document.getElementById("modal-match");
   const area = document.getElementById("match-detail-area");
-  if (!modal || !area) return;
+  if (!modal || !area) {
+    console.warn("[Home] modal-match not found", { id, col });
+    return;
+  }
+  const row = allMatches.find((m) => m.id === id || m.eventMatchId === id) || null;
+  const resolvedCol = (col || row?.col || (row?.eventoId ? "eventoPartidos" : "partidosAmistosos")) || "partidosAmistosos";
+  const resolvedId = row?.id || id;
+  console.log("[Home] openMatch modal", { id, col, resolvedId, resolvedCol });
   modal.classList.add("active");
-  renderMatchDetail(area, id, col, currentUser, currentUserData || {});
+  renderMatchDetail(area, resolvedId, resolvedCol, currentUser, currentUserData || {});
 };
 
 window.closeHomeMatchModal = () => {
@@ -1302,6 +2107,168 @@ window.clearAppCache = async () => {
   }
 };
 
+/* Apoing Logic for Home */
+async function syncApoingReservations() {
+  const now = Date.now();
+  if (now - apoingLastSyncAt < APOING_SYNC_TTL_MS) return;
+  
+  const sources = await getApoingSources();
+  if (!sources.length) return;
+
+  try {
+    const allEvents = [];
+    for (const source of sources) {
+      try {
+        const icsUrl = String(source.icsUrl || "").trim();
+        if (!icsUrl) continue;
+        let raw = "";
+        try {
+          raw = await fetchRawApoingByUrl(icsUrl);
+        } catch (e) {
+          console.warn("Apoing fetch fail", source.uid, e);
+          continue;
+        }
+        const parsed = parseIcsEvents(raw).filter((e) => !Number.isNaN(e.dtStart.getTime()));
+        const filtered = parsed.filter((e) => isRelevantApoingEvent(e));
+        const expanded = expandRecurringEvents(filtered).map((e) => ({
+          ...e,
+          sourceUid: source.uid,
+          sourceName: source.name,
+          owner: extractOwnerFromApoingEvent(e) || source.name
+        }));
+        allEvents.push(...expanded);
+      } catch (err) {
+        console.warn("Source sync error", source.uid, err);
+      }
+    }
+    apoingEvents = allEvents.sort((a,b) => a.dtStart - b.dtStart);
+    apoingLastSyncAt = now;
+    const activeTab = document.querySelector(".hv2-tab.active")?.dataset.filter || "open";
+    renderMatchesByFilter(activeTab);
+  } catch (e) {
+    console.error("Apoing sync failed", e);
+  }
+}
+
+async function getApoingSources() {
+  const sources = [];
+  const pushUnique = (row) => {
+    const uid = String(row?.uid || "").trim();
+    const icsUrl = String(row?.icsUrl || "").trim();
+    if (!uid || !icsUrl) return;
+    if (sources.some((s) => s.uid === uid)) return;
+    sources.push({ uid, name: row?.name || "Jugador", icsUrl });
+  };
+  try {
+    const publicSnap = await getDocs(collection(db, "apoingCalendars"));
+    publicSnap.forEach((d) => pushUnique({ uid: d.id, ...d.data() }));
+  } catch (_) {}
+  const myUrl = String(currentUserData?.apoingCalendarUrl || "").trim();
+  if (currentUser?.uid && myUrl) pushUnique({ uid: currentUser.uid, name: currentUserData?.nombreUsuario || "Tú", icsUrl: myUrl });
+  return sources;
+}
+
+async function fetchRawApoingByUrl(url) {
+  for (const proxy of APOING_PROXY_LIST) {
+    try {
+      const target = proxy.includes('allorigins') || proxy.includes('corsproxy') 
+        ? `${proxy}${encodeURIComponent(url)}`
+        : `${proxy}${url.replace(/^https?:\/\//i, "")}`;
+      const resp = await fetch(target);
+      if (resp.ok) return await resp.text();
+    } catch (_) {}
+  }
+  const jinaTarget = `${APOING_PROXY_JINA}${url.replace(/^https?:\/\//i, "")}`;
+  const resp = await fetch(jinaTarget);
+  if (resp.ok) return await resp.text();
+  throw new Error("Apoing fetch failed all proxies");
+}
+
+function parseIcsEvents(icsText = "") {
+  const lines = unfoldIcsLines(icsText);
+  const out = [];
+  let current = null;
+  for (const line of lines) {
+    if (line === "BEGIN:VEVENT") { current = {}; continue; }
+    if (line === "END:VEVENT") { if (current?.dtStart && current?.dtEnd) out.push(current); current = null; continue; }
+    if (!current) continue;
+    const split = line.indexOf(":");
+    if (split <= 0) continue;
+    const rawKey = line.slice(0, split).trim();
+    const value = decodeIcsText(line.slice(split + 1).trim());
+    const key = rawKey.split(";")[0].toUpperCase();
+    if (key === "SUMMARY") current.summary = value;
+    if (key === "DESCRIPTION") current.description = value;
+    if (key === "DTSTART") current.dtStart = parseIcsDate(value);
+    if (key === "DTEND") current.dtEnd = parseIcsDate(value);
+  }
+  return out.filter((e) => e.dtStart instanceof Date && e.dtEnd instanceof Date);
+}
+
+function unfoldIcsLines(raw = "") {
+  const lines = String(raw || "").split(/\r?\n/);
+  const unfolded = [];
+  for (const line of lines) {
+    if (!line) continue;
+    if (line.startsWith(" ") || line.startsWith("\t")) unfolded[unfolded.length - 1] += line.trim();
+    else unfolded.push(line.trim());
+  }
+  return unfolded;
+}
+
+function parseIcsDate(v) {
+  const dOnly = String(v).match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (dOnly) return new Date(Number(dOnly[1]), Number(dOnly[2])-1, Number(dOnly[3]));
+  const m = String(v).match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?/);
+  if (!m) return new Date(NaN);
+  if (m[7] === "Z") return new Date(Date.UTC(Number(m[1]), Number(m[2])-1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]||0)));
+  return new Date(Number(m[1]), Number(m[2])-1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]||0));
+}
+
+function decodeIcsText(t) { return String(t||"").replaceAll("\\n","\n").replaceAll("\\,",",").replaceAll("\\;",";").replaceAll("\\\\","\\"); }
+
+function expandRecurringEvents(events) {
+  const out = [];
+  const horizon = Date.now() + 15 * 24 * 60 * 60 * 1000;
+  for (const ev of events) {
+    out.push(ev);
+    // Recurring logic skipped for home simplicity unless requested, 
+    // basic one-off matches are usually enough for home "upcoming" view.
+  }
+  return out;
+}
+
+function isRelevantApoingEvent(ev) {
+  const txt = normalizeName(`${ev.summary || ""} ${ev.description || ""}`);
+  // Loosen condition: if it mentions padel/padle OR common terms like reserve/match/court
+  // but definitely ignore club social.
+  const isPadel = txt.includes("padel") || txt.includes("padle");
+  const isGeneric = txt.includes("reserva") || txt.includes("pista") || txt.includes("match") || txt.includes("partida");
+  const isClub = txt.includes("club social") || txt.includes("club");
+  if (isClub && !isPadel) return false;
+  return (isPadel || isGeneric) && !txt.includes("club social");
+}
+
+function normalizeName(t) { return String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim(); }
+
+function extractOwnerFromApoingEvent(ev) {
+  const raw = `${ev.summary || ""} ${ev.description || ""}`;
+  const patterns = [
+    /(?:reservad[oa]\s+por|usuario|cliente|player|jugador)\s*[:\-]\s*([^\n,(]+)/i,
+    /\(([A-Za-z\u00C0-\u024F'`.\- ]{3,})\)/,
+    /[-|]\s*([A-Za-z\u00C0-\u024F ]{3,})/
+  ];
+  for (const p of patterns) {
+    const m = raw.match(p);
+    if (m?.[1]?.trim()) return m[1].trim();
+  }
+  return "";
+}
+
+window.openApoingMatch = (id) => {
+  window.location.href = "calendario.html";
+};
+
 // Ensure cleanup includes Nexus
 const originalCleanup = cleanup;
 cleanup = () => {
@@ -1310,9 +2277,686 @@ cleanup = () => {
   unsubNexus = null;
 };
 
+function initProposeMatch() {
+    // Prepare proposal modal on load
+    ensureProposalModal();
+}
+
+window.openProposeMatchChat = () => {
+    openProposalModal();
+};
+
+function ensureProposalModal() {
+    if (document.getElementById("proposal-view-list")) return;
+    const inline = document.getElementById("proposal-inline-section");
+    proposalInlineMode = !!inline;
+    const wrapper = document.createElement("div");
+    if (proposalInlineMode) {
+        wrapper.className = "hv2-proposal-panel";
+        wrapper.innerHTML = `
+            <div class="flex-col gap-3">
+                <div class="text-[10px] uppercase tracking-widest font-black text-primary">Propuestas</div>
+                <div id="proposal-view-list" class="flex-col gap-3"></div>
+                <div id="proposal-view-create" class="flex-col gap-3 hidden"></div>
+                <div id="proposal-view-chat" class="flex-col gap-3 hidden"></div>
+            </div>
+        `;
+        inline.appendChild(wrapper);
+    } else {
+        wrapper.id = "proposal-modal";
+        wrapper.className = "modal-overlay";
+        wrapper.innerHTML = `
+            <div class="modal-card glass-strong" style="max-width:560px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">Propuesta de Partido</h3>
+                    <button class="close-btn" id="proposal-close-btn">&times;</button>
+                </div>
+                <div class="modal-body scroll-y" style="max-height: 80vh;">
+                    <div id="proposal-view-list" class="flex-col gap-3"></div>
+                    <div id="proposal-view-create" class="flex-col gap-3 hidden"></div>
+                    <div id="proposal-view-chat" class="flex-col gap-3 hidden"></div>
+                </div>
+            </div>
+        `;
+        wrapper.addEventListener("click", (e) => {
+            if (e.target === wrapper) wrapper.classList.remove("active");
+        });
+        document.body.appendChild(wrapper);
+        wrapper.querySelector("#proposal-close-btn")?.addEventListener("click", () => {
+            wrapper.classList.remove("active");
+            cleanupProposalChat();
+        });
+    }
+}
+
+function openProposalModal() {
+    console.log('[Proposal] open modal');
+    ensureProposalModal();
+    if (!proposalInlineMode) {
+        const modal = document.getElementById("proposal-modal");
+        if (!modal) return;
+        modal.classList.add("active");
+    } else {
+        const inline = document.getElementById("proposal-inline-section");
+        if (inline) {
+            inline.classList.remove("hidden");
+            inline.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    }
+    if (!currentUser?.uid) {
+        showToast("Cargando usuario", "Espera un segundo y vuelve a abrir la propuesta.", "info");
+        setTimeout(() => {
+            if (proposalInlineMode || document.getElementById("proposal-modal")?.classList.contains("active")) {
+                renderProposalList();
+            }
+        }, 600);
+        return;
+    }
+    renderProposalList();
+}
+
+function setProposalView(view) {
+    ["proposal-view-list", "proposal-view-create", "proposal-view-chat"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle("hidden", id !== view);
+    });
+}
+
+async function renderProposalList() {
+    console.log('[Proposal] render list', { uid: currentUser?.uid });
+    const listEl = document.getElementById("proposal-view-list");
+    if (!listEl) return;
+    if (!currentUser?.uid) {
+        listEl.innerHTML = `<div class="text-xs opacity-60">Esperando usuario...</div>`;
+        return;
+    }
+    setProposalView("proposal-view-list");
+    listEl.innerHTML = `<div class="text-xs opacity-60">Cargando propuestas...</div>`;
+
+    if (typeof proposalListUnsub === "function") proposalListUnsub();
+    proposalListUnsub = onSnapshot(
+        query(
+            collection(db, "propuestasPartido"),
+            where("participantUids", "array-contains", currentUser.uid),
+        ),
+        (snap) => {
+            const rows = snap.docs
+                .map((d) => ({ id: d.id, ...d.data() }))
+                .filter((p) => p.status !== "closed")
+                .sort((a, b) => {
+                    const ta = a?.createdAt?.toMillis?.() || 0;
+                    const tb = b?.createdAt?.toMillis?.() || 0;
+                    return tb - ta;
+                });
+            updateProposalBadges(rows);
+            const inline = document.getElementById("proposal-inline-section");
+            if (inline && !rows.length) {
+                inline.classList.add("hidden");
+            } else if (inline) {
+                inline.classList.remove("hidden");
+            }
+            listEl.innerHTML = rows.length ? rows.map((p) => proposalCardHtml(p)).join("") : `
+                <div class="p-4 rounded-xl border border-white/10 bg-white/5 text-center text-[10px] opacity-70">
+                    No tienes propuestas activas.
+                </div>
+            `;
+            listEl.querySelectorAll("[data-prop-id]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    const pid = btn.getAttribute("data-prop-id");
+                    if (pid) openProposalChat(pid);
+                });
+            });
+        },
+        (err) => {
+            console.warn("[Proposal] snapshot error", err);
+            listEl.innerHTML = `<div class="p-4 rounded-xl border border-white/10 bg-white/5 text-center text-[10px] opacity-70">
+                No se pudieron cargar las propuestas. Reintenta en unos segundos.
+            </div>`;
+        }
+    );
+}
+
+function proposalCardHtml(p) {
+    const names = Array.isArray(p.participantNames) ? p.participantNames.join(", ") : "";
+    const statusLabel = p.status === "rejected" ? "RECHAZADA" : "ABIERTA";
+    return `
+        <div class="p-3 rounded-xl border border-white/10 bg-white/5 flex-col gap-2">
+            <div class="flex-row between items-center">
+                <span class="text-[10px] font-black uppercase tracking-widest">${statusLabel}</span>
+                <button class="btn-ghost" data-prop-id="${p.id}">Abrir chat</button>
+            </div>
+            <div class="text-[11px] font-bold">${p.title || "Propuesta de partido"}</div>
+            <div class="text-[10px] opacity-60">Participantes: ${names || "Sin datos"}</div>
+        </div>
+    `;
+}
+
+async function renderProposalCreate() {
+    const createEl = document.getElementById("proposal-view-create");
+    if (!createEl || !currentUser?.uid) return;
+    setProposalView("proposal-view-create");
+    createEl.innerHTML = `<div class="text-xs opacity-60">Cargando usuarios...</div>`;
+
+    if (!proposalUsersCache.length) {
+        try {
+            const snap = await getDocs(query(collection(db, "usuarios"), orderBy("nombreUsuario"), limit(200)));
+            proposalUsersCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        } catch (_) {
+            proposalUsersCache = [];
+        }
+    }
+
+    const userOptions = proposalUsersCache
+        .filter((u) => u.id !== currentUser.uid)
+        .map((u) => `
+            <label class="flex-row items-center gap-2 text-[11px]">
+                <input type="checkbox" class="proposal-user-check" value="${u.id}">
+                <span>${u.nombreUsuario || u.nombre || u.email || u.id}</span>
+            </label>
+        `)
+        .join("");
+
+    createEl.innerHTML = `
+        <div class="text-[10px] uppercase tracking-widest font-black text-primary">Nueva propuesta</div>
+        <div class="p-3 rounded-xl border border-white/10 bg-white/5 flex-col gap-2">
+            <label class="text-[10px] font-black uppercase opacity-60">Título</label>
+            <input id="proposal-title" class="input" placeholder="Partido de la semana">
+        </div>
+        <div class="p-3 rounded-xl border border-white/10 bg-white/5 flex-col gap-2">
+            <label class="text-[10px] font-black uppercase opacity-60">Invitar jugadores</label>
+            <div class="flex-col gap-2 max-h-48 scroll-y">
+                ${userOptions || '<div class="text-[10px] opacity-60">No hay usuarios cargados.</div>'}
+            </div>
+        </div>
+        <div class="flex-row gap-2">
+            <button class="btn-ghost w-full" id="proposal-back-btn">Volver</button>
+            <button class="btn-confirm-v7 w-full" id="proposal-create-btn">Crear chat</button>
+        </div>
+    `;
+
+    createEl.querySelector("#proposal-back-btn")?.addEventListener("click", renderProposalList);
+    createEl.querySelector("#proposal-create-btn")?.addEventListener("click", createProposalChat);
+}
+
+async function createProposalChat() {
+    const title = document.getElementById("proposal-title")?.value?.trim() || "Propuesta de partido";
+    const checks = Array.from(document.querySelectorAll(".proposal-user-check:checked"));
+    const uids = checks.map((c) => c.value);
+    if (!uids.length) {
+        showToast("Faltan jugadores", "Selecciona al menos un usuario para invitar.", "warning");
+        return;
+    }
+    const participantUids = Array.from(new Set([currentUser.uid, ...uids]));
+    const participantNames = participantUids.map((uid) => {
+        if (uid === currentUser.uid) return currentUserData?.nombreUsuario || currentUserData?.nombre || "Tú";
+        const u = proposalUsersCache.find((x) => x.id === uid);
+        return u?.nombreUsuario || u?.nombre || u?.email || uid;
+    });
+
+    try {
+        const ref = await addDoc(collection(db, "propuestasPartido"), {
+            title,
+            createdBy: currentUser.uid,
+            participantUids,
+            participantNames,
+            status: "open",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        showToast("Chat creado", "Propuesta abierta con los usuarios seleccionados.", "success");
+        openProposalChat(ref.id);
+    } catch (e) {
+        showToast("Error", "No se pudo crear la propuesta.", "error");
+    }
+}
+
+function cleanupProposalChat() {
+    if (typeof proposalChatUnsub === "function") proposalChatUnsub();
+    proposalChatUnsub = null;
+    activeProposalId = null;
+}
+
+async function openProposalChat(proposalId) {
+    console.log("[Proposal] open chat", { proposalId });
+    if (!proposalUsersCache.length) {
+        try {
+            const snap = await getDocs(query(collection(db, "usuarios"), orderBy("nombreUsuario"), limit(200)));
+            proposalUsersCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        } catch (e) {
+            console.warn("[Proposal] user cache load failed", e);
+        }
+    }
+    const chatEl = document.getElementById("proposal-view-chat");
+    if (!chatEl || !proposalId) return;
+    setProposalView("proposal-view-chat");
+    activeProposalId = proposalId;
+
+    const propSnap = await getDocument("propuestasPartido", proposalId);
+    if (!propSnap) {
+        showToast("No disponible", "La propuesta ya no existe.", "warning");
+        renderProposalList();
+        return;
+    }
+
+    activeProposalMeta = propSnap;
+    chatEl.innerHTML = `
+        <div class="flex-row between items-center">
+            <div>
+                <div class="text-[10px] uppercase tracking-widest font-black text-primary">Chat de propuesta</div>
+                <div class="text-[11px] font-bold">${propSnap.title || "Propuesta de partido"}</div>
+                <div class="text-[10px] opacity-60">Participantes: ${(propSnap.participantNames || []).join(", ")}</div>
+            </div>
+            <button class="btn-ghost" id="proposal-back-list">Volver</button>
+        </div>
+        <div id="proposal-chat-list" class="proposal-chat-list whatsapp"></div>
+        <div class="proposal-chat-input whatsapp">
+            <input id="proposal-chat-text" class="input" placeholder="Escribe un mensaje...">
+            <button class="btn-confirm-v7" id="proposal-send-btn">Enviar</button>
+        </div>
+        <div class="proposal-actions">
+            <button class="btn-ghost" id="proposal-leave-btn">Abandonar propuesta</button>
+            <button class="btn-ghost" id="proposal-confirm-btn">Concretar propuesta</button>
+        </div>
+        <div id="proposal-confirm-area" class="proposal-confirm-area hidden"></div>
+    `;
+
+    chatEl.querySelector("#proposal-back-list")?.addEventListener("click", () => {
+        cleanupProposalChat();
+        renderProposalList();
+    });
+    chatEl.querySelector("#proposal-send-btn")?.addEventListener("click", () => sendProposalMessage(proposalId));
+    chatEl.querySelector("#proposal-chat-text")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") sendProposalMessage(proposalId);
+    });
+    chatEl.querySelector("#proposal-leave-btn")?.addEventListener("click", () => leaveProposal(proposalId));
+    chatEl.querySelector("#proposal-confirm-btn")?.addEventListener("click", () => toggleProposalConfirm(propSnap));
+
+    const chatList = chatEl.querySelector("#proposal-chat-list");
+    if (typeof proposalChatUnsub === "function") proposalChatUnsub();
+    proposalChatUnsub = onSnapshot(
+        query(collection(db, "propuestasPartido", proposalId, "chat"), orderBy("createdAt", "asc")),
+        (snap) => {
+            if (!chatList) return;
+            chatList.innerHTML = snap.docs.map((d) => {
+                const m = d.data() || {};
+                const isMe = m.uid === currentUser?.uid;
+                return `
+                    <div class="proposal-msg ${isMe ? "me" : ""}">
+                        <div class="proposal-msg-meta">${m.name || "Jugador"} · ${formatChatTime(m.createdAt)}</div>
+                        <div class="proposal-msg-text">${escapeHtml(m.text || "")}</div>
+                    </div>
+                `;
+            }).join("") || `<div class="text-[10px] opacity-50">Sin mensajes todavía.</div>`;
+            chatList.scrollTop = chatList.scrollHeight;
+        },
+    );
+}
+
+function formatChatTime(ts) {
+    if (!ts) return "";
+    const d = ts?.toDate ? ts.toDate() : new Date(ts);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+}
+
+async function sendProposalMessage(proposalId) {
+    const input = document.getElementById("proposal-chat-text");
+    const text = input?.value?.trim();
+    if (!text) return;
+    input.value = "";
+    try {
+        const name = currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador";
+        await addDoc(collection(db, "propuestasPartido", proposalId, "chat"), {
+            uid: currentUser.uid,
+            name,
+            text,
+            createdAt: serverTimestamp(),
+        });
+        const meta = activeProposalMeta || (await getDocument("propuestasPartido", proposalId));
+        const targets = (meta?.participantUids || []).filter((uid) => uid && uid !== currentUser.uid);
+        if (targets.length) {
+            await createNotification(
+                targets,
+                "Mensaje de propuesta",
+                `Tienes un mensaje en: ${meta?.title || "Propuesta de partido"}`,
+                "proposal_message",
+                "home.html",
+                { type: "proposal_message", proposalId, dedupId: `proposal_msg_${proposalId}_${Date.now()}` },
+            );
+        }
+    } catch (e) {
+        showToast("Error", "No se pudo enviar el mensaje.", "error");
+    }
+}
+
+async function rejectProposal(proposalId) {
+    if (!confirm("¿Rechazar esta propuesta?")) return;
+    try {
+        await setDoc(doc(db, "propuestasPartido", proposalId), { status: "rejected", updatedAt: serverTimestamp() }, { merge: true });
+        showToast("Propuesta rechazada", "El chat se cerrará para el resto.", "info");
+        cleanupProposalChat();
+        renderProposalList();
+    } catch (e) {
+        showToast("Error", "No se pudo rechazar la propuesta.", "error");
+    }
+}
+
+async function leaveProposal(proposalId) {
+    if (!confirm("¿Abandonar esta propuesta? Se eliminará para todos.")) return;
+    try {
+        await deleteProposalChat(proposalId);
+        showToast("Propuesta eliminada", "La propuesta se ha cerrado.", "info");
+        cleanupProposalChat();
+        renderProposalList();
+    } catch (e) {
+        showToast("Error", "No se pudo cerrar la propuesta.", "error");
+    }
+}
+
+function toggleProposalConfirm(propSnap) {
+    const area = document.getElementById("proposal-confirm-area");
+    if (!area) return;
+    area.classList.toggle("hidden");
+    if (!area.classList.contains("hidden")) {
+        renderProposalConfirmForm(propSnap);
+    }
+}
+
+function renderProposalConfirmForm(propSnap) {
+    console.log('[Proposal] render confirm', { proposalId: propSnap?.id, participants: propSnap?.participantUids });
+    const area = document.getElementById("proposal-confirm-area");
+    if (!area) return;
+    const participants = Array.isArray(propSnap.participantUids) ? propSnap.participantUids : [];
+    const options = participants.map((uid) => {
+        const u = proposalUsersCache.find((x) => x.id === uid);
+        const name = uid === currentUser.uid
+            ? (currentUserData?.nombreUsuario || currentUserData?.nombre || "Tú")
+            : (u?.nombreUsuario || u?.nombre || u?.email || uid);
+        return `<option value="${uid}">${name}</option>`;
+    }).join("");
+    const slotOptions = `<option value="">-- Libre --</option>${options}<option value="guest">Invitado</option>`;
+    area.innerHTML = `
+        <div class="p-3 rounded-xl border border-white/10 bg-white/5 flex-col gap-3">
+            <div class="text-[10px] uppercase tracking-widest font-black text-primary">Concretar propuesta</div>
+            <div class="grid grid-cols-2 gap-2">
+                <input id="proposal-date" type="date" class="input">
+                <input id="proposal-time" type="time" class="input" value="19:00">
+                <select id="proposal-surface" class="input">
+                    <option value="indoor">Indoor</option>
+                    <option value="outdoor">Outdoor</option>
+                </select>
+                <select id="proposal-court" class="input">
+                    <option value="normal">Pista normal</option>
+                    <option value="central">Pista central</option>
+                </select>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                ${[1,2,3,4].map(i => `
+                    <div class="flex-col gap-1">
+                        <label class="text-[9px] uppercase opacity-60">Jugador ${i}</label>
+                        <select class="input proposal-slot" data-slot="${i}">${slotOptions}</select>
+                        <input class="input proposal-guest hidden" data-guest="${i}" placeholder="Nombre invitado">
+                    </div>
+                `).join("")}
+            </div>
+            <div id="proposal-preview" class="p-2 rounded-xl border border-white/10 bg-white/5 text-[10px]"></div>
+            <div class="flex-row gap-2">
+                <button class="btn-ghost w-full" id="proposal-cancel-confirm">Cancelar</button>
+                <button class="btn-ghost w-full" id="proposal-assign-calendar">Asignar en calendario</button>
+            </div>
+            <button class="btn-confirm-v7 w-full" id="proposal-finalize">Crear partido ahora</button>
+        </div>
+    `;
+    area.querySelectorAll(".proposal-slot").forEach((sel) => {
+        sel.addEventListener("change", () => {
+            const idx = sel.getAttribute("data-slot");
+            const guestInput = area.querySelector(`.proposal-guest[data-guest="${idx}"]`);
+            if (!guestInput) return;
+            if (sel.value === "guest") guestInput.classList.remove("hidden");
+            else guestInput.classList.add("hidden");
+            updateProposalPreview(propSnap);
+        });
+    });
+    area.querySelectorAll(".proposal-guest").forEach((inp) => {
+        inp.addEventListener("input", () => updateProposalPreview(propSnap));
+    });
+    area.querySelector("#proposal-cancel-confirm")?.addEventListener("click", () => area.classList.add("hidden"));
+    area.querySelector("#proposal-assign-calendar")?.addEventListener("click", () => assignProposalToCalendar(propSnap));
+    area.querySelector("#proposal-finalize")?.addEventListener("click", () => finalizeProposal(propSnap));
+    updateProposalPreview(propSnap);
+}
+
+function buildGuestId(name) {
+    const safe = String(name || "Invitado").trim().replace(/\s+/g, "_");
+    return `GUEST_${safe}_2.5_0`;
+}
+
+function updateProposalPreview(propSnap) {
+    const preview = document.getElementById("proposal-preview");
+    if (!preview) return;
+    const names = [];
+    document.querySelectorAll(".proposal-slot").forEach((sel) => {
+        if (!sel.value) return;
+        if (sel.value === "guest") {
+            const idx = sel.getAttribute("data-slot");
+            const g = document.querySelector(`.proposal-guest[data-guest="${idx}"]`)?.value?.trim() || "Invitado";
+            names.push(g);
+            return;
+        }
+        const u = proposalUsersCache.find((x) => x.id === sel.value);
+        names.push(u?.nombreUsuario || u?.nombre || u?.email || sel.value);
+    });
+    const teamA = names.slice(0, 2).join(" / ") || "Por definir";
+    const teamB = names.slice(2, 4).join(" / ") || "Por definir";
+    preview.innerHTML = `
+        <div class="text-[9px] uppercase opacity-60 mb-1">Vista previa parejas</div>
+        <div><strong>Equipo A:</strong> ${escapeHtml(teamA)}</div>
+        <div><strong>Equipo B:</strong> ${escapeHtml(teamB)}</div>
+    `;
+}
+
+function collectProposalFormData(propSnap) {
+    const date = document.getElementById("proposal-date")?.value || "";
+    const time = document.getElementById("proposal-time")?.value || "19:00";
+    const surface = document.getElementById("proposal-surface")?.value || "indoor";
+    const courtType = document.getElementById("proposal-court")?.value || "normal";
+    const players = [];
+    document.querySelectorAll(".proposal-slot").forEach((sel) => {
+        const val = sel.value;
+        if (!val) { players.push(null); return; }
+        if (val === "guest") {
+            const idx = sel.getAttribute("data-slot");
+            const g = document.querySelector(`.proposal-guest[data-guest="${idx}"]`)?.value?.trim();
+            players.push(g ? buildGuestId(g) : buildGuestId("Invitado"));
+            return;
+        }
+        players.push(val);
+    });
+    while (players.length < 4) players.push(null);
+    const invitedUsers = (propSnap.participantUids || []).filter((uid) => uid && !String(uid).startsWith("GUEST_"));
+    return { date, time, surface, courtType, players, invitedUsers };
+}
+
+async function assignProposalToCalendar(propSnap) {
+    const data = collectProposalFormData(propSnap);
+    if (data.players.filter(Boolean).length < 2) {
+        return showToast("Faltan jugadores", "Selecciona al menos 2 jugadores.", "warning");
+    }
+    try {
+        const payload = {
+            proposalId: propSnap?.id || null,
+            createdBy: currentUser?.uid || null,
+            players: data.players,
+            invitedUsers: data.invitedUsers,
+            surface: data.surface,
+            courtType: data.courtType,
+            title: propSnap?.title || "Propuesta de partido",
+            createdAt: Date.now(),
+        };
+        localStorage.setItem("proposal:draft:v1", JSON.stringify(payload));
+        showToast("Selecciona franja", "Elige una hora en el calendario para crear el partido.", "info");
+        window.location.href = `calendario.html?proposalId=${propSnap?.id || ""}`;
+    } catch (e) {
+        console.error("[Proposal] assign calendar failed", e);
+        showToast("Error", "No se pudo preparar el calendario.", "error");
+    }
+}
+
+async function finalizeProposal(propSnap) {
+    console.log('[Proposal] finalize', { proposalId: propSnap?.id });
+    const data = collectProposalFormData(propSnap);
+    if (!data.date) return showToast("Fecha requerida", "Indica el día del partido.", "warning");
+    if (data.players.filter(Boolean).length < 2) {
+        return showToast("Faltan jugadores", "Selecciona al menos 2 jugadores.", "warning");
+    }
+
+    try {
+        const matchDate = new Date(`${data.date}T${data.time}`);
+
+        await addDoc(collection(db, "partidosAmistosos"), {
+            creador: currentUser.uid,
+            organizerId: currentUser.uid,
+            fecha: matchDate,
+            jugadores: data.players,
+            restriccionNivel: { min: 1.0, max: 7.0 },
+            estado: "abierto",
+            visibility: "private",
+            invitedUsers: data.invitedUsers,
+            equipoA: [data.players[0], data.players[1]],
+            equipoB: [data.players[2], data.players[3]],
+            surface: data.surface,
+            courtType: data.courtType,
+            proposalId: propSnap.id,
+            createdAt: serverTimestamp(),
+            timestamp: serverTimestamp(),
+        });
+
+        await deleteProposalChat(propSnap.id);
+        showToast("Partido creado", "El partido ya está en calendario.", "success");
+        cleanupProposalChat();
+        renderProposalList();
+    } catch (e) {
+        showToast("Error", "No se pudo crear el partido desde la propuesta.", "error");
+    }
+}
+
+async function deleteProposalChat(proposalId) {
+    try {
+        const chatSnap = await getDocs(collection(db, "propuestasPartido", proposalId, "chat"));
+        await Promise.all(chatSnap.docs.map((d) => deleteDoc(d.ref)));
+        await deleteDoc(doc(db, "propuestasPartido", proposalId));
+    } catch (e) {
+        console.warn("deleteProposalChat failed", e);
+    }
+}
+
+function escapeHtml(raw = "") {
+    const div = document.createElement("div");
+    div.textContent = String(raw || "");
+    return div.innerHTML;
+}
 
 
 
 
+
+
+
+
+async function updateProposalBadges(proposals) {
+    const badgeEl = document.querySelector(".hv2-propose-badge");
+    if (!badgeEl) return;
+
+    const activeCount = proposals.length;
+    if (activeCount === 0) {
+        badgeEl.innerHTML = '<i class="fas fa-plus"></i>';
+        badgeEl.classList.remove("has-messages", "has-proposals");
+        return;
+    }
+
+    // Check for messages in the last 24h
+    let totalMessages = 0;
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+
+    // We only check if any proposal has been updated recently to avoid too many fetches
+    const recentlyUpdated = proposals.some(p => {
+        const up = p.updatedAt?.toMillis?.() || 0;
+        return up > dayAgo;
+    });
+
+    if (recentlyUpdated) {
+        badgeEl.classList.add("has-messages");
+        badgeEl.innerHTML = `<span>${activeCount}</span>`;
+    } else {
+        badgeEl.classList.add("has-proposals");
+        badgeEl.innerHTML = `<span>${activeCount}</span>`;
+    }
+}
+
+window.shareMatch = async (matchId, col) => {
+    const match = allMatches.find(m => m.id === matchId) || {};
+    const d = toDateSafe(match.fecha);
+    const dateStr = d ? d.toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : "próximamente";
+    const players = getNormalizedPlayers(match);
+    const names = players.map(uid => getPlayerDisplayName(uid));
+    
+    // Check if finished to use mission / result poster
+    if (isFinishedMatch(match)) {
+        const sets = (match.resultado?.sets || (typeof match.resultado === "string" ? match.resultado : "PARTIDO FINALIZADO"));
+        const winner = resolveWinnerTeam(match);
+        const pNames = players.map(uid => String(getPlayerDisplayName(uid) || "Jugador"));
+        
+        const metadata = {
+            players: pNames,
+            teamA: [pNames[0], pNames[1]],
+            teamB: [pNames[2], pNames[3]],
+            winner,
+            sets,
+            club: "PADELUMINATIS CLUB",
+            logoUrl: 'imagenes/Logojafs.png'
+        };
+
+        
+        const analysis = {
+            sets: sets,
+            delta: 0,
+            pointsAfter: "CONFIRMADAS",
+            levelBand: "MISION CUMPLIDA"
+        };
+        
+        await shareMatchResult(analysis, metadata);
+        return;
+    }
+
+
+    // Default social share text
+    let text = `🎾 ¡Partido de Padel! \n📅 ${dateStr}\n`;
+    if (names.length >= 4) {
+        text += `⚔️ ${names[0]} / ${names[1]} VS ${names[2]} / ${names[3]}\n`;
+    }
+    
+    text += `\n¡Entra en Padeluminatis para ver más!`;
+
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'Partido de Padeluminatis',
+                text: text,
+                url: window.location.origin
+            });
+        } catch (err) {
+            console.log('Share failed', err);
+        }
+    } else {
+        try {
+            await navigator.clipboard.writeText(text);
+            showToast("Copiado", "Detalles del partido copiados al portapapeles", "success");
+        } catch (err) {
+            console.error("Clipboard fail", err);
+        }
+    }
+};
 
 

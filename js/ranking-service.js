@@ -13,6 +13,8 @@ import {
   levelFromRating,
   getLevelBandByRating,
 } from "./config/elo-system.js";
+import { checkAchievements } from "./achievement-service.js";
+import { calculateGlicko2Delta, applyRankingAdjustments, calculateNewLevel } from "./services/rating-engine.js";
 
 const BONUS_REASON_NONE = "none";
 const BONUS_REASON_MVP = "mvp";
@@ -87,10 +89,67 @@ export function parseMatchResult(resultStr = "") {
 
 function calculateMatchFactor(parsed) {
   const diff = Number(parsed?.gameDiff || 0);
-  if (diff >= 12) return 1.12;
-  if (diff >= 8) return 1.08;
-  if (diff >= 4) return 1.04;
-  return 1.0;
+  const setDiff = Math.abs(Number(parsed?.teamASets || 0) - Number(parsed?.teamBSets || 0));
+  const dominance = 1 + Math.min(ELO_CONFIG.DYNAMIC.DOMINANCE_M - 1, (diff / 48) + (setDiff * 0.06));
+  return round2(dominance);
+}
+
+function calcClutchAdjustment(baseDelta, parsed) {
+  const sets = parsed?.sets || [];
+  let clutch = 0;
+  sets.forEach(s => {
+    if (s.includes("7-6") || s.includes("6-7") || s.includes("7-5") || s.includes("5-7")) clutch += ELO_CONFIG.DYNAMIC.CLUTCH_M;
+  });
+  return round2(Math.abs(baseDelta) * clutch);
+}
+
+// Streak bonus/penalty based on current streak and match outcome.
+function calcStreakAdjustment(baseDelta, streak = 0, didWin = false) {
+  const s = Number(streak || 0);
+  if (!Number.isFinite(s) || s === 0) return 0;
+  const magnitude = Math.abs(baseDelta);
+  const m = ELO_CONFIG.DYNAMIC.STREAK_M;
+  if (didWin) {
+    if (s >= 2) return round2(magnitude * Math.min(0.25, m * (s/2)));
+    if (s <= -2) return round2(magnitude * Math.min(0.15, m * (Math.abs(s)/3)));
+  } else {
+    if (s >= 3) return -round2(magnitude * Math.min(0.30, (m * 1.2) * (s/2)));
+    if (s <= -2) return -round2(magnitude * Math.min(0.10, m * (Math.abs(s)/4)));
+  }
+  return 0;
+}
+
+// Upset/favorite adjustment to reward surprises and penalize expected losses.
+function calcSurpriseAdjustment(baseDelta, expected = 0.5, didWin = false) {
+  const exp = Number(expected || 0.5);
+  const gap = Math.abs(0.5 - exp);
+  if (gap < 0.02) return 0;
+  const underdogWin = didWin && exp < 0.5;
+  const favoriteLoss = !didWin && exp > 0.5;
+  if (!underdogWin && !favoriteLoss) return 0;
+  const factor = Math.min(0.50, gap * ELO_CONFIG.DYNAMIC.UPSET_M);
+  const sign = underdogWin ? 1 : -1;
+  return round2(Math.abs(baseDelta) * factor * sign);
+}
+
+// Skill adjustment uses explicit skill fields or positional/surface sub-ELO if present.
+function calcSkillAdjustment(baseDelta, player, posKey, surface) {
+  if (!player) return 0;
+  const rawSkill = Number(player?.skillScore ?? player?.skill ?? player?.habilidad ?? NaN);
+  if (Number.isFinite(rawSkill)) {
+    const skillNorm = clampNumber(rawSkill, 1, 10);
+    const factor = clampNumber((skillNorm - 5) / 40, -0.1, 0.12);
+    return round2(Math.abs(baseDelta) * factor);
+  }
+  const posElo = Number(player?.elo?.[posKey]);
+  const surfElo = Number(player?.elo?.[surface]);
+  const skillRating = Number.isFinite(posElo) && Number.isFinite(surfElo)
+    ? (posElo + surfElo) / 2
+    : (Number.isFinite(posElo) ? posElo : (Number.isFinite(surfElo) ? surfElo : NaN));
+  if (!Number.isFinite(skillRating)) return 0;
+  const baseRating = resolvePlayerRating(player);
+  const factor = clampNumber((skillRating - baseRating) / 1200, -0.08, 0.08);
+  return round2(Math.abs(baseDelta) * factor);
 }
 
 function getSafePlayerDoc(p, fallbackId = null) {
@@ -104,6 +163,8 @@ function getSafePlayerDoc(p, fallbackId = null) {
     isGuest,
     puntosRanking: baseRating,
     nivel: Number(p.nivel || levelFromRating(baseRating)),
+    glickoRD: Number(p.glickoRD || 80),
+    glickoVol: Number(p.glickoVol || 0.06),
   };
 }
 
@@ -113,21 +174,21 @@ function buildPointsBreakdown({
   didWin,
   matchFactor,
   bonusDelta,
+  streakDelta = 0,
+  surpriseDelta = 0,
+  skillDelta = 0,
   diaryBonus = 0,
+  smurfPenalty = 0,
   finalDelta,
 }) {
   const base = round2(baseDelta);
   const difficulty = round2(((didWin ? 0.5 - expected : expected - 0.5) * Math.max(4, Math.abs(baseDelta))) * 0.5);
   const sets = round2(baseDelta * (matchFactor - 1));
-  const racha = 0;
-  
-  // Penalización por abusar de niveles bajos (Smurf Check)
-  let smurfPenalty = 0;
-  if (didWin && expected > 0.85) {
-    smurfPenalty = -round2(Math.abs(baseDelta) * 0.3); // Penaliza 30% del delta si la prob de ganar era altísima
-  }
+  const racha = round2(streakDelta);
+  const sorpresa = round2(surpriseDelta);
+  const skill = round2(skillDelta);
 
-  const subtotal = base + difficulty + racha + sets + bonusDelta + smurfPenalty + diaryBonus;
+  const subtotal = base + difficulty + racha + sets + bonusDelta + sorpresa + skill + smurfPenalty + diaryBonus;
   const ajusteJusticia = round2(finalDelta - subtotal);
 
   return {
@@ -136,6 +197,8 @@ function buildPointsBreakdown({
     racha,
     sets,
     rendimientoBonus: round2(bonusDelta),
+    sorpresa,
+    skill,
     ajusteJusticia,
     diarioCoach: diaryBonus,
     smurfPenalty,
@@ -237,11 +300,26 @@ export { getBaseEloByLevel };
 export async function processMatchResults(matchId, col, resultStr, extraMatchData = {}) {
   try {
     const initial = await getDocument(col, matchId);
-    const jugadores = Array.isArray(initial?.jugadores)
+    let jugadores = Array.isArray(initial?.jugadores)
       ? initial.jugadores
       : col === "eventoPartidos" && Array.isArray(initial?.playerUids) && initial.playerUids.length === 4
         ? initial.playerUids
         : null;
+
+    if (col === "eventoPartidos" && (!jugadores || jugadores.filter(Boolean).length !== 4)) {
+      const eventId = initial?.eventoId || initial?.eventId || null;
+      if (eventId && (initial?.teamAId || initial?.teamBId)) {
+        const ev = await getDocument("eventos", eventId);
+        const teams = Array.isArray(ev?.teams) ? ev.teams : [];
+        const teamA = teams.find(t => t?.id === initial?.teamAId);
+        const teamB = teams.find(t => t?.id === initial?.teamBId);
+        const players = [
+          ...(teamA?.playerUids || []),
+          ...(teamB?.playerUids || []),
+        ];
+        if (players.length >= 4) jugadores = players.slice(0, 4);
+      }
+    }
     if (!initial || !jugadores || jugadores.filter(Boolean).length !== 4) {
       return { success: false, error: "Match or players invalid" };
     }
@@ -254,7 +332,8 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
       const matchRaw = matchSnap.data();
       const match = { ...matchRaw, jugadores: matchRaw.jugadores || matchRaw.playerUids || jugadores };
       const normalizedResult = normalizeResultString(resultStr);
-      if (match.rankingProcessedAt) {
+      // Only skip if rankingProcessedAt is set (non-null/non-undefined) - admin can clear it to force reprocess
+      if (match.rankingProcessedAt != null) {
         return {
           success: true,
           skipped: true,
@@ -269,7 +348,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
       const parsed = parseMatchResult(normalizedResult);
       const pointDetails = estimatePointDetailsFromSets(normalizedResult);
       const isComp = col === "partidosReto" || match.tipo === "reto";
-      const modeMult = isComp ? 1.0 : 0.85;
+      const modeMult = isComp ? 1.0 : 0.95;
       const matchFactor = calculateMatchFactor(parsed);
       const capAbs = isComp ? ELO_CONFIG.CAPS.COMPETITIVE_ABS : ELO_CONFIG.CAPS.FRIENDLY_ABS;
 
@@ -298,12 +377,22 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
 
         const userRef = doc(db, "usuarios", uid);
         const userSnap = await transaction.get(userRef);
-        roster.push(userSnap.exists() ? getSafePlayerDoc({ id: uid, ...userSnap.data() }, uid) : null);
+        if (userSnap.exists()) {
+          roster.push({ ...getSafePlayerDoc({ id: uid, ...userSnap.data() }, uid), __exists: true });
+        } else {
+          // Fallback for missing user record (e.g. deleted or guest not correctly prefixed)
+          roster.push({ ...getSafePlayerDoc({ 
+            id: uid, 
+            nombre: "Jugador " + uid.slice(0, 4), 
+            nivel: 2.5,
+            isGuest: true 
+          }, uid), __exists: false });
+        }
       }
 
       const teamA = roster.slice(0, 2).filter(Boolean);
       const teamB = roster.slice(2, 4).filter(Boolean);
-      if (teamA.length !== 2 || teamB.length !== 2) throw new Error("Teams incomplete.");
+      if (teamA.length !== 2 || teamB.length !== 2) throw new Error("Teams incomplete after fallback.");
 
       const teamARating = (resolvePlayerRating(teamA[0]) + resolvePlayerRating(teamA[1])) / 2;
       const teamBRating = (resolvePlayerRating(teamB[0]) + resolvePlayerRating(teamB[1])) / 2;
@@ -316,58 +405,94 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         ? nonGuestKs.reduce((acc, k) => acc + k, 0) / nonGuestKs.length
         : ELO_CONFIG.K.STABLE;
 
-      const teamARaw = Math.round(kCombined * ((winnerIsA ? 1 : 0) - expectedA) * modeMult * matchFactor);
-      let teamADelta = clampNumber(teamARaw, -capAbs, capAbs);
-      let teamBDelta = -teamADelta;
+      // ─── PRE-READ: Event + standings docs BEFORE any writes ───
+      let eventWinnerTeamId = null;
+      let eventLoserTeamId = null;
+      let eventWinnerName = null;
+      let eventLoserName = null;
+      const eventId = match.eventoId || match.eventId || null;
+      let evData = {};
+      let winSnapData = {};
+      let loseSnapData = {};
+      let winRef = null;
+      let loseRef = null;
 
-      const teamARealCount = teamA.filter((p) => p && !p.isGuest).length;
-      const teamBRealCount = teamB.filter((p) => p && !p.isGuest).length;
-      const teamATotalDelta = teamADelta * 2;
-      const teamBTotalDelta = -teamATotalDelta;
-      const teamABaseForReal = teamARealCount > 0 ? Math.round(teamATotalDelta / teamARealCount) : 0;
-      const teamBBaseForReal = teamBRealCount > 0 ? Math.round(teamBTotalDelta / teamBRealCount) : 0;
-      const playerBase = [
-        roster[0] && !roster[0].isGuest ? teamABaseForReal : 0,
-        roster[1] && !roster[1].isGuest ? teamABaseForReal : 0,
-        roster[2] && !roster[2].isGuest ? teamBBaseForReal : 0,
-        roster[3] && !roster[3].isGuest ? teamBBaseForReal : 0,
-      ];
-      const bonusDeltas = [0, 0, 0, 0];
-      let bonusReason = BONUS_REASON_NONE;
+      if (col === "eventoPartidos" && eventId) {
+        const teamAId_ev = match.teamAId || match.equipoAUid || null;
+        const teamBId_ev = match.teamBId || match.equipoBUid || null;
+        if (teamAId_ev && teamBId_ev) {
+          eventWinnerTeamId = winnerIsA ? teamAId_ev : teamBId_ev;
+          eventLoserTeamId = winnerIsA ? teamBId_ev : teamAId_ev;
+          eventWinnerName = winnerIsA ? (match.teamAName || match.equipoA || null) : (match.teamBName || match.equipoB || null);
+          eventLoserName = winnerIsA ? (match.teamBName || match.equipoB || null) : (match.teamAName || match.equipoA || null);
 
-      const mvpId = String(extraMatchData?.mvpId || "").trim();
-      const mvpIndex = mvpId ? roster.findIndex((p) => p?.id === mvpId) : -1;
-      if (mvpIndex >= 0 && !roster[mvpIndex]?.isGuest) {
-        const mvpTeamDelta = mvpIndex < 2 ? teamADelta : teamBDelta;
-        const baseAbs = Math.abs(mvpTeamDelta);
-        const maxBonus = Math.floor(baseAbs * ELO_CONFIG.BONUS_CAP_RATIO);
-        if (maxBonus > 0) {
-          const signedBonus = mvpTeamDelta >= 0 ? maxBonus : maxBonus;
-          const teammateIndex = mvpIndex % 2 === 0 ? mvpIndex + 1 : mvpIndex - 1;
-          if (roster[teammateIndex] && !roster[teammateIndex].isGuest) {
-            bonusDeltas[mvpIndex] += signedBonus;
-            bonusDeltas[teammateIndex] -= signedBonus;
-            bonusReason = BONUS_REASON_MVP;
-          }
+          // Read event doc
+          const evRef = doc(db, "eventos", eventId);
+          const evSnap = await transaction.get(evRef);
+          evData = evSnap.exists() ? evSnap.data() : {};
+
+          // Read standings docs
+          const winKey = `${eventId}_${eventWinnerTeamId}`;
+          const loseKey = `${eventId}_${eventLoserTeamId}`;
+          winRef = doc(db, "eventoClasificacion", winKey);
+          loseRef = doc(db, "eventoClasificacion", loseKey);
+          const winSnap = await transaction.get(winRef);
+          const loseSnap = await transaction.get(loseRef);
+          winSnapData = winSnap.exists() ? winSnap.data() : {};
+          loseSnapData = loseSnap.exists() ? loseSnap.data() : {};
         }
       }
+      // ─── END PRE-READ ───
 
-      const provisionalDeltas = roster.map((player, idx) => {
-        if (!player || player.isGuest) return null;
-        return Math.round(playerBase[idx] + bonusDeltas[idx]);
-      });
-      const provisionalSum = provisionalDeltas
-        .filter((v) => Number.isFinite(v))
-        .reduce((acc, v) => acc + Number(v || 0), 0);
-      if (provisionalSum !== 0) {
-        const candidateIndices = [0, 1, 2, 3].filter((idx) => Number.isFinite(provisionalDeltas[idx]));
-        if (candidateIndices.length > 0) {
-          const adjustTarget = candidateIndices.sort(
-            (a, b) => Math.abs(provisionalDeltas[b]) - Math.abs(provisionalDeltas[a]),
-          )[0];
-          provisionalDeltas[adjustTarget] = Number(provisionalDeltas[adjustTarget]) - provisionalSum;
+      // --- INDIVIDUAL CALCULATION (GLICKO-2 HYBRID) ---
+      const provisionalDeltas = [0, 0, 0, 0];
+      const levelDeltas = [0, 0, 0, 0];
+      
+      for (let i = 0; i < 4; i += 1) {
+        const player = roster[i];
+        if (!player || player.isGuest) {
+            provisionalDeltas[i] = 0;
+            continue;
         }
+        
+        const amITeamA = i < 2;
+        const didWin = (amITeamA && winnerIsA) || (!amITeamA && !winnerIsA);
+        const actualScore = didWin ? 1 : 0;
+        
+        const opponents = amITeamA ? teamB : teamA;
+        const opponentData = opponents.map(opp => ({ 
+          r: resolvePlayerRating(opp), 
+          rd: Number(opp.glickoRD || 80) 
+        }));
+        
+        const myRating = resolvePlayerRating(player);
+        const rivalAvgRating = opponentData.reduce((acc, o) => acc + o.r, 0) / opponentData.length;
+        
+        // 1. Calculate raw Glicko-2 delta
+        const glickoResult = calculateGlicko2Delta({
+          r: myRating,
+          rd: Number(player.glickoRD || 80),
+          vol: Number(player.glickoVol || 0.06)
+        }, opponentData, actualScore);
+        
+        // 2. Apply Custom Human Adjustments (anti-smurf, difficulty, etc.)
+        const finalDelta = applyRankingAdjustments({
+          delta: glickoResult.delta,
+          matchesPlayed: Number(player.partidosJugados || 0),
+          isWin: didWin,
+          myRating: myRating,
+          rivalAvgRating: rivalAvgRating
+        });
+        
+        provisionalDeltas[i] = round2(finalDelta);
+        player.newRD = glickoResult.newRD; // Temporary store for transaction update
       }
+
+      const bonusReason = "Glicko-2 Hybrid";
+      const totalTeamADelta = round2((provisionalDeltas[0] + provisionalDeltas[1]) / 2);
+      const totalTeamBDelta = round2((provisionalDeltas[2] + provisionalDeltas[3]) / 2);
+
+
 
       const changes = [];
       const allocations = [];
@@ -377,27 +502,17 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const player = roster[i];
         const amITeamA = i < 2;
         const didWin = (amITeamA && winnerIsA) || (!amITeamA && !winnerIsA);
-        const baseDelta = playerBase[i];
-        const bonusDelta = bonusDeltas[i];
-        let delta = Number.isFinite(provisionalDeltas[i])
-          ? Number(provisionalDeltas[i])
-          : Math.round(baseDelta + bonusDelta);
-
-        // Calculate smurf penalty (beating very weak opponents)
+        const delta = Number.isFinite(provisionalDeltas[i]) ? Number(provisionalDeltas[i]) : 0;
         const expected = amITeamA ? expectedA : 1 - expectedA;
-        let smurfPenalty = 0;
-        if (didWin && expected > 0.85) {
-          smurfPenalty = -round2(Math.abs(baseDelta) * 0.3);
-          delta += smurfPenalty;
-        }
+        const baseDelta = delta;
+        const bonusDelta = 0;
 
         if (!player || player.isGuest) {
           allocations.push({
             uid: player?.id || null,
             team: amITeamA ? "A" : "B",
-            baseDelta,
-            bonusDelta,
-            delta,
+            baseDelta: delta,
+            delta: delta,
             isGuest: true,
           });
           continue;
@@ -407,7 +522,9 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const oldPoints = resolvePlayerRating(player);
         const newPoints = clampNumber(oldPoints + delta, ELO_CONFIG.MIN_RATING, ELO_CONFIG.MAX_RATING);
         const levelBefore = Number(player.nivel || levelFromRating(oldPoints));
-        const levelAfter = levelFromRating(newPoints);
+        
+        // 3. Decoupled Level Scaling
+        const levelAfter = calculateNewLevel(levelBefore, delta);
         const progressAfter = buildLevelProgressState({ rating: newPoints, levelOverride: levelAfter });
         const levelBand = getLevelBandByRating(newPoints);
 
@@ -417,26 +534,12 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const currentPosElo = Number(player?.elo?.[posKey] || oldPoints);
         const currentSurfElo = Number(player?.elo?.[surface] || oldPoints);
 
-        const breakdown = buildPointsBreakdown({
-          baseDelta,
-          expected,
-          didWin,
-          matchFactor,
-          bonusDelta,
-          finalDelta: delta,
-        });
-
         const analysis = {
           systemVersion: ELO_SYSTEM_VERSION,
           matchId,
           matchCollection: col,
           won: didWin,
           delta,
-          baseDelta,
-          bonusDelta,
-          smurfPenalty,
-          bonusCap: Math.floor(Math.abs(baseDelta) * ELO_CONFIG.BONUS_CAP_RATIO),
-          bonusReason,
           pointsBefore: oldPoints,
           pointsAfter: newPoints,
           levelBefore,
@@ -453,49 +556,42 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
           },
           prediction: Math.round(expected * 100),
           breakdown: {
-            expectedTeam: round2(expected),
-            teamRating: round2(amITeamA ? teamARating : teamBRating),
-            rivalTeamRating: round2(amITeamA ? teamBRating : teamARating),
-            kCombined: round2(kCombined),
-            competitiveFactor: modeMult,
-            dominanceFactor: matchFactor,
-            teamBaseDelta: baseDelta,
-            bonusDelta,
-            smurfPenalty,
+            expected: round2(expected),
             finalDelta: delta,
             zeroSumGuard: true,
           },
-          math: {
-            K: round2(kCombined),
-            expected: round2(expected),
-            streak: 1,
-            performance: round2(matchFactor),
-            underdog: 1,
-            dominance: round2(matchFactor),
-            clutch: 1,
-            partnerSync: 1,
-          },
-          puntosCalculados: breakdown,
-          puntosDetalle: breakdown,
           timestamp: new Date().toISOString(),
         };
 
-        transaction.update(doc(db, "usuarios", player.id), {
-          puntosRanking: newPoints,
-          rating: newPoints,
-          nivel: levelAfter,
-          nivelProgresoPct: progressAfter.progressPct,
-          nivelRango: levelBand.label,
-          victorias: Number(player.victorias || 0) + (didWin ? 1 : 0),
-          partidosJugados: Number(player.partidosJugados || 0) + 1,
-          rachaActual: didWin
-            ? (Number(player.rachaActual || 0) > 0 ? Number(player.rachaActual || 0) + 1 : 1)
-            : (Number(player.rachaActual || 0) < 0 ? Number(player.rachaActual || 0) - 1 : -1),
-          lastMatchAnalysis: analysis,
-          [`elo.${posKey}`]: currentPosElo + delta,
-          [`elo.${surface}`]: currentSurfElo + delta,
-          lastMatchDate: serverTimestamp(),
-        });
+
+        if (player.__exists !== false && !player.isGuest) {
+          const baseNivel = Number.isFinite(Number(player.nivelBaseInicial))
+            ? Number(player.nivelBaseInicial)
+            : levelBefore;
+          const basePuntos = Number.isFinite(Number(player.puntosBaseInicial))
+            ? Number(player.puntosBaseInicial)
+            : oldPoints;
+          transaction.update(doc(db, "usuarios", player.id), {
+            puntosRanking: newPoints,
+            rating: newPoints,
+            nivel: levelAfter,
+            glickoRD: player.newRD,
+            glickoVol: Number(player.glickoVol || 0.06),
+            nivelProgresoPct: progressAfter.progressPct,
+            nivelRango: levelBand.label,
+            victorias: Number(player.victorias || 0) + (didWin ? 1 : 0),
+            partidosJugados: Number(player.partidosJugados || 0) + 1,
+            rachaActual: didWin
+              ? (Number(player.rachaActual || 0) > 0 ? Number(player.rachaActual || 0) + 1 : 1)
+              : (Number(player.rachaActual || 0) < 0 ? Number(player.rachaActual || 0) - 1 : -1),
+            lastMatchAnalysis: analysis,
+            [`elo.${posKey}`]: currentPosElo + delta,
+            [`elo.${surface}`]: currentSurfElo + delta,
+            lastMatchDate: serverTimestamp(),
+            nivelBaseInicial: baseNivel,
+            puntosBaseInicial: basePuntos,
+          });
+        }
 
         const logId = `${matchId}_${player.id}`;
         transaction.set(doc(db, "rankingLogs", logId), {
@@ -540,16 +636,64 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         createdAt: serverTimestamp(),
       });
 
+      // ─── WRITE: Event standings using PRE-READ data ───
+      if (col === "eventoPartidos" && eventId && eventWinnerTeamId && eventLoserTeamId && winRef && loseRef) {
+          const ptsWin = Number(evData?.puntosVictoria || 2);
+          const ptsLoss = Number(evData?.puntosDerrota || 1);
+          const teamAGames = Number(parsed?.teamAGames || 0);
+          const teamBGames = Number(parsed?.teamBGames || 0);
+          const winGamesFor = winnerIsA ? teamAGames : teamBGames;
+          const winGamesAgainst = winnerIsA ? teamBGames : teamAGames;
+          const loseGamesFor = winnerIsA ? teamBGames : teamAGames;
+          const loseGamesAgainst = winnerIsA ? teamAGames : teamBGames;
+          const winPF = Number(winSnapData.puntosGanados || 0) + winGamesFor;
+          const winPA = Number(winSnapData.puntosPerdidos || 0) + winGamesAgainst;
+          const losePF = Number(loseSnapData.puntosGanados || 0) + loseGamesFor;
+          const losePA = Number(loseSnapData.puntosPerdidos || 0) + loseGamesAgainst;
+          transaction.set(
+            winRef,
+            {
+              eventoId: eventId,
+              uid: eventWinnerTeamId,
+              nombre: eventWinnerName || winSnapData.nombre || eventWinnerTeamId,
+              pj: Number(winSnapData.pj || 0) + 1,
+              ganados: Number(winSnapData.ganados || 0) + 1,
+              puntos: Number(winSnapData.puntos || 0) + ptsWin,
+              puntosGanados: winPF,
+              puntosPerdidos: winPA,
+              diferencia: winPF - winPA,
+            },
+            { merge: true },
+          );
+          transaction.set(
+            loseRef,
+            {
+              eventoId: eventId,
+              uid: eventLoserTeamId,
+              nombre: eventLoserName || loseSnapData.nombre || eventLoserTeamId,
+              pj: Number(loseSnapData.pj || 0) + 1,
+              perdidos: Number(loseSnapData.perdidos || 0) + 1,
+              puntos: Number(loseSnapData.puntos || 0) + ptsLoss,
+              puntosGanados: losePF,
+              puntosPerdidos: losePA,
+              diferencia: losePF - losePA,
+            },
+            { merge: true },
+          );
+      }
+
       transaction.update(matchRef, {
         estado: "jugado",
         resultado: { sets: normalizedResult },
+        ...(eventWinnerTeamId ? { ganadorTeamId: eventWinnerTeamId, ganador: winnerIsA ? "A" : "B" } : {}),
+        ...(col === "eventoPartidos" ? { standingsProcessedAt: serverTimestamp(), standingsProcessedResult: normalizedResult } : {}),
         eloSummary: {
           systemVersion: ELO_SYSTEM_VERSION,
           expectedA: round2(expectedA),
           teamARating: round2(teamARating),
           teamBRating: round2(teamBRating),
-          teamADelta,
-          teamBDelta,
+          teamADelta: totalTeamADelta,
+          teamBDelta: totalTeamBDelta,
           kCombined: round2(kCombined),
           modeMult,
           dominanceFactor: round2(matchFactor),
@@ -560,6 +704,25 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         rankingProcessedAt: serverTimestamp(),
         rankingProcessedResult: normalizedResult,
         rankingProcessedBy: auth.currentUser?.uid || null,
+      });
+
+      // After success, trigger background check for achievements
+      roster.forEach((p, idx) => {
+          if (p && !p.isGuest) {
+              const allocation = allocations.find(a => a.uid === p.id);
+              if (allocation) {
+                checkAchievements(p.id, {
+                    partidosJugados: Number(p.partidosJugados || 0) + 1,
+                    victorias: Number(p.victorias || 0) + (allocation.delta > 0 ? 1 : 0),
+                    rachaActual: allocation.delta > 0 
+                        ? (Number(p.rachaActual || 0) > 0 ? Number(p.rachaActual || 0) + 1 : 1)
+                        : (Number(p.rachaActual || 0) < 0 ? Number(p.rachaActual || 0) - 1 : -1)
+                }, { 
+                    mvpId: extraMatchData?.mvpId, 
+                    fecha: match.fecha 
+                }).catch(e => console.warn("Achievement check failed for", p.id, e));
+              }
+          }
       });
 
       return {

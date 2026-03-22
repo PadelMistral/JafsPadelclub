@@ -620,6 +620,11 @@ export function initAppUI(activePageName) {
             // Logged in user on index/login -> Redirect to Home
             if (isPublic && !path.includes('registro.html') && !path.includes('recuperar.html') && !path.includes('terms.html')) {
                 logInfo('redirect_home_logged_in', { path });
+                try {
+                    if (path.includes('index.html') || path === '/' || path.endsWith('/')) {
+                        sessionStorage.setItem('show_home_welcome', '1');
+                    }
+                } catch (_) {}
                 safeNavigate('home.html');
                 return;
             }
@@ -930,6 +935,4 @@ export function showSidePreferenceModal() {
 if (typeof window !== 'undefined') {
     window.showSidePreferenceModal = showSidePreferenceModal;
 }
-
-
 
