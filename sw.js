@@ -1,84 +1,91 @@
-﻿const CACHE_NAME = "padeluminatis-v7.8";
+importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+
+const CACHE_VERSION = "v8.7.0";
+const SHELL_CACHE = `padeluminatis-shell-${CACHE_VERSION}`;
+const RUNTIME_CACHE = `padeluminatis-runtime-${CACHE_VERSION}`;
+const OFFLINE_FALLBACK_URL = "./offline.html";
+
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./home.html",
   "./admin.html",
+  "./calendario.html",
+  "./eventos.html",
+  "./notificaciones.html",
+  "./perfil.html",
+  "./offline.html",
   "./css/global.css",
-  "./css/core-bundle.css",
-  "./css/design-tokens.css",
-  "./css/themes.css",
-  "./css/layout.css",
-  "./css/home-core.css",
-  "./css/premium-v7.css",
-  "./css/design-system.css",
-  "./css/components-premium.css",
   "./css/auth.css",
+  "./css/home-v2.css",
+  "./css/calendar.css",
+  "./css/notificaciones.css",
+  "./css/perfil.css",
   "./css/admin-core.css",
+  "./css/production-upgrade.css",
+  "./js/login.js",
   "./js/home-core.js",
   "./js/admin.js",
-  "./js/ai/ai-core.js",
-  "./js/ai/ai-context-builder.js",
-  "./js/ai/ai-memory.js",
-  "./js/ai/ai-coach.js",
   "./js/ui-core.js",
-  "./js/core/app-logger.js",
-  "./js/core/analytics.js",
-  "./js/core/core-engine.js",
-  "./js/core/competitive-metrics.js",
-  "./js/core/rate-limit.js",
   "./js/firebase-service.js",
   "./js/modules/theme-manager.js",
-  "./js/login.js",
+  "./js/modules/pwa-shell.js",
+  "./js/modules/push-notifications.js",
+  "./js/utils/team-utils.js",
   "./imagenes/Logojafs.png",
   "./manifest.json",
-  // OneSignal workers are intentionally excluded from app shell cache.
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
-      .open(CACHE_NAME)
+      .open(SHELL_CACHE)
       .then((cache) => cache.addAll(CORE_ASSETS))
-      .then(() => self.skipWaiting())
+      .then(() => self.skipWaiting()),
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
-      const cacheNames = await caches.keys();
+      const names = await caches.keys();
       await Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
+        names.map((name) => {
+          if (name !== SHELL_CACHE && name !== RUNTIME_CACHE) {
+            return caches.delete(name);
           }
           return Promise.resolve();
-        })
+        }),
       );
-      // Keep claim disabled to avoid forced refresh loops on older clients.
-      // await self.clients.claim();
-    })()
+      if ("navigationPreload" in self.registration) {
+        await self.registration.navigationPreload.enable().catch(() => {});
+      }
+      await self.clients.claim();
+    })(),
   );
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
+  if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
 });
 
-async function cachePut(request, response) {
+async function putRuntimeCache(request, response) {
   if (!response || (!response.ok && response.type !== "opaque")) return response;
-  const cache = await caches.open(CACHE_NAME);
+  const cache = await caches.open(RUNTIME_CACHE);
   await cache.put(request, response.clone());
   return response;
 }
 
-async function networkFirst(request, fallbackUrl = null) {
+async function networkFirst(request, fallbackUrl = null, preloadResponsePromise = null) {
   try {
+    if (preloadResponsePromise) {
+      const preloadResponse = await preloadResponsePromise.catch(() => null);
+      if (preloadResponse) return await putRuntimeCache(request, preloadResponse);
+    }
     const response = await fetch(request, { cache: "no-store" });
-    return await cachePut(request, response);
+    return await putRuntimeCache(request, response);
   } catch (error) {
     const cached = await caches.match(request);
     if (cached) return cached;
@@ -94,15 +101,15 @@ async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
   const response = await fetch(request);
-  return cachePut(request, response);
+  return putRuntimeCache(request, response);
 }
 
 async function staleWhileRevalidate(request) {
   const cached = await caches.match(request);
-  const networkFetch = fetch(request)
-    .then((response) => cachePut(request, response))
+  const networkPromise = fetch(request)
+    .then((response) => putRuntimeCache(request, response))
     .catch(() => null);
-  return cached || networkFetch || fetch(request);
+  return cached || networkPromise || fetch(request);
 }
 
 self.addEventListener("fetch", (event) => {
@@ -112,7 +119,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (event.request.mode === "navigate") {
-    event.respondWith(networkFirst(event.request, "./index.html"));
+    event.respondWith(networkFirst(event.request, OFFLINE_FALLBACK_URL, event.preloadResponse));
     return;
   }
 
@@ -129,15 +136,13 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(staleWhileRevalidate(event.request));
 });
 
-// Fallback click handler for local notifications.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification?.data?.url || "./home.html";
 
   event.waitUntil(
     clients.matchAll({ type: "window" }).then((windowClients) => {
-      for (let i = 0; i < windowClients.length; i += 1) {
-        const client = windowClients[i];
+      for (const client of windowClients) {
         if (client.url === url && "focus" in client) {
           return client.focus();
         }
@@ -146,9 +151,6 @@ self.addEventListener("notificationclick", (event) => {
         return clients.openWindow(url);
       }
       return null;
-    })
+    }),
   );
 });
-
-
-

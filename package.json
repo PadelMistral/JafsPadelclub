@@ -1,0 +1,17 @@
+{
+  "name": "jafspadel-web",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Base de pruebas E2E y utilidades de release para JafsPadel",
+  "scripts": {
+    "serve:test": "npx http-server . -p 4173 -c-1",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.2",
+    "http-server": "^14.1.1"
+  }
+}
