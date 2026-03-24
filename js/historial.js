@@ -3,6 +3,8 @@ import { auth, db, observerAuth, getDocument } from './firebase-service.js';
 import { collection, getDocs, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast } from './ui-core.js';
 import { injectHeader, injectNavbar, initBackground, setupModals } from './modules/ui-loader.js?v=6.5';
+import { getFriendlyTeamName } from './utils/team-utils.js';
+import { getMatchPlayers, getMatchTeamPlayerIds, getResultSetsString, isCancelledMatch, isExpiredOpenMatch, parseGuestMeta } from './utils/match-utils.js';
 
 let currentUser = null;
 let allMatches = [];
@@ -71,17 +73,15 @@ document.addEventListener('DOMContentLoaded', () => {
         snapE.forEach(d => list.push({ id: d.id, col: "eventoPartidos", ...d.data(), isComp: true, isEvent: true }));
 
         allMatches = list.map(m => {
-            const isParticipant = m.jugadores?.includes(currentUser.uid);
-            const isT1 = m.jugadores?.indexOf(currentUser.uid) < 2;
-            const rawSets = (m.resultado?.sets || '').trim().split(/\s+/);
+            const players = getMatchPlayers(m);
+            const isParticipant = players.includes(currentUser.uid);
+            const currentIdx = players.indexOf(currentUser.uid);
+            const isT1 = currentIdx >= 0 && currentIdx < 2;
+            const rawSets = getResultSetsString(m).trim().split(/\s+/);
             const sets = rawSets.filter(s => s !== '0-0' && s.includes('-'));
             const matchDate = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha || 0);
-            
-            // Auto-detect "Anulada" if time passed and not played/abierto with holes
-            const isExpired = matchDate.getTime() + (150 * 60 * 1000) < Date.now(); // 2.5 hours after
-            const isMissingPlayers = (m.jugadores || []).filter(id => id).length < 4;
-            const isAutoCanceled = (m.estado === 'abierto' || !m.estado) && isExpired && isMissingPlayers;
-            const finalStatus = (m.estado === 'anulado' || isAutoCanceled) ? 'anulado' : (m.estado || 'abierto');
+            const isAutoCanceled = isExpiredOpenMatch({ ...m, jugadores: players });
+            const finalStatus = (isCancelledMatch(m) || isAutoCanceled) ? 'anulado' : (m.estado || 'abierto');
 
             let t1S = 0, t2S = 0;
             sets.forEach(s => {
@@ -93,6 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return {
                 ...m,
+                jugadores: players,
                 estado: finalStatus,
                 isParticipant,
                 won: isParticipant ? (isT1 ? (t1S > t2S) : (t2S > t1S)) : false,
@@ -146,6 +147,12 @@ function sortAndRender() {
     renderMatchesFiltered(list);
 }
 
+function getPlayerName(uid) {
+    if (!uid) return 'Libre';
+    if (uid.startsWith('GUEST_')) return parseGuestMeta(uid)?.name || uid.split('_')[1] || 'Invitado';
+    return userMap[uid]?.name || 'Jugador';
+}
+
 async function renderMatchesFiltered(filtered) {
     const container = document.getElementById('history-container');
     if (!container) return;
@@ -164,8 +171,22 @@ async function renderMatchesFiltered(filtered) {
     container.innerHTML = '';
     filtered.forEach((m, i) => {
         const isAnulada = m.estado === 'anulado';
-        const result = isAnulada ? '<span class="text-danger">ANULADA</span>' : (m.validSets?.join(' ') || m.resultado?.sets || 'PENDIENTE');
+        const result = isAnulada ? '<span class="text-danger">ANULADA</span>' : (m.validSets?.join(' ') || getResultSetsString(m) || 'PENDIENTE');
         const creator = userMap[m.creador] || { name: 'Desconocido' };
+        const teamAIds = getMatchTeamPlayerIds(m, 'A');
+        const teamBIds = getMatchTeamPlayerIds(m, 'B');
+        const teamA = getFriendlyTeamName({
+            teamName: m.teamAName || m.equipoA,
+            playerNames: teamAIds.map(getPlayerName),
+            side: 'A',
+            fallback: 'Pareja A'
+        });
+        const teamB = getFriendlyTeamName({
+            teamName: m.teamBName || m.equipoB,
+            playerNames: teamBIds.map(getPlayerName),
+            side: 'B',
+            fallback: 'Pareja B'
+        });
         
         const item = document.createElement('div');
         item.className = `history-card-premium ${m.isParticipant ? (m.won ? 'won' : 'lost') : 'neutral'} ${isAnulada ? 'canceled' : ''} animate-up`;
@@ -204,6 +225,7 @@ async function renderMatchesFiltered(filtered) {
                     
                     <div class="h-card-main">
                         <div class="h-score">${result}</div>
+                        <div class="h-card-matchup">${teamA} <span class="text-primary">vs</span> ${teamB}</div>
                         <div class="h-players-row">${pList}</div>
                     </div>
                 </div>
@@ -228,10 +250,10 @@ async function showMatchDetail(m) {
 
     // Fetch points logs
     let logsSnap = await window.getDocsSafe(query(collection(db, "rankingLogs"), where("matchId", "==", m.id)));
-    if (logsSnap.empty && m?.resultado?.sets && m?.col) {
+    if (logsSnap.empty && getResultSetsString(m) && m?.col) {
         try {
             const { processMatchResults } = await import("./ranking-service.js");
-            await processMatchResults(m.id, m.col, m.resultado.sets, {
+            await processMatchResults(m.id, m.col, getResultSetsString(m), {
                 mvpId: m.mvp || m.mvpId || null,
                 surface: m.superficie || m.surface || "indoor",
             });
@@ -251,15 +273,17 @@ async function showMatchDetail(m) {
     });
 
     // Fetch Players
-    const players = await Promise.all(m.jugadores.map(async uid => {
+    const normalizedPlayers = getMatchPlayers(m);
+    while (normalizedPlayers.length < 4) normalizedPlayers.push(null);
+    const players = await Promise.all(normalizedPlayers.map(async uid => {
         if (!uid) return { name: 'Libre', level: 0 };
-        if (uid.startsWith('GUEST_')) return { name: uid.split('_')[1], isGuest: true };
+        if (uid.startsWith('GUEST_')) return { name: parseGuestMeta(uid)?.name || uid.split('_')[1], isGuest: true };
         const d = await getDocument('usuarios', uid);
         return { name: d?.nombreUsuario || d?.nombre || 'Jugador', photo: d?.fotoPerfil || d?.fotoURL, id: uid };
     }));
 
     // AI Analysis Validation
-    if (!m.resultado || !m.resultado.sets) {
+    if (!getResultSetsString(m)) {
         content.innerHTML = `
             <div class="center py-20 flex-col items-center gap-4 animate-fade-in">
                 <div class="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex center mb-2 opacity-50">
@@ -311,7 +335,7 @@ async function showMatchDetail(m) {
         <div class="modal-body custom-scroll">
             <!-- Score Display -->
             <div class="match-score-display text-center py-6">
-                <span class="score-value block font-black text-4xl text-white tracking-[4px] font-display mb-2 drop-shadow-lg">${m.resultado?.sets || '0-0'}</span>
+                <span class="score-value block font-black text-4xl text-white tracking-[4px] font-display mb-2 drop-shadow-lg">${getResultSetsString(m) || '0-0'}</span>
                 <span class="badge ${m.isEvent ? 'badge-danger' : (m.isComp ? 'badge-warning' : 'badge-primary')}">${m.isEvent ? ' TORNEO/EVENTO OFICIAL' : (m.isComp ? ' RETO OFICIAL' : ' AMISTOSO')}</span>
             </div>
 
@@ -325,6 +349,57 @@ async function showMatchDetail(m) {
                 <div class="modal-court-team flex-row justify-between bg-glass p-4 rounded-xl border border-white/5 shadow-inner">
                     ${renderPlayerCard(players[2], logs[players[2]?.id], 1)}
                     ${renderPlayerCard(players[3], logs[players[3]?.id], 1)}
+                </div>
+            </div>
+
+            <!-- ELO Summary per player -->
+            <div class="elo-summary-section mb-4 px-1">
+                <div class="text-[9px] font-black text-muted uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <i class="fas fa-chart-bar text-primary"></i>
+                    RESUMEN ELO DEL PARTIDO
+                </div>
+                <div class="grid gap-2" style="grid-template-columns: 1fr 1fr">
+                    
+                    <div class="px-3 py-2 rounded-xl border" style="background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.07)">
+                        <div class="text-[9px] font-black text-white uppercase truncate mb-1">${players[0]?.name || 'Jugador'}</div>
+                        ${logs[players[0]?.id] ? `
+                        <div class="text-sm font-black ${Number(logs[players[0]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
+                            ${Number(logs[players[0]?.id]?.diff || 0) >= 0 ? '+' : ''}${Math.round(Number(logs[players[0]?.id]?.diff || 0))} PTS
+                        </div>
+                        ${formatEloBreakdown(logs[players[0]?.id])}
+                        ` : '<div class="text-[9px] text-muted">Sin calculo</div>'}
+                    </div>
+                    
+                    <div class="px-3 py-2 rounded-xl border" style="background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.07)">
+                        <div class="text-[9px] font-black text-white uppercase truncate mb-1">${players[1]?.name || 'Jugador'}</div>
+                        ${logs[players[1]?.id] ? `
+                        <div class="text-sm font-black ${Number(logs[players[1]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
+                            ${Number(logs[players[1]?.id]?.diff || 0) >= 0 ? '+' : ''}${Math.round(Number(logs[players[1]?.id]?.diff || 0))} PTS
+                        </div>
+                        ${formatEloBreakdown(logs[players[1]?.id])}
+                        ` : '<div class="text-[9px] text-muted">Sin calculo</div>'}
+                    </div>
+                    
+                    <div class="px-3 py-2 rounded-xl border" style="background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.07)">
+                        <div class="text-[9px] font-black text-white uppercase truncate mb-1">${players[2]?.name || 'Jugador'}</div>
+                        ${logs[players[2]?.id] ? `
+                        <div class="text-sm font-black ${Number(logs[players[2]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
+                            ${Number(logs[players[2]?.id]?.diff || 0) >= 0 ? '+' : ''}${Math.round(Number(logs[players[2]?.id]?.diff || 0))} PTS
+                        </div>
+                        ${formatEloBreakdown(logs[players[2]?.id])}
+                        ` : '<div class="text-[9px] text-muted">Sin calculo</div>'}
+                    </div>
+                    
+                    <div class="px-3 py-2 rounded-xl border" style="background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.07)">
+                        <div class="text-[9px] font-black text-white uppercase truncate mb-1">${players[3]?.name || 'Jugador'}</div>
+                        ${logs[players[3]?.id] ? `
+                        <div class="text-sm font-black ${Number(logs[players[3]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
+                            ${Number(logs[players[3]?.id]?.diff || 0) >= 0 ? '+' : ''}${Math.round(Number(logs[players[3]?.id]?.diff || 0))} PTS
+                        </div>
+                        ${formatEloBreakdown(logs[players[3]?.id])}
+                        ` : '<div class="text-[9px] text-muted">Sin calculo</div>'}
+                    </div>
+                    
                 </div>
             </div>
 
@@ -350,7 +425,7 @@ async function showMatchDetail(m) {
 }
 
 function generateMatchNarrative(m, p, logs, diary) {
-    const result = (m.resultado?.sets || '').trim();
+    const result = (getResultSetsString(m) || '').trim();
     const sets = result.split(/\s+/);
     
     const safeName = (idx) => p?.[idx]?.name || `Jugador ${idx + 1}`;
@@ -411,25 +486,65 @@ function generateMatchNarrative(m, p, logs, diary) {
 
 function renderPlayerCard(p, log, teamIdx) {
     const photo = p.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || 'P')}&background=random&color=fff`;
-    const ptsClass = log?.diff >= 0 ? 'text-sport-green' : 'text-danger';
-    const ptsTxt = log ? `${log.diff >= 0 ? '+' : ''}${log.diff}` : '0';
+    const delta = log ? Number(log.diff || 0) : null;
+    const hasDelta = delta !== null && !!log;
+    const ptsClass = !hasDelta ? 'text-muted' : (delta > 0 ? 'text-sport-green' : delta < 0 ? 'text-danger' : 'text-muted');
+    const ptsTxt = hasDelta ? `${delta >= 0 ? '+' : ''}${Math.round(delta)}` : '—';
     const teamColor = teamIdx === 0 ? 'border-primary/30' : 'border-secondary/30';
+    const details = log?.details || null;
+    const eloBefore = details?.pointsBefore ? Math.round(details.pointsBefore) : null;
+    const eloAfter = details?.pointsAfter ? Math.round(details.pointsAfter) : null;
+    const eloTip = (eloBefore && eloAfter) ? `${eloBefore} → ${eloAfter}` : '';
 
     return `
-        <div class="modal-player-slot flex-col items-center gap-1 w-20">
+        <div class="modal-player-slot flex-col items-center gap-1 w-24" title="${eloTip}">
             <div class="modal-player-avatar w-12 h-12 rounded-full overflow-hidden border-2 ${teamColor} bg-black/40 shadow-lg">
-                <img src="${photo}" class="w-full h-full object-cover">
+                <img src="${photo}" class="w-full h-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=P&background=random&color=fff'">
             </div>
             <span class="modal-player-name text-[10px] font-black text-white truncate w-full text-center uppercase">${p.name || 'Libre'}</span>
-            <div class="flex-row items-baseline gap-1">
-                <span class="${ptsClass} text-[10px] font-black">${ptsTxt}</span>
-                <span class="text-[8px] text-muted font-bold">PTS</span>
+            <div class="flex-col items-center gap-0">
+                <div class="flex-row items-baseline gap-1">
+                    <span class="${ptsClass} text-sm font-black leading-none">${ptsTxt}</span>
+                    <span class="text-[8px] text-muted font-bold">PTS</span>
+                </div>
+                ${eloTip ? `<span class="text-[9px] font-bold" style="color:rgba(255,255,255,0.45)">${eloTip}</span>` : ''}
             </div>
         </div>
     `;
 }
 
+/**
+ * Genera HTML del desglose de puntos ELO para el modal de detalle.
+ */
+function formatEloBreakdown(log) {
+    if (!log || !log.details || !log.details.breakdown) return '';
+    const bd = log.details.breakdown;
+    const rows = [
+        { label: 'Base Glicko-2', value: bd.base, icon: 'fa-calculator', col: '#00d4ff' },
+        { label: 'Racha', value: bd.racha, icon: 'fa-fire', col: '#f59e0b' },
+        { label: 'Sorpresa', value: bd.sorpresa, icon: 'fa-bolt', col: '#a78bfa' },
+        { label: 'Clutch', value: bd.clutch, icon: 'fa-crosshairs', col: '#f97316' },
+        { label: 'Habilidad', value: bd.habilidad, icon: 'fa-star', col: '#22c55e' },
+    ].filter(r => r.value !== undefined && r.value !== null && r.value !== 0);
 
+    if (!rows.length) return '';
 
-
-
+    return `
+        <div class="mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,0.06)">
+            <div class="text-[9px] font-black text-muted uppercase tracking-widest mb-2">Desglose ELO</div>
+            <div class="flex-col gap-1">
+                ${rows.map(r => `
+                    <div class="flex-row between items-center px-2 py-1 rounded-lg" style="background:rgba(255,255,255,0.03)">
+                        <div class="flex-row items-center gap-2">
+                            <i class="fas ${r.icon} text-[9px]" style="color:${r.col}"></i>
+                            <span class="text-[9px] text-muted font-bold">${r.label}</span>
+                        </div>
+                        <span class="text-[10px] font-black ${Number(r.value) >= 0 ? 'text-sport-green' : 'text-danger'}">
+                            ${Number(r.value) >= 0 ? '+' : ''}${Number(r.value).toFixed(1)}
+                        </span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}

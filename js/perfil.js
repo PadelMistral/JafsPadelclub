@@ -2,6 +2,7 @@ import {
   auth,
   db,
   subscribeDoc,
+  subscribeCol,
   updateDocument,
   uploadProfilePhoto,
   getDocument,
@@ -38,13 +39,75 @@ import {
   observeCoreSession,
 } from "./core/core-engine.js";
 import { isFinishedMatch, isCancelledMatch, resolveWinnerTeam } from "./utils/match-utils.js";
+import { getAIMemory, primeAIMemory } from "./ai/ai-memory.js";
+import { addPlayerHistoryEntry } from "./services/player-history-service.js";
 const APOING_PROFILE_DEBUG = true;
+function escapeProfileHtml(raw = "") {
+  const div = document.createElement("div");
+  div.textContent = String(raw || "");
+  return div.innerHTML;
+}
+function confirmProfileAction({
+  title = "Confirmar",
+  message = "¿Quieres continuar?",
+  confirmLabel = "Continuar",
+  danger = false,
+} = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay active modal-stack-front";
+    overlay.innerHTML = `
+      <div class="modal-card glass-strong" style="max-width:380px;">
+        <div class="modal-header">
+          <h3 class="modal-title">${escapeProfileHtml(title)}</h3>
+          <button class="close-btn" type="button">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="text-[11px] text-white/75 leading-relaxed">${escapeProfileHtml(message)}</p>
+          <div class="flex-row gap-2 mt-4">
+            <button type="button" class="btn btn-ghost w-full" data-profile-cancel>Cancelar</button>
+            <button type="button" class="btn w-full ${danger ? "btn-danger" : "btn-primary"}" data-profile-ok>${escapeProfileHtml(confirmLabel)}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const close = (accepted = false) => {
+      overlay.remove();
+      resolve(Boolean(accepted));
+    };
+    overlay.querySelector(".close-btn")?.addEventListener("click", () => close(false));
+    overlay.querySelector("[data-profile-cancel]")?.addEventListener("click", () => close(false));
+    overlay.querySelector("[data-profile-ok]")?.addEventListener("click", () => close(true));
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close(false);
+    });
+    document.body.appendChild(overlay);
+  });
+}
 function apoingProfileLog(step, data = null) {
   if (!APOING_PROFILE_DEBUG) return;
   try {
     if (data === null || data === undefined) console.log(`[ApoingProfile][${step}]`);
     else console.log(`[ApoingProfile][${step}]`, data);
   } catch (_) {}
+}
+
+function maybeFocusApoingSection() {
+  if (window.__apoingFocusHandled) return;
+  const url = new URL(window.location.href);
+  const focus = String(url.searchParams.get("focus") || "").toLowerCase();
+  const hash = String(window.location.hash || "").toLowerCase();
+  if (focus !== "apoing" && !hash.includes("apoing")) return;
+  window.__apoingFocusHandled = true;
+  window.requestAnimationFrame(() => {
+    const target =
+      document.getElementById("profile-apoing-settings") ||
+      document.getElementById("profile-apoing-section");
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.add("flash-focus-ring");
+    window.setTimeout(() => target.classList.remove("flash-focus-ring"), 1800);
+  });
 }
 
 window.openAIHubFromProfile = function () {
@@ -56,6 +119,78 @@ document.addEventListener("DOMContentLoaded", () => {
   initAppUI('profile');
   initBackground();
   setupModals();
+
+  const normalizeProfileProductCopy = () => {
+    const pageTitle = document.querySelector("title");
+    if (pageTitle) pageTitle.textContent = "Perfil | JafsPadel";
+    document.querySelectorAll(".section-title").forEach((node) => {
+      const text = String(node.textContent || "");
+      if (/Siri/i.test(text)) node.innerHTML = `<i class="fas fa-brain-circuit text-purple-400 mr-2"></i>IA Tactica`;
+      if (/Métricas|MÃ©tricas/i.test(text)) node.textContent = "Metricas de rendimiento";
+      if (/Memoria y Evoluci/i.test(text)) node.innerHTML = `<i class="fas fa-memory text-primary mr-2"></i>Memoria y evolucion`;
+      if (/Configuraci/i.test(text)) node.innerHTML = `<i class="fas fa-cog text-white/30 mr-2"></i>Configuracion`;
+    });
+    const iaCta = document.querySelector("#profile-chat-ia-cta .text-\\[11px\\]");
+    if (iaCta) iaCta.textContent = "Todo lo avanzado, en la IA";
+  };
+  normalizeProfileProductCopy();
+
+  const compactProfileSection = (sectionId, titleHtml) => {
+    const section = document.getElementById(sectionId);
+    if (!section || section.dataset.compacted === "1") return;
+    section.dataset.compacted = "1";
+    const children = Array.from(section.children);
+    if (!children.length) return;
+
+    const details = document.createElement("details");
+    details.className = "profile-accordion";
+    const summary = document.createElement("summary");
+    summary.className = "profile-accordion-trigger";
+    summary.innerHTML = `
+      <h2 class="section-title" style="margin:0;">${titleHtml}</h2>
+      <i class="fas fa-chevron-down accordion-arrow"></i>
+    `;
+    const body = document.createElement("div");
+    body.style.marginTop = "12px";
+
+    children.forEach((child) => {
+      if (child.classList?.contains("section-header")) return;
+      body.appendChild(child);
+    });
+
+    details.appendChild(summary);
+    details.appendChild(body);
+    section.replaceChildren(details);
+  };
+
+  compactProfileSection("ai-tactical-report-section", `<i class="fas fa-brain-circuit text-purple-400 mr-2"></i>IA Tactica`);
+  compactProfileSection("profile-settings-section", `<i class="fas fa-cog text-white/30 mr-2"></i>Configuracion`);
+
+  const sections = Array.from(document.querySelectorAll(".profile-section"));
+  const memorySection = sections.find((section) => section.querySelector("#profile-memory-bank"));
+  if (memorySection && !memorySection.dataset.compacted) {
+    memorySection.id = memorySection.id || "profile-memory-section";
+    compactProfileSection(memorySection.id, `<i class="fas fa-memory text-primary mr-2"></i>Memoria y Evolucion`);
+  }
+
+  const achievementsSection = sections.find((section) => section.querySelector("#achievements-grid"));
+  if (achievementsSection && !achievementsSection.dataset.compacted) {
+    achievementsSection.id = achievementsSection.id || "profile-achievements-section";
+    compactProfileSection(achievementsSection.id, `<i class="fas fa-medal text-sport-gold mr-2"></i>Logros`);
+  }
+
+  const rivalrySection = sections.find((section) => section.querySelector("#rival-intel-dashboard"));
+  if (rivalrySection && !rivalrySection.dataset.compacted) {
+    rivalrySection.id = rivalrySection.id || "profile-rivalry-section";
+    compactProfileSection(rivalrySection.id, `<i class="fas fa-crosshairs text-primary mr-2"></i>Rivalidad y Alianzas`);
+  }
+
+  const apoingSection = sections.find((section) => section.querySelector("#apoing-preview"));
+  if (apoingSection && !apoingSection.dataset.compacted) {
+    apoingSection.id = apoingSection.id || "profile-apoing-section";
+    compactProfileSection(apoingSection.id, `<i class="fas fa-calendar-check text-primary mr-2"></i>Mis Reservas Apoing`);
+  }
+
   let currentUser = null;
   let userData = null;
   let eloChart = null;
@@ -64,6 +199,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let eloLogsCache = [];
   let profileUid = null;
   let viewingOwnProfile = true;
+  let playerHistoryFeed = [];
+  let unsubPlayerHistory = null;
   let usersCache = [];
   let usersCacheAt = 0;
   let globalLogsCache = [];
@@ -72,11 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedEloRange = 30;
 
   const getApoingStorageKey = (uid) => `apoingCalendarUrl:${uid || "anon"}`;
-  const APOING_PROFILE_PROXY_LIST = [
-    "/api/apoing-ics?url=",
-    "https://api.allorigins.win/raw?url=",
-    "https://cors.isomorphic-git.org/",
-  ];
+  const APOING_PROFILE_PROXY_URL = "https://europe-west1-padeluminatis.cloudfunctions.net/getApoingICS?url=";
   const APOING_PROFILE_PROXY_3 = "https://r.jina.ai/http://";
 
   function unfoldIcsLines(raw = "") {
@@ -160,22 +293,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function fetchRawApoingByUrl(icsUrl = "") {
     const cleanUrl = String(icsUrl || "").trim();
-    if (!cleanUrl) throw new Error("apoing_empty_url");
-    const candidates = [
-      `${APOING_PROFILE_PROXY_3}${cleanUrl.replace(/^https?:\/\//i, "")}`,
-      ...APOING_PROFILE_PROXY_LIST.map((p) => `${p}${encodeURIComponent(cleanUrl)}`),
-    ];
-    let lastErr = null;
-    for (const candidate of candidates) {
+    if (!cleanUrl) return "";
+    try {
+      apoingProfileLog("ics.fetch.try", { url: cleanUrl });
+      const jinaTarget = `${APOING_PROFILE_PROXY_3}${cleanUrl.replace(/^https?:\/\//i, "")}`;
+      return await fetchApoingIcs(jinaTarget);
+    } catch (e) {
+      apoingProfileLog("ics.fetch.fail", { err: e?.message || String(e) });
       try {
-        apoingProfileLog("ics.fetch.try", { candidate: `${String(candidate).slice(0, 80)}...` });
-        return await fetchApoingIcs(candidate);
-      } catch (e) {
-        apoingProfileLog("ics.fetch.fail", { candidate: `${String(candidate).slice(0, 80)}...`, err: e?.message || String(e) });
-        lastErr = e;
+        const target = `${APOING_PROFILE_PROXY_URL}${encodeURIComponent(cleanUrl)}`;
+        return await fetchApoingIcs(target);
+      } catch (e2) {
+        apoingProfileLog("ics.fetch.unavailable", { err: e2?.message || String(e2) });
+        return "";
       }
     }
-    throw lastErr || new Error("apoing_fetch_failed");
   }
 
   function renderApoingPreviewEmpty(message = "Configura tu calendario Apoing en Ajustes", sub = "Verás aquí un resumen de tus reservas activas") {
@@ -283,11 +415,15 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll('button[onclick*="openGearModal"]').forEach(el => el.style.display = 'none');
       }
 
-      subscribeDoc("usuarios", profileUid, (docData) => {
+      subscribeDoc("usuarios", profileUid, async (docData) => {
         if (docData) {
+          const primedMemory = await primeAIMemory(profileUid).catch(() => null);
+          if (primedMemory && !docData.aiMemory) docData.aiMemory = primedMemory;
           userData = docData;
           renderProfileData(docData);
           renderAIInsights(docData);
+          renderMemoryBank(docData);
+          renderPlayerTimeline(docData);
           loadEloHistory(profileUid);
           loadCompetitiveData(profileUid);
           renderTacticalRadar(docData);
@@ -295,6 +431,7 @@ document.addEventListener("DOMContentLoaded", () => {
           renderDiarioStats(docData.diario || [], docData);
           loadAdvancedCompetitiveStats(profileUid, docData);
           loadVisualIntelligence(profileUid, docData);
+          maybeFocusApoingSection();
         } else if (!userData) {
           const fallback = {
             nombreUsuario: "Jugador",
@@ -307,8 +444,28 @@ document.addEventListener("DOMContentLoaded", () => {
           };
           userData = fallback;
           renderProfileData(fallback);
+          renderMemoryBank(fallback);
+          renderPlayerTimeline(fallback);
         }
       });
+
+      if (typeof unsubPlayerHistory === "function") {
+        try { unsubPlayerHistory(); } catch (_) {}
+      }
+      unsubPlayerHistory = await subscribeCol(
+        "playerHistory",
+        (rows) => {
+          playerHistoryFeed = (rows || []).slice().sort((a, b) => {
+            const aTime = toSafeDate(a?.createdAt)?.getTime() || 0;
+            const bTime = toSafeDate(b?.createdAt)?.getTime() || 0;
+            return bTime - aTime;
+          });
+          renderPlayerTimeline(userData || {});
+        },
+        [["uid", "==", profileUid]],
+        [],
+        24,
+      );
 
       setupStatInteractions();
     },
@@ -394,6 +551,123 @@ document.addEventListener("DOMContentLoaded", () => {
     renderGear(data.palas || []);
     renderUltimateFutCard(data);
     renderApoingPreview(data).catch(() => {});
+  }
+
+  function toSafeDate(value) {
+    if (!value) return null;
+    if (typeof value?.toDate === "function") return value.toDate();
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  function formatTimelineDate(value) {
+    const d = toSafeDate(value);
+    if (!d) return "Ahora";
+    return d.toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "short",
+    }).toUpperCase();
+  }
+
+  function renderMemoryBank(user = {}) {
+    const container = document.getElementById("profile-memory-bank");
+    if (!container) return;
+    const mem = user.aiMemory || getAIMemory(profileUid);
+    const insights = Array.isArray(mem?.insights) ? mem.insights.slice(0, 2) : [];
+    const patterns = Array.isArray(mem?.patterns) ? mem.patterns.slice(0, 2) : [];
+    const cards = [
+      ...insights.map((item) => ({
+        eyebrow: "Insight IA",
+        title: item.type || "general",
+        text: item.text || "Sin detalle",
+        metaLeft: `${item.hits || 1} usos`,
+        metaRight: formatTimelineDate(item.updatedAt || item.createdAt),
+      })),
+      ...patterns.map((item) => ({
+        eyebrow: "Patrón",
+        title: item.id || "repetido",
+        text: item.summary || "Sin resumen",
+        metaLeft: `${item.hits || 1} detecciones`,
+        metaRight: formatTimelineDate(item.lastSeenAt || item.firstSeenAt),
+      })),
+    ];
+
+    if (!cards.length) {
+      container.innerHTML = `<div class="memory-card-empty">La IA todavía no tiene suficiente historial unificado para este jugador.</div>`;
+      return;
+    }
+
+    container.innerHTML = cards.map((card) => `
+      <article class="memory-card">
+        <div class="memory-card__eyebrow">${card.eyebrow}</div>
+        <div class="memory-card__title">${card.title}</div>
+        <div class="memory-card__text">${card.text}</div>
+        <div class="memory-card__meta">
+          <span>${card.metaLeft}</span>
+          <span>${card.metaRight}</span>
+        </div>
+      </article>
+    `).join("");
+  }
+
+  function renderPlayerTimeline(user = {}) {
+    const container = document.getElementById("profile-timeline");
+    if (!container) return;
+    const diary = Array.isArray(user.diario) ? user.diario : [];
+    const mem = user.aiMemory || getAIMemory(profileUid);
+
+    const diaryItems = diary.slice(-4).map((entry) => ({
+      date: entry?.fecha || entry?.timestamp || entry?.createdAt,
+      title: "Entrada de diario",
+      text: entry?.coachNote || entry?.memoryNote || entry?.tactica?.leccion || "Nueva reflexión táctica registrada.",
+      tone: "diary",
+      tag: "Diario",
+    }));
+
+    const eloItems = (eloLogsCache || []).slice(0, 4).map((log) => ({
+      date: log?.timestamp,
+      title: Number(log?.diff || 0) >= 0 ? "Subida de ranking" : "Ajuste de ranking",
+      text: `${Number(log?.diff || 0) >= 0 ? "+" : ""}${Number(log?.diff || 0).toFixed(2)} ELO · ${log?.reason || "Partido procesado"}`,
+      tone: "elo",
+      tag: "Ranking",
+    }));
+
+    const memoryItems = (mem?.insights || []).slice(0, 3).map((item) => ({
+      date: item?.updatedAt || item?.createdAt,
+      title: "Memoria IA",
+      text: item?.text || "Nueva observación almacenada por la IA.",
+      tone: "ai",
+      tag: "IA",
+    }));
+
+    const persistedItems = (playerHistoryFeed || []).slice(0, 6).map((item) => ({
+      date: item?.createdAt,
+      title: item?.title || "Actividad",
+      text: item?.text || "Nuevo evento registrado en tu historial.",
+      tone: item?.tone || "system",
+      tag: item?.tag || "Sistema",
+    }));
+
+    const rows = [...persistedItems, ...diaryItems, ...eloItems, ...memoryItems]
+      .filter((row) => row.date || row.text)
+      .sort((a, b) => (toSafeDate(b.date)?.getTime() || 0) - (toSafeDate(a.date)?.getTime() || 0))
+      .slice(0, 8);
+
+    if (!rows.length) {
+      container.innerHTML = `<div class="memory-card-empty">Cuando empieces a jugar, analizar y registrar partidos, aquí verás tu evolución completa.</div>`;
+      return;
+    }
+
+    container.innerHTML = rows.map((row) => `
+      <article class="timeline-item">
+        <div class="timeline-item__date">${formatTimelineDate(row.date)}</div>
+        <div>
+          <div class="timeline-item__title">${row.title}</div>
+          <div class="timeline-item__text">${row.text}</div>
+          <span class="timeline-item__tag ${row.tone}">${row.tag}</span>
+        </div>
+      </article>
+    `).join("");
   }
 
   function getLevelProgressState(rawNivel, rawPuntos) {
@@ -564,6 +838,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderEloByDays(selectedEloRange);
       renderEloHistoryMini(raw.slice(0, 5));
       renderActivityHeatmap(raw);
+      if (userData) renderPlayerTimeline(userData);
     } catch (e) {
       return;
     }
@@ -1317,15 +1592,60 @@ document.addEventListener("DOMContentLoaded", () => {
         const finalRecs = recs.length > 0 ? recs : fallbackRecs;
 
         if (auto) {
-            auto.innerHTML = finalRecs.length > 0 ? finalRecs.map(r => `
-                <div class="automation-card">
-                    <div class="auto-icon"><i class="fas ${r.icon || 'fa-robot'}"></i></div>
-                    <div class="flex-col">
-                        <span class="text-[8px] font-black tracking-widest uppercase text-primary mb-1">${(r.type || 'AI').toUpperCase()}</span>
-                        <p class="text-[10px] text-white font-bold leading-tight">${r.text}</p>
+            const phrases = [];
+            
+            // Phrase 1: Recent match (using eloLogsCache or user.diario)
+            const lastEntry = (user.diario || []).sort((a,b) => {
+                const da = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+                const db = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp);
+                return db - da;
+            })[0];
+            
+            if (lastEntry) {
+                const res = lastEntry.resultado || "";
+                const date = lastEntry.timestamp?.toDate ? lastEntry.timestamp.toDate() : new Date(lastEntry.timestamp);
+                const isToday = date.toDateString() === new Date().toDateString();
+                const isYesterday = date.toDateString() === new Date(Date.now()-86400000).toDateString();
+                const dateText = isToday ? "Hoy" : (isYesterday ? "Ayer" : `El ${date.toLocaleDateString('es-ES')}`);
+                phrases.push({ icon: 'fa-history', type: 'Partido', text: `${dateText} jugaste y el marcador fue ${res || 'ajustado'}. ¡Sigue así!` });
+            }
+
+            // Phrase 2: Weather (Actually checking global weather if on-site)
+            const weather = window.weeklyWeather?.daily?.weather_code?.[0];
+            const isSoleado = !weather || weather === 0;
+            phrases.push({ icon: isSoleado ? 'fa-sun' : 'fa-cloud', type: 'Clima', text: isSoleado ? "Hoy hace un día soleado, ideal para el pádel." : "Parece que el cielo está cubierto, ¡perfecto para jugar en indoor!" });
+
+            // Phrase 3: Next Match (Check Apoing or Upcoming)
+            const hasApoing = !!user.apoingCalendarUrl;
+            if (hasApoing) {
+                phrases.push({ icon: 'fa-calendar-check', type: 'Agenda', text: "Tienes reservas en Apoing detectadas. ¡Prepárate para el próximo reto!" });
+            }
+
+            // Phrase 4: Progression
+            phrases.push({ icon: 'fa-chart-line', type: 'Progreso', text: `Tu nivel actual es ${Number(user.nivel || 2.5).toFixed(2)}. Sigue entrenando para subir de división.` });
+
+            // Combine with AI recs
+            const allPhrases = [...phrases, ...finalRecs].filter(Boolean);
+            
+            let currentIdx = 0;
+            const updateTicker = () => {
+                const r = allPhrases[currentIdx];
+                if (!r) return;
+                auto.innerHTML = `
+                    <div class="automation-card animate-fade-in" style="min-width: 100%;">
+                        <div class="auto-icon"><i class="fas ${r.icon || 'fa-robot'}"></i></div>
+                        <div class="flex-col">
+                            <span class="text-[8px] font-black tracking-widest uppercase text-primary mb-1">${(r.type || 'AI').toUpperCase()}</span>
+                            <p class="text-[11px] text-white font-bold leading-tight">${r.text}</p>
+                        </div>
                     </div>
-                </div>
-            `).join('') : `<div class="automation-card opacity-50"><span class="text-[10px] p-2">Sin intervenciones activas.</span></div>`;
+                `;
+                currentIdx = (currentIdx + 1) % allPhrases.length;
+            };
+
+            if (window.__ai_ticker_interval) clearInterval(window.__ai_ticker_interval);
+            updateTicker();
+            window.__ai_ticker_interval = setInterval(updateTicker, 8000);
         }
       } catch(e) { console.error("AI Unified Error", e); }
   }
@@ -1388,7 +1708,12 @@ document.addEventListener("DOMContentLoaded", () => {
   window.removePala = async (idx) => {
     if (!currentUser?.uid) return showToast("Sesión", "Debes iniciar sesión de nuevo.", "warning");
     if (!ensureOwnProfile()) return;
-    if(!confirm("¿Eliminar pala?")) return;
+    if (!(await confirmProfileAction({
+      title: "Eliminar pala",
+      message: "Se borrara esta pala de tu inventario.",
+      confirmLabel: "Eliminar",
+      danger: true,
+    }))) return;
     try {
         showToast("Eliminando...", "Actualizando inventario.", "info");
         const updated = [...(userData.palas || [])];
@@ -1508,6 +1833,16 @@ document.addEventListener("DOMContentLoaded", () => {
     return true;
   }
 
+  async function logOwnProfileHistory(entry = {}) {
+    if (!currentUser?.uid) return;
+    await addPlayerHistoryEntry({
+      uid: currentUser.uid,
+      tag: "Perfil",
+      tone: "system",
+      ...entry,
+    }).catch(() => {});
+  }
+
   // Save profile handlers
   document.getElementById("p-save-name")?.addEventListener("click", async () => {
     if (!currentUser?.uid) return showToast("Sesión", "Debes iniciar sesión de nuevo.", "warning");
@@ -1518,6 +1853,12 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       showToast("Guardando...", "Actualizando tu alias de combate.", "info");
       await updateDocument("usuarios", currentUser.uid, { nombreUsuario: val, nombre: val });
+      await logOwnProfileHistory({
+        kind: "profile_alias_update",
+        title: "Alias actualizado",
+        text: `Tu nombre visible paso a ser ${val}.`,
+        entityId: currentUser.uid,
+      });
       showToast("Identidad", "Alias de combate actualizado", "success");
       if(document.getElementById("p-name")) document.getElementById("p-name").textContent = val.toUpperCase();
     } catch (e) {
@@ -1536,6 +1877,12 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       showToast("Guardando...", "Actualizando teléfono de contacto.", "info");
       await updateDocument("usuarios", currentUser.uid, { telefono: val });
+      await logOwnProfileHistory({
+        kind: "profile_phone_update",
+        title: "Telefono actualizado",
+        text: "Se actualizo tu via principal de contacto.",
+        entityId: currentUser.uid,
+      });
       showToast("Enlace", "Frecuencia de contacto guardada", "success");
     } catch (e) {
       showToast("Error", "No se pudo guardar el teléfono.", "error");
@@ -1581,6 +1928,12 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (_) {}
       if (userData) userData.apoingCalendarUrl = safe;
       renderApoingPreview({ ...(userData || {}), apoingCalendarUrl: safe }).catch(() => {});
+      await logOwnProfileHistory({
+        kind: "profile_apoing_update",
+        title: "Calendario Apoing conectado",
+        text: "Tu disponibilidad externa quedo enlazada al perfil.",
+        entityId: currentUser.uid,
+      });
       showToast("Apoing", "Enlace de calendario guardado", "success");
     } catch (e) {
       showToast("Error", "No se pudo guardar el enlace de Apoing.", "error");
@@ -1668,6 +2021,12 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       showToast("Guardando...", "Actualizando dirección.", "info");
       await updateDocument("usuarios", currentUser.uid, { vivienda: { bloque: b, piso: pi, puerta: pu } });
+      await logOwnProfileHistory({
+        kind: "profile_address_update",
+        title: "Datos de vivienda actualizados",
+        text: "Se actualizaron tus datos de localizacion en la aplicacion.",
+        entityId: currentUser.uid,
+      });
       showToast("Ubicación", "Coordenadas guardadas", "success");
     } catch (e) {
       showToast("Error", "No se pudo guardar la dirección.", "error");
@@ -1677,7 +2036,15 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const btnLogout = document.getElementById("btn-logout");
-  if (btnLogout) btnLogout.onclick = () => { if(confirm("¿Salir?")) auth.signOut(); };
+  if (btnLogout) btnLogout.onclick = async () => {
+    if (!(await confirmProfileAction({
+      title: "Cerrar sesion",
+      message: "Se cerrara tu sesion en este dispositivo.",
+      confirmLabel: "Salir",
+      danger: true,
+    }))) return;
+    auth.signOut();
+  };
 
   // Photo Upload (Enhanced Path)
   document.getElementById("upload-photo")?.addEventListener("change", async (e) => {
@@ -1688,6 +2055,12 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast("Subiendo...", "Procesando imagen con el satélite", "info");
             const url = await uploadProfilePhoto(currentUser.uid, file);
             await updateDocument("usuarios", currentUser.uid, { fotoPerfil: url, fotoURL: url });
+            await logOwnProfileHistory({
+              kind: "profile_photo_update",
+              title: "Imagen de perfil renovada",
+              text: "Tu identidad visual en la aplicacion fue actualizada.",
+              entityId: currentUser.uid,
+            });
             showToast("Éxito", "Imagen actualizada", "success");
         } catch(e) { showToast("Error", "Fallo al subir", "error"); }
     }

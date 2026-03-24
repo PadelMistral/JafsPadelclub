@@ -68,45 +68,73 @@ export function calculateGlicko2Delta(player, opponents, actualScore) {
 
 /**
  * Apply custom adjustments required by the project specifications.
+ * Each player gets DIFFERENT points based on their individual context.
  * @param {Object} params { delta, matchesPlayed, isWin, myRating, rivalAvgRating }
  */
 export function applyRankingAdjustments({ delta, matchesPlayed, isWin, myRating, rivalAvgRating }) {
   let adjustedDelta = delta;
 
-  // 1. If lose -> multiply delta by 0.7 (buffered losses)
+  // 1. Loss buffer — soften losses slightly (reduces rage-quit)
   if (!isWin && adjustedDelta < 0) {
-    adjustedDelta *= 0.7;
+    adjustedDelta *= 0.75;
   }
 
-  // 2. If <10 matches -> reduce gains (anti-smurf)
-  if (isWin && matchesPlayed < 10) {
-    adjustedDelta *= 0.6; // Reduced climbing speed for fresh accounts
+  // 2. Provisional boost: New players gain/lose more to reach their true level faster
+  const matches = Number(matchesPlayed || 0);
+  if (matches < 5) {
+    adjustedDelta *= 1.8; // Very new: fast calibration
+  } else if (matches < 15) {
+    adjustedDelta *= 1.35; // Still calibrating
+  } else if (matches < 30) {
+    adjustedDelta *= 1.1; // Almost stable
+  }
+  // matches >= 30: stable (no multiplier)
+
+  // 3. Rating gap / difficulty scaling (major source of variation between players)
+  const ratingGap = (myRating || 1000) - (rivalAvgRating || 1000);
+
+  if (isWin) {
+    if (ratingGap > 300) {
+      // Crushing much weaker opponents: barely any gain
+      adjustedDelta *= Math.max(0.2, 1 - (ratingGap - 300) / 600);
+    } else if (ratingGap > 150) {
+      // Beating slightly weaker: reduced gain
+      const gapFactor = Math.max(0.5, 1 - (ratingGap - 150) / 500);
+      adjustedDelta *= gapFactor;
+    } else if (ratingGap < -300) {
+      // MAJOR upset: beating much stronger opponents
+      adjustedDelta *= Math.min(2.8, 1 + (Math.abs(ratingGap) - 300) / 250);
+    } else if (ratingGap < -150) {
+      // Upset: beating stronger opponent
+      adjustedDelta *= Math.min(2.0, 1 + (Math.abs(ratingGap) - 150) / 350);
+    }
+  } else {
+    // On a loss: penalize more if losing to a much weaker opponent
+    if (ratingGap > 300) {
+      adjustedDelta *= Math.min(1.8, 1 + (ratingGap - 300) / 400);
+    } else if (ratingGap < -300) {
+      // Losing to much stronger: loss buffer
+      adjustedDelta *= Math.max(0.3, 1 - (Math.abs(ratingGap) - 300) / 600);
+    }
   }
 
-  // 3. Difficulty scaling (inspired by Playtomic)
-  const ratingGap = myRating - rivalAvgRating;
-
-  // If wins against much worse (Gap > 150) -> reduce delta
-  if (isWin && ratingGap > 150) {
-    const gapFactor = Math.max(0.4, 1 - (ratingGap - 150) / 400);
-    adjustedDelta *= gapFactor;
-  }
-
-  // If wins being underdog (Gap < -150) -> increase delta
-  if (isWin && ratingGap < -150) {
-    const gapFactor = Math.min(2.0, 1 + (Math.abs(ratingGap) - 150) / 300);
-    adjustedDelta *= gapFactor;
-  }
-
-  // Final Clamp [-15, +15] as per critical rules
-  return Math.max(-15, Math.min(15, adjustedDelta));
+  // Final Individual Clamp [-40, +40] — wide range to allow real variation
+  return Math.max(-40, Math.min(40, Math.round(adjustedDelta)));
 }
 
 /**
  * Decoupled Level Calculation
  * levelAfter = levelBefore + clamp(delta * 0.004, -0.03, 0.05)
  */
-export function calculateNewLevel(levelBefore, delta) {
+export function calculateNewLevel(levelBefore, delta, nextPoints, levelFromRatingFn = null) {
+  if (typeof levelFromRatingFn === "function" && Number.isFinite(Number(nextPoints))) {
+    const targetLevel = Number(levelFromRatingFn(nextPoints) || levelBefore || 2.5);
+    const currentLevel = Number(levelBefore || targetLevel || 2.5);
+    const stepCap = delta >= 0 ? 0.07 : 0.05;
+    const drift = targetLevel - currentLevel;
+    const adjustedLevel = currentLevel + Math.max(-stepCap, Math.min(stepCap, drift));
+    return Number(adjustedLevel.toFixed(2));
+  }
   const levelAdjustment = Math.max(-0.03, Math.min(0.05, delta * 0.004));
   return Number((levelBefore + levelAdjustment).toFixed(2));
 }

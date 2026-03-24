@@ -5,8 +5,10 @@ import { doc, onSnapshot, collection, query, where, orderBy, limit, updateDoc, d
 import { injectHeader, injectNavbar } from './modules/ui-loader.js';
 import { computeGroupTable, generateKnockoutTree, generateRoundRobin } from './event-tournament-engine.js';
 import { processMatchResults } from './ranking-service.js';
-import { openResultForm, renderMatchDetail, indexEventUserNames } from './match-service.js';
+import { openResultForm, renderMatchDetail, indexEventUserNames } from './match-service.v1.js';
 import { createNotification } from './services/notification-service.js';
+import { getFriendlyTeamName } from './utils/team-utils.js';
+import { buildBaseMatchPayload, buildMatchPersistencePatch, getResultSetsString } from './utils/match-utils.js';
 
 initAppUI('event-detail');
 
@@ -35,6 +37,144 @@ const getInitials = (name) => {
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     return name.substring(0, 2).toUpperCase();
 };
+
+function askEventTextInput({
+    title = "Editar valor",
+    label = "Valor",
+    value = "",
+    placeholder = "",
+    confirmLabel = "Guardar",
+} = {}) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay active modal-stack-front';
+        overlay.innerHTML = `
+            <div class="modal-card glass-strong" style="max-width:420px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">${escapeHtml(title)}</h3>
+                    <button class="close-btn" type="button">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">${escapeHtml(label)}</label>
+                    <input id="event-inline-input" class="input w-full mt-2" value="${escapeHtml(String(value || ""))}" placeholder="${escapeHtml(placeholder)}">
+                    <div class="flex-row gap-2 mt-4">
+                        <button type="button" class="btn btn-ghost w-full" data-action="cancel">Cancelar</button>
+                        <button type="button" class="btn btn-primary w-full" data-action="ok">${escapeHtml(confirmLabel)}</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        const close = (result = null) => {
+            overlay.remove();
+            resolve(result);
+        };
+        overlay.querySelector('.close-btn')?.addEventListener('click', () => close(null));
+        overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', () => close(null));
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) close(null);
+        });
+        overlay.querySelector('[data-action="ok"]')?.addEventListener('click', () => {
+            const input = overlay.querySelector('#event-inline-input');
+            close(input?.value?.trim() || "");
+        });
+        const input = overlay.querySelector('#event-inline-input');
+        if (input) {
+            input.focus();
+            input.select?.();
+        }
+    });
+}
+
+function askEventDateTime(initialDate = null) {
+    return new Promise((resolve) => {
+        const d = initialDate instanceof Date && !Number.isNaN(initialDate.getTime()) ? initialDate : new Date();
+        const dateValue = d.toISOString().slice(0, 10);
+        const timeValue = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay active modal-stack-front';
+        overlay.innerHTML = `
+            <div class="modal-card glass-strong" style="max-width:420px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">Programar partido</h3>
+                    <button class="close-btn" type="button">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="flex-col gap-3">
+                        <div>
+                            <label class="text-[10px] font-black text-muted uppercase tracking-widest">Fecha</label>
+                            <input id="event-date-input" type="date" class="input w-full mt-2" value="${dateValue}">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-black text-muted uppercase tracking-widest">Hora</label>
+                            <input id="event-time-input" type="time" class="input w-full mt-2" value="${timeValue}">
+                        </div>
+                    </div>
+                    <div class="flex-row gap-2 mt-4">
+                        <button type="button" class="btn btn-ghost w-full" data-action="cancel">Cancelar</button>
+                        <button type="button" class="btn btn-primary w-full" data-action="ok">Guardar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        const close = (result = null) => {
+            overlay.remove();
+            resolve(result);
+        };
+        overlay.querySelector('.close-btn')?.addEventListener('click', () => close(null));
+        overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', () => close(null));
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) close(null);
+        });
+        overlay.querySelector('[data-action="ok"]')?.addEventListener('click', () => {
+            const date = overlay.querySelector('#event-date-input')?.value || '';
+            const time = overlay.querySelector('#event-time-input')?.value || '';
+            if (!date || !time) return close(null);
+            const combined = new Date(`${date}T${time}`);
+            if (Number.isNaN(combined.getTime())) return close(null);
+            close(combined);
+        });
+    });
+}
+
+function confirmEventAction({
+    title = "Confirmar",
+    message = "¿Quieres continuar?",
+    confirmLabel = "Continuar",
+    danger = false,
+} = {}) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay active modal-stack-front';
+        overlay.innerHTML = `
+            <div class="modal-card glass-strong" style="max-width:420px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">${escapeHtml(title)}</h3>
+                    <button class="close-btn" type="button">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-[11px] text-white/75 leading-relaxed">${escapeHtml(message)}</p>
+                    <div class="flex-row gap-2 mt-4">
+                        <button type="button" class="btn btn-ghost w-full" data-action="cancel">Cancelar</button>
+                        <button type="button" class="btn w-full ${danger ? 'btn-danger' : 'btn-primary'}" data-action="ok">${escapeHtml(confirmLabel)}</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        const close = (result = false) => {
+            overlay.remove();
+            resolve(result);
+        };
+        overlay.querySelector('.close-btn')?.addEventListener('click', () => close(false));
+        overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', () => close(false));
+        overlay.querySelector('[data-action="ok"]')?.addEventListener('click', () => close(true));
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) close(false);
+        });
+    });
+}
 
 function parseGuestMeta(uid) {
     if (!uid) return null;
@@ -278,7 +418,7 @@ window.openAddTeamModalED = () => {
             <div class="modal-body">
                 <div class="flex-col gap-3">
                     <label class="text-[10px] font-black text-muted uppercase tracking-widest">Nombre del equipo</label>
-                    <input id="new-team-name" class="input" placeholder="Equipo A">
+                    <input id="new-team-name" class="input" placeholder="Nombre de la pareja">
                     <label class="text-[10px] font-black text-muted uppercase tracking-widest mt-2">Jugador 1</label>
                     <select id="new-team-p1" class="input">
                         ${pool.map(p => `<option value="${p.uid}" ${used.has(p.uid) ? 'disabled' : ''}>${escapeHtml(p.name)}${used.has(p.uid) ? ' (ocupado)' : ''}</option>`).join('')}
@@ -717,8 +857,8 @@ function updateMatchesList(pane) {
         const aTbd = isTbdMatch(a);
         const bTbd = isTbdMatch(b);
         if (aTbd !== bTbd) return aTbd ? b : a;
-        const aPlayed = !!a?.resultado?.sets || String(a?.estado || '').toLowerCase() === 'jugado';
-        const bPlayed = !!b?.resultado?.sets || String(b?.estado || '').toLowerCase() === 'jugado';
+        const aPlayed = !!getResultSetsString(a) || String(a?.estado || '').toLowerCase() === 'jugado';
+        const bPlayed = !!getResultSetsString(b) || String(b?.estado || '').toLowerCase() === 'jugado';
         if (aPlayed !== bPlayed) return aPlayed ? a : b;
         return a;
     };
@@ -781,10 +921,8 @@ function updateMatchesList(pane) {
 
     listEl.innerHTML = uniqueSorted.map(m => {
         const isMy = m.playerUids?.includes(currentUid);
-        let played = m.estado === 'jugado';
-        let score = typeof m.resultado === 'string'
-            ? m.resultado
-            : (m.resultado?.sets || m.resultado?.score || '');
+        let played = m.estado === 'jugado' || !!getResultSetsString(m);
+        let score = getResultSetsString(m);
 
         return `
         <div class="match-card match-court-bg-v7 ${isMy ? 'my-match' : ''} ${played ? 'jugado' : ''}" onclick="window.verDetallePartido('${m.id}')">
@@ -795,13 +933,13 @@ function updateMatchesList(pane) {
             </div>
             <div class="match-body-v9">
                 <div class="m-team-v9 ${m.ganadorTeamId === m.teamAId ? 'winner' : ''}">
-                    <span class="team-n-v9">${m.teamAName || 'TBD'}</span>
+                    <span class="team-n-v9">${getFriendlyTeamName({ teamName: m.teamAName, teamId: m.teamAId, side: 'A' })}</span>
                 </div>
                 <div class="m-score-v9">
                      ${played ? (score || 'FINAL') : (m.linkedMatchId ? '<i class="fas fa-link text-[10px] opacity-40"></i>' : '<span class="m-vs-v9">VS</span>')}
                 </div>
                 <div class="m-team-v9 ${m.ganadorTeamId === m.teamBId ? 'winner' : ''}">
-                    <span class="team-n-v9">${m.teamBName || 'TBD'}</span>
+                    <span class="team-n-v9">${getFriendlyTeamName({ teamName: m.teamBName, teamId: m.teamBId, side: 'B' })}</span>
                 </div>
             </div>
             ${m.linkedMatchId || m.fecha ? `
@@ -829,7 +967,7 @@ function areGroupsComplete(ev, matches) {
     if (!ev || !Array.isArray(matches)) return false;
     const groupMatches = matches.filter(m => m.phase === 'group' || m.phase === 'league');
     if (!groupMatches.length) return false;
-    return groupMatches.every(m => m.estado === 'jugado' || m.resultado?.sets || m.resultado?.score || m.ganadorTeamId);
+    return groupMatches.every(m => m.estado === 'jugado' || getResultSetsString(m) || m.ganadorTeamId);
 }
 
 // Modal to select teams that advance to the next phase.
@@ -918,9 +1056,7 @@ function isGroupPhaseMatch(match = {}, ev = null) {
 
 function hasMatchResult(match) {
     if (!match) return false;
-    if (typeof match.resultado === "string") return match.resultado.trim().length > 0;
-    if (typeof match?.resultado?.sets === "string") return match.resultado.sets.trim().length > 0;
-    return false;
+    return !!getResultSetsString(match);
 }
 
 function renderBracket(pane) {
@@ -944,7 +1080,7 @@ function renderBracket(pane) {
         round.forEach(m => {
             const matchData = eventMatches.find(em => em.matchCode === m.matchCode) || m;
             const played = matchData.estado === 'jugado';
-            const resultStr = typeof matchData.resultado === 'string' ? matchData.resultado : (matchData.resultado?.score || '');
+            const resultStr = getResultSetsString(matchData);
             const scoreParts = resultStr.split(' '); // Take the first set or the whole string and try to show it nicely
             const scoreA = matchData.ganadorTeamId === m.teamAId ? 'Ganador' : (resultStr ? 'Perdedor' : '');
             const scoreB = matchData.ganadorTeamId === m.teamBId ? 'Ganador' : (resultStr ? 'Perdedor' : '');
@@ -953,11 +1089,11 @@ function renderBracket(pane) {
             html += `
             <div class="bracket-match ${pending ? 'pending' : ''}" ${pending ? '' : `onclick="window.verDetallePartido('${matchData.id || ''}')"`}>
                 <div class="b-team-v9 ${matchData.ganadorTeamId === m.teamAId && played ? 'winner' : ''}">
-                    <span class="b-name-v9">${m.teamAName || 'TBD'}</span>
+                    <span class="b-name-v9">${getFriendlyTeamName({ teamName: m.teamAName, teamId: m.teamAId, side: 'A' })}</span>
                     <span class="b-score-v9">${scoreA}</span>
                 </div>
                 <div class="b-team-v9 ${matchData.ganadorTeamId === m.teamBId && played ? 'winner' : ''}">
-                    <span class="b-name-v9">${m.teamBName || 'TBD'}</span>
+                    <span class="b-name-v9">${getFriendlyTeamName({ teamName: m.teamBName, teamId: m.teamBId, side: 'B' })}</span>
                     <span class="b-score-v9">${scoreB}</span>
                 </div>
                 ${pending ? `<span class="bracket-pending-tag">PENDIENTE</span>` : ""}
@@ -1133,9 +1269,16 @@ function renderGroupEditor(ev) {
 // Funciones globales para edición de grupos
 window.moverEquipo = (teamId, fromGroup, toGroup) => {
     if (!toGroup) return;
-    const newGroup = prompt('Introduce el grupo destino (A, B, C, D):', toGroup || 'A');
-    if (!newGroup) return;
-    window.guardarMovimiento(teamId, newGroup);
+    askEventTextInput({
+        title: 'Mover equipo',
+        label: 'Grupo destino',
+        value: toGroup || 'A',
+        placeholder: 'A, B, C...',
+        confirmLabel: 'Mover'
+    }).then((newGroup) => {
+        if (!newGroup) return;
+        window.guardarMovimiento(teamId, String(newGroup).trim().toUpperCase());
+    });
 };
 
 window.guardarMovimiento = async (teamId, newGroup) => {
@@ -1158,7 +1301,12 @@ window.guardarMovimiento = async (teamId, newGroup) => {
 
 window.deleteTeamED = async (teamId) => {
     if (!canOrganizar()) return;
-    if (!confirm('¿Eliminar este equipo y sus partidos?')) return;
+    if (!(await confirmEventAction({
+        title: 'Eliminar equipo',
+        message: 'Se eliminara el equipo y tambien sus partidos vinculados.',
+        confirmLabel: 'Eliminar',
+        danger: true
+    }))) return;
     const ev = currentEvent;
     if (!ev) return;
     try {
@@ -1323,7 +1471,12 @@ window.guardarConfigOrganizador = async () => {
 };
 
 window.reiniciarTorneo = async () => {
-    if (!confirm('¿Reiniciar el torneo? Se perderán todos los resultados y se volverá a estado de inscripción.')) return;
+    if (!(await confirmEventAction({
+        title: 'Reiniciar torneo',
+        message: 'Se borran los resultados y el evento vuelve a inscripción.',
+        confirmLabel: 'Reiniciar',
+        danger: true
+    }))) return;
     try {
         const matchesSnap = await getDocs(query(collection(db, 'eventoPartidos'), where('eventoId', '==', eventId)));
         await Promise.all(matchesSnap.docs.map(d => deleteDoc(doc(db, 'eventoPartidos', d.id))));
@@ -1335,7 +1488,7 @@ window.reiniciarTorneo = async () => {
             drawState: { status: 'pending', steps: [], version: 0 },
             updatedAt: serverTimestamp()
         });
-        showToast('Torneo reiniciado', 'Volviendo a inscripción', 'success');
+        showToast('Torneo reiniciado', 'El evento vuelve a inscripción', 'success');
         setTimeout(() => window.location.reload(), 1000);
     } catch (e) {
         showToast('Error', e.message, 'error');
@@ -1343,7 +1496,12 @@ window.reiniciarTorneo = async () => {
 };
 
 window.deleteEvent = async () => {
-    if (!confirm('¿Eliminar evento permanentemente?')) return;
+    if (!(await confirmEventAction({
+        title: 'Eliminar evento',
+        message: 'Esta acción elimina el evento de forma permanente.',
+        confirmLabel: 'Eliminar',
+        danger: true
+    }))) return;
     try {
         await deleteDoc(doc(db, 'eventos', eventId));
         showToast('Evento eliminado', '', 'info');
@@ -1358,17 +1516,13 @@ window.editarResultado = async (matchId) => {
     const match = eventMatches.find(m => m.id === matchId);
     console.log("[EventoDetalle] match found", match);
     if (match && !match.fecha) {
-        const dateStr = prompt('Indica la fecha (YYYY-MM-DD):', new Date().toISOString().slice(0, 10));
-        const hour = prompt('Indica la hora (HH:MM):', '19:00');
-        if (dateStr && hour) {
-            const combinedDate = new Date(`${dateStr}T${hour}`);
-            if (!Number.isNaN(combinedDate.getTime())) {
-                await updateDoc(doc(db, 'eventoPartidos', matchId), {
-                    fecha: combinedDate,
-                    updatedAt: serverTimestamp()
-                });
-                console.log("[EventoDetalle] fecha actualizada", { matchId, combinedDate });
-            }
+        const combinedDate = await askEventDateTime();
+        if (combinedDate && !Number.isNaN(combinedDate.getTime())) {
+            await updateDoc(doc(db, 'eventoPartidos', matchId), {
+                fecha: combinedDate,
+                updatedAt: serverTimestamp()
+            });
+            console.log("[EventoDetalle] fecha actualizada", { matchId, combinedDate });
         }
     }
     console.log("[EventoDetalle] abriendo form resultado", { matchId });
@@ -1416,14 +1570,14 @@ async function advanceBracket(match, winnerTeamId) {
 window.asignarFechaPartido = async (matchId) => {
     const match = eventMatches.find(m => m.id === matchId);
     if (!match) return;
-    const dateStr = prompt('Introduce fecha y hora (ej. 2026-03-10T18:00):', new Date().toISOString().slice(0,16));
-    if (!dateStr) return;
+    const nextDate = await askEventDateTime(match?.fecha?.toDate ? match.fecha.toDate() : (match?.fecha ? new Date(match.fecha) : new Date()));
+    if (!nextDate) return;
     try {
         await updateDoc(doc(db, 'eventoPartidos', matchId), {
-            fecha: dateStr,
+            fecha: nextDate,
             updatedAt: serverTimestamp()
         });
-        showToast('Fecha asignada', 'El partido aparecerá en el calendario/home', 'success');
+        showToast('Fecha asignada', 'El partido aparece ya en calendario y home', 'success');
     } catch(e) {
         showToast('Error asignando fecha', e.message, 'error');
     }
@@ -1443,9 +1597,9 @@ window.verDetallePartido = (matchId) => {
         ? match.playerUids
         : [...(teamMap.get(match.teamAId)?.playerUids || []), ...(teamMap.get(match.teamBId)?.playerUids || [])];
     const isParticipant = fallbackPlayers.includes(auth.currentUser?.uid);
-    const score = typeof match.resultado === 'string' ? match.resultado : (match.resultado?.score || match.resultado?.sets || 'Sin detalle');
-    const teamAName = (match.teamAName || teamMap.get(match.teamAId)?.name || 'TBD');
-    const teamBName = (match.teamBName || teamMap.get(match.teamBId)?.name || 'TBD');
+    const score = getResultSetsString(match) || 'Sin detalle';
+    const teamAName = getFriendlyTeamName({ teamName: match.teamAName || teamMap.get(match.teamAId)?.name, teamId: match.teamAId, side: 'A' });
+    const teamBName = getFriendlyTeamName({ teamName: match.teamBName || teamMap.get(match.teamBId)?.name, teamId: match.teamBId, side: 'B' });
     
     let actionsHtml = '';
     if (played) {
@@ -1533,11 +1687,11 @@ window.openMatchTeamEditor = (matchId) => {
             </div>
             <div class="modal-body">
                 <div class="flex-col gap-3">
-                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">Equipo A</label>
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">Pareja 1</label>
                     <select id="match-edit-teamA" class="input">
                         ${teams.map(t => `<option value="${t.id}" ${t.id === match.teamAId ? 'selected' : ''}>${escapeHtml(t.name || t.id)}</option>`).join('')}
                     </select>
-                    <label class="text-[10px] font-black text-muted uppercase tracking-widest mt-2">Equipo B</label>
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest mt-2">Pareja 2</label>
                     <select id="match-edit-teamB" class="input">
                         ${teams.map(t => `<option value="${t.id}" ${t.id === match.teamBId ? 'selected' : ''}>${escapeHtml(t.name || t.id)}</option>`).join('')}
                     </select>
@@ -1706,16 +1860,19 @@ window.confirmarProgramacionCalendarioED = async (matchId) => {
         if (match.playerUids && match.playerUids.length >= 4) {
             const col = "partidosAmistosos";
             const matchData = {
-                creador: auth.currentUser.uid,
-                organizerId: auth.currentUser.uid,
-                fecha: combinedDate,
-                jugadores: match.playerUids,
-                restriccionNivel: { min: 1, max: 7 },
-                estado: 'abierto',
-                timestamp: serverTimestamp(),
-                equipoA: match.playerUids.slice(0, 2),
-                equipoB: match.playerUids.slice(2, 4),
-                visibility: 'public',
+                ...buildBaseMatchPayload({
+                    creatorId: auth.currentUser.uid,
+                    organizerId: auth.currentUser.uid,
+                    matchDate: combinedDate,
+                    players: match.playerUids,
+                    minLevel: 1,
+                    maxLevel: 7,
+                    visibility: 'public',
+                    state: 'abierto',
+                    extra: {
+                        timestamp: serverTimestamp(),
+                    }
+                }),
                 eventoId: match.eventoId,
                 eventMatchId: match.id,
                 phase: match.phase || '',
@@ -1757,7 +1914,13 @@ window.generarFaseEliminatoria = async (opts = {}) => {
     const manualIds = Array.isArray(opts.selectedTeamIds) ? opts.selectedTeamIds.filter(Boolean) : null;
     let nPasan = Number.isFinite(Number(opts.nPasan)) ? parseInt(opts.nPasan) : null;
     if (!nPasan) {
-        const pasanPorGrupo = prompt('¿Cuántos equipos pasan por grupo a la siguiente fase?', ev.equiposPorGrupo || 2);
+        const pasanPorGrupo = await askEventTextInput({
+            title: 'Clasificados por grupo',
+            label: 'Equipos que avanzan',
+            value: String(ev.equiposPorGrupo || 2),
+            placeholder: '2',
+            confirmLabel: 'Continuar'
+        });
         if (!pasanPorGrupo) return;
         nPasan = parseInt(pasanPorGrupo);
     }
@@ -1793,7 +1956,12 @@ window.generarFaseEliminatoria = async (opts = {}) => {
         return;
     }
 
-    if (!confirm(`Pasarán ${clasificados.length} equipos al bracket final y se eliminarán ${eliminados.length} equipos. ¿Estás seguro?`)) return;
+    if (!(await confirmEventAction({
+        title: 'Generar fase final',
+        message: `Avanzan ${clasificados.length} equipos y ${eliminados.length} quedan fuera del cuadro final.`,
+        confirmLabel: 'Generar cuadro',
+        danger: true
+    }))) return;
 
     try {
         const updatedTeams = (ev.teams || []).map(t => {
@@ -1864,15 +2032,14 @@ window.generarFaseEliminatoria = async (opts = {}) => {
                     sourceB: match.sourceB || null,
                     teamAId: match.teamAId || null,
                     teamBId: match.teamBId || null,
-                    teamAName: match.teamAId ? (teamA?.name || 'TBD') : null,
-                    teamBName: match.teamBId ? (teamB?.name || 'TBD') : null,
+                    teamAName: match.teamAId ? getFriendlyTeamName({ teamName: teamA?.name, teamId: match.teamAId, side: 'A' }) : null,
+                    teamBName: match.teamBId ? getFriendlyTeamName({ teamName: teamB?.name, teamId: match.teamBId, side: 'B' }) : null,
                     playerUids: [
                         ...(teamA?.playerUids || []),
                         ...(teamB?.playerUids || [])
                     ],
-                    resultado: null,
+                    ...buildMatchPersistencePatch({ state: 'abierto', resultStr: '' }),
                     ganadorTeamId: null,
-                    estado: 'pendiente',
                     fecha: null,
                     createdAt: serverTimestamp()
                 });
@@ -1986,11 +2153,11 @@ function openBracketPreviewModal(rounds = []) {
             html += `
                 <div class="bracket-match">
                     <div class="b-team-v9">
-                        <span class="b-name-v9">${teamA?.name || 'TBD'}</span>
+                        <span class="b-name-v9">${getFriendlyTeamName({ teamName: teamA?.name, teamId: teamA?.id, side: 'A' })}</span>
                         <span class="b-score-v9">-</span>
                     </div>
                     <div class="b-team-v9">
-                        <span class="b-name-v9">${teamB?.name || 'TBD'}</span>
+                        <span class="b-name-v9">${getFriendlyTeamName({ teamName: teamB?.name, teamId: teamB?.id, side: 'B' })}</span>
                         <span class="b-score-v9">-</span>
                     </div>
                 </div>`;
@@ -2002,15 +2169,32 @@ function openBracketPreviewModal(rounds = []) {
 }
 
 window.reiniciarPartido = async (matchId) => {
-    if (!confirm('¿Reiniciar este partido? Se borrará el resultado.')) return;
+    const match = eventMatches.find(m => m.id === matchId);
+    if (!match) return;
+    if (!(await confirmEventAction({
+        title: 'Reiniciar partido',
+        message: 'Se borra el resultado y el partido vuelve a abierto.',
+        confirmLabel: 'Reiniciar',
+        danger: true
+    }))) return;
     try {
         await updateDoc(doc(db, 'eventoPartidos', matchId), {
-            resultado: null,
+            ...buildMatchPersistencePatch({ state: 'abierto', resultStr: '' }),
             ganador: null,
             ganadorTeamId: null,
-            estado: 'pendiente',
             updatedAt: serverTimestamp()
         });
+        if (match?.linkedMatchId && match?.linkedMatchCollection) {
+            await updateDoc(doc(db, match.linkedMatchCollection, match.linkedMatchId), {
+                ...buildMatchPersistencePatch({ state: 'abierto', resultStr: '' }),
+                ganador: null,
+                ganadorTeamId: null,
+                rankingProcessedAt: null,
+                rankingProcessedResult: null,
+                eloSummary: {},
+                updatedAt: serverTimestamp()
+            });
+        }
         showToast('Partido reiniciado', '', 'info');
     } catch (e) {
         showToast('Error', e.message, 'error');
@@ -2025,7 +2209,12 @@ window.regenerarPartidosLiga = async () => {
         return;
     }
 
-    if (!confirm('Esto ELIMINARÁ todos los partidos de liga/grupo del evento (incluidos vínculos) y los volverá a crear. ¿Continuar?')) return;
+    if (!(await confirmEventAction({
+        title: 'Regenerar partidos',
+        message: 'Se borran los partidos de grupos y sus vínculos para crearlos de nuevo.',
+        confirmLabel: 'Regenerar',
+        danger: true
+    }))) return;
 
     try {
         showToast('Procesando...', 'Regenerando partidos de liga', 'info');
@@ -2069,18 +2258,17 @@ window.regenerarPartidosLiga = async () => {
                     round: i + 1,
                     teamAId: m.teamAId,
                     teamBId: m.teamBId,
-                    teamAName: teamA.name || 'TBD',
-                    teamBName: teamB.name || 'TBD',
+                    teamAName: getFriendlyTeamName({ teamName: teamA.name, teamId: teamA.id, side: 'A' }),
+                    teamBName: getFriendlyTeamName({ teamName: teamB.name, teamId: teamB.id, side: 'B' }),
                     playerUids: [...(teamA.playerUids || []), ...(teamB.playerUids || [])],
-                    estado: 'pendiente',
-                    resultado: null,
+                    ...buildMatchPersistencePatch({ state: 'abierto', resultStr: '' }),
                     ganadorTeamId: null,
                     fecha: null,
                     createdAt: serverTimestamp()
                 });
             }
         }
-        showToast('—XITO', 'Partidos regenerados correctamente', 'success');
+        showToast('Éxito', 'Partidos regenerados correctamente', 'success');
     } catch (e) {
         console.error(e);
         showToast('Error', e.message, 'error');
@@ -2104,7 +2292,12 @@ window.aprobarJugador = async (eventId, uid) => {
 };
 
 window.expulsarJugador = async (eventId, uid) => {
-    if (!confirm('¿Expulsar a este jugador?')) return;
+    if (!(await confirmEventAction({
+        title: 'Expulsar jugador',
+        message: 'Se elimina del evento y se actualizan sus equipos y partidos.',
+        confirmLabel: 'Expulsar',
+        danger: true
+    }))) return;
     const ev = currentEvent;
     if (!ev) return;
     const entry = ev.inscritos?.find(i => i.uid === uid);
@@ -2255,10 +2448,16 @@ window.inscribirseEventoED = async () => {
 
         let pairCode = '';
         if (ev.modalidad === 'parejas' && ev.companeroObligatorio) {
-            const code = prompt('Código de pareja (igual para ambos)', 'pareja-1');
+            const code = await askEventTextInput({
+                title: 'Código de pareja',
+                label: 'Código compartido',
+                value: 'pareja-1',
+                placeholder: 'pareja-1',
+                confirmLabel: 'Usar código'
+            });
             if (code === null) return;
             pairCode = code.trim().toLowerCase();
-            if (!pairCode) { showToast('Pareja', 'Debes indicar código de pareja.', 'warning'); return; }
+            if (!pairCode) { showToast('Pareja', 'Debes indicar un código de pareja.', 'warning'); return; }
         }
 
         const newInscripto = {
@@ -2336,7 +2535,7 @@ window.proponerFechaEvento = async (matchId) => {
         return showToast("Sin acceso", "Solo participantes del partido pueden entrar al chat.", "warning");
     }
 
-    const title = `Propuesta: ${(match.teamAName || teamA?.name || "Equipo A")} vs ${(match.teamBName || teamB?.name || "Equipo B")}`;
+    const title = `Propuesta: ${(match.teamAName || teamA?.name || "Pareja 1")} vs ${(match.teamBName || teamB?.name || "Pareja 2")}`;
     let proposalId = null;
     const existing = await getDocs(query(collection(db, "propuestasPartido"), where("eventMatchId", "==", matchId), limit(1)));
     if (!existing.empty) {

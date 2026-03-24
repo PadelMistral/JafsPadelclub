@@ -2,7 +2,7 @@
 import { observerAuth, getDocument, subscribeCol, db, getDocsSafe } from './firebase-service.js';
 import { logError, logInfo, logWarn } from './core/app-logger.js';
 
-const PUBLIC_PAGES = ['index.html', 'registro.html'];
+const PUBLIC_PAGES = ['index.html', 'registro.html', 'terms.html', 'privacy.html', 'offline.html'];
 let onlineNexusCurrentUid = null;
 let onlineNexusViewerIsAdmin = false;
 let onlineNexusRoleResolvedFor = null;
@@ -105,7 +105,7 @@ function ensureBootLoader() {
           <div class="app-boot-core">
             <div style="position:relative; display:flex; align-items:center; justify-content:center;">
               <div class="app-boot-ring"></div>
-              <img class="app-boot-logo" src="./imagenes/Logojafs.png" alt="Padeluminatis">
+              <img class="app-boot-logo" src="./imagenes/Logojafs.png" alt="JafsPadel">
             </div>
             <div class="app-boot-status">${msg}</div>
           </div>
@@ -584,28 +584,15 @@ export function initAppUI(activePageName) {
     const isPublic = PUBLIC_PAGES.some(p => path.includes(p)) || path.endsWith('/') || path === '';
 
     // Only inject UI in PRIVATE pages if not already present
+    // If we're not public, we hide the content until auth is ready via the boot-loader
     if (!isPublic) {
-        // Smooth reveal instead of harsh opacity swap (prevents flicker)
-        document.body.style.transition = 'opacity 0.35s ease';
-        document.body.style.opacity = '0';
-        document.body.style.pointerEvents = 'none';
-    }
-
-    let authResolved = false;
-    // Safety net: if auth never resolves, at least render the shell
-    if (!isPublic) {
-        setTimeout(() => {
-            if (!authResolved) {
-                logWarn('auth_resolution_timeout', { path });
-                document.body.style.opacity = '1';
-                document.body.style.pointerEvents = 'auto';
-                hideBootLoader(0);
-            }
-        }, 2000);
+        // We use the existing boot loader to avoid the harsh "blank screen" flicker
+        document.body.style.opacity = '1'; 
     }
 
     observerAuth(async (user) => {
-        authResolved = true;
+        if (!window.__authResolvedFlag) window.__authResolvedFlag = false;
+        window.__authResolvedFlag = true;
         logInfo('auth_state_changed', { hasUser: !!user, path });
 
         if (user) {
@@ -935,4 +922,3 @@ export function showSidePreferenceModal() {
 if (typeof window !== 'undefined') {
     window.showSidePreferenceModal = showSidePreferenceModal;
 }
-

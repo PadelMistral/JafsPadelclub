@@ -23,20 +23,55 @@ function ensureInstallButton() {
   button = document.createElement("button");
   button.id = INSTALL_BUTTON_ID;
   button.type = "button";
-  button.className = "pwa-install-launcher hidden";
-  button.style.position = "fixed";
-  button.style.top = "14px";
-  button.style.left = "14px";
-  button.style.right = "auto";
-  button.style.zIndex = "10060";
-  button.setAttribute("aria-label", "Instalar aplicacion");
-  button.innerHTML = `
-    <span class="pwa-install-launcher__icon"><i class="fas fa-mobile-screen-button"></i></span>
-    <span class="pwa-install-launcher__text">Instalar App</span>
+  button.setAttribute("aria-label", "Instalar aplicación");
+  button.setAttribute("title", "Instalar App");
+
+  // FAB pequeño circular en esquina inferior derecha
+  const style = document.createElement("style");
+  style.textContent = `
+    #pwa-install-launcher {
+      position: fixed !important;
+      bottom: calc(88px + env(safe-area-inset-bottom, 8px)) !important;
+      right: 20px !important;
+      z-index: 999999 !important;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(198,255,0,0.5);
+      background: rgba(8, 14, 30, 0.94);
+      color: #c6ff00;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 12px rgba(198,255,0,0.15);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      animation: fabPulse 3s ease-in-out infinite;
+    }
+    #pwa-install-launcher.hidden {
+      opacity: 0 !important;
+      transform: scale(0.7) translateY(20px) !important;
+      pointer-events: none !important;
+    }
+    #pwa-install-launcher:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 24px rgba(0,0,0,0.6), 0 0 20px rgba(198,255,0,0.3);
+    }
+    @keyframes fabPulse {
+      0%, 100% { box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 8px rgba(198,255,0,0.15); }
+      50% { box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 18px rgba(198,255,0,0.35); }
+    }
   `;
+  document.head.appendChild(style);
+
+  button.innerHTML = `<i class="fas fa-download" style="font-size:16px"></i>`;
   document.body.appendChild(button);
   return button;
 }
+
 
 function ensureAppBanner() {
   let banner = document.getElementById(APP_BANNER_ID);
@@ -206,10 +241,23 @@ async function watchServiceWorkerUpdates(pageName) {
     bindInstalling(reg.installing);
 
     navigator.serviceWorker.addEventListener("controllerchange", () => {
+      // Avoid reload loops: check if we already reloaded in this session or very recently
       if (window.__pwaControllerReloaded) return;
+      
+      const lastReload = sessionStorage.getItem('pwa_auto_reload_ts');
+      const now = Date.now();
+      if (lastReload && (now - parseInt(lastReload)) < 10000) {
+        console.warn("Skipping PWA auto-reload to prevent loop.");
+        return;
+      }
+      
       window.__pwaControllerReloaded = true;
-      showToast("App actualizada", `${pageName} ya esta usando la ultima version.`, "success");
-      window.location.reload();
+      sessionStorage.setItem('pwa_auto_reload_ts', now.toString());
+      
+      showToast("Actualizando", `Aplicando nueva version del sistema...`, "success");
+      setTimeout(() => {
+        window.location.reload();
+      }, 800);
     });
   } catch (error) {
     console.warn("PWA update watcher failed:", error);

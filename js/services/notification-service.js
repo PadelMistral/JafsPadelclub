@@ -1,4 +1,4 @@
-﻿/* =====================================================
+/* =====================================================
    PADELUMINATIS NOTIFICATION SERVICE V2.0 (Unified)
    Centralized notification handling, listeners, and automation.
    ===================================================== */
@@ -143,7 +143,7 @@ export async function createNotification(
   }
   const targets = Array.isArray(targetUids) ? targetUids : [targetUids];
   const notifType = normalizeType(type);
-  const safeTitle = String(title || "Padeluminatis").trim()
+  const safeTitle = String(title || "JafsPadel").trim()
     .normalize('NFC')
     .slice(0, 120);
   const safeMessage = String(message || "").trim()
@@ -402,7 +402,7 @@ export async function initAutoNotifications(uid) {
       )[0];
     if (newest && !notifiedDuringSession.has(newest.id)) {
       sendPushNotification(
-        newest.titulo || "Padeluminatis",
+        newest.titulo || "JafsPadel",
         newest.mensaje,
         `https://ui-avatars.com/api/?name=${encodeURIComponent(newest.titulo || 'P')}&background=00d4ff&color=fff`,
         { tag: `notif_${newest.id}`, url: newest.enlace || "./home.html" },
@@ -663,12 +663,15 @@ function watchMatchParticipationEvents(uid) {
   const collections = ["partidosReto", "partidosAmistosos"];
 
   collections.forEach((colName) => {
-    const q = query(collection(db, colName), where("jugadores", "array-contains", uid));
+    // 1. Matches I'm playing in
+    const qPlaying = query(collection(db, colName), where("jugadores", "array-contains", uid));
+    // 2. Matches I created (may not be playing yet)
+    const qCreated = query(collection(db, colName), where("creador", "==", uid));
+
     const stateById = new Map();
 
-    safeOnSnapshot(q, async (snapshot) => {
+    const handleSnapshot = async (snapshot) => {
       const currentIds = new Set();
-
       for (const d of snapshot.docs) {
         const matchId = d.id;
         const curr = d.data() || {};
@@ -678,8 +681,9 @@ function watchMatchParticipationEvents(uid) {
         stateById.set(matchId, curr);
         if (!prev) continue;
 
-        const prevPlayers = (prev.jugadores || []).filter((p) => p && !String(p).startsWith("GUEST_"));
-        const currPlayers = (curr.jugadores || []).filter((p) => p && !String(p).startsWith("GUEST_"));
+        const prevPlayers = (prev.jugadores || prev.playerUids || []).filter((p) => p && !String(p).startsWith("GUEST_"));
+        const currPlayers = (curr.jugadores || curr.playerUids || []).filter((p) => p && !String(p).startsWith("GUEST_"));
+        
         const joined = currPlayers.find((p) => !prevPlayers.includes(p));
         const left = prevPlayers.find((p) => !currPlayers.includes(p));
 
@@ -736,7 +740,10 @@ function watchMatchParticipationEvents(uid) {
       for (const oldId of [...stateById.keys()]) {
         if (!currentIds.has(oldId)) stateById.delete(oldId);
       }
-    });
+    };
+
+    safeOnSnapshot(qPlaying, handleSnapshot);
+    safeOnSnapshot(qCreated, handleSnapshot);
   });
 }
 
@@ -935,7 +942,7 @@ async function checkMorningMatchSummary(uid) {
 
       await createNotification(
         uid,
-        `?? ¡Hoy juegas, ${name}!`,
+        `🎾 ¡Hoy juegas, ${name}!`,
         `Tienes ${matchesToday} partido(s) programado(s) para hoy en la Matrix. ¡A por todas!`,
         "info",
         null,
@@ -970,12 +977,12 @@ async function checkDailySummary(uid) {
       streak: userData.rachaActual || 0,
     };
 
-    let message = `?? Resumen: ${stats.points} ELO | ${stats.wins} victorias`;
-    if (stats.streak >= 3) message += ` | ?? Racha de ${stats.streak}!`;
+    let message = `🎾 Resumen: ${stats.points} ELO | ${stats.wins} victorias`;
+    if (stats.streak >= 3) message += ` | 🔥 Racha de ${stats.streak}!`;
 
     await createNotification(
       uid,
-      `?? Buenos días, ${userData.nombreUsuario?.split(" ")[0] || "Campeón"}`,
+      `🌅 Buenos días, ${userData.nombreUsuario?.split(" ")[0] || "Campeón"}`,
       message,
       "info",
       null,

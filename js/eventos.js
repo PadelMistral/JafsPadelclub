@@ -1,7 +1,8 @@
 // eventos.js — Versión mejorada con aprobación de inscritos y campo repesca
 import { db, auth, observerAuth, getDocument, addDocument, updateDocument, getDocsSafe } from './firebase-service.js';
 import { initAppUI, showToast, showSidePreferenceModal } from './ui-core.js';
-import { openResultForm } from './match-service.js';
+import { openResultForm } from './match-service.v1.js';
+import { buildMatchPersistencePatch } from './utils/match-utils.js';
 import {
     collection, getDocs, doc, getDoc, updateDoc, deleteDoc, addDoc,
     query, where, orderBy, serverTimestamp, onSnapshot, writeBatch,
@@ -19,6 +20,93 @@ let activeEventId = null;
 let adminTabState = 'players';
 let unsubscribeEvents = null;
 let usersById = new Map();
+
+function escapeEventsHtml(raw = "") {
+    const div = document.createElement("div");
+    div.textContent = String(raw || "");
+    return div.innerHTML;
+}
+
+function confirmEventsAction({
+    title = "Confirmar",
+    message = "¿Quieres continuar?",
+    confirmLabel = "Continuar",
+    danger = false,
+} = {}) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.className = "modal-overlay active modal-stack-front";
+        overlay.innerHTML = `
+            <div class="modal-card glass-strong" style="max-width:380px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">${escapeEventsHtml(title)}</h3>
+                    <button class="close-btn" type="button">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-[11px] text-white/75 leading-relaxed">${escapeEventsHtml(message)}</p>
+                    <div class="flex-row gap-2 mt-4">
+                        <button type="button" class="btn btn-ghost w-full" data-events-cancel>Cancelar</button>
+                        <button type="button" class="btn w-full ${danger ? "btn-danger" : "btn-primary"}" data-events-ok>${escapeEventsHtml(confirmLabel)}</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        const close = (accepted = false) => {
+            overlay.remove();
+            resolve(Boolean(accepted));
+        };
+        overlay.querySelector(".close-btn")?.addEventListener("click", () => close(false));
+        overlay.querySelector("[data-events-cancel]")?.addEventListener("click", () => close(false));
+        overlay.querySelector("[data-events-ok]")?.addEventListener("click", () => close(true));
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) close(false);
+        });
+        document.body.appendChild(overlay);
+    });
+}
+
+function askEventsTextInput({
+    title = "Editar valor",
+    label = "Valor",
+    value = "",
+    placeholder = "",
+    confirmLabel = "Guardar",
+} = {}) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.className = "modal-overlay active modal-stack-front";
+        overlay.innerHTML = `
+            <div class="modal-card glass-strong" style="max-width:380px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">${escapeEventsHtml(title)}</h3>
+                    <button class="close-btn" type="button">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">${escapeEventsHtml(label)}</label>
+                    <input id="events-inline-input" class="input w-full mt-2" value="${escapeEventsHtml(String(value || ""))}" placeholder="${escapeEventsHtml(placeholder)}">
+                    <div class="flex-row gap-2 mt-4">
+                        <button type="button" class="btn btn-ghost w-full" data-events-input-cancel>Cancelar</button>
+                        <button type="button" class="btn btn-primary w-full" data-events-input-ok>${escapeEventsHtml(confirmLabel)}</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        const close = (result = null) => {
+            overlay.remove();
+            resolve(result);
+        };
+        overlay.querySelector(".close-btn")?.addEventListener("click", () => close(null));
+        overlay.querySelector("[data-events-input-cancel]")?.addEventListener("click", () => close(null));
+        overlay.querySelector("[data-events-input-ok]")?.addEventListener("click", () => {
+            close(overlay.querySelector("#events-inline-input")?.value?.trim() || "");
+        });
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) close(null);
+        });
+        document.body.appendChild(overlay);
+        overlay.querySelector("#events-inline-input")?.focus();
+    });
+}
 
 /* ==================== BOOT ==================== */
 document.addEventListener('DOMContentLoaded', () => {
@@ -254,10 +342,16 @@ window.inscribirseEvento = async (eventId) => {
 
         let pairCode = '';
         if (ev.modalidad === 'parejas' && ev.companeroObligatorio) {
-            const code = prompt('Código de pareja (igual para ambos)', 'pareja-1');
+            const code = await askEventsTextInput({
+                title: 'Codigo de pareja',
+                label: 'Codigo compartido',
+                value: 'pareja-1',
+                placeholder: 'pareja-1',
+                confirmLabel: 'Usar codigo'
+            });
             if (code === null) return;
             pairCode = code.trim().toLowerCase();
-            if (!pairCode) { showToast('Pareja', 'Debes indicar código de pareja.', 'warning'); return; }
+            if (!pairCode) { showToast('Pareja', 'Debes indicar un codigo de pareja.', 'warning'); return; }
         }
 
         const newInscripto = {
@@ -282,7 +376,12 @@ window.inscribirseEvento = async (eventId) => {
 };
 
 window.cancelInscripcion = async (eventId) => {
-    if (!confirm('¿Cancelar tu inscripción?')) return;
+    if (!(await confirmEventsAction({
+        title: 'Cancelar inscripcion',
+        message: 'Se cancelara tu plaza o solicitud en este evento.',
+        confirmLabel: 'Cancelar',
+        danger: true
+    }))) return;
     const ev = allEvents.find(e => e.id === eventId);
     if (!ev) return;
     const myEntry = ev.inscritos?.find(i => i.uid === currentUser?.uid);
@@ -748,7 +847,12 @@ window.aprobarJugador = async (eventId, uid) => {
 };
 
 window.expulsarJugador = async (eventId, uid) => {
-    if (!confirm('¿Expulsar a este jugador?')) return;
+    if (!(await confirmEventsAction({
+        title: 'Expulsar jugador',
+        message: 'Se eliminara a este jugador del evento.',
+        confirmLabel: 'Expulsar',
+        danger: true
+    }))) return;
     const ev = allEvents.find(e => e.id === eventId);
     if (!ev) return;
     const entry = ev.inscritos?.find(i => i.uid === uid);
@@ -761,7 +865,12 @@ window.expulsarJugador = async (eventId, uid) => {
 };
 
 window.deleteEvent = async (eventId) => {
-    if (!confirm('¿Eliminar este evento permanentemente?')) return;
+    if (!(await confirmEventsAction({
+        title: 'Eliminar evento',
+        message: 'Esta accion elimina el evento de forma permanente.',
+        confirmLabel: 'Eliminar',
+        danger: true
+    }))) return;
     try {
         await deleteDoc(doc(db, 'eventos', eventId));
         showToast('Evento eliminado', '', 'info');
@@ -770,7 +879,13 @@ window.deleteEvent = async (eventId) => {
 };
 
 window.addManualPlayer = async (eventId) => {
-    const nombre = prompt('Nombre del jugador a añadir:');
+    const nombre = await askEventsTextInput({
+        title: 'Añadir jugador manual',
+        label: 'Nombre del jugador',
+        value: '',
+        placeholder: 'Nombre o apodo',
+        confirmLabel: 'Añadir'
+    });
     if (!nombre) return;
     try {
         await updateDoc(doc(db, 'eventos', eventId), {
@@ -787,8 +902,21 @@ window.addManualPlayer = async (eventId) => {
 };
 
 window.addManualMatch = async (eventId) => {
-    const equipoA = prompt('Equipo A (nombre):');
-    const equipoB = prompt('Equipo B (nombre):');
+    const equipoA = await askEventsTextInput({
+        title: 'Partido manual',
+        label: 'Pareja 1',
+        value: '',
+        placeholder: 'Nombre de la pareja 1',
+        confirmLabel: 'Continuar'
+    });
+    if (!equipoA) return;
+    const equipoB = await askEventsTextInput({
+        title: 'Partido manual',
+        label: 'Pareja 2',
+        value: '',
+        placeholder: 'Nombre de la pareja 2',
+        confirmLabel: 'Crear'
+    });
     if (!equipoA || !equipoB) return;
     try {
         await addDocument('eventoPartidos', {
@@ -803,8 +931,7 @@ window.addManualMatch = async (eventId) => {
             playerUids: [],
             ganadorTeamId: null,
             fecha: null,
-            resultado: null,
-            estado: 'pendiente',
+            ...buildMatchPersistencePatch({ state: 'abierto', resultStr: '' }),
             createdAt: serverTimestamp()
         });
         showToast('Partido añadido', `${equipoA} vs ${equipoB}`, 'success');
@@ -817,7 +944,12 @@ window.editMatchResult = async (_eventId, matchId) => {
 };
 
 window.deleteEventMatch = async (_eventId, matchId) => {
-    if (!confirm('¿Eliminar este partido del evento?')) return;
+    if (!(await confirmEventsAction({
+        title: 'Eliminar partido',
+        message: 'Se eliminara este partido del evento y su vinculo si existe.',
+        confirmLabel: 'Eliminar',
+        danger: true
+    }))) return;
     try {
         const snap = await getDoc(doc(db, 'eventoPartidos', matchId));
         const data = snap.exists() ? snap.data() : null;

@@ -24,9 +24,22 @@ const SW_RETRY_BASE_MS = 350;
 
 let notifPermission =
   typeof Notification !== "undefined" ? Notification.permission : "default";
+
+// Proactive permission tracking
+if (typeof navigator !== "undefined" && navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: "notifications" }).then((perm) => {
+        perm.onchange = () => {
+            notifPermission = Notification.permission;
+            pushLog("info", "permission_changed_proactive", { permission: notifPermission });
+            persistNotifPermissionFlag(notifPermission);
+        };
+    }).catch(() => {});
+}
+
 let oneSignalReady = false;
 let oneSignalInitPromise = null;
 let lastOneSignalLoginUid = null;
+let oneSignalScriptURL = null; // prevent undefined reference
 const pushInitByUid = new Map();
 
 function pushLog(level, event, meta = {}) {
@@ -109,34 +122,39 @@ function getWorkerCandidates() {
   const base = getAppBase();
   pushLog("info", "detecting_app_base", { base, pathname: window.location.pathname });
 
-  // Preferred candidate: local Service Worker files in root of the app
-  return [
+  const candidates = [
     {
-      base: base,
-      swPath: `${base}sw.js`,
-      updaterPath: `${base}sw.js`,
+      base,
+      swPath: "./sw.js",
+      updaterPath: "./sw.js",
+      scope: "./",
+    },
+    {
+      base,
+      swPath: getFullUrl("sw.js"),
+      updaterPath: getFullUrl("sw.js"),
       scope: base,
-    }
+    },
+    {
+      base,
+      swPath: "sw.js",
+      updaterPath: "sw.js",
+      scope: "/",
+    },
   ];
+
+  return uniqueBy(candidates, (cfg) => `${cfg.swPath}|${cfg.scope}`);
 }
 
 async function filterReachableWorkerCandidates(candidates = []) {
-  const checks = await Promise.all(
-    candidates.map(async (cfg) => {
-      try {
-        const res = await fetch(cfg.swPath, {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-        });
-        return res.ok ? cfg : null;
-      } catch {
-        return null;
-      }
-    }),
-  );
-  const reachable = checks.filter(Boolean);
-  return reachable.length > 0 ? reachable : candidates;
+  const currentDir = `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, "")}`;
+  return candidates
+    .slice()
+    .sort((a, b) => {
+      const aScore = String(a?.swPath || "").startsWith(currentDir) || String(a?.swPath || "").startsWith("./") ? 1 : 0;
+      const bScore = String(b?.swPath || "").startsWith(currentDir) || String(b?.swPath || "").startsWith("./") ? 1 : 0;
+      return bScore - aScore;
+    });
 }
 
 async function getServiceWorkerDiagnostics() {
@@ -159,6 +177,13 @@ export async function registerBestServiceWorkerWithRetry(customCandidates = null
   if (!("serviceWorker" in navigator)) {
     return { ok: false, reason: "sw_unsupported" };
   }
+  
+  if (window.__swRegisteredByCore || window.__swRegisterBound) {
+    pushLog("info", "sw_register_skipped_already_bound");
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg) return { ok: true, reg };
+  }
+
   const candidates = customCandidates || getWorkerCandidates();
   const swDiag = await getServiceWorkerDiagnostics();
   const appScope = swDiag?.appShell?.scope || null;
@@ -811,7 +836,7 @@ export async function checkNotificationStatus() {
       appShellActive = Boolean(swDiag?.appShell?.active || swDiag?.appShell?.installing || swDiag?.appShell?.waiting);
       oneSignalWorkerActive = Boolean(swDiag?.oneSignal?.active || swDiag?.oneSignal?.installing || swDiag?.oneSignal?.waiting);
       const oneSignalActiveWorker = swDiag?.oneSignal?.active || swDiag?.oneSignal?.installing || swDiag?.oneSignal?.waiting;
-      const oneSignalScriptURL = oneSignalActiveWorker?.scriptURL || null;
+      oneSignalScriptURL = oneSignalActiveWorker?.scriptURL || null;
       appShellScope = swDiag?.appShell?.scope || null;
       oneSignalScope = swDiag?.oneSignal?.scope || null;
       
@@ -924,10 +949,10 @@ const HUMAN_MESSAGES = {
   permission_denied: { title: "Avisos desactivados", message: "Has bloqueado los avisos. Para volver a recibirlos:", steps: ["Abre la configuración de tu navegador (icono de candado o información en la barra de la dirección).", "Busca «Notificaciones» para esta página y cámbialo a «Permitir».", "Vuelve aquí y recarga la app si hace falta."] },
   sw_inactive: { title: "Actualiza la app", message: "Para recibir avisos en segundo plano, instala o actualiza la app desde tu navegador.", steps: ["En el menú del navegador (tres puntos), elige «Instalar aplicación» o «Añadir a pantalla de inicio».", "Abre la app desde el icono instalado y activa de nuevo los avisos."] },
   sw_scope_conflict: { title: "Conflicto de versión", message: "Hay dos versiones de la app en uso. Usa solo la instalada (icono en el móvil).", steps: ["Cierra pestañas abiertas de la app en el navegador.", "Abre solo la app instalada (icono en la pantalla de inicio)."] },
-  onesignal_sdk_missing: { title: "Cargando sistema de avisos", message: "El sistema de notificaciones no ha cargado aún. Vuelve a intentar en unos segundos.", steps: [] },
-  onesignal_not_initialized: { title: "Avisos en preparación", message: "El servicio de avisos no se ha iniciado. Comprueba tu conexión y recarga la página.", steps: [] },
-  onesignal_not_subscribed: { title: "Un paso más", message: "Acepta recibir notificaciones cuando el navegador lo pregunte.", steps: ["Pulsa «Activar» y luego «Permitir» en la ventana del navegador."] },
-  onesignal_error: { title: "Algo ha fallado", message: "No hemos podido conectar el sistema de avisos. Prueba a recargar la app o a abrirla de nuevo desde el icono instalado.", steps: [] },
+  onesignal_sdk_missing: { title: "Cargando avisos...", message: "El sistema de notificaciones está arrancando. Si ves este mensaje mucho tiempo, recarga la app.", steps: [] },
+  onesignal_not_initialized: { title: "Sincronizando...", message: "Conectando con el servidor de avisos en segundo plano.", steps: [] },
+  onesignal_not_subscribed: { title: "Activa los avisos", message: "Parece que no tienes los avisos activados para este dispositivo.", steps: ["Pulsa el botón «Reconectar» o «Activar» debajo."] },
+  onesignal_error: { title: "Conexión en pausa", message: "Hubo un pequeño corte con nuestro servidor de avisos. Prueba a cerrar y abrir la app de nuevo.", steps: [] },
   default: { title: "Estado de los avisos", message: "Comprueba que tienes la app instalada y que has permitido las notificaciones.", steps: [] },
 };
 
@@ -1007,9 +1032,10 @@ export function showNotificationHelpModal() {
  */
 export async function sendExternalPush({ title, message, uids = [], url = "home.html", data = {} }) {
   try {
-    const endpoint = window.__PUSH_API_URL || "/api/send-push";
+    const endpoint = "https://europe-west1-padeluminatis.cloudfunctions.net/sendPush";
     if (window.location.protocol === "file:") return;
 
+    console.log("Enviando push externo via Firebase Functions...");
     const payload = {
       titulo: title,
       mensaje: message,

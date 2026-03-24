@@ -38,12 +38,12 @@ export async function generateMatchShareImage(analysis, matchData = {}) {
     ctx.fillStyle = '#b8ff00';
     ctx.font = '900 42px Rajdhani';
     ctx.textAlign = 'center';
-    ctx.fillText('MISIÓN CUMPLIDA', 540, 200);
+    ctx.fillText('RESULTADO FINAL', 540, 200);
 
     // Subtitle
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = '700 18px Rajdhani';
-    ctx.fillText('RESULTADO OFICIAL DEL ENCUENTRO', 540, 235);
+    ctx.fillText('MARCADOR OFICIAL DEL PARTIDO', 540, 235);
 
     // --- SCOREBOARD ---
     ctx.fillStyle = '#ffffff';
@@ -53,12 +53,16 @@ export async function generateMatchShareImage(analysis, matchData = {}) {
     ctx.fillText(scoreText, 540, 430); // Adjusted Y
 
 
+    const winnerKey = String(matchData.winner || "").toUpperCase();
+
     // --- WINNER BANNER ---
     if (matchData.winner) {
-        const winnerText = `GANADOR: EQUIPO ${String(matchData.winner).toUpperCase()}`;
+        const teamAName = (matchData.teamA || []).map(p => (typeof p === 'object' ? p.name : p)).filter(Boolean).join(' & ') || 'Pareja A';
+        const teamBName = (matchData.teamB || []).map(p => (typeof p === 'object' ? p.name : p)).filter(Boolean).join(' & ') || 'Pareja B';
+        const winnerText = `GANADORES · ${winnerKey === 'A' ? teamAName : teamBName}`;
         ctx.fillStyle = '#b8ff00';
-        ctx.font = '900 30px Rajdhani';
-        ctx.fillText(winnerText, 540, 530);
+        ctx.font = '900 24px Rajdhani';
+        ctx.fillText(winnerText.toUpperCase(), 540, 530);
     }
 
     // --- PLAYERS SECTION ---
@@ -71,6 +75,16 @@ export async function generateMatchShareImage(analysis, matchData = {}) {
 
     const teamA = (matchData.teamA || []).map(p => (typeof p === 'object' ? p.name : p)).filter(Boolean);
     const teamB = (matchData.teamB || []).map(p => (typeof p === 'object' ? p.name : p)).filter(Boolean);
+    const teamAIsWinner = winnerKey === "A" || winnerKey === "1";
+    const teamBIsWinner = winnerKey === "B" || winnerKey === "2";
+
+    roundRect(ctx, 110, 610, 360, 180, 26, teamAIsWinner ? 'rgba(184,255,0,0.08)' : 'rgba(255,255,255,0.03)');
+    roundRect(ctx, 610, 610, 360, 180, 26, teamBIsWinner ? 'rgba(184,255,0,0.08)' : 'rgba(255,255,255,0.03)');
+    ctx.strokeStyle = teamAIsWinner ? 'rgba(184,255,0,0.32)' : 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(110, 610, 360, 180);
+    ctx.strokeStyle = teamBIsWinner ? 'rgba(184,255,0,0.32)' : 'rgba(255,255,255,0.08)';
+    ctx.strokeRect(610, 610, 360, 180);
 
     // Team A column
     ctx.textAlign = 'right';
@@ -78,7 +92,7 @@ export async function generateMatchShareImage(analysis, matchData = {}) {
     const levelsA = matchData.levelsA || [];
     teamA.forEach((name, i) => {
         const y = 680 + (i * 70);
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillStyle = teamAIsWinner ? '#f4ffd0' : 'rgba(255,255,255,0.85)';
         ctx.fillText(String(name).toUpperCase(), 440, y);
         if (levelsA[i]) {
             ctx.fillStyle = '#b8ff00';
@@ -100,7 +114,7 @@ export async function generateMatchShareImage(analysis, matchData = {}) {
     const levelsB = matchData.levelsB || [];
     teamB.forEach((name, i) => {
         const y = 680 + (i * 70);
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillStyle = teamBIsWinner ? '#f4ffd0' : 'rgba(255,255,255,0.85)';
         ctx.fillText(String(name).toUpperCase(), 640, y);
         if (levelsB[i]) {
             ctx.fillStyle = '#b8ff00';
@@ -112,7 +126,7 @@ export async function generateMatchShareImage(analysis, matchData = {}) {
 
 
     // Footer
-    drawBrandFooter(ctx, 1080, 1080, matchData.club || 'PADELUMINATIS CLUB');
+    drawBrandFooter(ctx, 1080, 1080, matchData.club || 'JAFS PADEL');
 
     return canvas.toDataURL('image/png');
 }
@@ -124,7 +138,7 @@ export async function shareMatchResult(analysis, matchData) {
         const blob = await (await fetch(dataUrl)).blob();
         const file = new File([blob], 'mision_padel.png', { type: 'image/png' });
         try {
-            await navigator.share({ title: 'Mi Resultado Padeluminatis', text: `Misión completada. ${analysis.delta >= 0 ? 'Gané' : 'Perdí'} ${Math.abs(analysis.delta)} puntos.`, files: [file] });
+            await navigator.share({ title: 'Mi resultado JafsPadel', text: `Mision completada. ${analysis.delta >= 0 ? 'Gane' : 'Perdi'} ${Math.abs(analysis.delta)} puntos.`, files: [file] });
             return true;
         } catch (e) { downloadDataUrl(dataUrl, 'mision_padel.png'); }
     } else { downloadDataUrl(dataUrl, 'mision_padel.png'); }
@@ -242,7 +256,8 @@ export async function generateMatchPosterImage(matchData = {}) {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(0,212,255,0.5)';
     ctx.font = '900 14px Rajdhani';
-    ctx.fillText('EQUIPO A', 280, 435);
+    const teamAHead = (teamA[0] || 'JUGADOR 1') + (teamA[1] ? ' & ' + teamA[1] : '');
+    ctx.fillText(teamAHead.toUpperCase(), 280, 435);
 
     const nameA1 = trim(teamA[0] || 'JUGADOR 1');
     const nameA2 = trim(teamA[1] || '');
@@ -278,7 +293,8 @@ export async function generateMatchPosterImage(matchData = {}) {
 
     ctx.fillStyle = 'rgba(255,140,0,0.5)';
     ctx.font = '900 14px Rajdhani';
-    ctx.fillText('EQUIPO B', 800, 435);
+    const teamBHead = (teamB[0] || 'JUGADOR 3') + (teamB[1] ? ' & ' + teamB[1] : '');
+    ctx.fillText(teamBHead.toUpperCase(), 800, 435);
 
     const nameB1 = trim(teamB[0] || 'JUGADOR 3');
     const nameB2 = trim(teamB[1] || '');
@@ -410,7 +426,7 @@ export async function generateMatchPosterImage(matchData = {}) {
     ctx.restore();
 
     // === 11. FOOTER ===
-    drawBrandFooter(ctx, 1080, 1350, matchData.club || 'PADELUMINATIS CLUB');
+    drawBrandFooter(ctx, 1080, 1350, matchData.club || 'JAFS PADEL');
 
     return canvas.toDataURL('image/png');
 }

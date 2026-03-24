@@ -6,21 +6,6 @@ import { logInfo } from '../core/app-logger.js';
 // Initialize theme system immediately  
 initThemeSystem();
 
-// --- GLOBAL SESSION GUARD ---
-// Redirect to login if unauthenticated on a private page
-if (typeof window !== 'undefined') {
-    guardAuth((user) => {
-        const path = window.location.pathname.toLowerCase();
-        const publicPages = ['index.html', 'registro.html', 'terms.html', 'privacy.html'];
-        const isPublic = publicPages.some(p => path.includes(p)) || path === '/' || path.endsWith('/') || path === '';
-        
-        if (!user && !isPublic) {
-            logInfo('session_guard_redirect_login', { path });
-            window.location.replace('index.html');
-        }
-    });
-}
-
 const PUBLIC_PAGES = ['index.html', 'registro.html'];
 
 function emitToast(title, body = '', type = 'info') {
@@ -58,6 +43,50 @@ function getUserInitials(name = "") {
     return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
 }
 
+function escapeUiLoaderHtml(raw = "") {
+    const div = document.createElement("div");
+    div.textContent = String(raw || "");
+    return div.innerHTML;
+}
+
+function confirmUiLoaderAction({
+    title = "Confirmar",
+    message = "¿Quieres continuar?",
+    confirmLabel = "Continuar",
+    danger = false,
+} = {}) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.className = "modal-overlay active modal-stack-front";
+        overlay.innerHTML = `
+            <div class="modal-card glass-strong" style="max-width:380px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">${escapeUiLoaderHtml(title)}</h3>
+                    <button class="close-btn" type="button">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-[11px] text-white/75 leading-relaxed">${escapeUiLoaderHtml(message)}</p>
+                    <div class="flex-row gap-2 mt-4">
+                        <button type="button" class="btn btn-ghost w-full" data-ui-loader-cancel>Cancelar</button>
+                        <button type="button" class="btn w-full ${danger ? "btn-danger" : "btn-primary"}" data-ui-loader-ok>${escapeUiLoaderHtml(confirmLabel)}</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        const close = (accepted = false) => {
+            overlay.remove();
+            resolve(Boolean(accepted));
+        };
+        overlay.querySelector(".close-btn")?.addEventListener("click", () => close(false));
+        overlay.querySelector("[data-ui-loader-cancel]")?.addEventListener("click", () => close(false));
+        overlay.querySelector("[data-ui-loader-ok]")?.addEventListener("click", () => close(true));
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) close(false);
+        });
+        document.body.appendChild(overlay);
+    });
+}
+
 function buildHeaderAvatarMarkup(userData = null) {
     const displayName = userData?.nombreUsuario || userData?.nombre || "Jugador";
     const photo = (userData?.fotoPerfil || userData?.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0f172a&color=fff&size=96`).trim();
@@ -74,9 +103,8 @@ function getCurrentPageMeta() {
     const pageMap = {
         'home.html': { id: 'home', subtitle: 'INICIO' },
         'calendario.html': { id: 'calendar', subtitle: 'CALENDARIO' },
-        'diario.html': { id: 'events', subtitle: 'DIARIO' },
-        'ranking-v3.html': { id: 'ranking', subtitle: 'RANKING' },
-        'puntosranking.html': { id: 'ranking', subtitle: 'RANKING' },
+        'diario.html': { id: 'diary', subtitle: 'DIARIO' },
+        'ranking.html': { id: 'ranking', subtitle: 'RANKING' },
         'historial.html': { id: 'history', subtitle: 'HISTORIAL' },
         'perfil.html': { id: 'profile', subtitle: 'PERFIL' },
         'palas.html': { id: 'palas', subtitle: 'PALAS' },
@@ -109,7 +137,7 @@ export async function injectHeader(userData = null) {
     header.innerHTML = `
         <div class="header-brand" onclick="window.location.href='home.html'">
             <div class="header-logo">
-                <img src="./imagenes/Logojafs.png" alt="Padeluminatis">
+                <img src="./imagenes/Logojafs.png" alt="JafsPadel">
             </div>
             <div class="header-text">
                 <span class="header-title">PADELUMINATIS</span>
@@ -138,6 +166,7 @@ export async function injectHeader(userData = null) {
     `;
     
     document.body.prepend(header);
+    document.documentElement.style.setProperty('--app-header-h', '70px');
     
     if (auth.currentUser && !window.__notifBadgeManagedByUICore) {
         Promise.resolve(
@@ -210,7 +239,7 @@ export async function injectNavbar(activePage) {
 
     const items = [
         { id: 'home', icon: icons.home, label: 'Inicio', link: 'home.html', color: '#2bbcff' },
-        { id: 'ranking', icon: icons.ranking, label: 'Ranking', link: 'ranking-v3.html', color: '#93ea08' },
+        { id: 'ranking', icon: icons.ranking, label: 'Ranking', link: 'ranking.html', color: '#93ea08' },
         { id: 'calendar', icon: icons.calendar, label: 'Calendario', link: 'calendario.html', center: true },
         { id: 'diary', icon: icons.events, label: 'Diario', link: 'diario.html', color: '#ae00ff' },
         { id: 'events', icon: icons.history, label: 'Eventos', link: 'eventos.html', color: '#c6ff00' }
@@ -243,6 +272,7 @@ export async function injectNavbar(activePage) {
     `;
 
     document.body.appendChild(nav);
+    document.documentElement.style.setProperty('--app-nav-h', '80px');
     nav.querySelectorAll('a.nav-item-v8').forEach((a) => {
         a.addEventListener('click', (e) => {
             const href = a.getAttribute('href');
@@ -365,21 +395,25 @@ export function hideLoading() {
 
 window.clearGlobalNotifications = async () => {
     if (!auth.currentUser) return;
-    if (!confirm('¿Vaciar toda la bandeja de entrada?')) return;
+    if (!(await confirmUiLoaderAction({
+        title: "Vaciar bandeja",
+        message: "Se eliminaran todos los avisos de tu bandeja de entrada.",
+        confirmLabel: "Vaciar",
+        danger: true,
+    }))) return;
     
     const { writeBatch, collection, query, where, getDocs, doc } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
     const q = query(collection(db, 'notificaciones'), where('destinatario', '==', auth.currentUser.uid));
     const snap = await getDocs(q);
     
-    if (snap.empty) return emitToast('Info', 'Ya está todo limpio', 'info');
+    if (snap.empty) return emitToast('Info', 'Ya esta todo limpio', 'info');
     
     const batch = writeBatch(db);
     snap.docs.forEach(d => batch.delete(doc(db, 'notificaciones', d.id)));
     await batch.commit();
-    emitToast('Limpieza Completa', 'Se han borrado todas las notificaciones.', 'success');
+    emitToast('Limpieza completa', 'Se han borrado todas las notificaciones.', 'success');
 };
 window.toggleAdminSidebar = () => {
     const sb = document.querySelector('.admin-sidebar');
     if (sb) sb.classList.toggle('active');
 };
-
