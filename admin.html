@@ -6,10 +6,12 @@
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#020617">
-  <title>Console v9.0 | Padeluminatis Admin</title>
+    <title>Admin | JafsPadel</title>
+  <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="./css/global.css">
+  <link rel="stylesheet" href="./css/layout.css">
   <link rel="stylesheet" href="./css/admin-core.css">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@100;400;900&display=swap" rel="stylesheet">
 </head>
@@ -22,36 +24,35 @@
   <div class="admin-layout no-sidebar">
     
     <main class="admin-main">
-      <header class="admin-top-bar sticky-top">
-        <div class="flex-row items-center gap-2">
-            <img src="./imagenes/Logojafs.png" class="h-8 w-auto" alt="Logo">
+	      <div class="admin-top-actions p-4 admin-toolbar-shell">
+        <div class="flex-row between items-center w-full">
             <div class="flex-col">
-                <span class="text-[10px] font-black tracking-widest text-[#00e5ff] leading-tight">CONSOLE v9.5</span>
-                <span class="text-[8px] opacity-50 uppercase tracking-tighter">Master Control Unit</span>
+                <span class="text-[10px] font-black tracking-widest text-[#00e5ff] leading-tight flex items-center gap-2">
+                    <i class="fas fa-terminal opacity-50"></i> PANEL ADMIN
+                </span>
+                <span class="text-[8px] opacity-30 uppercase tracking-tighter">Panel central</span>
+            </div>
+            
+            <div class="flex-row items-center gap-3">
+                <button id="btn-refresh-admin" class="btn-circular sm" title="Sincronizar Datos">
+                    <i class="fas fa-rotate"></i>
+                </button>
             </div>
         </div>
 
-        <nav class="admin-top-tabs custom-scroll">
+        <nav class="admin-top-tabs custom-scroll mt-4">
             <button class="tab-btn active admin-tab" data-pane="users"><i class="fas fa-users"></i> <span>JUGADORES</span></button>
             <button class="tab-btn admin-tab" data-pane="pending"><i class="fas fa-user-clock"></i> <span>SOLICITUDES</span> <span class="badge-dot hidden" id="dot-pending"></span></button>
             <button class="tab-btn admin-tab" data-pane="matches"><i class="fas fa-table-tennis-paddle-ball"></i> <span>PARTIDOS</span></button>
-            <button class="tab-btn admin-tab" data-pane="propuestas"><i class="fas fa-comments"></i> <span>CHATS PROPUESTAS</span></button>
+            <button class="tab-btn admin-tab" data-pane="propuestas"><i class="fas fa-comments"></i> <span>CHATS</span></button>
             <button class="tab-btn admin-tab" data-pane="eventos"><i class="fas fa-trophy"></i> <span>TORNEOS</span></button>
-            <button class="tab-btn admin-tab" data-pane="ranking"><i class="fas fa-ranking-star"></i> <span>PUNTUACIÓN</span></button>
+            <button class="tab-btn admin-tab" data-pane="ranking"><i class="fas fa-ranking-star"></i> <span>PUNTOS</span></button>
             <button class="tab-btn admin-tab" data-pane="system"><i class="fas fa-microchip"></i> <span>SISTEMA</span></button>
+            <button class="tab-btn admin-tab" data-pane="global-history"><i class="fas fa-history"></i> <span>LOG ELO</span></button>
         </nav>
+      </div>
 
-        <div class="flex-row items-center gap-3 ml-auto">
-            <button id="btn-refresh-admin" class="btn-circular" title="Sincronizar Datos">
-                <i class="fas fa-rotate"></i>
-            </button>
-             <button class="btn-pill-logout" onclick="import('./js/firebase-service.js').then(m => m.auth.signOut().then(()=>window.location.reload()))">
-                <i class="fas fa-power-off"></i>
-            </button>
-        </div>
-      </header>
-
-      <div class="admin-content-inner custom-scroll pb-20">
+	      <div class="admin-content-inner custom-scroll pb-20 admin-page-shell">
         
         <!-- KPI Row -->
         <section class="kpi-container mb-8">
@@ -75,9 +76,61 @@
             </div>
         </section>
 
+        <section class="admin-ops-overview mb-8">
+            <div class="admin-ops-grid">
+                <article class="admin-ops-card">
+                    <div class="admin-ops-head">
+                        <span class="admin-ops-title">Control rapido</span>
+                        <span class="admin-ops-sub">Lo importante primero</span>
+                    </div>
+                    <div class="admin-ops-actions">
+                        <button class="admin-ops-btn" onclick="window.jumpAdminPane('pending')"><i class="fas fa-user-clock"></i> Solicitudes</button>
+                        <button class="admin-ops-btn" onclick="window.jumpAdminPane('matches')"><i class="fas fa-table-tennis-paddle-ball"></i> Partidos</button>
+                        <button class="admin-ops-btn" onclick="window.jumpAdminPane('eventos')"><i class="fas fa-trophy"></i> Torneos</button>
+                        <button class="admin-ops-btn" onclick="window.jumpAdminPane('system')"><i class="fas fa-sliders"></i> Sistema</button>
+                    </div>
+                </article>
+                <article class="admin-ops-card">
+                    <div class="admin-ops-head">
+                        <span class="admin-ops-title">Ultimo cambio</span>
+                        <span class="admin-ops-sub">Trazabilidad inmediata</span>
+                    </div>
+                    <div id="admin-ops-latest" class="admin-ops-latest">
+                        Cargando ultimo movimiento del panel...
+                    </div>
+                </article>
+            </div>
+        </section>
+
 
         <!-- Dynamic Panes -->
-        <div class="panes-container">
+	        <div class="panes-container admin-panes-stack">
+          <!-- PANE LOG ELO -->
+          <section id="pane-global-history" class="admin-pane animate-fade-in">
+             <div class="pane-header flex-row between items-center mb-6">
+                <div>
+                   <h2 class="pane-title"><i class="fas fa-history text-primary mr-2"></i> HISTORIAL GLOBAL ELO</h2>
+                   <p class="text-[10px] text-muted uppercase tracking-widest mt-1">Últimos movimientos de puntos y progreso ELO</p>
+                </div>
+                <button class="btn hover-effect" onclick="window.refreshAll()"><i class="fas fa-sync-alt"></i> Actualizar</button>
+             </div>
+             <div class="glass-panel p-0 custom-scroll overflow-x-auto relative" style="border-radius:12px">
+                <table class="w-full text-left premium-table" style="min-width:700px; font-size:12px;">
+                   <thead>
+                      <tr class="bg-black/30 text-[9px] uppercase tracking-widest text-muted/80">
+                         <th class="p-3 pl-4">Fecha</th>
+                         <th class="p-3">Partido ID</th>
+                         <th class="p-3">Jugador / Tipo</th>
+                         <th class="p-3 text-right">Variación ELO</th>
+                         <th class="p-3 text-right pr-4">Nivel Actual</th>
+                      </tr>
+                   </thead>
+                   <tbody id="global-history-tbody">
+                     <!-- Inyectado por JS -->
+                   </tbody>
+                </table>
+             </div>
+          </section>
 
           <!-- JUGADORES -->
           <section id="pane-users" class="admin-pane active animate-fade-in">
@@ -153,7 +206,7 @@
                         <option value="all">TODOS</option>
                         <option value="open">ABIERTOS</option>
                         <option value="played">FINALIZADOS</option>
-                        <option value="upcoming">PRÓXIMOS</option>
+                        <option value="upcoming">PROXIMOS</option>
                         <option value="orphan">HUÉRFANOS</option>
                     </select>
                 </div>
@@ -194,7 +247,7 @@
           <!-- PUNTUACIÓN (ELO & RANKING) -->
           <section id="pane-ranking" class="admin-pane animate-fade-in">
              <div class="pane-header mb-6">
-                <h2 class="pane-title">CONFIGURACIÓN DE PUNTUACIÓN</h2>
+                <h2 class="pane-title">CONFIGURACION DE PUNTUACION</h2>
                 <p class="text-[10px] opacity-50 uppercase tracking-wider">Parámetros del sistema ELO y Ranking global</p>
             </div>
             
@@ -229,10 +282,9 @@
                     <div class="p-4 flex-col gap-3">
                         <select id="elo-action-select" class="admin-select-v9 w-full">
                             <option value="none">Seleccionar acción...</option>
-                            <option value="reset_base">Reset a Puntos Base (1000)</option>
-                            <option value="recalc_points">Recalcular desde Puntos Actuales</option>
-                            <option value="recalc_level">Recalcular desde Nivel Actual</option>
-                            <option value="historical">Reconstrucción Histórica</option>
+                            <option value="reset_base">WIPE TOTAL (Reset a 1000 y 2.5)</option>
+                            <option value="restore_base">REGENERACIÓN (Usa Niveles Reales + Recalcula)</option>
+                            <option value="recalc_points">Solo recalcular desde HISTÓRICO</option>
                         </select>
                         <button id="btn-execute-elo-action" class="btn-danger-v9 w-full">
                             <i class="fas fa-bolt"></i> EJECUTAR ACCIÓN
@@ -263,7 +315,7 @@
           <!-- SISTEMA -->
           <section id="pane-system" class="admin-pane animate-fade-in">
             <h2 class="pane-title mb-6"><i class="fas fa-terminal mr-2"></i> PANEL DE CONTROL DEL SISTEMA</h2>
-            <div class="system-grid-modern">
+            <div class="admin-ops-grid">
                 <!-- Notificaciones -->
                 <div class="sys-card-v9">
                     <div class="sys-card-head"><i class="fas fa-broadcast-tower"></i> COMUNICADOS GLOBALES</div>
@@ -282,7 +334,7 @@
                             <option value="none">Seleccionar tarea...</option>
                             <option value="cancel_stale">Cancelar Partidos Expirados</option>
                             <option value="reset_presence">Resetear Estado en Línea</option>
-                            <option value="clean_event_dupes">Limpiar Duplicados Evento (TBD)</option>
+                            <option value="clean_event_dupes">Limpiar duplicados de evento sin nombres</option>
                             <option value="clean_old_events">Borrar Partidos de Eventos Antiguos</option>
                             <option value="nuke_logs">Limpiar Registros de Actividad</option>
                             <option value="sync_apoing">Sincronización Apoing Forzada</option>
@@ -301,6 +353,25 @@
                             GESTIONAR ENLACES ICS
                         </button>
                         <p class="text-[9px] opacity-40 text-center">Gestiona la vinculación con perfiles de Apoing externos.</p>
+                    </div>
+                </div>
+
+                <div class="sys-card-v9">
+                    <div class="sys-card-head"><i class="fas fa-clock-rotate-left"></i> TRAZABILIDAD ADMIN</div>
+                    <div class="p-4">
+                        <div id="admin-audit-feed" class="audit-feed">
+                            <div class="audit-feed-empty">Cargando historial reciente del panel...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sys-card-v9">
+                    <div class="sys-card-head"><i class="fas fa-file-export"></i> EXPORTACIÓN SEGURA</div>
+                    <div class="p-4 flex-col gap-3">
+                        <button id="btn-export-admin-snapshot" class="btn-glass w-full">
+                            EXPORTAR SNAPSHOT JSON
+                        </button>
+                        <p class="text-[9px] opacity-40 text-center">Descarga un resumen operativo de jugadores, partidos, torneos y trazabilidad para soporte o backup manual.</p>
                     </div>
                 </div>
             </div>
@@ -373,7 +444,10 @@
   </div>
 
   <script type="module" src="./js/admin.js?v=9.0"></script>
-  <script type="module" src="./js/admin-recalc-elo.js"></script>
+  <script type="module">
+    import { initPWAShell } from './js/modules/pwa-shell.js';
+    initPWAShell('admin');
+  </script>
 
 </body>
 

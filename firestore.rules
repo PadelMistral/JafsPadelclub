@@ -1,4 +1,4 @@
-﻿rules_version = '2';
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
@@ -83,16 +83,24 @@ service cloud.firestore {
     }
 
     function isParticipantResultUpdate() {
-      return participantInBeforeAndAfter() &&
+      return isParticipant(resource.data) &&
              canWriteResultNow(resource.data) &&
              request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                'resultado',
+               'ganadorTeamId',
+               'ganador',
                'estado',
-               'diaryImpactBy',
-               'eloSummary',
+               'updatedAt',
                'rankingProcessedAt',
                'rankingProcessedResult',
-               'rankingProcessedBy'
+               'rankingProcessedBy',
+               'eloSummary',
+               'standingsProcessedAt',
+               'standingsProcessedResult',
+               'mvp',
+               'mvpId',
+               'surface',
+               'superficie'
              ]);
     }
 
@@ -189,16 +197,27 @@ service cloud.firestore {
     }
 
     function isEventoPartidoParticipantUpdate() {
-      return resource.data.playerUids is list &&
-        resource.data.playerUids.hasAny([currentUid()]) &&
+      return isParticipant(resource.data) &&
+        canWriteResultNow(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'resultado',
           'ganadorTeamId',
+          'ganador',
           'estado',
           'updatedAt',
           'linkedMatchId',
           'linkedMatchCollection',
-          'fecha'
+          'fecha',
+          'rankingProcessedAt',
+          'rankingProcessedResult',
+          'rankingProcessedBy',
+          'eloSummary',
+          'standingsProcessedAt',
+          'standingsProcessedResult',
+          'mvp',
+          'mvpId',
+          'surface',
+          'superficie'
         ]) &&
         request.resource.data.eventoId == resource.data.eventoId;
     }
@@ -222,7 +241,14 @@ service cloud.firestore {
       allow create: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow update: if isAdmin() || (signedIn() && (
         request.auth.uid == uid ||
-        (isApproved() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['puntosRanking', 'lastDiaryImpact']))
+        // Allow any approved user to update ELO/ranking fields (match processing via transaction)
+        (isApproved() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'puntosRanking', 'rating', 'nivel', 'glickoRD', 'glickoVol',
+          'nivelProgresoPct', 'nivelRango', 'victorias', 'partidosJugados',
+          'rachaActual', 'lastMatchAnalysis', 'lastMatchDate',
+          'nivelBaseInicial', 'puntosBaseInicial', 'lastDiaryImpact',
+          'elo'
+        ]))
       ));
       allow delete: if isAdmin();
 
