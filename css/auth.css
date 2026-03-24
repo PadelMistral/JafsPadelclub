@@ -490,6 +490,13 @@
   transform: translateX(-4px);
 }
 
+.auth-help-note {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
 /* Auth Buttons Elite */
 .btn-auth-premium {
   width: 100%;

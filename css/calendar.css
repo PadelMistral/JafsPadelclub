@@ -110,24 +110,50 @@
 
 /* ===== CALENDAR WRAPPER ===== */
 .calendar-wrapper-v5 {
+  --cal-time-col: 52px;
+  --cal-day-min: 104px;
+  --cal-slot-min-h: 58px;
   background: var(--bg-glass);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  padding: var(--space-md);
+  padding: clamp(8px, 1.4vw, 14px);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  position: relative;
 }
 
 /* ===== CALENDAR GRID V5 ===== */
 .calendar-grid-v5 {
-  min-width: 600px;
+  min-width: calc(var(--cal-time-col) + (7 * var(--cal-day-min)));
+  width: max(100%, calc(var(--cal-time-col) + (7 * var(--cal-day-min))));
+}
+
+@media (max-width: 767px) {
+  .calendar-wrapper-v5::after {
+    content: "Desliza para ver más";
+    position: sticky;
+    right: 0;
+    bottom: 6px;
+    float: right;
+    margin-top: 8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    color: #dff8ff;
+    background: rgba(2, 6, 23, 0.82);
+    border: 1px solid rgba(0, 212, 255, 0.18);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+    pointer-events: none;
+  }
 }
 
 /* Grid Header */
 .grid-header-v5 {
   display: grid;
-  grid-template-columns: 50px repeat(7, 1fr);
-  gap: 4px;
+  grid-template-columns: var(--cal-time-col) repeat(7, minmax(var(--cal-day-min), 1fr));
+  gap: 6px;
   margin-bottom: var(--space-sm);
   position: sticky;
   top: 0;
@@ -193,9 +219,9 @@
 /* Time Row */
 .time-row-v5 {
   display: grid;
-  grid-template-columns: 50px repeat(7, 1fr);
-  gap: 4px;
-  min-height: 52px;
+  grid-template-columns: var(--cal-time-col) repeat(7, minmax(var(--cal-day-min), 1fr));
+  gap: 6px;
+  min-height: var(--cal-slot-min-h);
 }
 
 .time-col-v5 {
@@ -230,11 +256,12 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 52px;
+  min-height: var(--cal-slot-min-h);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  isolation: isolate;
 }
 
 .slot-v5:active {
@@ -279,6 +306,21 @@
   border-color: var(--border-light);
   transform: translateY(-2px);
   z-index: 5;
+}
+
+.slot-v5::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(140deg, rgba(255,255,255,0.06), rgba(255,255,255,0));
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.slot-v5:hover::before,
+.slot-v5:focus-visible::before {
+  opacity: 1;
 }
 
 /* Slot States */
@@ -348,6 +390,17 @@
   opacity: 0.7;
 }
 
+.slot-v5.evento:not(.propia):not(.jugado) {
+  background: linear-gradient(
+    140deg,
+    rgba(59, 130, 246, 0.18),
+    rgba(14, 116, 144, 0.08)
+  );
+  border-color: rgba(59, 130, 246, 0.4);
+  border-left-color: #60a5fa;
+  border-top-color: rgba(96, 165, 250, 0.65);
+}
+
 .slot-v5.propia {
   background: linear-gradient(
     135deg,
@@ -357,6 +410,15 @@
   border-color: var(--sport-green);
   border-top-color: rgba(34, 197, 94, 0.65);
   box-shadow: inset 0 0 15px var(--sport-green-glow);
+}
+
+.slot-v5.propia.evento {
+  background: linear-gradient(
+    135deg,
+    rgba(163, 230, 53, 0.24),
+    rgba(14, 116, 144, 0.12)
+  );
+  border-left-color: #c6ff00;
 }
 
 .slot-v5.jugado {
@@ -404,7 +466,7 @@
 
 /* Slot Content */
 .slot-chip-v5 {
-  font-size: 0.55rem;
+  font-size: clamp(0.5rem, 0.75vw, 0.62rem);
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -413,6 +475,10 @@
 
 .slot-v5.abierta .slot-chip-v5 {
   color: var(--primary);
+}
+
+.slot-v5.evento .slot-chip-v5 {
+  color: #93c5fd;
 }
 
 .slot-v5.cerrada .slot-chip-v5 {
@@ -432,12 +498,13 @@
 }
 
 .slot-info-v5 {
-  font-size: 0.5rem;
+  font-size: clamp(0.48rem, 0.7vw, 0.58rem);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+  text-align: center;
 }
 
 .slot-owner-v5 {
@@ -457,6 +524,25 @@
   border: 1px solid rgba(198, 255, 0, 0.16);
   display: inline-flex;
   width: fit-content;
+}
+
+.p-slot-v7.slot-fill-anim {
+  animation: slotFillPulse 0.62s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes slotFillPulse {
+  0% {
+    transform: scale(0.92);
+    box-shadow: 0 0 0 rgba(0, 212, 255, 0);
+  }
+  45% {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 10px rgba(0, 212, 255, 0.14);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(0, 212, 255, 0);
+  }
 }
 
 /* ===== CALENDAR LEGEND ===== */
@@ -531,6 +617,142 @@
 .cal-hint-v5 {
   font-size: 0.75rem;
   color: var(--text-dim);
+}
+
+.calendar-history-strip {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.calendar-history-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.calendar-history-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.calendar-history-head span {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.calendar-history-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.calendar-history-card {
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.calendar-history-type {
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.calendar-history-match {
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.35;
+}
+
+.calendar-history-score {
+  font-size: 16px;
+  font-weight: 900;
+  color: #c6ff00;
+}
+
+.calendar-history-meta,
+.calendar-history-empty {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 1024px) {
+  .calendar-wrapper-v5 {
+    --cal-time-col: 48px;
+    --cal-day-min: 96px;
+    --cal-slot-min-h: 54px;
+  }
+}
+
+@media (max-width: 767px) {
+  .calendar-wrapper-v5 {
+    --cal-time-col: 42px;
+    --cal-day-min: 82px;
+    --cal-slot-min-h: 50px;
+    padding: 8px;
+  }
+
+  .grid-header-v5,
+  .time-row-v5 {
+    gap: 4px;
+  }
+
+  .day-header-v5 {
+    padding: 6px 4px;
+  }
+
+  .day-header-v5 .d-name {
+    font-size: 0.5rem;
+  }
+
+  .day-header-v5 .d-num {
+    font-size: 0.88rem;
+  }
+
+  .time-col-v5 {
+    font-size: 0.66rem;
+    padding-right: 2px;
+  }
+
+  .time-col-v5 .t-start {
+    font-size: 0.74rem;
+  }
+
+  .slot-v5 {
+    padding: 5px 4px;
+    border-radius: 12px;
+  }
+
+  .slot-owner-v5 {
+    max-width: 100%;
+    font-size: 0.5rem;
+  }
+}
+
+@media (min-width: 1440px) {
+  .calendar-wrapper-v5 {
+    --cal-time-col: 58px;
+    --cal-day-min: 116px;
+    --cal-slot-min-h: 62px;
+  }
 }
 
 .cal-hint-v5 i {
@@ -1255,6 +1477,148 @@
   background: rgba(16, 185, 129, 0.3);
   transform: translateY(-2px);
 }
+
+.creation-side-panel {
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.creation-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.creation-side-title {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.creation-side-copy {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.creation-side-shuffle {
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 212, 255, 0.22);
+  background: rgba(0, 212, 255, 0.1);
+  color: #dff7ff;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.creation-side-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 13000;
+  padding: 18px;
+}
+
+.creation-side-modal-card {
+  width: min(100%, 420px);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(9, 14, 28, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+  padding: 18px;
+}
+
+.creation-side-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.creation-side-modal-head h3 {
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0 0 4px;
+}
+
+.creation-side-modal-head p {
+  margin: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.creation-side-modal-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 18px;
+}
+
+.creation-side-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.creation-side-modal-row {
+  display: grid;
+  grid-template-columns: 1fr minmax(140px, 160px);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.creation-side-modal-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.creation-side-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.creation-side-box {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.creation-side-select {
+  width: 100%;
+  min-height: 28px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(2, 6, 23, 0.72);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 0 10px;
+}
 /* ===== APOING STATUS BAR ===== */
 .cal-apoing-status-v5 {
   display: flex;
@@ -1437,7 +1801,7 @@
     font-size: 0.55rem;
   }
   #calendar-grid-v5 {
-    min-width: 640px;
+    min-width: 560px;
   }
   .btn-cal-nav {
     min-width: 36px;
@@ -1464,6 +1828,20 @@
 
 /* Small phones */
 @media (min-width: 381px) and (max-width: 480px) {
+  .cal-controls-v5 {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .cal-week-nav,
+  .cal-location-box,
+  .cal-clock-box {
+    justify-content: center;
+    align-items: center;
+  }
+
   .cal-clock-box #current-time-v5 {
     font-size: 1.4rem;
   }
@@ -1475,7 +1853,7 @@
     font-size: 0.52rem;
   }
   #calendar-grid-v5 {
-    min-width: 680px;
+    min-width: 620px;
   }
 }
 
@@ -1693,4 +2071,134 @@
   font-size: 0.9rem;
   color: rgba(255, 255, 255, 0.2);
   margin-left: 4px;
+}
+.calendar-wrapper-v5,
+.cal-controls-v5,
+.legend-v5,
+.modal-card {
+  scroll-margin-top: 16px;
+}
+
+@media (max-width: 900px) {
+  .cal-controls-v5 {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .calendar-wrapper-v5 {
+    padding: 10px;
+    border-radius: 18px;
+  }
+
+  .legend-v5,
+  .legend-bar-v5,
+  .calendar-toolbar-v5 {
+    gap: 8px;
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .slot-v5 {
+    min-height: 48px;
+    padding: 5px;
+    border-radius: 12px;
+  }
+
+  .slot-title-v5,
+  .slot-chip-v5,
+  .slot-meta-v5 {
+    transform-origin: left center;
+  }
+
+  .modal-card {
+    max-width: min(420px, calc(100vw - 18px));
+    max-height: min(84vh, 100dvh - 24px);
+    border-radius: 20px;
+  }
+
+  .calendar-wrapper-v5,
+  .cal-controls-v5 {
+    box-shadow: 0 16px 34px rgba(2, 6, 23, 0.16);
+  }
+}
+
+@media (max-width: 640px) {
+  .calendar-title-row {
+    margin-bottom: 10px;
+  }
+
+  .cal-week-info h2 {
+    font-size: 0.92rem;
+  }
+
+  .cal-clock-box #current-time-v5 {
+    font-size: 1.45rem;
+  }
+
+  .time-row-v5 {
+    min-height: 48px;
+  }
+
+  .grid-header-v5 {
+    gap: 3px;
+  }
+
+  .slot-v5 {
+    min-height: 44px;
+  }
+}
+
+
+/* =====================================================
+   UX ENHANCEMENTS (FASE 7)
+   Animaciones premium y selector de jugadores modal
+   ===================================================== */
+
+@keyframes fadeUp {
+  0% { opacity: 0; transform: translateY(15px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-up {
+  animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes spin-slow {
+  100% { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin-slow 1.5s linear infinite;
+}
+
+@keyframes pulse-fast {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse {
+  animation: pulse-fast 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Scroll personalizado modal selector */
+#ps-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(198, 255, 0, 0.5) rgba(255,255,255,0.05);
+  max-height: 48vh;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+#ps-list::-webkit-scrollbar {
+  width: 4px;
+}
+#ps-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+#ps-list::-webkit-scrollbar-thumb {
+  background: rgba(198, 255, 0, 0.3);
+  border-radius: 4px;
 }
