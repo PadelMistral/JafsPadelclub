@@ -1,7 +1,7 @@
 // eventos.js — Versión mejorada con aprobación de inscritos y campo repesca
 import { db, auth, observerAuth, getDocument, addDocument, updateDocument, getDocsSafe } from './firebase-service.js';
 import { initAppUI, showToast, showSidePreferenceModal } from './ui-core.js';
-import { openResultForm } from './match-service.v1.js';
+import { openResultForm } from './match-service.js';
 import { buildMatchPersistencePatch } from './utils/match-utils.js';
 import {
     collection, getDocs, doc, getDoc, updateDoc, deleteDoc, addDoc,

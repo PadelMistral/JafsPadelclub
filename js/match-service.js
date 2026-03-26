@@ -2982,7 +2982,6 @@ export const openResultForm = async (id, col) => {
 };
 window.openResultForm = openResultForm;
 
-// --- DYNAMIC UI HELPERS ---
 window.toggleCourtInput = (sel) => {
     const customInp = document.getElementById('inp-court-custom');
     const finalInp = document.getElementById('inp-court');
@@ -3013,22 +3012,22 @@ window.openPlayerSelector = async (matchId, col, extra) => {
             
             <div class="p-4">
                 <div class="ps-tabs flex-row gap-2 mb-4">
-                    <div class="ps-tab active flex-1 p-2 text-center rounded-xl bg-primary text-black font-black text-xs cursor-pointer" onclick="window.switchPsTab(this, 'search')">EXISTENTE</div>
+                    <div class="ps-tab active flex-1 p-2 text-center rounded-xl bg-primary text-black font-black text-xs cursor-pointer shadow-glow-sm" onclick="window.switchPsTab(this, 'search')">EXISTENTE</div>
                     <div class="ps-tab flex-1 p-2 text-center rounded-xl bg-white/5 text-white font-black text-xs cursor-pointer" onclick="window.switchPsTab(this, 'guest')">INVITADO</div>
                 </div>
                 
                 <div id="ps-panel-search">
-                    <input type="text" id="ps-search" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold mb-3 outline-none focus:border-primary/50" placeholder="Buscar jugador..." oninput="window.filterPsUsers(this.value)">
-                    <div id="ps-list" class="flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scroll">
+                    <input type="text" id="ps-search" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold mb-3 outline-none focus:border-primary focus:bg-white/10 transition-all" placeholder=" Buscar nombre o apodo..." oninput="window.filterPsUsers(this.value)">
+                    <div id="ps-list" class="flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scroll pr-1">
                         <!-- Users Rendered Here -->
                     </div>
                 </div>
                 
                 <div id="ps-panel-guest" class="hidden flex-col gap-3">
-                    <input type="text" id="guest-name" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary/50" placeholder="Nombre Invitado">
+                    <input type="text" id="guest-name" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary focus:bg-white/10 transition-all" placeholder=" Nombre Invitado">
                     <div class="flex-row gap-2">
-                        <input type="number" id="guest-level" class="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary/50" placeholder="Nivel (2.5)" step="0.1">
-                        <input type="text" id="guest-pala" class="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary/50" placeholder="Pala (Opcional)">
+                        <input type="number" id="guest-level" class="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary focus:bg-white/10 transition-all" placeholder=" Nivel (2.5)" step="0.1" value="2.5">
+                        <input type="text" id="guest-pala" class="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary focus:bg-white/10 transition-all" placeholder=" Pala (Opcional)">
                     </div>
                 </div>
 
@@ -3036,7 +3035,7 @@ window.openPlayerSelector = async (matchId, col, extra) => {
                     CONFIRMAR INVITADO <i class="fas fa-check ml-2"></i>
                 </button>
 
-                <button class="w-full py-4 mt-6 bg-white/10 rounded-xl text-white font-black text-xs tracking-widest border border-white/10 hover:bg-white/20" onclick="this.closest('.modal-overlay').remove()">
+                <button class="w-full py-4 mt-6 bg-white/10 rounded-xl text-white font-black text-xs tracking-widest border border-white/10 hover:bg-white/20 transition-all" onclick="this.closest('.modal-overlay').remove()">
                     FINALIZAR SELECCIÓN
                 </button>
             </div>
@@ -3051,11 +3050,11 @@ window.openPlayerSelector = async (matchId, col, extra) => {
 
 window.switchPsTab = (tab, mode) => {
     document.querySelectorAll('.ps-tab').forEach(t => {
-        t.classList.remove('bg-primary', 'text-black');
+        t.classList.remove('bg-primary', 'text-black', 'shadow-glow-sm');
         t.classList.add('bg-white/5', 'text-white');
     });
     tab.classList.remove('bg-white/5', 'text-white');
-    tab.classList.add('bg-primary', 'text-black');
+    tab.classList.add('bg-primary', 'text-black', 'shadow-glow-sm');
     
     document.getElementById('ps-panel-search').classList.toggle('hidden', mode !== 'search');
     document.getElementById('ps-panel-guest').classList.toggle('hidden', mode !== 'guest');
@@ -3075,14 +3074,24 @@ window.filterPsUsers = (q) => {
             ? `window.selectUserForNew('${u.id}')` 
             : `window.animateSelectionAndAdd('${u.id}', '${mid}', '${col}', ${extra.idx}, event)`;
         
+        const nombre = u.nombreUsuario || u.nombre || 'Jugador';
+        const hasFoto = u.fotoPerfil && !u.fotoPerfil.includes('Logojafs.png');
+        const initials = ((nombre.trim().split(' ')[0]?.[0] || '') + (nombre.trim().split(' ')[1]?.[0] || '')).toUpperCase() || 'JP';
+        
+        const avatarHtml = hasFoto 
+            ? `<img src="${u.fotoPerfil}" class="w-10 h-10 min-w-10 min-h-10 rounded-full bg-black object-cover border-2 border-primary/20 shadow-sm">`
+            : `<div class="w-10 h-10 min-w-10 min-h-10 rounded-full bg-gradient-to-br from-primary/80 to-primary-dark flex center font-black text-black text-[13px] shadow-glow-sm border-2 border-primary/30">${initials}</div>`;
+
         return `
-        <div class="flex-row items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/50 cursor-pointer transition-all hover:bg-white/10" onclick="${action}">
-            <img src="${u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png'}" class="w-8 h-8 rounded-full bg-black/50 object-cover border border-white/10">
-            <div class="flex-col flex-1">
-                <span class="text-xs font-bold text-white">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
-                <span class="text-[9px] text-muted">Nivel ${(u.nivel || 2.5).toFixed(2)}</span>
+        <div class="flex-row items-center gap-4 p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-primary/50 cursor-pointer transition-all hover:bg-white/10" onclick="${action}">
+            ${avatarHtml}
+            <div class="flex-col flex-1 pl-1">
+                <span class="text-sm font-black text-white tracking-tight">${nombre}</span>
+                <span class="text-[10px] text-primary/80 font-bold tracking-widest mt-0.5">Lv. ${(Number(u.nivel) || 2.5).toFixed(2)}</span>
             </div>
-            <i class="fas fa-plus text-primary text-xs"></i>
+            <div class="w-8 h-8 rounded-full bg-white/10 flex center hover:bg-primary transition-colors hover:text-black">
+                <i class="fas fa-plus text-xs"></i>
+            </div>
         </div>
         `;
     }).join('');
@@ -3102,7 +3111,6 @@ window.animateSelectionAndAdd = (uid, mid, col, idx, eventOrNull) => {
         window.executeMatchAction('add', mid, col, { uid, idx });
     }
     
-    // Auto-close modal
     const modal = document.querySelector('.modal-overlay.active');
     if (modal && modal.innerHTML.includes('AÑADIR JUGADOR')) modal.remove();
 };
@@ -3128,9 +3136,6 @@ window.addGuest = (mid, col, extra) => {
     showToast('Invitado', 'Se ha añadido al squad');
 };
  
-// CSS injection removed. Styles moved to css/premium-v7.css
-
-
 window.selectUserForNew = (uid, forceIdx = null) => {
     let idx = forceIdx;
     if (idx === null) {
@@ -3140,8 +3145,7 @@ window.selectUserForNew = (uid, forceIdx = null) => {
     
     if (!window._initialJugadores) window._initialJugadores = [null, null, null, null];
     
-    // Animation Trigger
-    const sourceEl = event?.currentTarget;
+    const sourceEl = typeof event !== 'undefined' ? event?.currentTarget : null;
     const targetEl = document.getElementById(`slot-${idx}-wrap`);
     if (sourceEl && targetEl) {
         animatePlayerSelection(sourceEl, targetEl, () => finalizeSelection(uid, idx));
@@ -3169,19 +3173,26 @@ function finalizeSelection(uid, idx) {
         const isTeamA = idx < 2;
         const color = isTeamA ? 'var(--primary)' : 'var(--secondary)';
         
+        const nombre = u.nombreUsuario || u.nombre || 'Jugador';
+        const hasFoto = u.fotoPerfil && !u.fotoPerfil.includes('Logojafs.png');
+        const initials = ((nombre.trim().split(' ')[0]?.[0] || '') + (nombre.trim().split(' ')[1]?.[0] || '')).toUpperCase() || 'JP';
+        
+        const avatarHtml = hasFoto
+            ? `<img src="${u.fotoPerfil}" class="w-full h-full object-cover">`
+            : `<div class="w-full h-full flex center font-black text-black text-xs bg-gradient-to-br from-primary to-lime-500">${initials}</div>`;
+        
         slot.className = "p-slot-v7 pointer";
         slot.onclick = () => window.removeUserFromNew(idx); 
         slot.innerHTML = `
-            <div class="p-img-box" style="border-color:${color}">
-                <img src="${u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png'}">
+            <div class="p-img-box" style="border-color:${color}; overflow:hidden;">
+                ${avatarHtml}
             </div>
             <span class="p-badge" style="color:${color}; border-color:currentColor">${(Number(u.nivel)||2.5).toFixed(1)}</span>
-            <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${color}">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
-            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px] shadow-lg z-10 hover:scale-110 transition-transform" onclick="event.stopPropagation(); window.removeUserFromNew(${idx})"><i class="fas fa-times"></i></button>
+            <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${color}">${nombre}</span>
+            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px] shadow-lg z-10 hover:scale-[1.1] transition-transform" onclick="event.stopPropagation(); window.removeUserFromNew(${idx})"><i class="fas fa-times"></i></button>
         `;
     }
     
-    // Close selector modal after a short delay to see animation finish
     setTimeout(() => {
         const modal = document.querySelector('.modal-overlay.active');
         if (modal && modal.innerHTML.includes('AÑADIR JUGADOR')) modal.remove();
@@ -3189,9 +3200,9 @@ function finalizeSelection(uid, idx) {
 }
 
 function animatePlayerSelection(source, target, callback) {
+    if (!source || !target) return;
     const srcRect = source.getBoundingClientRect();
     const dstRect = target.getBoundingClientRect();
-    
     const clone = source.cloneNode(true);
     clone.style.position = 'fixed';
     clone.style.top = srcRect.top + 'px';

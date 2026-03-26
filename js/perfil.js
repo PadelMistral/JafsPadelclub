@@ -1185,24 +1185,27 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
         const amSnap = await window.getDocsSafe(query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", uid), limit(50)));
         const reSnap = await window.getDocsSafe(query(collection(db, "partidosReto"), where("jugadores", "array-contains", uid), limit(50)));
+        const evSnap = await window.getDocsSafe(query(collection(db, "eventoPartidos"), where("jugadores", "array-contains", uid), limit(100)));
         
-        const allMatches = [...amSnap.docs, ...reSnap.docs].map(d => d.data());
+        const allMatchesRaw = [...amSnap.docs, ...reSnap.docs, ...evSnap.docs].map(d => d.data());
         
         const partners = {};
         const rivals = { won: {}, lost: {} };
 
-        allMatches.forEach(m => {
+        allMatchesRaw.forEach(m => {
             if (!isFinishedMatch(m) || isCancelledMatch(m)) return;
             const winnerTeam = resolveWinnerTeam(m);
-            if (winnerTeam !== 1 && winnerTeam !== 2) return;
+            if (winnerTeam !== 1 && winnerTeam !== 2 && winnerTeam !== "A" && winnerTeam !== "B") return;
 
-            const players = Array.isArray(m.jugadores) ? m.jugadores : [];
+            const players = Array.isArray(m.jugadores) || Array.isArray(m.playerUids) ? (m.jugadores || m.playerUids) : [];
             const myIdx = players.indexOf(uid);
             if (myIdx < 0) return;
-            const isT1 = myIdx < 2;
-            const userTeam = isT1 ? players.slice(0, 2) : players.slice(2, 4);
-            const rivalTeam = isT1 ? players.slice(2, 4) : players.slice(0, 2);
-            const userWon = isT1 ? winnerTeam === 1 : winnerTeam === 2;
+            
+            const isTeam1 = myIdx < 2;
+            const userWon = (winnerTeam === 1 || winnerTeam === "A") ? isTeam1 : !isTeam1;
+            
+            const userTeam = isTeam1 ? players.slice(0, 2) : players.slice(2, 4);
+            const rivalTeam = isTeam1 ? players.slice(2, 4) : players.slice(0, 2);
 
             userTeam?.forEach(p => {
                 if (p && p !== uid && !String(p).startsWith("GUEST_")) {

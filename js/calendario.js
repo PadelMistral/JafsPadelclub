@@ -6,7 +6,7 @@
 import { db, auth, subscribeDoc, subscribeCol, updateDocument, getDocument } from './firebase-service.js';
 import { collection, getDocs, query, orderBy, limit, where, addDoc, doc, getDoc, setDoc, deleteDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast, countUp } from './ui-core.js';
-import { renderMatchDetail, renderCreationForm } from './match-service.v1.js';
+import { renderMatchDetail, renderCreationForm } from './match-service.js';
 import { isExpiredOpenMatch, isFinishedMatch, isCancelledMatch, getMatchPlayers, getMatchTeamPlayerIds, parseGuestMeta, buildBaseMatchPayload, toDateSafe as toDateSafeBase, getResultSetsString } from "./utils/match-utils.js";
 import { observeCoreSession } from "./core/core-engine.js";
 import { getFriendlyTeamName, isUnknownTeamName, normalizeTeamToken } from "./utils/team-utils.js";
@@ -1558,7 +1558,7 @@ window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
         window._vincularMatchId = null;
         try {
             const slotDate = new Date(`${date}T${hour}:00`);
-            const { createLinkedMatchFromEvent } = await import('./match-service.v1.js');
+            const { createLinkedMatchFromEvent } = await import('./match-service.js');
             await createLinkedMatchFromEvent(matchId, slotDate);
             showToast("ÉXITO", "Partido vinculado correctamente", "success");
             window.location.search = ""; 

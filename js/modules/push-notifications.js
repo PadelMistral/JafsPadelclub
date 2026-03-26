@@ -430,26 +430,19 @@ async function safeLoginToOneSignal(userId) {
     if (!userId) return false;
     try {
         await oneSignalExec(async (OneSignal) => {
-            // Validate SDK State 
-            if (!OneSignal || !OneSignal.User || !OneSignal.User.PushSubscription) {
-                pushLog("warn", "onesignal_user_module_missing_skip", { uid: userId });
-                return false; // Escaping race condition without recursion
+            if (!OneSignal || typeof OneSignal.login !== "function") {
+                pushLog("warn", "onesignal_login_method_missing", { uid: userId });
+                return false;
             }
             
-            const sub = OneSignal.User.PushSubscription;
+            // Login unconditionally so OneSignal links the device to the User ID from the start.
+            await OneSignal.login(userId);
+            lastOneSignalLoginUid = userId;
+            pushLog("info", "onesignal_login_ok_unconditional", { uid: userId });
             
-            // Execute login ONLY if subscribed and opted-in
-            if (sub.id && sub.optedIn && typeof OneSignal.login === "function") {
-                await OneSignal.login(userId);
-                lastOneSignalLoginUid = userId;
-                pushLog("info", "onesignal_login_ok", { uid: userId });
-            } else {
-                pushLog("info", "onesignal_login_skipped", { 
-                    reason: "not_opted_in_or_no_id", 
-                    sub_id: sub.id, 
-                    optedIn: sub.optedIn 
-                });
-            }
+            const subId = OneSignal.User?.PushSubscription?.id || "unknown";
+            const optedIn = OneSignal.User?.PushSubscription?.optedIn || false;
+            pushLog("info", "onesignal_login_state_post", { sub_id: subId, optedIn });
         });
         return true;
     } catch(e) {

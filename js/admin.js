@@ -6,7 +6,7 @@ import { MAX_PLAYERS } from "./config/match-constants.js";
 import { levelFromRating, ELO_SYSTEM_VERSION } from "./config/elo-system.js";
 import { sendCoreNotification } from "./core/core-engine.js";
 import { getFriendlyTeamName, isUnknownTeamName as sharedIsUnknownTeamName } from "./utils/team-utils.js";
-import { openResultForm } from "./match-service.v1.js";
+import { openResultForm } from "./match-service.js";
 import { logAdminAudit } from "./services/audit-service.js";
 import { validateMatchAdminPayload } from "./services/admin-validator.js";
 import { addPlayerHistoryEntry, addPlayerHistoryEntries } from "./services/player-history-service.js";
@@ -111,78 +111,58 @@ function bindSystemActions() {
         
         await refreshAll();
     });
+    
     document.getElementById("btn-save-elo-config")?.addEventListener("click", window.saveEloConfig);
     document.getElementById("btn-emergency-recover")?.addEventListener("click", recoverFromRankingLogs);
     document.getElementById("btn-recover-matches")?.addEventListener("click", recoverMatchesFromLogs);
+    
     document.getElementById("btn-execute-delete-matches")?.addEventListener("click", () => {
         const action = document.getElementById("matches-delete-action")?.value;
         if (!action || action === "none") return showToast("Aviso", "Selecciona una opción de borrado", "info");
         window.deleteMatchesByFilter(action);
     });
 
-    document.getElementById("btn-execute-elo-action")?.addEventListener("click", async () => {
-        const action = document.getElementById("elo-action-select")?.value;
-        if (!action || action === "none") return showToast("Aviso", "Selecciona una acción ELO", "info");
+    document.getElementById("btn-recalc-history")?.addEventListener("click", async () => {
+        if (!(await confirmAdminAction({ title: "RECONSTR_HISTORICA", message: "Se va a reconstruir todo el historial de puntos ELO desde el base_level. ¿Proceder?", confirmLabel: "EXECUTE_REBUILD", danger: true }))) return;
+        
+        const indicator = document.getElementById("recalc-indicator");
+        const bar = document.getElementById("recalc-bar");
+        const pctEl = document.getElementById("recalc-pct");
+        const statusEl = document.getElementById("recalc-status");
 
-        if (action === "reset_base") {
-            await window.resetEloToBase();
-        } else if (action === "recalc_level") {
-            if (!(await confirmAdminAction({ title: "Recalcular desde nivel", message: "Se recalculará el ELO partiendo del nivel actual de cada usuario.", confirmLabel: "Recalcular" }))) return;
-            showToast("Procesando...", "Recalculando desde nivel actual...", "info");
-            try {
-                const res = await window.RECALC_FROM_CURRENT_LEVELS();
-                if (res.success) {
-                    showToast("OK", "Recalculo completado.", "success");
-                    showRecalcReport(res, "Recalculo desde nivel");
-                    await refreshAll();
-                }
-            } catch (e) {
-                showToast("Error", "Fallo en el recalculo.", "error");
+        if (indicator) {
+            indicator.classList.remove("hidden");
+            indicator.classList.add("flex");
+        }
+
+        const onProgress = (e) => {
+            const { pct, current, total, matchId } = e.detail;
+            if (bar) bar.style.width = `${pct}%`;
+            if (pctEl) pctEl.textContent = `${pct}%`;
+            if (statusEl) statusEl.textContent = `Procesando match ${current}/${total} [${matchId.substring(0,8)}...]`;
+        };
+
+        window.addEventListener('adminRecalcProgress', onProgress);
+        
+        showToast("Procesando...", "Reconstruyendo kernel ELO...", "info");
+        try {
+            const res = await window.RESTORE_AND_RECALC_FROM_BASE();
+            if (res && res.success) {
+                showToast("ÉXITO", "Sincronización histórica completa", "success");
+                await refreshAll();
             }
-        } else if (action === "recalc_points") {
-            if (!(await confirmAdminAction({ title: "Recalcular desde puntos", message: "Se recalculará el histórico usando los puntos actuales como base.", confirmLabel: "Recalcular" }))) return;
-            showToast("Procesando...", "Recalculando desde puntos actuales...", "info");
-            try {
-                const res = await window.RECALC_FROM_CURRENT_POINTS();
-                if (res.success) {
-                    showToast("OK", "Recalculo completado.", "success");
-                    showRecalcReport(res, "Recalculo desde puntos");
-                    await refreshAll();
-                }
-            } catch (e) {
-                showToast("Error", "Fallo en el recalculo.", "error");
-            }
-        } else if (action === "historical") {
-            if (!(await confirmAdminAction({ title: "Reconstrucción histórica", message: "Se va a reconstruir todo el historial de puntos ELO desde el primer partido.", confirmLabel: "Reconstruir", danger: true }))) return;
-            showToast("Procesando...", "Estamos recalculando todo el ranking. Paciencia...", "info");
-            try {
-                const res = await window.WIPE_AND_RECALC_ALL_MATCHES();
-                if (res.success) {
-                    showToast("¡HECHO!", "El ranking ha sido recalculado con éxito.", "success");
-                    showRecalcReport(res, "Recalculo total");
-                    await refreshAll();
-                }
-            } catch (e) {
-                showToast("Oops", "Parece que algo ha fallado al recalcular. Intenta de nuevo.", "error");
-            }
-        } else if (action === "restore_base") {
-            if (!(await confirmAdminAction({ title: "Recuperar niveles", message: "¿Quieres recuperar el nivel inicial de todos los jugadores?", confirmLabel: "Recuperar", danger: true }))) return;
-            showToast("Recuperando...", "Buscando niveles originales y recalculando puntos...", "info");
-            try {
-                const res = await window.RESTORE_AND_RECALC_FROM_BASE();
-                if (res.success) {
-                    showToast("¡CONSEGUIDO!", "Tus jugadores han recuperado sus niveles y puntos reales.", "success");
-                    showRecalcReport(res, "Recuperación con Base");
-                    await refreshAll();
-                }
-            } catch (e) {
-                showToast("Fallo", "No hemos podido recuperar los niveles base. Revisa la consola.", "error");
+        } catch (e) {
+            console.error(e);
+            showToast("Error", "Fallo crítico en reconstrucción", "error");
+        } finally {
+            window.removeEventListener('adminRecalcProgress', onProgress);
+            if (indicator) {
+                indicator.classList.add("hidden");
+                indicator.classList.remove("flex");
             }
         }
-            
     });
-
-}
+} // end of onReady
 
 function normalizeTeamName(value) {
     return String(value || "").trim().toLowerCase();
@@ -191,7 +171,6 @@ function normalizeTeamName(value) {
 function isUnknownTeamName(value) {
     return sharedIsUnknownTeamName(value);
 }
-
 function getRealPlayerCount(match) {
     const players = (match?.jugadores || match?.playerUids || []).filter(Boolean);
     return players.filter((p) => !String(p).startsWith("GUEST_")).length;
@@ -455,6 +434,21 @@ function renderDashboard() {
 window.jumpAdminPane = (paneName = "users") => {
     const btn = document.querySelector(`.admin-tab[data-pane="${paneName}"]`);
     if (btn) btn.click();
+};
+
+window.forceAppUpdateAdmin = async () => {
+    try {
+        if (!confirm("¿Seguro que quieres forzar la recarga de toda la aplicación en todos los móviles de los usuarios? Saldrá un aviso pidiendo que actualicen.")) return;
+        showToast("Forzando update...", "Enviando señal de actualización a la base de datos...", "info");
+        await setDoc(doc(db, "systemConfigs", "forceUpdate"), {
+            versionStamp: Date.now(),
+            updatedBy: auth.currentUser?.uid || "admin",
+            message: "Por favor, pulsa aquí para aplicar la nueva actualización y corregir errores recientes."
+        }, { merge: true });
+        showToast("¡HECHO!", "Señal enviada a todos los usuarios en línea", "success");
+    } catch (e) {
+        showToast("Error", e.message, "error");
+    }
 };
 
 function ensureEloActionOptions() {
@@ -793,6 +787,7 @@ function renderUsers() {
         else if (notifPermission === "granted" && stat.count === 0) { notifLabel = "Sin dispositivo"; notifClass = "acc-badge text-amber-300"; }
         else if (notifPermission === "granted") { notifLabel = "Sin suscripción"; notifClass = "acc-badge text-amber-300"; }
         const seenStr = stat.lastSeenAt ? stat.lastSeenAt.toLocaleDateString("es-ES") : "N/D";
+        
         return `
         <div class="admin-acc-v9" id="user-acc-${u.id}">
             <div class="acc-header" onclick="window.toggleAcc('user-acc-${u.id}')">
@@ -864,7 +859,8 @@ function renderUsers() {
                 </div>
             </div>
         </div>
-    `;}).join("");
+        `;
+    }).join("");
 }
 
 function renderPending() {
@@ -942,22 +938,18 @@ function renderMatches() {
         }).join(' · ') || '<span class="text-[10px] opacity-30">Sin jugadores</span>';
         const eloProcessed = m.rankingProcessedAt ? '✅ Procesado' : (isPlayed(m) ? '⚠️ Sin ELO' : '—');
         const eloStatusColor = m.rankingProcessedAt ? 'text-green-400' : (isPlayed(m) ? 'text-amber-400' : 'opacity-30');
-        const rosterNames = playerIds.map((uid) => {
-            const u = users.find((entry) => entry.id === uid);
-            return u?.nombreUsuario || u?.nombre || String(uid || "");
-        });
         const usersVsLabel = getMatchUsersVsLabel(m);
 
         return `
         <div class="admin-acc-v9" id="match-acc-${m.id}">
             <div class="acc-header" onclick="window.toggleAcc('match-acc-${m.id}')">
-                <div class="acc-icon-box"><i class="fas fa-table-tennis-paddle-ball"></i></div>
+                <div class="acc-icon-box"><i class="fas fa-microchip"></i></div>
                 <div class="acc-main">
                     <span class="acc-title">${escapeHtml(usersVsLabel)}</span>
                     <span class="acc-sub">${dateStr} · ${typeLabel}</span>
                 </div>
                 <div class="acc-badges">
-                    <span class="acc-badge">${isPlayed(m) ? res : 'ABIERTO'}</span>
+                    <span class="acc-badge">${isPlayed(m) ? res : 'PENDING_RESULT'}</span>
                     <span class="acc-badge ${eloStatusColor}">${eloProcessed}</span>
                 </div>
                 <i class="fas fa-chevron-down acc-chevron"></i>
@@ -965,45 +957,92 @@ function renderMatches() {
             <div class="acc-content">
                 <div class="admin-grid-v9">
                     <div class="admin-field-group col-span-2">
-                        <label>Jugadores (${playerIds.length}/4)</label>
+                        <label>NODE_PARTICIPANTS (${playerIds.length}/4)</label>
                         <div class="input-v9 flex-row flex-wrap gap-2">${playerNames}</div>
                     </div>
                     <div class="admin-field-group col-span-2">
-                        <label>Resultado del Partido</label>
+                        <label>SCORE_REGISTER</label>
                         <div class="input-v9 flex-row between items-center gap-2">
-                            <span class="text-[11px] font-black text-white">${res === '--' ? 'Sin resultado' : escapeHtml(res)}</span>
+                            <span class="text-[11px] font-black text-white terminal-text">${res === '--' ? 'WAITING_RESULT' : escapeHtml(res)}</span>
                             <input type="hidden" value="${res === '--' ? '' : escapeHtml(res)}" id="m-res-${m.id}">
-                            <button class="btn-v9 ghost" type="button" onclick="window.openAdminMatchResultModal('${m.id}','${m.col}')">ABRIR MARCADOR</button>
+                            <button class="btn-v9 ghost sm" type="button" onclick="window.openAdminMatchResultModal('${m.id}','${m.col}')"><i class="fas fa-edit"></i> EDIT_SCORE</button>
                         </div>
                     </div>
-                    ${isPlayed(m) && m.eloSummary ? `
+                    ${isPlayed(m) ? `
                     <div class="admin-field-group col-span-2">
-                        <label>Resumen ELO</label>
+                        <label>ELO_DIAGNOSTIC</label>
                         ${formatAdminEloSummary(m)}
                     </div>` : ""}
                     <div class="admin-field-group">
-                        <label>Fecha y Hora</label>
+                        <label>TIMESTAMP</label>
                         <input type="datetime-local" class="input-v9" value="${date ? date.toISOString().slice(0, 16) : ''}" id="m-date-${m.id}">
                     </div>
                     <div class="admin-field-group">
-                        <label>Estado</label>
+                        <label>EXECUTION_STATUS</label>
                         <select class="input-v9" id="m-state-${m.id}">
-                            <option value="abierto" ${m.estado === 'abierto' ? 'selected' : ''}>Abierto</option>
-                            <option value="jugado" ${m.estado === 'jugado' ? 'selected' : ''}>Finalizado</option>
-                            <option value="cancelado" ${m.estado === 'cancelado' ? 'selected' : ''}>Cancelado</option>
+                            <option value="abierto" ${m.estado === 'abierto' ? 'selected' : ''}>OPEN</option>
+                            <option value="jugado" ${m.estado === 'jugado' ? 'selected' : ''}>FINALIZED</option>
+                            <option value="cancelado" ${m.estado === 'cancelado' ? 'selected' : ''}>ABORTED</option>
                         </select>
                     </div>
                 </div>
                 <div class="flex-row gap-3 mt-6 flex-wrap">
-                    <button class="btn-v9 primary flex-1" onclick="window.saveMatchAdmin('${m.id}','${m.col}')">GUARDAR + ELO</button>
-                    ${isPlayed(m) ? `<button class="btn-v9 ghost" onclick="window.recalcMatchElo('${m.id}','${m.col}',document.getElementById('m-res-${m.id}').value||'${res}')">⚡ RECALC ELO</button>` : ''}
-                    ${isPlayed(m) ? `<button class="btn-v9 ghost" onclick="window.resetMatchAdmin('${m.id}','${m.col}')">RESETEAR</button>` : ''}
-                    <button class="btn-v9 danger" onclick="window.deleteMatchAdmin('${m.id}','${m.col}')">ELIMINAR</button>
+                    <button class="btn-v9 primary flex-1" onclick="window.saveMatchAdmin('${m.id}','${m.col}')"><i class="fas fa-floppy-disk"></i> SINC_MATCH_DATABASE</button>
+                    ${isPlayed(m) ? `<button class="btn-v9 ghost" onclick="window.resetMatchAdmin('${m.id}','${m.col}')"><i class="fas fa-rotate-left"></i> RESET</button>` : ''}
+                    <button class="btn-v9 danger" onclick="window.deleteMatchAdmin('${m.id}','${m.col}')"><i class="fas fa-trash-can"></i> PURGE_NODE</button>
                 </div>
             </div>
         </div>
         `;
     }).join("");
+}
+
+function hasOrphanPlayers(m) {
+    const ids = getMatchPlayersNormalized(m).filter(Boolean);
+    if (!ids.length) return false;
+    const userIds = new Set(users.map((u) => u.id));
+    return ids.some((uid) => uid && !String(uid).startsWith("GUEST_") && !userIds.has(uid));
+}
+
+function renderEvents() {
+    const container = document.getElementById("events-accordion-container");
+    if (!container) return;
+
+    container.innerHTML = eventsArr.map(e => `
+        <div class="admin-acc-v9" id="ev-acc-${e.id}">
+            <div class="acc-header" onclick="window.toggleAcc('ev-acc-${e.id}')">
+                <div class="acc-icon-box"><i class="fas fa-trophy"></i></div>
+                <div class="acc-main">
+                    <span class="acc-title">${e.nombre}</span>
+                    <span class="acc-sub">${e.formato?.toUpperCase()} · ${e.estado?.toUpperCase()}</span>
+                </div>
+                <div class="acc-badges">
+                    <span class="acc-badge">${(e.inscritos||[]).length} INSCRITOS</span>
+                </div>
+                <i class="fas fa-chevron-down acc-chevron"></i>
+            </div>
+            <div class="acc-content">
+                <div class="admin-grid-v9">
+                    <div class="admin-field-group">
+                        <label>Estado del Torneo</label>
+                        <select class="input-v9" id="ev-state-${e.id}">
+                            <option value="inscripcion" ${e.estado === 'inscripcion' ? 'selected' : ''}>Inscripciones</option>
+                            <option value="activo" ${e.estado === 'activo' ? 'selected' : ''}>Activo (En Juego)</option>
+                            <option value="finalizado" ${e.estado === 'finalizado' ? 'selected' : ''}>Cerrado</option>
+                        </select>
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Máximo de Plazas</label>
+                        <input type="number" class="input-v9" value="${e.plazasMax || 16}" id="ev-plazas-${e.id}">
+                    </div>
+                </div>
+                <div class="flex-row gap-3 mt-6">
+                    <button class="btn-v9 primary flex-1" onclick="window.saveEventAdmin('${e.id}')">ACTUALIZAR CONFIGURACIÓN</button>
+                    <button class="btn-v9 ghost" onclick="window.location.href='evento-detalle.html?id=${e.id}&admin=1'">MODIFICAR EQUIPOS / BRACKET</button>
+                </div>
+            </div>
+        </div>
+    `).join("");
 }
 
 
@@ -1056,7 +1095,8 @@ function getMatchUsersVsLabel(m) {
 
 function formatAdminEloSummary(match) {
     const summary = match?.eloSummary;
-    if (!summary || typeof summary !== "object") return "";
+    if (!summary || typeof summary !== "object") return `<div class="p-4 text-center opacity-30 text-[10px] uppercase tracking-widest border border-dashed border-white/10 rounded-xl">No ELO data recorded</div>`;
+    
     const versusParts = getMatchUsersVsLabel(match).split(" vs ");
     const teamALabel = versusParts[0] || "Pareja 1";
     const teamBLabel = versusParts[1] || "Pareja 2";
@@ -1064,46 +1104,70 @@ function formatAdminEloSummary(match) {
     const teamA = Number(summary.teamADelta || 0);
     const teamB = Number(summary.teamBDelta || 0);
     const expectedA = Number(summary.expectedA || 0);
-    const kCombined = Number(summary.kCombined || 0);
     
-    // Show individual changes if available
-    let individualHtml = "";
-    if (Array.isArray(summary.changes) && summary.changes.length) {
-        individualHtml = `
-            <div class="flex-row flex-wrap gap-2 mt-2 mb-2 p-2 bg-white/5 rounded-lg border border-white/10">
-                ${summary.changes.map(c => `
-                    <div class="flex-col center px-2 py-1 rounded bg-black/30 border border-white/5 min-w-[60px]">
-                        <span class="text-[7px] text-muted uppercase font-bold truncate w-14 text-center">${(c.name || 'JUG').toUpperCase()}</span>
-                        <span class="text-[9px] font-black ${c.delta >= 0 ? "text-green-300" : "text-red-300"}">${c.delta >= 0 ? "+" : ""}${Number(c.delta).toFixed(1)}</span>
-                    </div>
-                `).join("")}
+    // Detailed Hacker Breakdown
+    const pData = Array.isArray(summary.playerData) ? summary.playerData : [];
+    
+    let breakdownHtml = "";
+    if (pData.length > 0) {
+        breakdownHtml = `
+            <div class="flex-col gap-3 mt-4 mb-4">
+                <div class="text-[9px] font-black text-[#00e5ff] uppercase tracking-widest mb-1 opacity-70">Variable_Point_Analysis</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    ${pData.map(p => {
+                        const b = p.breakdown || {};
+                        return `
+                        <div class="bg-black/40 border border-white/5 rounded-xl p-3 flex-col gap-2">
+                            <div class="flex-row between items-center mb-1">
+                                <span class="text-[10px] font-black text-white truncate max-w-[100px]">${(p.name || 'Unknown').toUpperCase()}</span>
+                                <span class="text-[11px] font-black ${p.delta >= 0 ? 'text-[#39ff14]' : 'text-red-400'}">${p.delta >= 0 ? '+' : ''}${p.delta}</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-x-4 gap-y-1 opacity-60 text-[8px] uppercase font-bold tracking-tighter">
+                                <div class="flex-row between"><span>Base</span><span class="${b.base >= 0 ? 'text-white' : 'text-red-300'}">${b.base || 0}</span></div>
+                                <div class="flex-row between"><span>Streak</span><span class="${b.racha >= 0 ? 'text-white' : 'text-red-300'}">${b.racha || 0}</span></div>
+                                <div class="flex-row between"><span>Upset</span><span class="${b.sorpresa >= 0 ? 'text-white' : 'text-red-300'}">${b.sorpresa || 0}</span></div>
+                                <div class="flex-row between"><span>Clutch</span><span class="${b.clutch >= 0 ? 'text-white' : 'text-red-300'}">${b.clutch || 0}</span></div>
+                                <div class="flex-row between"><span>Skill</span><span class="${b.habilidad >= 0 ? 'text-white' : 'text-red-300'}">${b.habilidad || 0}</span></div>
+                                <div class="flex-row between"><span>Bonus</span><span class="${b.bonusIndividual >= 0 ? 'text-white' : 'text-red-300'}">${b.bonusIndividual || 0}</span></div>
+                            </div>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
             </div>
         `;
     }
 
     return `
-        <div class="input-v9 flex-col gap-2">
-            ${individualHtml}
-            <div class="flex-row between text-[10px]">
-                <span class="opacity-60">Balance ${teamALabel}</span>
-                <span class="font-black ${teamA >= 0 ? "text-green-300" : "text-red-300"}">${teamA >= 0 ? "+" : ""}${teamA.toFixed(2)}</span>
-            </div>
-            <div class="flex-row between text-[10px]">
-                <span class="opacity-60">Balance ${teamBLabel}</span>
-                <span class="font-black ${teamB >= 0 ? "text-green-300" : "text-red-300"}">${teamB >= 0 ? "+" : ""}${teamB.toFixed(2)}</span>
-            </div>
+        <div class="bg-[#020617]/80 border border-white/10 rounded-2xl p-4 flex-col gap-3">
+            ${breakdownHtml}
+            
+            <div class="divider-admin opacity-20"></div>
+
             <div class="flex-row between text-[10px] items-center">
-                <span class="opacity-60">Prob. inicial ${teamALabel}</span>
-                <div class="flex-row items-center gap-1.5">
-                    <div class="w-16 h-1 rounded-full bg-white/10 overflow-hidden">
-                        <div class="h-full bg-cyan-400 shadow-glow-cyan" style="width: ${expectedA * 100}%"></div>
-                    </div>
-                    <span class="font-black text-white">${Math.round(expectedA * 100)}%</span>
+                <div class="flex-col">
+                    <span class="opacity-40 uppercase font-black tracking-widest text-[8px]">Team_A_Performance</span>
+                    <span class="text-white font-black">${teamALabel}</span>
                 </div>
+                <span class="font-black text-lg ${teamA >= 0 ? "text-[#39ff14]" : "text-red-400"}">${teamA >= 0 ? "+" : ""}${teamA.toFixed(2)}</span>
             </div>
-            <div class="flex-row between text-[10px]">
-                <span class="opacity-60">Viviacidad (K)</span>
-                <span class="font-black text-sport-gold">${kCombined.toFixed(0)}</span>
+            
+            <div class="flex-row between text-[10px] items-center">
+                <div class="flex-col">
+                    <span class="opacity-40 uppercase font-black tracking-widest text-[8px]">Team_B_Performance</span>
+                    <span class="text-white font-black">${teamBLabel}</span>
+                </div>
+                <span class="font-black text-lg ${teamB >= 0 ? "text-[#39ff14]" : "text-red-400"}">${teamB >= 0 ? "+" : ""}${teamB.toFixed(2)}</span>
+            </div>
+
+            <div class="flex-row between items-center p-2 bg-white/5 rounded-lg">
+                <span class="text-[9px] opacity-40 uppercase font-black tracking-widest">Expected_Winrate (A)</span>
+                <div class="flex-row items-center gap-3">
+                    <div class="w-24 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                        <div class="h-full bg-[#00e5ff] shadow-[0_0_10px_rgba(0,229,255,0.5)]" style="width: ${expectedA * 100}%"></div>
+                    </div>
+                    <span class="font-black text-white text-[11px]">${Math.round(expectedA * 100)}%</span>
+                </div>
             </div>
         </div>
     `;
@@ -1136,59 +1200,10 @@ function ensureAdminMatchModal() {
     return modal;
 }
 
-function hasOrphanPlayers(m) {
-    const ids = getMatchPlayersNormalized(m).filter(Boolean);
-    if (!ids.length) return false;
-    const userIds = new Set(users.map((u) => u.id));
-    return ids.some((uid) => uid && !String(uid).startsWith("GUEST_") && !userIds.has(uid));
-}
-
-function renderEvents() {
-    const container = document.getElementById("events-accordion-container");
-    if (!container) return;
-
-    container.innerHTML = eventsArr.map(e => `
-        <div class="admin-acc-v9" id="ev-acc-${e.id}">
-            <div class="acc-header" onclick="window.toggleAcc('ev-acc-${e.id}')">
-                <div class="acc-icon-box"><i class="fas fa-trophy"></i></div>
-                <div class="acc-main">
-                    <span class="acc-title">${e.nombre}</span>
-                    <span class="acc-sub">${e.formato?.toUpperCase()} · ${e.estado?.toUpperCase()}</span>
-                </div>
-                <div class="acc-badges">
-                    <span class="acc-badge">${(e.inscritos||[]).length} INSCRITOS</span>
-                </div>
-                <i class="fas fa-chevron-down acc-chevron"></i>
-            </div>
-            <div class="acc-content">
-                <div class="admin-grid-v9">
-                    <div class="admin-field-group">
-                        <label>Estado del Torneo</label>
-                        <select class="input-v9" id="ev-state-${e.id}">
-                            <option value="inscripcion" ${e.estado === 'inscripcion' ? 'selected' : ''}>Inscripciones</option>
-                            <option value="activo" ${e.estado === 'activo' ? 'selected' : ''}>Activo (En Juego)</option>
-                            <option value="finalizado" ${e.estado === 'finalizado' ? 'selected' : ''}>Cerrado</option>
-                        </select>
-                    </div>
-                    <div class="admin-field-group">
-                        <label>Máximo de Plazas</label>
-                        <input type="number" class="input-v9" value="${e.plazasMax || 16}" id="ev-plazas-${e.id}">
-                    </div>
-                </div>
-                <div class="flex-row gap-3 mt-6">
-                    <button class="btn-v9 primary flex-1" onclick="window.saveEventAdmin('${e.id}')">ACTUALIZAR CONFIGURACIÓN</button>
-                    <button class="btn-v9 ghost" onclick="window.location.href='evento-detalle.html?id=${e.id}&admin=1'">MODIFICAR EQUIPOS / BRACKET</button>
-                </div>
-            </div>
-        </div>
-    `).join("");
-}
-
 function renderRanking() {
     const body = document.getElementById("ranking-body");
     if (!body) return;
     const data = [...users].sort((a,b) => (b.puntosRanking||1000) - (a.puntosRanking||1000)).slice(0, 50);
-    
     body.innerHTML = data.map((u, i) => `
         <tr>
             <td>#${i+1}</td>
@@ -1501,7 +1516,7 @@ window.saveMatchAdmin = async (id, col) => {
             // Sync event standings if applicable
             if (col !== 'eventoPartidos') {
                 try {
-                    const { syncLinkedEventMatchFromRegularMatch } = await import('./match-service.v1.js');
+                    const { syncLinkedEventMatchFromRegularMatch } = await import('./match-service.js');
                     await syncLinkedEventMatchFromRegularMatch(id, col, resultStr);
                 } catch(e) { console.warn("Event sync error", e); }
             }
@@ -1691,7 +1706,12 @@ window.deleteMatchesByFilter = async (mode = "all") => {
 
 window.saveUserRanking = async (uid) => {
     const pts = parseInt(document.getElementById(`r-points-${uid}`).value);
-    await updateDocument("usuarios", uid, { puntosRanking: pts, nivel: levelFromRating(pts) });
+    await updateDocument("usuarios", uid, { 
+        puntosRanking: pts, 
+        rating: pts, 
+        nivel: levelFromRating(pts),
+        _manual_adjustment_at: serverTimestamp()
+    });
     await logAdminAudit("update_user_ranking", "usuarios", uid, { points: pts }).catch(() => {});
     await addPlayerHistoryEntry({
         uid,

@@ -251,5 +251,5 @@ export function computeGroupTable(matches = [], teams = [], cfg = {}) {
     b.dif = b.pf - b.pc;
   });
 
-  return [...table.values()].sort((x, y) => (y.pts - x.pts) || (y.g - x.g) || (x.p - y.p));
+  return [...table.values()].sort((x, y) => (y.pts - x.pts) || (y.dif - x.dif) || (y.g - x.g) || (x.p - y.p));
 }

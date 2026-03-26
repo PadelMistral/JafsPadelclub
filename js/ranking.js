@@ -9,7 +9,7 @@ import {
 import { initAppUI } from "./ui-core.js";
 import { injectHeader, injectNavbar, updateHeader } from "./modules/ui-loader.js";
 import { levelFromRating } from "./config/elo-system.js";
-import { renderMatchDetail } from "./match-service.v1.js";
+import { renderMatchDetail } from "./match-service.js";
 import { getCoreLevelProgressState } from "./core/core-engine.js";
 import { getFriendlyTeamName } from "./utils/team-utils.js";
 import { parseGuestMeta, getNormalizedPlayers, getMatchTeamPlayerIds } from "./utils/match-utils.js";
@@ -312,44 +312,84 @@ async function renderRankUserModal(uid) {
 
     const points = Number(u.puntosRanking || 1000);
     const level = Number(u.nivel || levelFromRating(points));
-    const state = getCoreLevelProgressState({
-      rating: points,
-      levelOverride: level,
-    });
+    const state = getCoreLevelProgressState({ rating: points, levelOverride: level });
     const rank = users.findIndex((x) => x.id === uid) + 1;
     const name = u.nombreUsuario || u.nombre || "Jugador";
     const centeredPct = buildCenteredProgress(state.pointsToDown, state.pointsToUp);
     if (title) title.textContent = `PERFIL COMPETITIVO · ${name.toUpperCase()}`;
 
-    const logsSnap = await getDocsSafe(
-      query(
-        collection(db, "rankingLogs"),
-        where("uid", "==", uid),
-        orderBy("timestamp", "desc"),
-        limit(12),
-      ),
-    );
-    const logs = (logsSnap?.docs || []).map((d) => ({ id: d.id, ...d.data() }));
+    // Try ordered query, fallback to unordered if index is missing
+    let logs = [];
+    try {
+      const logsSnap = await getDocsSafe(
+        query(collection(db, "rankingLogs"), where("uid", "==", uid), orderBy("timestamp", "desc"), limit(20)),
+      );
+      logs = (logsSnap?.docs || []).map((d) => ({ id: d.id, ...d.data() }));
+    } catch (_) {
+      // index not ready yet — fetch without ordering
+      const logsSnap2 = await getDocsSafe(
+        query(collection(db, "rankingLogs"), where("uid", "==", uid), limit(20)),
+      );
+      logs = (logsSnap2?.docs || []).map((d) => ({ id: d.id, ...d.data() }));
+      logs.sort((a, b) => {
+        const ta = a.timestamp?.seconds || 0;
+        const tb = b.timestamp?.seconds || 0;
+        return tb - ta;
+      });
+    }
 
     const cards = await Promise.all(
       logs.map(async (log) => {
         const diff = Number(log.diff || 0);
-        const match = log.matchId ? await getMatchById(log.matchId) : null;
-        const sets = match?.resultado?.sets || log.details?.sets || "Sin sets";
-        const when = fmtDate(match?.fecha || log.timestamp);
         const col = log.matchCollection || log.matchCol || "partidosAmistosos";
+        const sets = log.sets || log.details?.sets || "Sin marcador";
+        const when = fmtDate(log.timestamp || log.details?.timestamp);
+        const tipo = log.type || (col === "eventoPartidos" ? "TORNEO" : col === "partidosReto" ? "RETO" : "AMISTOSO");
+        const newTotal = Number(log.newTotal || 0);
+
+        let rivalesTexto = "Sin datos de rivales";
+        try {
+          const match = log.matchId ? await getMatchById(log.matchId).catch(() => null) : null;
+          if (match) {
+            const arr = match.jugadores || match.playerUids || [];
+            const myIdx = arr.findIndex(x => x === uid);
+            if (myIdx !== -1 && arr.length >= 4) {
+              const rivalUids = myIdx < 2 ? arr.slice(2, 4) : arr.slice(0, 2);
+              const rivalNames = await Promise.all(rivalUids.map(async r => {
+                if (!r) return "?";
+                if (String(r).startsWith("GUEST_")) return String(r).split("_")[1] || "Invitado";
+                const cu = users.find(x => x.id === r);
+                if (cu) return cu.nombreUsuario || cu.nombre || "Jugador";
+                const du = await getDocument("usuarios", r).catch(() => null);
+                return du?.nombreUsuario || du?.nombre || "Jugador";
+              }));
+              rivalesTexto = `vs <span class="font-bold text-white">${rivalNames.join(" &amp; ")}</span>`;
+            } else if (match.teamAName || match.teamBName) {
+              const myTeam = myIdx < 2 ? "A" : "B";
+              rivalesTexto = `vs <span class="font-bold text-white">${myTeam === "A" ? (match.teamBName || "Equipo B") : (match.teamAName || "Equipo A")}</span>`;
+            }
+          }
+        } catch (_) {}
+
+        const won = log.won ?? diff >= 0;
         return `
-          <button class="rank-match-card ${diff >= 0 ? "pos" : "neg"}"
+          <button class="rank-match-card flex-col gap-2 ${won ? "border-l-sport-green" : "border-l-sport-red"} bg-white/5 border border-white/5 hover:bg-white/10 transition-all rounded-xl p-3 text-left w-full"
                   onclick="window.openRankMatchBreakdown('${log.id}','${log.matchId || ""}','${col}')">
-            <div class="rank-match-top">
-              <span class="rank-match-type">${log.type || "PARTIDO"}</span>
-              <span class="rank-match-date">${when}</span>
+            <div class="flex-row between items-center w-full">
+              <span class="text-[9px] font-black text-white/50 bg-black/40 px-2 py-0.5 rounded-md uppercase tracking-widest">${tipo}</span>
+              <span class="text-[10px] text-white/40">${when}</span>
             </div>
-            <div class="rank-match-main">
-              <span class="rank-match-sets">${sets}</span>
-              <span class="rank-match-diff ${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${diff >= 0 ? "+" : ""}${num(diff, 2)}</span>
+            <div class="flex-row between items-center w-full mt-1">
+              <div class="flex-col gap-0.5">
+                <span class="text-xs text-white/80">${rivalesTexto}</span>
+                <span class="text-[11px] font-mono text-white/50"><i class="fas fa-table-tennis text-primary/50 mr-1"></i>${sets}</span>
+              </div>
+              <div class="flex-col items-end gap-0.5">
+                <span class="text-lg font-black ${won ? "text-sport-green" : "text-sport-red"}">${won ? "+" : ""}${num(diff, 1)}</span>
+                <span class="text-[10px] font-black text-primary/70 uppercase tracking-widest">${Math.round(newTotal)} pts</span>
+              </div>
             </div>
-            <div class="rank-match-foot">Pulsa para ver desglose y progreso</div>
+            <div class="w-full text-center text-[8px] font-bold text-primary/50 uppercase tracking-[2px] mt-1 opacity-50">Pulsa para ver desglose completo</div>
           </button>
         `;
       }),
@@ -367,7 +407,7 @@ async function renderRankUserModal(uid) {
         <div class="rank-progress-wrap">
           <div class="rank-progress-info">
             <span>Progreso de nivel</span>
-            <b>${centeredPct.toFixed(2)}%</b>
+            <b>${centeredPct.toFixed(1)}%</b>
           </div>
           <div class="level-bar">
             <div class="level-fill" style="width:${centeredPct}%"></div>
@@ -379,14 +419,15 @@ async function renderRankUserModal(uid) {
           </div>
         </div>
       </div>
-      <div class="rank-user-section-title">Partidos recientes</div>
-      <div class="rank-match-list">${cards.join("") || '<div class="center py-10 opacity-40">Sin actividad reciente</div>'}</div>
+      <div class="rank-user-section-title">Partidos recientes (${logs.length})</div>
+      <div class="rank-match-list">${cards.join("") || '<div class="center py-10 opacity-40">Sin actividad registrada.<br><span class="text-xs">Usa "Recalcular todo" en Admin para actualizar.</span></div>'}</div>
     `;
   } catch (e) {
     console.error("Rank user modal error:", e);
-    body.innerHTML = `<div class="center py-16 text-sport-red">No se pudo cargar el jugador.</div>`;
+    body.innerHTML = `<div class="center py-16 text-sport-red">No se pudo cargar el jugador.<br><span class="text-xs opacity-60">${e.message}</span></div>`;
   }
 }
+
 
 window.openRankUserModal = (uid) => {
   if (!uid) return;
@@ -406,18 +447,31 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
   try {
     const logDoc = logId ? await getDocument("rankingLogs", logId) : null;
     const match = matchId ? await getMatchById(matchId) : null;
-    const detail = logDoc?.details?.puntosDetalle || {};
-    const factors = [
-      ["Base", detail.base],
-      ["Dificultad", detail.dificultad],
-      ["Racha", detail.racha],
-      ["Sorpresa", detail.sorpresa],
-      ["Skill", detail.skill],
-      ["Sets", detail.sets],
-      ["Rendimiento", detail.rendimientoBonus],
-      ["Diario", detail.diarioCoach],
-      ["Justicia", detail.ajusteJusticia],
-    ].filter(([, v]) => v !== undefined && v !== null);
+    const detail = logDoc?.details?.breakdown || logDoc?.details?.puntosDetalle || {};
+    let factors = [];
+    if (detail.factoresAdicionales) {
+        // v8 Advanced Scoring
+        factors = [
+            ["Elo Dinámico", detail.cambioElo],
+            ["Ajuste Compañero/Habilidad", detail.factoresAdicionales?.companero],
+            ["Racha de Victorias", detail.factoresAdicionales?.racha],
+            ["Dominio / Sets / Dificultad", detail.factoresAdicionales?.margenSets]
+        ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
+        // Si hay cap, mostrarlo
+        if (detail.sumaTotal && detail.limiteAplicado && Math.abs(detail.sumaTotal) > Math.abs(detail.limiteAplicado)) {
+            factors.push(["Ajuste Tope Rígido", Number((detail.limiteAplicado - detail.sumaTotal).toFixed(2))]);
+        }
+    } else {
+        // Legacy
+        factors = [
+        ["Puntos Base", detail.base],
+        ["Bonificación Racha", detail.racha || detail.streak],
+        ["Factor Sorpresa", detail.sorpresa || detail.surprise],
+        ["Por Sets/Juegos", detail.clutch || detail.sets],
+        ["Ajuste de Nivel/Habilidad", detail.habilidad || detail.skill || detail.dificultad],
+        ["Bonus Individual", detail.bonusIndividual || detail.rendimientoBonus],
+        ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
+    }
 
     const diff = Number(logDoc?.diff || 0);
     const levelBefore = Number(logDoc?.details?.levelBefore || 0);

@@ -16,7 +16,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI, showToast } from "./ui-core.js";
 import { injectHeader, injectNavbar } from "./modules/ui-loader.js";
-import { renderMatchDetail } from "./match-service.v1.js";
+import { renderMatchDetail } from "./match-service.js";
 import { createNotification } from "./services/notification-service.js";
 import {
   isCancelledMatch,
@@ -592,6 +592,7 @@ function renderWelcome() {
   }
 
   refreshWelcomeRank();
+  refreshTacticalStats();
   renderHomeIcsSetup();
   startClock();
   setTimeout(checkHomeNotices, 1000);
@@ -2125,6 +2126,80 @@ function maybeCreateEventDayNotice() {
 
 
 
+/* Tactical Stats — Nemesis & Partner */
+async function refreshTacticalStats() {
+  const elNemesis = document.getElementById("stat-nemesis");
+  const elPartner = document.getElementById("stat-partner");
+  if (!elNemesis && !elPartner) return;
+  if (!currentUser?.uid || !allMatches.length) return;
+
+  const myUid = currentUser.uid;
+  const myHistory = dedupeEventLinkedMatches(allMatches).filter(
+    (m) => isFinishedMatch(m) && getNormalizedPlayers(m).includes(myUid)
+  );
+
+  if (!myHistory.length) {
+    if (elNemesis) elNemesis.textContent = "---";
+    if (elPartner) elPartner.textContent = "---";
+    return;
+  }
+
+  const rivals = {}; // uid -> { wins, losses }
+  const partners = {}; // uid -> count
+
+  myHistory.forEach((m) => {
+    const players = getNormalizedPlayers(m);
+    const side = getTeamSide(m, myUid);
+    const winner = resolveWinnerTeam(m);
+    if (!side || !winner) return;
+
+    const isWin = (winner === "A" && side === 1) || (winner === "B" && side === 2);
+    const myTeam = side === 1 ? players.slice(0, 2) : players.slice(2, 4);
+    const oppTeam = side === 1 ? players.slice(2, 4) : players.slice(0, 2);
+
+    myTeam.forEach((p) => {
+      if (p && p !== myUid) partners[p] = (partners[p] || 0) + 1;
+    });
+
+    oppTeam.forEach((r) => {
+      if (r) {
+        if (!rivals[r]) rivals[r] = { wins: 0, losses: 0 };
+        if (isWin) rivals[r].wins++;
+        else rivals[r].losses++;
+      }
+    });
+  });
+
+  let nemesisId = null;
+  let maxLosses = -1;
+  Object.entries(rivals).forEach(([rid, stats]) => {
+    if (stats.losses > maxLosses) {
+      maxLosses = stats.losses;
+      nemesisId = rid;
+    } else if (stats.losses === maxLosses && nemesisId) {
+      if (stats.wins < rivals[nemesisId].wins) nemesisId = rid;
+    }
+  });
+
+  let partnerId = null;
+  let maxPlayed = -1;
+  Object.entries(partners).forEach(([pid, count]) => {
+    if (count > maxPlayed) {
+      maxPlayed = count;
+      partnerId = pid;
+    }
+  });
+
+  if (nemesisId && elNemesis) {
+    const name = await resolvePlayerName(nemesisId);
+    elNemesis.textContent = name.split(" ")[0].toUpperCase().slice(0, 8);
+  }
+  if (partnerId && elPartner) {
+    const name = await resolvePlayerName(partnerId);
+    elPartner.textContent = name.split(" ")[0].toUpperCase().slice(0, 8);
+  }
+}
+
 /* Match data */
 async function mergeMatches(col, list) {
   const sig = JSON.stringify(list.map((m) => m.id + m.estado));
@@ -2180,6 +2255,7 @@ async function mergeMatches(col, list) {
   renderHomeCompactBrief();
   renderEventSpotlight();
   renderCompetitivePulse();
+  refreshTacticalStats();
   maybeCreateEventDayNotice();
   const activeTab =
     document.querySelector(".hv2-tab.active")?.dataset.filter || "open";

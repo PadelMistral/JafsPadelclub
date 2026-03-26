@@ -66,15 +66,10 @@ export function calculateGlicko2Delta(player, opponents, actualScore) {
   };
 }
 
-/**
- * Apply custom adjustments required by the project specifications.
- * Each player gets DIFFERENT points based on their individual context.
- * @param {Object} params { delta, matchesPlayed, isWin, myRating, rivalAvgRating }
- */
-export function applyRankingAdjustments({ delta, matchesPlayed, isWin, myRating, rivalAvgRating }) {
+export function applyRankingAdjustments({ delta, matchesPlayed, isWin, myRating, rivalAvgRating, gameDiff }) {
   let adjustedDelta = delta;
 
-  // 1. Loss buffer — soften losses slightly (reduces rage-quit)
+  // 1. Loss buffer — soften losses slightly
   if (!isWin && adjustedDelta < 0) {
     adjustedDelta *= 0.75;
   }
@@ -82,59 +77,82 @@ export function applyRankingAdjustments({ delta, matchesPlayed, isWin, myRating,
   // 2. Provisional boost: New players gain/lose more to reach their true level faster
   const matches = Number(matchesPlayed || 0);
   if (matches < 5) {
-    adjustedDelta *= 1.8; // Very new: fast calibration
+    adjustedDelta *= 1.8;
   } else if (matches < 15) {
-    adjustedDelta *= 1.35; // Still calibrating
+    adjustedDelta *= 1.35;
   } else if (matches < 30) {
-    adjustedDelta *= 1.1; // Almost stable
+    adjustedDelta *= 1.1;
   }
-  // matches >= 30: stable (no multiplier)
 
-  // 3. Rating gap / difficulty scaling (major source of variation between players)
+  // 3. Rating gap / difficulty scaling
   const ratingGap = (myRating || 1000) - (rivalAvgRating || 1000);
 
   if (isWin) {
     if (ratingGap > 300) {
-      // Crushing much weaker opponents: barely any gain
-      adjustedDelta *= Math.max(0.2, 1 - (ratingGap - 300) / 600);
+      adjustedDelta *= Math.max(0.1, 1 - (ratingGap - 300) / 600);
     } else if (ratingGap > 150) {
-      // Beating slightly weaker: reduced gain
-      const gapFactor = Math.max(0.5, 1 - (ratingGap - 150) / 500);
-      adjustedDelta *= gapFactor;
+      adjustedDelta *= Math.max(0.4, 1 - (ratingGap - 150) / 500);
     } else if (ratingGap < -300) {
-      // MAJOR upset: beating much stronger opponents
-      adjustedDelta *= Math.min(2.8, 1 + (Math.abs(ratingGap) - 300) / 250);
+      adjustedDelta *= Math.min(3.0, 1 + (Math.abs(ratingGap) - 300) / 250);
     } else if (ratingGap < -150) {
-      // Upset: beating stronger opponent
       adjustedDelta *= Math.min(2.0, 1 + (Math.abs(ratingGap) - 150) / 350);
     }
   } else {
-    // On a loss: penalize more if losing to a much weaker opponent
+    // On a loss
     if (ratingGap > 300) {
-      adjustedDelta *= Math.min(1.8, 1 + (ratingGap - 300) / 400);
+      adjustedDelta *= Math.min(2.0, 1 + (ratingGap - 300) / 400); // Pierde mas contra debiles
     } else if (ratingGap < -300) {
-      // Losing to much stronger: loss buffer
-      adjustedDelta *= Math.max(0.3, 1 - (Math.abs(ratingGap) - 300) / 600);
+      adjustedDelta *= Math.max(0.2, 1 - (Math.abs(ratingGap) - 300) / 600); // Pierde poco contra muy fuertes
     }
   }
 
-  // Final Individual Clamp [-40, +40] — wide range to allow real variation
-  return Math.max(-40, Math.min(40, Math.round(adjustedDelta)));
+  // 4. Game Difference Multiplier (abultado = mas puntos)
+  if (typeof gameDiff === 'number') {
+      const diffAbs = Math.abs(gameDiff);
+      // diffAbs es algo como 0, 2, 4, 6... hasta 12 (ej. 6-0 6-0)
+      if (diffAbs >= 10) adjustedDelta *= (isWin ? 1.25 : 1.15);
+      else if (diffAbs >= 6) adjustedDelta *= (isWin ? 1.15 : 1.05);
+      else if (diffAbs <= 2) adjustedDelta *= (isWin ? 0.90 : 0.85); // Apretado, suma/resta menos
+  }
+
+  // 5. Elo Friction (Cuesta mucho subir en nivel alto)
+  if (myRating > 1500) {
+      if (isWin) {
+          // Ganan menos mientras mas arriba estan (High Elos)
+          const friction = Math.max(0.3, 1 - ((myRating - 1500) / 1500));
+          adjustedDelta *= friction;
+      } else {
+          // Pierden mas
+          const gravity = Math.min(1.5, 1 + ((myRating - 1500) / 2000));
+          adjustedDelta *= gravity;
+      }
+  }
+
+  // Clamp ampliado individual a un rango potente para permitir subidas notables al inicio
+  return Math.max(-50, Math.min(50, Math.round(adjustedDelta)));
 }
 
 /**
  * Decoupled Level Calculation
- * levelAfter = levelBefore + clamp(delta * 0.004, -0.03, 0.05)
+ * Max increment requested: 0.1
  */
 export function calculateNewLevel(levelBefore, delta, nextPoints, levelFromRatingFn = null) {
   if (typeof levelFromRatingFn === "function" && Number.isFinite(Number(nextPoints))) {
     const targetLevel = Number(levelFromRatingFn(nextPoints) || levelBefore || 2.5);
     const currentLevel = Number(levelBefore || targetLevel || 2.5);
-    const stepCap = delta >= 0 ? 0.07 : 0.05;
+    const stepCap = delta >= 0 ? 0.1 : 0.08; // El usuario pidio (max 0.1) si se gana muy fuerte
+    
+    // Friction in level too
     const drift = targetLevel - currentLevel;
-    const adjustedLevel = currentLevel + Math.max(-stepCap, Math.min(stepCap, drift));
+    let adjustedLevel = currentLevel + Math.max(-stepCap, Math.min(stepCap, drift));
+    
+    // Prevent exceeding max level logic directly
+    if (adjustedLevel > 4.5) adjustedLevel = 4.5;
+    if (adjustedLevel < 2) adjustedLevel = 2; // Floor en 2
+    
     return Number(adjustedLevel.toFixed(2));
   }
-  const levelAdjustment = Math.max(-0.03, Math.min(0.05, delta * 0.004));
-  return Number((levelBefore + levelAdjustment).toFixed(2));
+  const levelAdjustment = Math.max(-0.06, Math.min(0.1, delta * 0.005));
+  const lvl = Number((levelBefore + levelAdjustment).toFixed(2));
+  return Math.max(2, Math.min(4.5, lvl));
 }

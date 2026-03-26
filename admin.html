@@ -6,7 +6,7 @@
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#020617">
-    <title>Admin | JafsPadel</title>
+  <title>Terminal Admin | JafsPadel</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -17,127 +17,104 @@
 </head>
 
 <body class="admin-body-premium">
-  <div class="sport-bg admin-bg-dark"></div>
   <div class="admin-scanline" aria-hidden="true"></div>
 
   <!-- Main App Layout -->
   <div class="admin-layout no-sidebar">
     
     <main class="admin-main">
-	      <div class="admin-top-actions p-4 admin-toolbar-shell">
-        <div class="flex-row between items-center w-full">
+      <div class="admin-toolbar-shell">
+        <div class="flex-row between items-center w-full mb-4">
             <div class="flex-col">
-                <span class="text-[10px] font-black tracking-widest text-[#00e5ff] leading-tight flex items-center gap-2">
-                    <i class="fas fa-terminal opacity-50"></i> PANEL ADMIN
+                <span class="text-[11px] font-black tracking-widest text-[#00e5ff] leading-tight flex items-center gap-2">
+                    <i class="fas fa-terminal"></i> PANEL DE ADMINISTRACIÓN
                 </span>
-                <span class="text-[8px] opacity-30 uppercase tracking-tighter">Panel central</span>
+                <span class="text-[9px] opacity-40 uppercase tracking-tighter terminal-text">Estado: Conectado // Sistema: Seguro</span>
             </div>
             
             <div class="flex-row items-center gap-3">
+                <div id="recalc-indicator" class="hidden flex-row items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30">
+                    <span class="relative flex h-2 w-2">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                    </span>
+                    <span class="text-[9px] font-black text-red-400 uppercase">Procesando ELO...</span>
+                </div>
                 <button id="btn-refresh-admin" class="btn-circular sm" title="Sincronizar Datos">
                     <i class="fas fa-rotate"></i>
                 </button>
             </div>
         </div>
 
-        <nav class="admin-top-tabs custom-scroll mt-4">
-            <button class="tab-btn active admin-tab" data-pane="users"><i class="fas fa-users"></i> <span>JUGADORES</span></button>
-            <button class="tab-btn admin-tab" data-pane="pending"><i class="fas fa-user-clock"></i> <span>SOLICITUDES</span> <span class="badge-dot hidden" id="dot-pending"></span></button>
-            <button class="tab-btn admin-tab" data-pane="matches"><i class="fas fa-table-tennis-paddle-ball"></i> <span>PARTIDOS</span></button>
-            <button class="tab-btn admin-tab" data-pane="propuestas"><i class="fas fa-comments"></i> <span>CHATS</span></button>
-            <button class="tab-btn admin-tab" data-pane="eventos"><i class="fas fa-trophy"></i> <span>TORNEOS</span></button>
-            <button class="tab-btn admin-tab" data-pane="ranking"><i class="fas fa-ranking-star"></i> <span>PUNTOS</span></button>
-            <button class="tab-btn admin-tab" data-pane="system"><i class="fas fa-microchip"></i> <span>SISTEMA</span></button>
-            <button class="tab-btn admin-tab" data-pane="global-history"><i class="fas fa-history"></i> <span>LOG ELO</span></button>
+        <nav class="admin-top-tabs custom-scroll">
+            <button class="tab-btn active admin-tab" data-pane="dashboard"><i class="fas fa-chart-line"></i> <span>DASHBOARD</span></button>
+            <button class="tab-btn admin-tab" data-pane="users"><i class="fas fa-users-gear"></i> <span>JUGADORES</span></button>
+            <button class="tab-btn admin-tab" data-pane="matches"><i class="fas fa-gamepad"></i> <span>PARTIDOS</span></button>
+            <button class="tab-btn admin-tab" data-pane="ranking"><i class="fas fa-microchip"></i> <span>PUNTOS Y LOGS</span></button>
+            <button class="tab-btn admin-tab" data-pane="pending"><i class="fas fa-user-plus"></i> <span>SOLICITUDES</span> <span class="badge-dot hidden" id="dot-pending"></span></button>
+            <button class="tab-btn admin-tab" data-pane="eventos"><i class="fas fa-shield-halved"></i> <span>TORNEOS</span></button>
+            <button class="tab-btn admin-tab" data-pane="propuestas"><i class="fas fa-message"></i> <span>CHATS</span></button>
+            <button class="tab-btn admin-tab" data-pane="system"><i class="fas fa-sliders-h"></i> <span>SISTEMA</span></button>
         </nav>
       </div>
 
-	      <div class="admin-content-inner custom-scroll pb-20 admin-page-shell">
+      <div class="admin-content-inner custom-scroll pb-20 admin-page-shell">
         
-        <!-- KPI Row -->
-        <section class="kpi-container mb-8">
-            <div class="kpi-grid">
+        <!-- Dynamic Panes -->
+        <div class="panes-container admin-panes-stack">
+
+        <!-- Dashboard Overview -->
+        <section id="pane-dashboard" class="admin-pane active animate-fade-in">
+            <div class="kpi-grid mb-8">
                 <div class="kpi-card shadow-premium glow-primary">
-                    <span class="kpi-label"><i class="fas fa-users"></i> JUGADORES</span>
+                    <span class="kpi-label" title="Usuarios Totales Registrados">USUARIOS</span>
                     <span class="kpi-value" id="kpi-users">0</span>
                 </div>
                 <div class="kpi-card shadow-premium glow-amber">
-                    <span class="kpi-label"><i class="fas fa-bolt"></i> PARTIDOS</span>
+                    <span class="kpi-label" title="Partidos Registrados en Total">PARTIDOS</span>
                     <span class="kpi-value" id="kpi-matches">0</span>
                 </div>
-                <div class="kpi-card shadow-premium glow-red">
-                    <span class="kpi-label"><i class="fas fa-fire"></i> ACTIVOS</span>
-                    <span class="kpi-value" id="kpi-active">0</span>
-                </div>
                 <div class="kpi-card shadow-premium glow-green">
-                    <span class="kpi-label"><i class="fas fa-chart-line"></i> MEDIA ELO</span>
+                    <span class="kpi-label" title="Puntuación Media del Club">MEDIA ELO</span>
                     <span class="kpi-value" id="kpi-avg">0</span>
                 </div>
+                <div class="kpi-card shadow-premium glow-red">
+                    <span class="kpi-label" title="Partidos Sin Finalizar">PENDIENTES</span>
+                    <span class="kpi-value" id="kpi-active">0</span>
+                </div>
             </div>
-        </section>
 
-        <section class="admin-ops-overview mb-8">
             <div class="admin-ops-grid">
                 <article class="admin-ops-card">
                     <div class="admin-ops-head">
-                        <span class="admin-ops-title">Control rapido</span>
-                        <span class="admin-ops-sub">Lo importante primero</span>
+                        <span class="admin-ops-title">SISTEMA DE ACTUALIZACIÓN TÉCNICA</span>
+                        <span class="admin-ops-sub">Fuerza una limpieza de caché en los dispositivos de todos los usuarios para aplicar las nuevas versiones del código app.</span>
                     </div>
                     <div class="admin-ops-actions">
-                        <button class="admin-ops-btn" onclick="window.jumpAdminPane('pending')"><i class="fas fa-user-clock"></i> Solicitudes</button>
-                        <button class="admin-ops-btn" onclick="window.jumpAdminPane('matches')"><i class="fas fa-table-tennis-paddle-ball"></i> Partidos</button>
-                        <button class="admin-ops-btn" onclick="window.jumpAdminPane('eventos')"><i class="fas fa-trophy"></i> Torneos</button>
-                        <button class="admin-ops-btn" onclick="window.jumpAdminPane('system')"><i class="fas fa-sliders"></i> Sistema</button>
+                        <button class="admin-ops-btn" onclick="window.forceAppUpdateAdmin()" style="grid-column: span 2; background: rgba(0,229,255,0.1); border-color: #00e5ff; color: #00e5ff;" title="Al pulsar, saldrá un aviso a todos los usuarios pidiendo que refresquen la app para obtener la nueva versión">
+                            <i class="fas fa-satellite-dish"></i> FORZAR ACTUALIZACIÓN OBLIGATORIA A USUARIOS
+                        </button>
                     </div>
                 </article>
                 <article class="admin-ops-card">
                     <div class="admin-ops-head">
-                        <span class="admin-ops-title">Ultimo cambio</span>
-                        <span class="admin-ops-sub">Trazabilidad inmediata</span>
+                        <span class="admin-ops-title">Última Trazabilidad</span>
+                        <span class="admin-ops-sub">Logs de movimientos en tiempo real</span>
                     </div>
-                    <div id="admin-ops-latest" class="admin-ops-latest">
-                        Cargando ultimo movimiento del panel...
+                    <div id="admin-ops-latest" class="admin-ops-latest terminal-text">
+                        Inicializando flujo de datos...
                     </div>
                 </article>
             </div>
         </section>
 
 
-        <!-- Dynamic Panes -->
-	        <div class="panes-container admin-panes-stack">
-          <!-- PANE LOG ELO -->
-          <section id="pane-global-history" class="admin-pane animate-fade-in">
-             <div class="pane-header flex-row between items-center mb-6">
-                <div>
-                   <h2 class="pane-title"><i class="fas fa-history text-primary mr-2"></i> HISTORIAL GLOBAL ELO</h2>
-                   <p class="text-[10px] text-muted uppercase tracking-widest mt-1">Últimos movimientos de puntos y progreso ELO</p>
-                </div>
-                <button class="btn hover-effect" onclick="window.refreshAll()"><i class="fas fa-sync-alt"></i> Actualizar</button>
-             </div>
-             <div class="glass-panel p-0 custom-scroll overflow-x-auto relative" style="border-radius:12px">
-                <table class="w-full text-left premium-table" style="min-width:700px; font-size:12px;">
-                   <thead>
-                      <tr class="bg-black/30 text-[9px] uppercase tracking-widest text-muted/80">
-                         <th class="p-3 pl-4">Fecha</th>
-                         <th class="p-3">Partido ID</th>
-                         <th class="p-3">Jugador / Tipo</th>
-                         <th class="p-3 text-right">Variación ELO</th>
-                         <th class="p-3 text-right pr-4">Nivel Actual</th>
-                      </tr>
-                   </thead>
-                   <tbody id="global-history-tbody">
-                     <!-- Inyectado por JS -->
-                   </tbody>
-                </table>
-             </div>
-          </section>
-
           <!-- JUGADORES -->
-          <section id="pane-users" class="admin-pane active animate-fade-in">
-            <div class="pane-header flex-col md:flex-row between gap-4 mb-6">
+          <section id="pane-users" class="admin-pane animate-fade-in">
+            <div class="pane-header flex-col md:flex-row between gap-4">
                 <div>
-                    <h2 class="pane-title">GESTIÓN DE JUGADORES</h2>
-                    <p class="text-[10px] opacity-50 uppercase tracking-wider">Control de acceso y perfiles deportivos</p>
+                    <h2 class="pane-title"><i class="fas fa-users-rectangle"></i> GESTIÓN DE JUGADORES</h2>
+                    <p class="text-[10px] opacity-50 uppercase tracking-widest terminal-text">Acceso a la base de datos de usuarios autorizados</p>
                 </div>
                 <div class="flex-row gap-2">
                     <select id="users-role-filter" class="admin-select-v9 sm">
@@ -145,165 +122,134 @@
                         <option value="Admin">ADMINISTRADORES</option>
                         <option value="Jugador">JUGADORES</option>
                     </select>
-                    <input id="users-search" class="admin-search-v9" placeholder="Buscar por nombre o email...">
+                    <input id="users-search" class="admin-search-v9" placeholder="Codename o Email...">
                 </div>
             </div>
             <div id="users-accordion-container" class="accordion-flow">
-                <!-- Usuarios renderizados como acordeones aquí -->
+                <!-- Usuarios renderizados aquí -->
             </div>
           </section>
 
           <!-- SOLICITUDES -->
           <section id="pane-pending" class="admin-pane animate-fade-in">
-            <div class="pane-header mb-6">
-                <h2 class="pane-title">SOLICITUDES DE ACCESO</h2>
-                <p class="text-[10px] opacity-50 uppercase tracking-wider">Nuevos registros pendientes de validación</p>
+            <div class="pane-header">
+                <div>
+                    <h2 class="pane-title"><i class="fas fa-user-slash"></i> SOLICITUDES PENDIENTES</h2>
+                    <p class="text-[10px] opacity-50 uppercase tracking-widest terminal-text">Nuevos registros en espera de validación de identidad</p>
+                </div>
             </div>
-            <div class="table-card glass-v9">
+            <div class="table-card">
                 <div class="table-wrap">
                     <table class="premium-table">
                         <thead>
                             <tr>
                                 <th>IDENTIDAD</th>
-                                <th>FECHA</th>
-                                <th>ESTADO</th>
+                                <th>MARCA TEMPORAL</th>
+                                <th>ESTADO_HEX</th>
                                 <th class="text-right">ACCIONES</th>
                             </tr>
                         </thead>
-                        <tbody id="pending-body"></tbody>
+                        <tbody id="pending-body" class="terminal-text"></tbody>
                     </table>
                 </div>
             </div>
           </section>
 
-          <!-- PARTIDOS -->
+            <!-- PARTIDOS -->
           <section id="pane-matches" class="admin-pane animate-fade-in">
-            <div class="pane-header flex-col md:flex-row between gap-4 mb-6">
+            <div class="pane-header flex-col md:flex-row between gap-4">
                 <div>
-                    <h2 class="pane-title">HISTORIAL DE PARTIDOS</h2>
-                    <p class="text-[10px] opacity-50 uppercase tracking-wider">Gestión de resultados y horarios</p>
+                    <h2 class="pane-title"><i class="fas fa-microchip"></i> HISTORIAL DE PARTIDOS</h2>
+                    <p class="text-[10px] opacity-50 uppercase tracking-widest terminal-text">Gestión de resultados y creación de partidos forzada</p>
                 </div>
                 <div class="flex-row flex-wrap gap-2">
-                    <button class="btn-glass sm primary-glow" onclick="window.openCreateMatchAdmin()"><i class="fas fa-plus"></i> NUEVO PARTIDO</button>
-                    <div class="flex-row items-center gap-2 mt-2 md:mt-0">
-                        <input id="matches-user-search" class="admin-search-v9 sm" placeholder="Filtrar por jugador..." style="max-width:180px;">
-                        <select id="matches-delete-action" class="admin-select-v9 sm text-red-400 border-red-900/50">
-                            <option value="none">Opciones de borrado...</option>
-                            <option value="all">Borrar TODO</option>
-                            <option value="played">Borrar Jugados</option>
+                    <button class="btn-v9 primary sm" onclick="window.openCreateMatchAdmin()" title="Abre un formulario para crear un partido indicando fecha y tipo"><i class="fas fa-plus"></i> NUEVO PARTIDO</button>
+                    <div class="flex-row items-center gap-2">
+                        <input id="matches-user-search" class="admin-search-v9 sm" placeholder="Buscar partido..." style="max-width:180px;">
+                        <select id="matches-delete-action" class="admin-select-v9 sm text-red-400 border-red-900/50" title="Selecciona qué tipos de partidos deseas borrar en lote (cuidado con esto)">
+                            <option value="none">Eliminaciones en lote...</option>
+                            <option value="all">Borrar TODOS (Peligro)</option>
+                            <option value="played">Borrar Finalizados</option>
                             <option value="open">Borrar Pendientes</option>
                             <option value="orphan">Borrar Huérfanos</option>
                         </select>
-                        <button id="btn-execute-delete-matches" class="btn-danger-v9 sm px-4"><i class="fas fa-trash"></i> EJECUTAR</button>
+                        <button id="btn-execute-delete-matches" class="btn-danger-v9 sm px-4" title="Ejecutar el borrado seleccionado"><i class="fas fa-trash"></i> BORRAR</button>
                     </div>
-                    <select id="matches-type-filter" class="admin-select-v9 sm">
-                        <option value="all">TODOS</option>
-                        <option value="partidosAmistosos">AMISTOSOS</option>
-                        <option value="partidosReto">RETOS</option>
-                        <option value="eventoPartidos">TORNEO</option>
-                    </select>
-                    <select id="matches-filter" class="admin-select-v9 sm">
-                        <option value="all">TODOS</option>
-                        <option value="open">ABIERTOS</option>
-                        <option value="played">FINALIZADOS</option>
-                        <option value="upcoming">PROXIMOS</option>
-                        <option value="orphan">HUÉRFANOS</option>
-                    </select>
                 </div>
             </div>
+            
+            <div class="flex-row gap-2 mb-4 overflow-x-auto custom-scroll pb-2">
+                <select id="matches-type-filter" class="admin-select-v9 sm">
+                    <option value="all">TODOS LOS TIPOS</option>
+                    <option value="partidosAmistosos">AMISTOSOS</option>
+                    <option value="partidosReto">RETOS</option>
+                    <option value="eventoPartidos">TORNEO</option>
+                </select>
+                <select id="matches-filter" class="admin-select-v9 sm">
+                    <option value="all">TODOS LOS ESTADOS</option>
+                    <option value="open">ABIERTOS</option>
+                    <option value="played">FINALIZADOS</option>
+                    <option value="upcoming">PRÓXIMOS</option>
+                    <option value="orphan">SIN_ASIG</option>
+                </select>
+            </div>
+
             <div id="matches-accordion-container" class="accordion-flow">
-                <!-- Partidos renderizados como acordeones aquí -->
-            </div>
-          </section>
-
-          <!-- CHATS PROPUESTAS -->
-          <section id="pane-propuestas" class="admin-pane animate-fade-in">
-            <div class="pane-header flex-col md:flex-row between gap-4 mb-6">
-                <div>
-                    <h2 class="pane-title">CHATS DE PROPUESTAS</h2>
-                    <p class="text-[10px] opacity-50 uppercase tracking-wider">Visión admin de chats privados</p>
-                </div>
-                <div class="flex-row gap-2">
-                    <button class="btn-glass sm primary-glow" id="btn-refresh-proposals"><i class="fas fa-rotate"></i> RECARGAR</button>
-                </div>
-            </div>
-            <div id="proposals-admin-list" class="accordion-flow"></div>
-          </section>
-
-          <!-- TORNEOS -->
-          <section id="pane-eventos" class="admin-pane animate-fade-in">
-            <div class="pane-header flex-row between items-center mb-6">
-                <div>
-                    <h2 class="pane-title">CENTRO DE TORNEOS</h2>
-                    <p class="text-[10px] opacity-50 uppercase tracking-wider">Gestión integral de eventos y cuadros</p>
-                </div>
-                <button class="btn-glass sm" onclick="window.openCreateEventWizard()"><i class="fas fa-plus"></i> CREAR TORNEO</button>
-            </div>
-            <div id="events-accordion-container" class="accordion-flow">
-                <!-- Eventos renderizados como acordeones aquí -->
+                <!-- Partidos renderizados aquí -->
             </div>
           </section>
 
           <!-- PUNTUACIÓN (ELO & RANKING) -->
           <section id="pane-ranking" class="admin-pane animate-fade-in">
-             <div class="pane-header mb-6">
-                <h2 class="pane-title">CONFIGURACION DE PUNTUACION</h2>
-                <p class="text-[10px] opacity-50 uppercase tracking-wider">Parámetros del sistema ELO y Ranking global</p>
+             <div class="pane-header flex-col md:flex-row between gap-4">
+                <div>
+                    <h2 class="pane-title"><i class="fas fa-chart-line"></i> MOTOR ELO (Base Inicial)</h2>
+                    <p class="text-[10px] opacity-50 uppercase tracking-widest terminal-text break-words">SISTEMA HÍBRIDO AVANZADO: Se basará en el nivel_base inicial proporcionando un sistema de rangos como los videojuegos, detectando compañeros y rivales.</p>
+                </div>
+                <div id="recalc-indicator" class="hidden flex-col gap-2 mb-4 p-4 rounded-xl border border-sport-green/30 bg-sport-green/5">
+                    <div class="flex-row between items-center mb-1">
+                        <span class="text-[10px] font-black text-sport-green uppercase tracking-widest animate-pulse">Recalculando Partidos...</span>
+                        <span id="recalc-pct" class="text-[11px] font-black text-white">0%</span>
+                    </div>
+                    <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                        <div id="recalc-bar" class="h-full bg-sport-green shadow-[0_0_10px_rgba(57,255,20,0.5)] transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div id="recalc-status" class="text-[8px] opacity-60 font-mono truncate">Iniciando...</div>
+                </div>
+                <button id="btn-recalc-history" class="btn-v9 danger sm p-4" title="ATENCIÓN: Cogerá el nivel base de TODOS los usuarios, limpiará su progreso actual, e irá procesando desde el principio de los tiempos partido a partido calculando sumas/restas de ELO para generar la puntuación precisa individual.">
+                    <i class="fas fa-bolt text-lg"></i> RECALCULAR ABSOLUTAMENTE TODO
+                </button>
             </div>
             
-            <div class="system-grid-modern mb-8">
-                <!-- Configuración ELO -->
-                <div class="sys-card-v9">
-                    <div class="sys-card-head"><i class="fas fa-cog"></i> PARÁMETROS ELO</div>
-                    <div class="p-4 flex-col gap-4">
-                        <div class="ua-field">
-                            <label>Puntos por Victoria</label>
-                            <input type="number" id="cfg-elo-win" class="admin-field-v9" value="25">
-                        </div>
-                        <div class="ua-field">
-                            <label>Puntos por Derrota</label>
-                            <input type="number" id="cfg-elo-loss" class="admin-field-v9" value="-15">
-                        </div>
-                        <div class="ua-field">
-                            <label>Factor K (Sensibilidad)</label>
-                            <input type="number" id="cfg-elo-k" class="admin-field-v9" value="32">
-                        </div>
-                        <div class="flex-row gap-2 mt-4">
-                            <button id="btn-save-elo-config" class="btn-primary-admin flex-1">GUARDAR CONFIGURACIÓN</button>
-                            <button id="btn-emergency-recover" class="btn-glass text-blue-400" title="Recuperar ELO desde Logs"><i class="fas fa-undo-alt"></i> ELO</button>
-                            <button id="btn-recover-matches" class="btn-glass text-sport-green" title="Reconstruir Partidos desde Logs"><i class="fas fa-history"></i> PARTIDOS</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Acciones Masivas -->
-                <div class="sys-card-v9">
-                    <div class="sys-card-head"><i class="fas fa-sync-alt"></i> GESTIÓN ELO & RANKING</div>
-                    <div class="p-4 flex-col gap-3">
-                        <select id="elo-action-select" class="admin-select-v9 w-full">
-                            <option value="none">Seleccionar acción...</option>
-                            <option value="reset_base">WIPE TOTAL (Reset a 1000 y 2.5)</option>
-                            <option value="restore_base">REGENERACIÓN (Usa Niveles Reales + Recalcula)</option>
-                            <option value="recalc_points">Solo recalcular desde HISTÓRICO</option>
-                        </select>
-                        <button id="btn-execute-elo-action" class="btn-danger-v9 w-full">
-                            <i class="fas fa-bolt"></i> EJECUTAR ACCIÓN
-                        </button>
-                        <p class="text-[9px] opacity-40 text-center">Precaución: Estas acciones afectan a toda la base de datos.</p>
-                    </div>
+            <div class="sys-card-v9 mb-8">
+                <div class="sys-card-head"><i class="fas fa-terminal"></i> REGISTRO DE MOVIMIENTOS ELO Y PARTIDOS</div>
+                <div class="overflow-x-auto custom-scroll" style="max-height: 400px;">
+                    <table class="w-full text-left premium-table terminal-text" style="min-width:700px; font-size:12px;">
+                       <thead>
+                          <tr class="bg-black/30">
+                             <th class="p-3">FECHA</th>
+                             <th class="p-3">ID OPERACIÓN</th>
+                             <th class="p-3">JUGADOR / TIPO</th>
+                             <th class="p-3 text-right">ELO GANADO/PERDIDO</th>
+                             <th class="p-3 text-right">NIVEL NUEVO</th>
+                          </tr>
+                       </thead>
+                       <tbody id="global-history-tbody"></tbody>
+                    </table>
                 </div>
             </div>
 
-            <div class="table-card glass-v9">
-                <div class="table-wrap">
-                    <table class="premium-table">
+            <div class="sys-card-v9">
+                <div class="sys-card-head"><i class="fas fa-ranking-star"></i> ESTADO ACTUAL DEL RANKING GLOBAL</div>
+                <div class="overflow-x-auto custom-scroll">
+                    <table class="premium-table terminal-text">
                         <thead>
                             <tr>
-                                <th>#</th>
+                                <th>POSICIÓN</th>
                                 <th>JUGADOR</th>
                                 <th>PUNTOS</th>
                                 <th>NIVEL</th>
-                                <th class="text-right">GESTIÓN</th>
+                                <th class="text-right">ACCIÓN</th>
                             </tr>
                         </thead>
                         <tbody id="ranking-body"></tbody>
@@ -312,138 +258,129 @@
             </div>
           </section>
 
+          <!-- TORNEOS -->
+          <section id="pane-eventos" class="admin-pane animate-fade-in">
+            <div class="pane-header flex-row between items-center mb-6">
+                <div>
+                    <h2 class="pane-title"><i class="fas fa-shield-cat"></i> GESTIÓN DE TORNEOS/EVENTOS</h2>
+                    <p class="text-[10px] opacity-50 uppercase tracking-widest terminal-text">Crear torneos, ligas o eventos para invitar apuntados</p>
+                </div>
+                <button class="btn-v9 primary sm" onclick="window.openCreateEventWizard()" title="Inicia el creador de torneos para elegir fechas, pistas y generar su cuadro de la muerte."><i class="fas fa-plus"></i> CREAR EVENTO</button>
+            </div>
+            <div id="events-accordion-container" class="accordion-flow"></div>
+          </section>
+
+          <!-- CHATS -->
+          <section id="pane-propuestas" class="admin-pane animate-fade-in">
+            <div class="pane-header flex-col md:flex-row between gap-4 mb-6">
+                <div>
+                    <h2 class="pane-title"><i class="fas fa-network-wired"></i> TRANSMISIONES / PROPUESTAS</h2>
+                    <p class="text-[10px] opacity-50 uppercase tracking-widest terminal-text">Muro general donde la gente avisa que quiere jugar y mensajes</p>
+                </div>
+                <button class="btn-v9 ghost sm" id="btn-refresh-proposals" title="Refrescar el chat de muro general"><i class="fas fa-rotate"></i> RECARGAR MENSAJES</button>
+            </div>
+            <div id="proposals-admin-list" class="accordion-flow"></div>
+          </section>
+
           <!-- SISTEMA -->
           <section id="pane-system" class="admin-pane animate-fade-in">
-            <h2 class="pane-title mb-6"><i class="fas fa-terminal mr-2"></i> PANEL DE CONTROL DEL SISTEMA</h2>
-            <div class="admin-ops-grid">
+            <h2 class="pane-title mb-6"><i class="fas fa-microchip"></i> CONFIGURACIÓN TÉCNICA (SISTEMA)</h2>
+            <div class="system-grid-modern">
                 <!-- Notificaciones -->
                 <div class="sys-card-v9">
-                    <div class="sys-card-head"><i class="fas fa-broadcast-tower"></i> COMUNICADOS GLOBALES</div>
-                    <div class="flex-col gap-3 p-4">
-                        <input id="sys-broadcast-title" class="admin-field-v9" placeholder="Título del mensaje">
-                        <textarea id="sys-broadcast-message" class="admin-field-v9" rows="3" placeholder="Contenido del anuncio..."></textarea>
-                        <button id="btn-broadcast" class="btn-primary-admin w-full">ENVIAR NOTIFICACIÓN</button>
+                    <div class="sys-card-head" title="Esto envía una notificación emergente a los móviles de la gente"><i class="fas fa-tower-broadcast"></i> ANUNCIO GLOBAL (PUSH)</div>
+                    <div class="flex-col gap-3 p-5">
+                        <input id="sys-broadcast-title" class="input-v9" placeholder="Título Mensaje (Ej: ¡Torneo Mañana!)">
+                        <textarea id="sys-broadcast-message" class="input-v9" rows="3" placeholder="Mensaje..."></textarea>
+                        <button id="btn-broadcast" class="btn-v9 primary w-full" title="¡Cuidado! Se enviará a todos al instante.">ENVIAR A TODOS LOS MÓVILES</button>
                     </div>
                 </div>
 
-                <!-- Mantenimiento Global -->
+                <!-- Mantenimiento -->
                 <div class="sys-card-v9">
-                    <div class="sys-card-head"><i class="fas fa-tools"></i> MANTENIMIENTO GLOBAL</div>
-                    <div class="p-4 flex-col gap-3">
+                    <div class="sys-card-head" title="Herramientas para limpiar base de datos si hay fallos o basurilla."><i class="fas fa-screwdriver-wrench"></i> TAREAS DE LIMPIEZA</div>
+                    <div class="p-5 flex-col gap-3">
                         <select id="sys-maint-action" class="admin-select-v9 w-full">
-                            <option value="none">Seleccionar tarea...</option>
-                            <option value="cancel_stale">Cancelar Partidos Expirados</option>
-                            <option value="reset_presence">Resetear Estado en Línea</option>
-                            <option value="clean_event_dupes">Limpiar duplicados de evento sin nombres</option>
-                            <option value="clean_old_events">Borrar Partidos de Eventos Antiguos</option>
-                            <option value="nuke_logs">Limpiar Registros de Actividad</option>
-                            <option value="sync_apoing">Sincronización Apoing Forzada</option>
+                            <option value="none">SELECCIONAR ACCIÓN...</option>
+                            <option value="cancel_stale">Eliminar partidos que se pasaron de fecha sin jugar</option>
+                            <option value="reset_presence">Resetear estado En Linea de usuarios bugueados</option>
+                            <option value="clean_event_dupes">Limpiar partidos duplicados en torneos</option>
+                            <option value="clean_old_events">Borrar eventos/torneos muy antiguos finalizados</option>
+                            <option value="nuke_logs">Limpiar el historial de logs (Auditoria)</option>
+                            <option value="sync_apoing">Forzar sincronización de Reservas Externas</option>
                         </select>
-                        <button id="btn-execute-maint" class="btn-primary-admin w-full">
-                            <i class="fas fa-play"></i> EJECUTAR TAREA
-                        </button>
+                        <button id="btn-execute-maint" class="btn-v9 primary w-full" title="Ejecuta la limpieza">EJECUTAR LIMPIEZA</button>
                     </div>
                 </div>
 
-                <!-- ICS Manager -->
-                <div class="sys-card-v9">
-                    <div class="sys-card-head"><i class="fas fa-link"></i> CALENDARIOS EXTERNOS</div>
-                    <div class="p-4 flex-col gap-2">
-                        <button class="btn-glass w-full" onclick="document.getElementById('pane-apoing-list').classList.toggle('hidden')">
-                            GESTIONAR ENLACES ICS
-                        </button>
-                        <p class="text-[9px] opacity-40 text-center">Gestiona la vinculación con perfiles de Apoing externos.</p>
-                    </div>
-                </div>
-
-                <div class="sys-card-v9">
-                    <div class="sys-card-head"><i class="fas fa-clock-rotate-left"></i> TRAZABILIDAD ADMIN</div>
-                    <div class="p-4">
-                        <div id="admin-audit-feed" class="audit-feed">
-                            <div class="audit-feed-empty">Cargando historial reciente del panel...</div>
+                <!-- Audit -->
+                <div class="sys-card-v9 col-span-2">
+                    <div class="sys-card-head"><i class="fas fa-receipt"></i> AUDITORÍA DE MOVIMIENTOS TÉCNICOS EN ADMIN</div>
+                    <div class="p-5">
+                        <div id="admin-audit-feed" class="audit-feed terminal-text max-h-[400px] overflow-y-auto custom-scroll">
+                            <div class="audit-feed-empty">Conectando a base de datos...</div>
                         </div>
-                    </div>
-                </div>
-
-                <div class="sys-card-v9">
-                    <div class="sys-card-head"><i class="fas fa-file-export"></i> EXPORTACIÓN SEGURA</div>
-                    <div class="p-4 flex-col gap-3">
-                        <button id="btn-export-admin-snapshot" class="btn-glass w-full">
-                            EXPORTAR SNAPSHOT JSON
-                        </button>
-                        <p class="text-[9px] opacity-40 text-center">Descarga un resumen operativo de jugadores, partidos, torneos y trazabilidad para soporte o backup manual.</p>
-                    </div>
-                </div>
-            </div>
-
-            <div id="pane-apoing-list" class="hidden mt-8">
-                <h3 class="text-xs font-black mb-4">ENLACES DE CALENDARIO APOING</h3>
-                <div class="table-card glass-v9">
-                    <div class="table-wrap">
-                        <table class="premium-table">
-                            <thead>
-                                <tr>
-                                    <th>DUEÑO</th>
-                                    <th>URL ICS</th>
-                                    <th class="text-right">ACCIONES</th>
-                                </tr>
-                            </thead>
-                            <tbody id="apoing-body"></tbody>
-                        </table>
                     </div>
                 </div>
             </div>
           </section>
         </div>
-
-
-        </div>
       </div>
     </main>
   </div>
 
+  <!-- Modals -->
   <!-- Modal Crear Partida -->
   <div id="modal-admin-create-match" class="modal-overlay">
-    <div class="modal-card admin-modal-card-v9">
+    <div class="modal-card" style="max-width:480px;">
       <div class="modal-header">
-        <h3 class="modal-title font-black uppercase text-sm text-[#00e5ff]">Partida Manual</h3>
-        <button class="close-btn" onclick="document.getElementById('modal-admin-create-match').classList.remove('active')">&times;</button>
+        <h3 class="modal-title">NUEVO PARTIDO FORZADO</h3>
+        <button class="btn-v9 danger sm px-3" onclick="document.getElementById('modal-admin-create-match').classList.remove('active')">&times;</button>
       </div>
       <div class="modal-body p-6 flex-col gap-4">
-          <select id="adm-create-col" class="admin-field-v9">
-             <option value="partidosAmistosos">AMISTOSO</option>
-             <option value="partidosReto">RETO</option>
-          </select>
-          <input type="datetime-local" id="adm-create-date" class="admin-field-v9">
-          <select id="adm-create-state" class="admin-field-v9">
-             <option value="abierto">ABIERTO</option>
-             <option value="jugado">JUGADO</option>
-          </select>
-          <button class="btn-primary-admin w-full mt-4" onclick="window.confirmCreateMatchAdmin()">CREAR</button>
+          <div class="admin-field-group">
+            <label>Tipo de Partido</label>
+            <select id="adm-create-col" class="input-v9">
+                <option value="partidosAmistosos">PARTIDO AMISTOSO NORMAL</option>
+                <option value="partidosReto">RETO COMPETITIVO</option>
+             </select>
+          </div>
+          <div class="admin-field-group">
+            <label>Fecha y Hora (Si es anterior recalcula bien el ranking)</label>
+            <input type="datetime-local" id="adm-create-date" class="input-v9">
+          </div>
+          <div class="admin-field-group">
+            <label>Estado Inicial al crearlo</label>
+            <select id="adm-create-state" class="input-v9">
+                <option value="abierto">ABIERTO (Buscando jugadores)</option>
+                <option value="jugado">CERRADO Y FINALIZADO</option>
+             </select>
+          </div>
+          <button class="btn-v9 primary w-full mt-4" onclick="window.confirmCreateMatchAdmin()">CREAR PARTIDO AHORA</button>
       </div>
     </div>
   </div>
 
   <!-- Modal Añadir Jugador -->
   <div id="modal-admin-add-player" class="modal-overlay">
-    <div class="modal-card admin-modal-card-v9">
+    <div class="modal-card" style="max-width: 500px;">
       <div class="modal-header">
-        <h3 id="add-player-target-title" class="modal-title font-black text-sm text-[#00e5ff]">AÑADIR JUGADOR</h3>
-        <button class="close-btn" onclick="document.getElementById('modal-admin-add-player').classList.remove('active')">&times;</button>
+        <h3 id="add-player-target-title" class="modal-title font-black text-sm text-[#00e5ff]">VINCULAR JUGADOR A PARTIDO</h3>
+        <button class="btn-v9 danger sm px-3" onclick="document.getElementById('modal-admin-add-player').classList.remove('active')">&times;</button>
       </div>
       <div class="modal-body p-6 custom-scroll">
-          <input type="text" id="admin-player-search" class="admin-field-v9 mb-4" placeholder="Buscar jugador...">
+          <input type="text" id="admin-player-search" class="admin-search-v9 mb-4" placeholder="Buscar por nombre o email...">
           <div id="admin-user-list-results" class="admin-user-flow-v9 mb-4"></div>
-          <div class="divider-admin mb-4"><span>O INVITADO</span></div>
+          <div class="divider-admin mb-4"><span>O AÑADIR JUGADOR INVITADO QUE NO TIENE APP</span></div>
           <div class="flex-row gap-2">
-              <input type="text" id="admin-guest-name" placeholder="Nombre" class="admin-field-v9 flex-1">
-              <button id="btn-add-guest-admin" class="btn-glass sm">ADD</button>
+              <input type="text" id="admin-guest-name" placeholder="Ej: Pedro Perez invitado" class="input-v9 flex-1">
+              <button id="btn-add-guest-admin" class="btn-v9 primary sm">AÑADIR INVITADO</button>
           </div>
       </div>
     </div>
   </div>
 
-  <script type="module" src="./js/admin.js?v=9.0"></script>
+  <script type="module" src="./js/admin.js?v=10.0"></script>
   <script type="module">
     import { initPWAShell } from './js/modules/pwa-shell.js';
     initPWAShell('admin');
@@ -452,5 +389,3 @@
 </body>
 
 </html>
-
-

@@ -5,7 +5,7 @@ import { doc, onSnapshot, collection, query, where, orderBy, limit, updateDoc, d
 import { injectHeader, injectNavbar } from './modules/ui-loader.js';
 import { computeGroupTable, generateKnockoutTree, generateRoundRobin } from './event-tournament-engine.js';
 import { processMatchResults } from './ranking-service.js';
-import { openResultForm, renderMatchDetail, indexEventUserNames } from './match-service.v1.js';
+import { openResultForm, renderMatchDetail, indexEventUserNames } from './match-service.js';
 import { createNotification } from './services/notification-service.js';
 import { getFriendlyTeamName } from './utils/team-utils.js';
 import { buildBaseMatchPayload, buildMatchPersistencePatch, getResultSetsString } from './utils/match-utils.js';

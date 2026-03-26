@@ -16,6 +16,9 @@ import {
 import { checkAchievements } from "./achievement-service.js";
 import { calculateGlicko2Delta, applyRankingAdjustments, calculateNewLevel } from "./services/rating-engine.js";
 import { buildMatchPersistencePatch } from "./utils/match-utils.js";
+import { SistemaPuntuacionAvanzado } from "./services/sistema-puntuacion.js";
+
+const puntuacionAvanzada = new SistemaPuntuacionAvanzado();
 
 const BONUS_REASON_NONE = "none";
 const BONUS_REASON_MVP = "mvp";
@@ -445,9 +448,11 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
       }
       // ─── END PRE-READ ───
 
-      // --- INDIVIDUAL CALCULATION (GLICKO-2 HYBRID) ---
+      // --- INDIVIDUAL CALCULATION (SISTEMA PUNTUACION AVANZADO V8) ---
       const provisionalDeltas = [0, 0, 0, 0];
       const levelDeltas = [0, 0, 0, 0];
+      const allAdjs = [null, null, null, null];
+      const calcContexts = [null, null, null, null];
       
       for (let i = 0; i < 4; i += 1) {
         const player = roster[i];
@@ -460,50 +465,43 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const didWin = (amITeamA && winnerIsA) || (!amITeamA && !winnerIsA);
         const actualScore = didWin ? 1 : 0;
         
-        const opponents = amITeamA ? teamB : teamA;
-        const opponentData = opponents.map(opp => ({ 
-          r: resolvePlayerRating(opp), 
-          rd: Number(opp.glickoRD || 80) 
-        }));
-        
-        const myRating = resolvePlayerRating(player);
-        const rivalAvgRating = opponentData.reduce((acc, o) => acc + o.r, 0) / opponentData.length;
-        
-        // 1. Calculate raw Glicko-2 delta
-        const glickoResult = calculateGlicko2Delta({
-          r: myRating,
-          rd: Number(player.glickoRD || 80),
-          vol: Number(player.glickoVol || 0.06)
-        }, opponentData, actualScore);
-        
-        // 2. Apply Standard Project Adjustments (buffered loss, anti-smurf, gap scaling)
-        const baseDelta = applyRankingAdjustments({
-          delta: glickoResult.delta,
-          matchesPlayed: Number(player.partidosJugados || 0),
-          isWin: didWin,
-          myRating: myRating,
-          rivalAvgRating: rivalAvgRating
-        });
+        const misAliados = amITeamA ? teamA : teamB;
+        const companero = misAliados.find(p => p && p.id !== player.id) || null;
+        const misRivales = amITeamA ? teamB : teamA;
 
-        // 3. New Individual Adjustments (Premium V7) - Each player gets unique points based on their context
-        const streakAdj = calcStreakAdjustment(baseDelta, Number(player.rachaActual || 0), didWin);
-        const surpriseAdj = calcSurpriseAdjustment(baseDelta, amITeamA ? expectedA : 1 - expectedA, didWin);
-        const clutchAdj = calcClutchAdjustment(baseDelta, parsed);
-        const skillAdj = calcSkillAdjustment(baseDelta, player, 'reves', String(extraMatchData?.surface || 'indoor'));
+        // Limpiar stats para el contexto
+        const margenSetsFormatted = {
+            juegosMios: didWin ? Math.max(parsed.teamAGames, parsed.teamBGames) : Math.min(parsed.teamAGames, parsed.teamBGames),
+            juegosRivales: didWin ? Math.min(parsed.teamAGames, parsed.teamBGames) : Math.max(parsed.teamAGames, parsed.teamBGames),
+            setsMios: didWin ? Math.max(parsed.teamASets, parsed.teamBSets) : Math.min(parsed.teamASets, parsed.teamBSets),
+            setsRivales: didWin ? Math.min(parsed.teamASets, parsed.teamBSets) : Math.max(parsed.teamASets, parsed.teamBSets)
+        };
 
-        let bonusDelta = streakAdj + surpriseAdj + clutchAdj + skillAdj;
-        bonusDelta = Math.max(-10, Math.min(12, bonusDelta)); // Cap bonus
+        const ctx = {
+            jugador: player,
+            companero: companero,
+            rivales: misRivales.filter(Boolean),
+            resultado: actualScore,
+            tipoPartido: String(match.tipo || col === 'eventoPartidos' ? 'evento' : 'amistoso'),
+            margenSets: margenSetsFormatted
+        };
 
-        // Remove overly-restrictive clamp — let rating-engine.js handle the real limits
-        const finalDelta = baseDelta + bonusDelta;
+        const calculo = puntuacionAvanzada.calcularCambio(ctx);
+        calcContexts[i] = calculo;
         
-        provisionalDeltas[i] = round2(finalDelta);
-        player._temp_bonus = bonusDelta;
-        player._temp_base = baseDelta;
-        player._temp_adjs = { streak: streakAdj, surprise: surpriseAdj, clutch: clutchAdj, skill: skillAdj };
-        player.newRD = glickoResult.newRD;
+        provisionalDeltas[i] = calculo.sumaTotal;
+        levelDeltas[i] = calculo.nuevoNivelCambio;
         
-        console.log(`[ELO] Player ${player.id?.slice(0,6) || '?'} | Rating:${Math.round(myRating)} vs rivals:${Math.round(rivalAvgRating)} | Win:${didWin} | Base:${round2(baseDelta)} | Bonus:${round2(bonusDelta)} | Final:${round2(finalDelta)}`);
+        player._temp_base = calculo.cambioElo;
+        player._temp_bonus = calculo.factoresAdicionales.companero + calculo.factoresAdicionales.racha + calculo.factoresAdicionales.margenSets;
+        player._temp_adjs = { 
+            streak: calculo.factoresAdicionales.racha, 
+            surprise: 0, 
+            clutch: calculo.factoresAdicionales.margenSets, 
+            skill: calculo.factoresAdicionales.companero 
+        };
+        
+        console.log(`[ELO AVANZADO] Player ${player.id?.slice(0,6)} | Win:${didWin} | BaseElo:${calculo.cambioElo} | Factores:${JSON.stringify(calculo.factoresAdicionales)} | Limite:${calculo.limiteAplicado} | NivelDelta:${calculo.nuevoNivelCambio}`);
       }
 
       const bonusReason = "Glicko-2 Hybrid";
@@ -543,8 +541,13 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const newPoints = clampNumber(oldPoints + delta, ELO_CONFIG.MIN_RATING, ELO_CONFIG.MAX_RATING);
         const levelBefore = Number(player.nivel || levelFromRating(oldPoints));
         
-        // 3. Decoupled Level Scaling
-        const levelAfter = calculateNewLevel(levelBefore, delta, newPoints, levelFromRating);
+        // 3. Aplicar Nivel (Skill Level) Avanzado
+        const calculo = calcContexts[i];
+        let levelAfter = levelBefore;
+        if (calculo && Number.isFinite(calculo.nuevoNivelCambio)) {
+            levelAfter = Math.max(1.0, Math.min(7.0, levelBefore + calculo.nuevoNivelCambio));
+        }
+
         const progressAfter = buildLevelProgressState({ rating: newPoints, levelOverride: levelAfter });
         const levelBand = getLevelBandByRating(newPoints);
 
@@ -556,7 +559,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const currentSurfElo = Number(player?.elo?.[surface] || oldPoints);
 
         const analysis = {
-          systemVersion: ELO_SYSTEM_VERSION,
+          systemVersion: "v8_avanzado",
           matchId,
           matchCollection: col,
           won: didWin,
@@ -576,7 +579,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
             gameDiff: parsed.gameDiff,
           },
           prediction: Math.round(expected * 100),
-          breakdown: buildPointsBreakdown({ 
+          breakdown: calculo || buildPointsBreakdown({ 
               baseDelta, 
               streak: subAdjs.streak || 0, 
               surprise: subAdjs.surprise || 0,
@@ -595,43 +598,51 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
           const basePuntos = Number.isFinite(Number(player.puntosBaseInicial))
             ? Number(player.puntosBaseInicial)
             : oldPoints;
-          transaction.update(doc(db, "usuarios", player.id), {
+          // Build safe update — never write undefined
+          const userUpdate = {
             puntosRanking: newPoints,
             rating: newPoints,
-            nivel: levelAfter,
-            glickoRD: player.newRD,
-            glickoVol: Number(player.glickoVol || 0.06),
-            nivelProgresoPct: progressAfter.progressPct,
-            nivelRango: levelBand.label,
+            nivel: Number(levelAfter.toFixed(4)),
+            nivelProgresoPct: Number(progressAfter.progressPct || 50),
+            nivelRango: levelBand.label || "Bronce",
             victorias: Number(player.victorias || 0) + (didWin ? 1 : 0),
             partidosJugados: Number(player.partidosJugados || 0) + 1,
             rachaActual: didWin
               ? (Number(player.rachaActual || 0) > 0 ? Number(player.rachaActual || 0) + 1 : 1)
               : (Number(player.rachaActual || 0) < 0 ? Number(player.rachaActual || 0) - 1 : -1),
             lastMatchAnalysis: analysis,
-            [`elo.${posKey}`]: currentPosElo + delta,
-            [`elo.${surface}`]: currentSurfElo + delta,
             lastMatchDate: serverTimestamp(),
             nivelBaseInicial: baseNivel,
             puntosBaseInicial: basePuntos,
-          });
+          };
+          // Only write elo sub-indices if they resolve to real numbers
+          if (posKey && Number.isFinite(currentPosElo + delta)) userUpdate[`elo.${posKey}`] = currentPosElo + delta;
+          if (surface && Number.isFinite(currentSurfElo + delta)) userUpdate[`elo.${surface}`] = currentSurfElo + delta;
+          transaction.update(doc(db, "usuarios", player.id), userUpdate);
         }
 
+        // Save rankingLog — timestamp must be a real Firestore Timestamp for query ordering
         const logId = `${matchId}_${player.id}`;
+        const logTimestamp = match.fecha?.seconds
+          ? match.fecha   // Use match date for chronological ordering
+          : serverTimestamp();
         transaction.set(doc(db, "rankingLogs", logId), {
           uid: player.id,
           matchId,
+          matchCol: col,
           matchCollection: col,
-          diff: delta,
-          newTotal: newPoints,
+          diff: Number(delta.toFixed(2)),
+          newTotal: Number(newPoints),
+          pointsBefore: Number(oldPoints),
+          levelBefore: Number(levelBefore.toFixed(4)),
+          levelAfter: Number(levelAfter.toFixed(4)),
+          sets: normalizedResult,
+          won: didWin,
+          type: col === 'eventoPartidos' ? 'TORNEO' : col === 'partidosReto' ? 'RETO' : 'AMISTOSO',
           seasonKey: getSeasonDescriptor(match?.fecha).key,
           seasonLabel: getSeasonDescriptor(match?.fecha).label,
           details: analysis,
-          subEloIndices: {
-            position: currentPosElo + delta,
-            surface: currentSurfElo + delta,
-          },
-          timestamp: serverTimestamp(),
+          timestamp: logTimestamp,
         });
 
         allocations.push({
@@ -640,6 +651,14 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
           baseDelta,
           bonusDelta,
           delta,
+          substrings: {
+            base: Number(player?._temp_base || delta),
+            racha: Number(subAdjs.streak || 0),
+            sorpresa: Number(subAdjs.surprise || 0),
+            clutch: Number(subAdjs.clutch || 0),
+            habilidad: Number(subAdjs.skill || 0),
+            bonusIndividual: Number(bonusDelta || 0),
+          },
           ratingBefore: oldPoints,
           ratingAfter: newPoints,
           levelAfter,
@@ -719,7 +738,14 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
           teamBRating: round2(teamBRating),
           teamADeltas: teamADeltas.map(d => round2(d)),
           teamBDeltas: teamBDeltas.map(d => round2(d)),
-          teamADelta: round2(teamADeltas.reduce((a,b)=>a+b,0)/2), // For legacy compatibility
+          // Added detailed player data for the hacker UI breakdown
+          playerData: allocations.map(a => ({
+              uid: a.uid,
+              name: roster.find(r => r?.id === a.uid)?.nombreUsuario || 'Jugador',
+              delta: round2(a.delta),
+              breakdown: a.substrings // sub-adjustments
+          })),
+          teamADelta: round2(teamADeltas.reduce((a,b)=>a+b,0)/2),
           teamBDelta: round2(teamBDeltas.reduce((a,b)=>a+b,0)/2),
           kCombined: round2(kCombined),
           modeMult,

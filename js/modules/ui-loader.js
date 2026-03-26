@@ -417,3 +417,30 @@ window.toggleAdminSidebar = () => {
     const sb = document.querySelector('.admin-sidebar');
     if (sb) sb.classList.toggle('active');
 };
+
+// Global Listener for Force App Updates
+try {
+    const loaderLoadTime = Date.now();
+    let updateShown = false;
+    import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js').then(({ doc, onSnapshot }) => {
+        onSnapshot(doc(db, "systemConfigs", "forceUpdate"), (snap) => {
+            if (!snap.exists()) return;
+            const data = snap.data();
+            if (data.versionStamp && data.versionStamp > loaderLoadTime && !updateShown) {
+                updateShown = true;
+                const msg = data.message || "Nueva versión obligatoria de la aplicación. Haz clic para actualizar el dispositivo ahora y corregir errores recientes.";
+                if (confirm("ACTUALIZACIÓN OBLIGATORIA DEL SISTEMA:\\n\\n" + msg)) {
+                    // Limpieza severa
+                    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
+                    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => {
+                        window.location.reload(true);
+                    }).catch(() => window.location.reload(true));
+                } else {
+                    window.location.reload(true);
+                }
+            }
+        });
+    });
+} catch(e) {
+    console.warn("Could not attach forceUpdate listener", e);
+}
