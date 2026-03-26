@@ -42,11 +42,40 @@
     <div class="sport-bg"></div>
 
     <main class="page-content ranking-page">
-        <div class="ranking-header-v7 animate-fade-in text-center mb-10">
+        <div class="ranking-header-v7 animate-fade-in text-center mb-6">
             <h1 class="page-title-pro">RANKING <span class="text-primary">Luminatis</span> <span
                     class="v3-badge">#</span></h1>
             <p class="page-sub-pro">Sistema de progresión estable y equilibrado</p>
         </div>
+
+        <div class="elo-explainer-box glass-strong mb-10 animate-fade-in p-4 rounded-2xl flex-col gap-3 border border-primary/20 shadow-glow-sm" style="animation-delay: 0.1s">
+            <div class="flex-row items-center border-b border-white/5 pb-2">
+                <h3 class="text-xs font-black text-white uppercase tracking-widest"><i class="fas fa-chart-line text-primary mr-2"></i> ¿Cómo funciona el ELO V3?</h3>
+            </div>
+            <div class="flex-col md:flex-row gap-4">
+                <div class="elo-graph bg-black/40 p-2 rounded-xl flex-1 border border-white/5 relative h-24 overflow-hidden shadow-inner">
+                   <div class="w-full h-px bg-red-400/30 absolute bottom-[20%] z-10">
+                       <span class="absolute -top-3 right-1 text-[8px] font-black text-red-400">Lv. 2.0 Floor</span>
+                   </div>
+                   <div class="w-full h-px bg-yellow-400/30 absolute top-[20%] z-10">
+                       <span class="absolute -top-3 right-1 text-[8px] font-black text-yellow-400">Elite / Fricción</span>
+                   </div>
+                   <svg preserveAspectRatio="none" class="w-full h-full absolute inset-0 rounded-xl" viewBox="0 0 100 100">
+                       <path d="M0,80 Q25,80 50,50 T100,10 L100,100 L0,100 Z" fill="var(--primary)" opacity="0.1"/>
+                       <path d="M0,80 Q25,80 50,50 T100,10" fill="none" stroke="var(--primary)" stroke-width="3" stroke-linecap="round"/>
+                   </svg>
+                </div>
+                <div class="flex-1 text-[10px] text-white/70 leading-relaxed font-medium">
+                    <p class="mb-2">El nuevo ELO implementa físicas <b>Glicko-2</b> no lineales. Tu nivel oscila entre 2.0 y 4.5 basándose matemáticamente en tus rivales.</p>
+                    <ul class="flex-col gap-1.5 list-none pl-0">
+                        <li class="flex items-center gap-2"><i class="fas fa-arrow-trend-up text-sport-green w-3"></i> <span>Gana a alguien superior = <b>Suma masiva</b>.</span></li>
+                        <li class="flex items-center gap-2"><i class="fas fa-layer-group text-primary w-3"></i> <span>Victoria abultada en sets = <b>Multiplicador X</b>.</span></li>
+                        <li class="flex items-center gap-2"><i class="fas fa-magnet text-yellow-500 w-3"></i> <span>Fricción High-Elo: Para preservar los Top, subir en nivel 4.0+ cuesta exponencialmente más.</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
 
         <div class="ranking-podium-v7 animate-fade-in mb-10">
             <!-- Podium Rank 2 -->

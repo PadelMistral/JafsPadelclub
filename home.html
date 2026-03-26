@@ -94,27 +94,24 @@
                     <span class="hv2-xp-val" id="stat-streak">0</span>
                     <span class="hv2-xp-lbl">RACHA</span>
                 </div>
-                <div class="hv2-xp-stat matches">
+                <div class="hv2-xp-stat matches" onclick="window.location.href='historial.html'">
                     <span class="hv2-xp-icon"><i class="fas fa-gamepad"></i></span>
                     <span class="hv2-xp-val" id="welcome-pending">0</span>
                     <span class="hv2-xp-lbl">JUGADOS</span>
                 </div>
+                <div class="hv2-xp-stat nemesis" onclick="window.location.href='perfil.html#stats-nemesis'">
+                    <span class="hv2-xp-icon"><i class="fas fa-skull"></i></span>
+                    <span class="hv2-xp-val" id="stat-nemesis">---</span>
+                    <span class="hv2-xp-lbl">NÉMESIS</span>
+                </div>
+                <div class="hv2-xp-stat partner" onclick="window.location.href='perfil.html#stats-partner'">
+                    <span class="hv2-xp-icon"><i class="fas fa-handshake"></i></span>
+                    <span class="hv2-xp-val" id="stat-partner">---</span>
+                    <span class="hv2-xp-lbl">SOCIO TOP</span>
+                </div>
             </div>
 
-            <!-- Notification Health -->
-            <section class="hv2-notify-health glass-strong mt-6" id="notify-health-card">
-                <div class="nh-left">
-                    <div class="nh-icon" id="notify-health-icon"><i class="fas fa-bell"></i></div>
-                    <div class="nh-texts">
-                        <p class="nh-title">Notificaciones</p>
-                        <p class="nh-sub" id="notify-health-status">Revisando estado...</p>
-                    </div>
-                </div>
-                <div class="nh-actions">
-                    <button class="btn-ghost" id="btn-notify-permission">Activar</button>
-                    <button class="btn-ghost" id="btn-notify-help" title="¿No te llegan?">Ayuda</button>
-                </div>
-            </section>
+
 
             <!-- Integrated Tactical Report (No Box style) -->
             <div id="home-recommendations" class="hv2-tactical-report-integrated">
@@ -209,62 +206,40 @@
         </section>
 
 
-        <!-- New: Proponer Partida Card -->
-        <section class="animate-up hidden" style="animation-delay:0.11s;">
-            <details class="hv2-collapsible">
-                <summary class="hv2-collapsible-summary">
-                    <span><i class="fas fa-grid-2"></i> Mas opciones</span>
-                    <i class="fas fa-chevron-down"></i>
-                </summary>
-                <div class="hv2-collapsible-body hv2-secondary-stack">
-            <div class="hv2-promo-card" onclick="window.location.href='historial.html'">
-                <div class="hv2-propose-glow"></div>
-                <div class="hv2-propose-content">
-                    <div class="hv2-propose-icon">
-                        <i class="fas fa-clock-rotate-left"></i>
+        <!-- ═══════════════ QUICK ACCESS — PREMIUM CARDS ═══════════════ -->
+        <section class="hv2-quick-access animate-up" style="animation-delay:0.11s;">
+            <div class="hv2-promo-grid">
+                <div class="hv2-promo-card-mini" onclick="window.location.href='historial.html'">
+                    <div class="hv2-promo-icon-bg"><i class="fas fa-clock-rotate-left"></i></div>
+                    <div class="hv2-promo-info">
+                        <span class="hv2-promo-t">Historial</span>
+                        <span class="hv2-promo-s">Mis partidos</span>
                     </div>
-                    <div class="hv2-propose-text">
-                        <span class="hv2-propose-title">HISTORIAL</span>
-                        <span class="hv2-propose-sub">Revisa partidos jugados, resultados y rivales recientes</span>
+                </div>
+                <div class="hv2-promo-card-mini" onclick="window.location.href='palas.html'">
+                    <div class="hv2-promo-icon-bg"><i class="fas fa-table-tennis-paddle-ball"></i></div>
+                    <div class="hv2-promo-info">
+                        <span class="hv2-promo-t">Palas</span>
+                        <span class="hv2-promo-s">Comparador</span>
                     </div>
-                    <div class="hv2-propose-badge">
-                        <i class="fas fa-chevron-right"></i>
+                </div>
+                <div class="hv2-promo-card-mini" onclick="window.openProposeMatchChat()">
+                    <div class="hv2-promo-icon-bg"><i class="fas fa-comments-alt"></i></div>
+                    <div class="hv2-promo-info">
+                        <span class="hv2-promo-t">Proponer</span>
+                        <span class="hv2-promo-s">Nuevo Chat</span>
+                    </div>
+                </div>
+                <div class="hv2-promo-card-mini" onclick="window.location.href='mi-elo.html'">
+                    <div class="hv2-promo-icon-bg"><i class="fas fa-chart-line"></i></div>
+                    <div class="hv2-promo-info">
+                        <span class="hv2-promo-t">Mi ELO</span>
+                        <span class="hv2-promo-s">Progreso</span>
                     </div>
                 </div>
             </div>
-            <div class="hv2-promo-card" onclick="window.location.href='mi-elo.html'">
-                <div class="hv2-propose-glow"></div>
-                <div class="hv2-propose-content">
-                    <div class="hv2-propose-icon">
-                        <i class="fas fa-chart-line"></i>
-                    </div>
-                    <div class="hv2-propose-text">
-                        <span class="hv2-propose-title">MI ELO</span>
-                        <span class="hv2-propose-sub">Consulta tu progreso, puntos y desglose por partido</span>
-                    </div>
-                    <div class="hv2-propose-badge">
-                        <i class="fas fa-chevron-right"></i>
-                    </div>
-                </div>
-            </div>
-            <div class="hv2-propose-card" onclick="window.openProposeMatchChat()">
-                <div class="hv2-propose-glow"></div>
-                <div class="hv2-propose-content">
-                    <div class="hv2-propose-icon">
-                        <i class="fas fa-comments-alt"></i>
-                    </div>
-                    <div class="hv2-propose-text">
-                        <span class="hv2-propose-title">PROPONER PARTIDA</span>
-                        <span class="hv2-propose-sub">¿No encuentras hueco? Abre un chat para concretar con otros jugadores</span>
-                    </div>
-                    <div class="hv2-propose-badge">
-                        <i class="fas fa-plus"></i>
-                    </div>
-                </div>
-            </div>
-                </div>
-            </details>
         </section>
+
         <section id="proposal-inline-section" class="hv2-proposal-inline hidden"></section>
 
         <!-- ═══════════════ PARTIDOS — TABS ═══════════════ -->
@@ -314,17 +289,6 @@
                 <div class="hv2-promo-text">
                     <span class="hv2-promo-title">EVENTOS Y TORNEOS</span>
                     <p class="hv2-promo-desc">Crea torneos, únete a ligas y compite en eventos especiales.</p>
-                </div>
-                <i class="fas fa-chevron-right hv2-promo-arrow"></i>
-            </div>
-        </section>
-        <section class="hv2-events-promo hidden" style="animation-delay:0.14s;">
-            <div class="hv2-promo-card" onclick="window.location.href='palas.html'">
-                <div class="hv2-promo-icon"><i class="fas fa-table-tennis-paddle-ball"></i></div>
-                <div class="hv2-promo-text">
-                    <span class="hv2-promo-title">COMPARADOR DE PALAS</span>
-                    <p class="hv2-promo-desc">Compara y añade tu pala para tener más información y sensaciones de cada
-                        pala</p>
                 </div>
                 <i class="fas fa-chevron-right hv2-promo-arrow"></i>
             </div>
