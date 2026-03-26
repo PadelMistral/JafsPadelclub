@@ -755,7 +755,7 @@ async function scheduleMatchReminders(uid) {
   const minReminderMs = 55 * 60 * 1000;
   const maxReminderMs = 65 * 60 * 1000;
 
-  const collections = ["partidosReto", "partidosAmistosos"];
+  const collections = ["partidosReto", "partidosAmistosos", "eventoPartidos"];
 
   for (const colName of collections) {
     try {
@@ -809,7 +809,7 @@ async function scheduleMatchReminders(uid) {
  */
 async function schedulePendingResultAlerts(uid) {
   const now = Date.now();
-  const collections = ["partidosReto", "partidosAmistosos"];
+  const collections = ["partidosReto", "partidosAmistosos", "eventoPartidos"];
 
   for (const colName of collections) {
     try {
@@ -916,7 +916,7 @@ async function checkMorningMatchSummary(uid) {
   if (localStorage.getItem(lastKey)) return;
 
   try {
-    const collections = ["partidosReto", "partidosAmistosos"];
+    const collections = ["partidosReto", "partidosAmistosos", "eventoPartidos"];
     let matchesToday = 0;
 
     for (const col of collections) {

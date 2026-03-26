@@ -615,6 +615,10 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
             nivelBaseInicial: baseNivel,
             puntosBaseInicial: basePuntos,
           };
+
+          // Sanity check for Glicko components if present
+          if (Number.isFinite(player.glickoRD)) userUpdate.glickoRD = player.glickoRD;
+          if (Number.isFinite(player.glickoVol)) userUpdate.glickoVol = player.glickoVol;
           // Only write elo sub-indices if they resolve to real numbers
           if (posKey && Number.isFinite(currentPosElo + delta)) userUpdate[`elo.${posKey}`] = currentPosElo + delta;
           if (surface && Number.isFinite(currentSurfElo + delta)) userUpdate[`elo.${surface}`] = currentSurfElo + delta;

@@ -453,11 +453,11 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         // v8 Advanced Scoring
         factors = [
             ["Elo Dinámico", detail.cambioElo],
-            ["Ajuste Compañero/Habilidad", detail.factoresAdicionales?.companero],
-            ["Racha de Victorias", detail.factoresAdicionales?.racha],
-            ["Dominio / Sets / Dificultad", detail.factoresAdicionales?.margenSets]
+            ["Ajuste Equipo", detail.factoresAdicionales?.companero],
+            ["Racha / Bonus", detail.factoresAdicionales?.racha],
+            ["Set Margin", detail.factoresAdicionales?.margenSets]
         ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
-        // Si hay cap, mostrarlo
+        
         if (detail.sumaTotal && detail.limiteAplicado && Math.abs(detail.sumaTotal) > Math.abs(detail.limiteAplicado)) {
             factors.push(["Ajuste Tope Rígido", Number((detail.limiteAplicado - detail.sumaTotal).toFixed(2))]);
         }
@@ -468,8 +468,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         ["Bonificación Racha", detail.racha || detail.streak],
         ["Factor Sorpresa", detail.sorpresa || detail.surprise],
         ["Por Sets/Juegos", detail.clutch || detail.sets],
-        ["Ajuste de Nivel/Habilidad", detail.habilidad || detail.skill || detail.dificultad],
-        ["Bonus Individual", detail.bonusIndividual || detail.rendimientoBonus],
+        ["Ajuste Nivel", detail.habilidad || detail.skill],
         ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
     }
 
@@ -537,7 +536,11 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         ${matchInfoHtml}
         <div class="rank-break-title">Desglose de puntuación</div>
         <div class="rank-break-grid">
-          ${factors.map(([k, v]) => `<div class="rank-break-row"><span>${k}</span><b>${Number(v) >= 0 ? "+" : ""}${num(v, 2)}</b></div>`).join("")}
+          ${factors.map(([k, v]) => {
+            const val = Number(v);
+            const colorCls = val > 0 ? "text-sport-green" : val < 0 ? "text-sport-red" : "text-white/40";
+            return `<div class="rank-break-row"><span>${k}</span><b class="${colorCls}">${val > 0 ? "+" : ""}${num(v, 2)}</b></div>`;
+          }).join("")}
         </div>
         
         <div class="rank-break-total">

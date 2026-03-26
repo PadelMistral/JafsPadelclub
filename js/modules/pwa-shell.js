@@ -82,14 +82,17 @@ function ensureAppBanner() {
   banner.className = "app-shell-banner hidden";
   banner.innerHTML = `
     <div class="app-shell-banner__main">
-      <span class="app-shell-banner__dot"></span>
+      <div class="app-shell-banner__icon-wrap">
+        <span class="app-shell-banner__dot"></span>
+        <i class="fas fa-microchip app-shell-banner__bg-icon"></i>
+      </div>
       <div class="app-shell-banner__copy">
-        <strong id="app-shell-banner-title">Estado de la app</strong>
-        <span id="app-shell-banner-text">Preparando experiencia PWA...</span>
+        <strong id="app-shell-banner-title" class="font-display uppercase tracking-widest text-[11px]">Sistema</strong>
+        <span id="app-shell-banner-text" class="font-body text-[10px] opacity-70">Sincronizando...</span>
       </div>
     </div>
     <div class="app-shell-banner__actions">
-      <button id="app-shell-banner-action" type="button" class="app-shell-banner__btn hidden">Abrir</button>
+      <button id="app-shell-banner-action" type="button" class="app-shell-banner__btn hidden">Actualizar</button>
       <button id="app-shell-banner-close" type="button" class="app-shell-banner__ghost" aria-label="Cerrar">
         <i class="fas fa-times"></i>
       </button>

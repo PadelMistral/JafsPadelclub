@@ -371,7 +371,12 @@ document.addEventListener("DOMContentLoaded", () => {
       startPresence();
       initNexus(); // New: Nexus Online
       bindNotificationNudge();
-      checkSystemAlerts(userDoc);
+      
+      // Auto-notifications (Real-time watchers)
+      const { initCoreNotifications } = await import("./core/core-engine.js");
+      initCoreNotifications(user.uid);
+
+      // checkSystemAlerts(userDoc); // DEFERRED: allMatches is empty here
       checkHomeNotices();
       initProposeMatch();
       applyHomeMatchCache({ complete: navigator.onLine === false });
@@ -596,6 +601,108 @@ function renderWelcome() {
   renderHomeIcsSetup();
   startClock();
   setTimeout(checkHomeNotices, 1000);
+}
+
+/* Tactical Stats */
+async function refreshTacticalStats() {
+    if (!currentUser?.uid || !allMatches.length) return;
+    
+    const myUid = currentUser.uid;
+    const finishedMatches = allMatches.filter(m => isFinishedMatch(m));
+    const opponentWins = new Map(); // Opponent -> times they beat me
+    const teammateCounts = new Map(); // Teammate -> times played together
+    
+    let currentStreak = 0;
+    let streakBroken = false;
+
+    // Process matches in reverse chronological order for streak
+    const sorted = [...finishedMatches].sort((a,b) => toDateSafe(b.fecha) - toDateSafe(a.fecha));
+
+    for (const m of sorted) {
+        const players = getNormalizedPlayers(m);
+        if (!players.includes(myUid)) continue;
+
+        const winnerTeam = resolveWinnerTeam(m);
+        const myTeam = players.indexOf(myUid) < 2 ? "A" : "B";
+        const won = winnerTeam === myTeam;
+
+        // Streak
+        if (!streakBroken) {
+            if (currentStreak === 0) currentStreak = won ? 1 : -1;
+            else if ((won && currentStreak > 0) || (!won && currentStreak < 0)) {
+                currentStreak += won ? 1 : -1;
+            } else {
+                streakBroken = true;
+            }
+        }
+
+        // Opponents and Partners
+        const myTeammate = myTeam === "A" 
+            ? players[players.indexOf(myUid) === 0 ? 1 : 0] 
+            : players[players.indexOf(myUid) === 2 ? 3 : 2];
+        
+        if (myTeammate && !String(myTeammate).startsWith("GUEST_") && myTeammate !== "LIBRE") {
+            teammateCounts.set(myTeammate, (teammateCounts.get(myTeammate) || 0) + 1);
+        }
+
+        if (!won) {
+            const opponents = myTeam === "A" ? [players[2], players[3]] : [players[0], players[1]];
+            opponents.forEach(opp => {
+                if (opp && !String(opp).startsWith("GUEST_") && opp !== "LIBRE") {
+                    opponentWins.set(opp, (opponentWins.get(opp) || 0) + 1);
+                }
+            });
+        }
+    }
+
+    // Update Streak
+    const streakEl = document.getElementById("stat-streak");
+    if (streakEl) {
+        streakEl.textContent = (currentStreak > 0 ? "+" : "") + currentStreak;
+        streakEl.className = "hv2-xp-val " + (currentStreak > 0 ? "text-sport-green" : currentStreak < 0 ? "text-sport-red" : "");
+    }
+
+    // Find Partner
+    let topPartnerUid = null;
+    let maxPartnerGames = 0;
+    teammateCounts.forEach((count, uid) => {
+        if (count > maxPartnerGames) {
+            maxPartnerGames = count;
+            topPartnerUid = uid;
+        }
+    });
+
+    const partnerEl = document.getElementById("stat-partner");
+    if (partnerEl) {
+        if (topPartnerUid) {
+            const name = await resolvePlayerName(topPartnerUid);
+            partnerEl.textContent = name.split(" ")[0].toUpperCase();
+            partnerEl.title = `${name} (${maxPartnerGames} partidos juntos)`;
+        } else {
+            partnerEl.textContent = "---";
+        }
+    }
+
+    // Find Nemesis
+    let topNemesisUid = null;
+    let maxNemesisWins = 0;
+    opponentWins.forEach((wins, uid) => {
+        if (wins > maxNemesisWins) {
+            maxNemesisWins = wins;
+            topNemesisUid = uid;
+        }
+    });
+
+    const nemesisEl = document.getElementById("stat-nemesis");
+    if (nemesisEl) {
+        if (topNemesisUid) {
+            const name = await resolvePlayerName(topNemesisUid);
+            nemesisEl.textContent = name.split(" ")[0].toUpperCase();
+            nemesisEl.title = `${name} te ha ganado ${maxNemesisWins} veces`;
+        } else {
+            nemesisEl.textContent = "---";
+        }
+    }
 }
 
 /* Home Notices */
@@ -2261,6 +2368,16 @@ async function mergeMatches(col, list) {
     document.querySelector(".hv2-tab.active")?.dataset.filter || "open";
   renderMatchesByFilter(activeTab);
   saveHomeMatchCache();
+  
+  // Re-run alerts if all main collections are loaded
+  if (loadedCollections.size >= 3) {
+    checkSystemAlerts(currentUserData || {});
+    
+    // Push reminders for today
+    import("./modules/push-notifications.js").then(m => {
+      m.checkDailyReminders(currentUser?.uid, allMatches);
+    });
+  }
 
   if (!homeLoadMeasured && loadedCollections.size >= 1) {
     homeLoadMeasured = true;
