@@ -3,7 +3,7 @@ import { db, getDocument } from "./firebase-service.js";
 import { collection, getDocs, query, orderBy, limit, where } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI } from "./ui-core.js";
 import { injectHeader, injectNavbar } from "./modules/ui-loader.js";
-import { getResultSetsString, getMatchTeamPlayerIds, toDateSafe } from "./utils/match-utils.js";
+import { getResultSetsString, getMatchTeamPlayerIds, toDateSafe, parseGuestMeta } from "./utils/match-utils.js";
 import { getFriendlyTeamName } from "./utils/team-utils.js";
 import { observeCoreSession } from "./core/core-engine.js";
 import {
@@ -35,7 +35,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function resolvePlayerName(uid) {
   if (!uid) return "Jugador";
-  if (String(uid).startsWith("GUEST_")) return String(uid).split("_")[1] || "Invitado";
+  const guest = parseGuestMeta(uid);
+  if (guest) return guest.name || "Invitado";
   if (playerNameCache.has(uid)) return playerNameCache.get(uid);
   try {
     const doc = await getDocument("usuarios", uid);

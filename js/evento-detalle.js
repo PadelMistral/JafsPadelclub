@@ -7,6 +7,7 @@ import { computeGroupTable, generateKnockoutTree, generateRoundRobin } from './e
 import { processMatchResults } from './ranking-service.js';
 import { openResultForm, renderMatchDetail, indexEventUserNames } from './match-service.js';
 import { createNotification } from './services/notification-service.js';
+import { ensureGuestProfile } from './services/guest-player-service.js';
 import { getFriendlyTeamName } from './utils/team-utils.js';
 import { buildBaseMatchPayload, buildMatchPersistencePatch, getResultSetsString } from './utils/match-utils.js';
 
@@ -356,10 +357,15 @@ function setupAddPlayerModal() {
                 showToast('Debes introducir un nombre para el invitado', 'warning');
                 return;
             }
+            const guestProfile = await ensureGuestProfile({
+                name: nombre,
+                level,
+                source: 'event_detail_manual_add',
+            });
             addPlayerToEvent({
-                uid: `invitado_${Date.now()}`,
-                nombre,
-                nivel: level,
+                uid: guestProfile.id,
+                nombre: guestProfile.nombre,
+                nivel: guestProfile.nivel,
                 sidePreference: preference,
                 pairCode,
                 inscritoEn: new Date().toISOString(),

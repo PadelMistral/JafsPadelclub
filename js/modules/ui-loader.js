@@ -1,5 +1,5 @@
 /* js/modules/ui-loader.js - Dynamic Layout Injection v5.5 */
-import { getDocument, auth, db, subscribeCol, getDocsSafe, observerAuth as guardAuth } from '../firebase-service.js';
+import { getDocument, auth, db, subscribeCol, getDocsSafe, observerAuth as guardAuth, logout } from '../firebase-service.js';
 import { initThemeSystem } from './theme-manager.js';
 import { logInfo } from '../core/app-logger.js';
 
@@ -32,6 +32,10 @@ function isPublicPage() {
     if (path === '/' || path.endsWith('/') || path === '') return true;
     
     // Otherwise it's private
+    return false;
+}
+
+function isStandalonePage() {
     return false;
 }
 
@@ -93,6 +97,60 @@ function buildHeaderAvatarMarkup(userData = null) {
     return `<img src="${photo}" alt="Perfil" id="header-avatar-img">`;
 }
 
+function ensureHeaderProfileMenuStyles() {
+    if (document.getElementById("header-profile-menu-styles")) return;
+    const style = document.createElement("style");
+    style.id = "header-profile-menu-styles";
+    style.textContent = `
+        .header-profile-wrap{position:relative}
+        .header-avatar-btn{background:transparent;border:0;padding:0;cursor:pointer}
+        .header-profile-menu{position:absolute;top:calc(100% + 12px);right:0;min-width:220px;padding:10px;border-radius:18px;border:1px solid rgba(255,255,255,.1);background:linear-gradient(180deg,rgba(5,10,22,.98),rgba(2,6,23,.98));box-shadow:0 20px 48px rgba(2,6,23,.42);display:none;z-index:450;backdrop-filter:blur(18px)}
+        .header-profile-wrap.open .header-profile-menu{display:block}
+        .header-menu-user{padding:10px 12px 12px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:8px}
+        .header-menu-name{display:block;color:#fff;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+        .header-menu-sub{display:block;color:rgba(255,255,255,.5);font-size:10px;text-transform:uppercase;letter-spacing:.12em;margin-top:4px}
+        .header-menu-action{width:100%;display:flex;align-items:center;gap:10px;padding:12px 12px;border-radius:14px;border:0;background:transparent;color:#e2e8f0;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;cursor:pointer}
+        .header-menu-action:hover{background:rgba(255,255,255,.06)}
+        .header-menu-action.danger{color:#fca5a5}
+    `;
+    document.head.appendChild(style);
+}
+
+function bindHeaderProfileMenu(userData = null) {
+    ensureHeaderProfileMenuStyles();
+    const wrap = document.getElementById("header-profile-wrap");
+    const toggle = document.getElementById("header-avatar-container");
+    const profileBtn = document.getElementById("header-go-profile");
+    const logoutBtn = document.getElementById("header-logout");
+    if (!wrap || !toggle) return;
+
+    const closeMenu = () => wrap.classList.remove("open");
+    toggle.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        wrap.classList.toggle("open");
+    };
+    profileBtn?.addEventListener("click", () => {
+        closeMenu();
+        window.location.href = "perfil.html";
+    });
+    logoutBtn?.addEventListener("click", async () => {
+        closeMenu();
+        const ok = await confirmUiLoaderAction({
+            title: "Cerrar sesión",
+            message: "Vas a salir de tu cuenta en este dispositivo.",
+            confirmLabel: "Salir",
+            danger: true,
+        });
+        if (!ok) return;
+        await logout().catch(() => {});
+        window.location.href = "index.html";
+    });
+    document.addEventListener("click", (event) => {
+        if (!wrap.contains(event.target)) closeMenu();
+    }, { passive: true });
+}
+
 function isAdminUser(userData) {
     const role = String(userData?.rol || userData?.role || "").toLowerCase();
     return role.includes("admin") || (auth.currentUser?.email === "Juanan221091@gmail.com");
@@ -121,7 +179,7 @@ function getCurrentPageMeta() {
  * Injects the App Header with logo, admin link (if admin), and profile
  */
 export async function injectHeader(userData = null) {
-    if (isPublicPage() || document.querySelector('.app-header')) return;
+    if (isPublicPage() || isStandalonePage() || document.querySelector('.app-header')) return;
     if (!userData && auth.currentUser?.uid) {
         try { userData = await getDocument("usuarios", auth.currentUser.uid); } catch (_) {}
     }
@@ -154,19 +212,34 @@ export async function injectHeader(userData = null) {
                     <i class="fas fa-shield-halved"></i>
                 </div>
             ` : ''}
+            <div class="header-online" onclick="window.showOnlineNexus && window.showOnlineNexus()" title="Usuarios conectados">
+                <span class="header-online-dot"></span>
+                <i class="fas fa-satellite-dish"></i>
+            </div>
  
             <div class="header-notif" onclick="window.location.href='notificaciones.html'" title="Notificaciones">
                 <i class="fas fa-bell"></i>
                 <span class="notification-badge" id="notif-badge" style="display:none">0</span>
             </div>
-            <div class="header-avatar avatar-premium" onclick="window.location.href='perfil.html'" id="header-avatar-container" title="Mi Perfil">
-                ${buildHeaderAvatarMarkup(userData)}
+            <div class="header-profile-wrap" id="header-profile-wrap">
+                <button class="header-avatar avatar-premium header-avatar-btn" id="header-avatar-container" title="Perfil y sesión">
+                    ${buildHeaderAvatarMarkup(userData)}
+                </button>
+                <div class="header-profile-menu" id="header-profile-menu">
+                    <div class="header-menu-user">
+                        <span class="header-menu-name">${escapeUiLoaderHtml(userData?.nombreUsuario || userData?.nombre || "Jugador")}</span>
+                        <span class="header-menu-sub">${escapeUiLoaderHtml(pageMeta.subtitle)}</span>
+                    </div>
+                    <button class="header-menu-action" id="header-go-profile"><i class="fas fa-user"></i> Ir a perfil</button>
+                    <button class="header-menu-action danger" id="header-logout"><i class="fas fa-right-from-bracket"></i> Cerrar sesión</button>
+                </div>
             </div>
         </div>
     `;
     
     document.body.prepend(header);
     document.documentElement.style.setProperty('--app-header-h', '70px');
+    bindHeaderProfileMenu(userData);
     
     if (auth.currentUser && !window.__notifBadgeManagedByUICore) {
         Promise.resolve(
@@ -221,7 +294,7 @@ export function updateHeader(userData) {
  * Injects Bottom Navigation - Redesigned for Beauty
  */
 export async function injectNavbar(activePage) {
-    if (isPublicPage() || document.querySelector('.bottom-nav')) return;
+    if (isPublicPage() || isStandalonePage() || document.querySelector('.bottom-nav')) return;
     
     const nav = document.createElement('nav');
     nav.className = 'bottom-nav';

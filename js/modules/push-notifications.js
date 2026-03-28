@@ -524,6 +524,7 @@ export async function initPushNotifications(uid = null) {
 
 function scheduleSoftPrompt() {
     if (sessionStorage.getItem('notif_soft_prompt_dismissed')) return;
+    if (localStorage.getItem('notif_soft_prompt_completed') === 'true') return;
     
     setTimeout(() => {
         showSoftPrompt();
@@ -532,10 +533,21 @@ function scheduleSoftPrompt() {
 
 async function showSoftPrompt() {
     if (notifPermission !== 'default' || document.getElementById('notif-soft-prompt')) return;
+    if (localStorage.getItem('notif_soft_prompt_completed') === 'true') return;
     
     const div = document.createElement('div');
     div.id = 'notif-soft-prompt';
     div.className = 'soft-prompt-card animate-up';
+    div.style.position = 'fixed';
+    div.style.left = '50%';
+    div.style.right = 'auto';
+    div.style.transform = 'translateX(-50%)';
+    div.style.bottom = window.innerWidth <= 640
+        ? 'calc(88px + env(safe-area-inset-bottom, 0px))'
+        : 'calc(112px + env(safe-area-inset-bottom, 0px))';
+    div.style.width = window.innerWidth <= 640 ? 'calc(100vw - 28px)' : 'min(92vw, 430px)';
+    div.style.maxWidth = '430px';
+    div.style.zIndex = '999999';
     div.innerHTML = `
         <div class="soft-prompt-content">
             <div class="soft-prompt-icon">
@@ -610,6 +622,8 @@ export async function requestNotificationPermission(autoInit = true) {
   notifPermission = Notification.permission;
 
   if (notifPermission === "granted") {
+    localStorage.setItem("notif_soft_prompt_completed", "true");
+    document.getElementById("notif-soft-prompt")?.remove();
     analyticsSetFlag("notifications.permission", true);
     analyticsCount("notifications.enabled", 1);
     persistNotifPermissionFlag("granted").catch(() => {});
@@ -638,6 +652,8 @@ export async function requestNotificationPermission(autoInit = true) {
     notifPermission = Notification.permission;
 
     if (notifPermission === "granted") {
+      localStorage.setItem("notif_soft_prompt_completed", "true");
+      document.getElementById("notif-soft-prompt")?.remove();
       analyticsSetFlag("notifications.permission", true);
       analyticsCount("notifications.enabled", 1);
       showToast(

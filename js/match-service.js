@@ -26,6 +26,7 @@ import { logError } from "./core/app-logger.js";
 import { analyticsCount, analyticsTiming } from "./core/analytics.js";
 import { rateLimitCheck } from "./core/rate-limit.js";
 import { getDivisionByRating } from "./config/elo-system.js";
+import { ensureGuestProfile } from "./services/guest-player-service.js";
 
 /*
   PROD_AUDIT_NEXT_PHASE (analysis only):
@@ -39,8 +40,72 @@ import { getDivisionByRating } from "./config/elo-system.js";
 let apoingStyleInjected = false;
 const eventDocCache = new Map();
 // Fallback para evitar ReferenceError en tabs de detalle
-function renderExtendedBreakdown() {
-    return "";
+async function renderExtendedBreakdown(container, matchId) {
+    if (!container || !matchId) return;
+    container.innerHTML = `<div class="center p-10 opacity-50">Cargando desglose de puntos...</div>`;
+    try {
+        const detailSnap = await window.getDocsSafe(query(collection(db, "matchPointDetails"), where("matchId", "==", matchId), limit(1)));
+        const detail = detailSnap?.docs?.[0]?.data?.() || null;
+        if (!detail) {
+            container.innerHTML = `<div class="p-4 rounded-2xl border border-dashed border-white/10 text-center text-[10px] uppercase tracking-widest opacity-40">No hay desglose guardado</div>`;
+            return;
+        }
+
+        const scoringSystem = String(detail?.scoringSystem || detail?.systemVersion || "default").toLowerCase();
+        const scoringLabel = scoringSystem.includes("atp") ? "ATP Hybrid Competitive" : "ELO Hibrido Club";
+        const allocations = Array.isArray(detail?.playerAllocations) ? detail.playerAllocations.filter((item) => !item?.isGuest) : [];
+        const pointsPerSet = Array.isArray(detail?.pointsPerSet) ? detail.pointsPerSet : [];
+
+        const setRows = pointsPerSet.map((setInfo) => `
+            <div class="bd-item-v7">
+                <span class="bd-label">SET ${setInfo.set}</span>
+                <span class="bd-val">${setInfo.gamesA}-${setInfo.gamesB}</span>
+            </div>
+        `).join("");
+
+        const playerCards = allocations.map((item) => {
+            const breakdown = item?.substrings || {};
+            const analysis = item?.analysis || {};
+            const real = analysis?.breakdown?.desgloseReal || {};
+            const delta = Number(item?.delta || 0);
+            return `
+                <div class="atp-break-card">
+                    <div class="flex-row between items-center mb-2">
+                        <span class="text-[10px] font-black text-white uppercase tracking-wider">${(item?.name || item?.uid || "Jugador").toUpperCase()}</span>
+                        <span class="text-[11px] font-black ${delta >= 0 ? "text-sport-green" : "text-danger"}">${delta >= 0 ? "+" : ""}${delta.toFixed(2)}</span>
+                    </div>
+                    <div class="atp-break-grid">
+                        <div><span>Base</span><b>${Number(breakdown.base || 0).toFixed(2)}</b></div>
+                        <div><span>Comp</span><b>${Number(breakdown.habilidad || 0).toFixed(2)}</b></div>
+                        <div><span>Margen</span><b>${Number(breakdown.clutch || 0).toFixed(2)}</b></div>
+                        <div><span>Seed</span><b>${Number(real.seedIndividual || 0).toFixed(0)}</b></div>
+                        <div><span>Gap pareja</span><b>${Number(real.diferenciaConCompanero || 0).toFixed(2)}</b></div>
+                        <div><span>Reparto</span><b>${Number(real.repartoPareja || 0).toFixed(2)}</b></div>
+                    </div>
+                    ${real.roleHint ? `<div class="atp-role-hint">${String(real.roleHint).replace(/_/g, " ")}</div>` : ""}
+                </div>
+            `;
+        }).join("");
+
+        container.innerHTML = `
+            <div class="elo-breakdown-v7 animate-fade-in">
+                <div class="flex-row between items-center mb-3">
+                    <span class="text-[9px] font-black text-primary uppercase tracking-widest">Desglose extendido</span>
+                    <span class="pm-chip">${scoringLabel}</span>
+                </div>
+                <div class="bd-grid-v7 mb-4">${setRows || `<div class="bd-item-v7"><span class="bd-label">SETS</span><span class="bd-val">--</span></div>`}</div>
+                <div class="atp-break-summary">
+                    <div><span>Sistema</span><b>${scoringLabel}</b></div>
+                    <div><span>Balance</span><b>${Number(detail?.zeroSumCheck || 0).toFixed(2)}</b></div>
+                    <div><span>Total puntos</span><b>${Number(detail?.totalPoints || 0)}</b></div>
+                </div>
+                <div class="flex-col gap-3 mt-4">${playerCards || `<div class="opacity-40 text-center text-[10px] uppercase tracking-widest">Sin datos de jugadores</div>`}</div>
+            </div>
+        `;
+    } catch (error) {
+        console.error("Extended breakdown render failed", error);
+        container.innerHTML = `<div class="p-4 rounded-2xl border border-red-500/20 text-center text-[10px] uppercase tracking-widest text-red-300">No se pudo cargar el desglose</div>`;
+    }
 }
 async function getEventDocCached(eventId) {
     if (!eventId) return null;
@@ -69,9 +134,39 @@ function ensureApoingStyles() {
       .md-tab-btn.active{border-color:rgba(34,211,238,.6);background:rgba(34,211,238,.12);color:#e0fbff}
       .md-tab-panel{display:flex;flex-direction:column;gap:14px}
       .md-tab-panel.hidden{display:none}
+      .scoring-select-v7{
+        width:100%;min-height:48px;border-radius:16px;border:1px solid rgba(255,255,255,.12);
+        background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+        color:#fff;padding:0 14px;font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase;
+        box-shadow:0 12px 24px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.06);
+      }
+      .scoring-select-v7 option{background:#08111f;color:#fff}
+      .scoring-help-v7{font-size:10px;line-height:1.45;color:rgba(255,255,255,.58);padding-left:2px}
+      .atp-break-summary{
+        display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;
+      }
+      .atp-break-summary div,.atp-break-card{
+        border:1px solid rgba(255,255,255,.1);border-radius:16px;background:rgba(255,255,255,.04);
+      }
+      .atp-break-summary div{padding:12px}
+      .atp-break-summary span,.atp-break-grid span{
+        display:block;font-size:9px;font-weight:900;letter-spacing:1px;text-transform:uppercase;opacity:.55
+      }
+      .atp-break-summary b{display:block;margin-top:6px;font-size:13px;font-weight:900;color:#fff}
+      .atp-break-card{padding:12px}
+      .atp-break-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+      .atp-break-grid b{display:block;margin-top:4px;font-size:12px;font-weight:900;color:#fff}
+      .atp-role-hint{
+        margin-top:10px;padding:8px 10px;border-radius:999px;display:inline-flex;align-items:center;
+        border:1px solid rgba(251,191,36,.2);background:rgba(251,191,36,.08);color:#fcd34d;
+        font-size:9px;font-weight:900;letter-spacing:1px;text-transform:uppercase;
+      }
       .ai-coach-btn-v1{
         border:1px solid rgba(198,255,0,.35);background:rgba(198,255,0,.1);color:#dfff8a;
         border-radius:10px;padding:7px 10px;font-size:10px;font-weight:900;letter-spacing:1px;
+      }
+      @media (max-width:560px){
+        .atp-break-summary,.atp-break-grid{grid-template-columns:1fr 1fr}
       }
       @keyframes apoingPulse{
         0%{box-shadow:0 0 0 0 rgba(0,212,255,.28)}
@@ -215,6 +310,8 @@ async function showPostMatchSummaryModal(rankingSync = {}, matchId = null) {
     const bonus = Number(analysis.bonusDelta || analysis.puntosCalculados?.rendimientoBonus || 0);
     const prog = Math.max(0, Math.min(100, Number(analysis.levelProgressAfter || 0)));
     const division = getDivisionByRating(newPts);
+    const scoringSystem = String(rankingSync?.summary?.scoringSystem || analysis?.systemVersion || "default");
+    const scoringLabel = String(scoringSystem).includes("atp") ? "ATP Hybrid Competitive" : "ELO Hibrido Club";
 
     await new Promise((resolve) => {
         const overlay = document.createElement("div");
@@ -223,6 +320,9 @@ async function showPostMatchSummaryModal(rankingSync = {}, matchId = null) {
         overlay.innerHTML = `
           <div class="post-match-sheet animate-up">
             <div class="post-match-title">Resumen Post-Partido</div>
+            <div style="margin-top:10px;display:flex;justify-content:flex-start;">
+              <span class="pm-chip">${scoringLabel}</span>
+            </div>
             <div class="post-match-main">
               <div class="pm-cell"><span>Rating anterior</span><b>${oldPts}</b></div>
               <div class="pm-cell"><span>Rating nuevo</span><b>${newPts}</b></div>
@@ -292,6 +392,12 @@ function hasMatchResult(match) {
     if (typeof match.resultado === "string") return match.resultado.trim().length > 0;
     if (typeof match?.resultado?.sets === "string") return match.resultado.sets.trim().length > 0;
     return false;
+}
+
+function getScoringSystemLabel(systemKey = "default") {
+    return String(systemKey || "default").toLowerCase() === "atp_test"
+        ? "ATP Hybrid Competitive"
+        : "ELO Hibrido Club";
 }
 
 function getFilledPlayers(match) {
@@ -2686,6 +2792,11 @@ export const openResultForm = async (id, col) => {
     const allowAdminEdit = isAdmin === true;
     const resultReadRaw = matchDoc?.resultado?.sets || (typeof matchDoc?.resultado === "string" ? matchDoc.resultado : "");
     const resultRead = resultReadRaw || 'Sin resultado';
+    const scoringSystemCurrent = String(
+        matchDoc?.scoringSystem ||
+        matchDoc?.eloSummary?.scoringSystem ||
+        "default"
+    ).toLowerCase();
     let parsed = null;
     try {
         if (resultReadRaw) parsed = parseMatchResult(resultReadRaw);
@@ -2838,6 +2949,17 @@ export const openResultForm = async (id, col) => {
                 </select>
             </div>
 
+            <div class="range-box-v7 flex-col gap-2 mb-8 items-start">
+                <span class="text-[10px] font-black text-primary uppercase tracking-widest pl-1">Sistema de puntuacion</span>
+                <select id="scoring-system-select" class="scoring-select-v7 outline-none cursor-pointer">
+                    <option value="default" class="bg-[#0f172a]" ${scoringSystemCurrent === "default" ? "selected" : ""}>ELO HIBRIDO CLUB</option>
+                    <option value="atp_test" class="bg-[#0f172a]" ${scoringSystemCurrent === "atp_test" ? "selected" : ""}>ATP HYBRID COMPETITIVE</option>
+                </select>
+                <p class="scoring-help-v7">
+                    Se guarda con el partido y sera el sistema usado al calcular puntos, nivel y desglose.
+                </p>
+            </div>
+
             <button class="btn-confirm-v7" id="btn-save-res">
                 <span class="t-main">REGISTRAR DATOS</span>
                 <i class="fas fa-save"></i>
@@ -2909,6 +3031,7 @@ export const openResultForm = async (id, col) => {
             showToast("Guardando...", "Registrando resultado oficial del partido.", "info");
             const resultStr = res.join(' ');
             const mvpId = document.getElementById('mvp-select')?.value || null;
+            const scoringSystem = String(document.getElementById('scoring-system-select')?.value || scoringSystemCurrent || 'default').toLowerCase();
             const adminOverride = adminEditMode && matchDoc?.rankingProcessedAt != null;
             
             if (adminOverride) {
@@ -2921,7 +3044,7 @@ export const openResultForm = async (id, col) => {
             }
 
             // We only call processMatchResults, it will handle estado: 'jugado' atomically
-            const rankingSync = await processMatchResults(id, col, resultStr, { mvpId });
+            const rankingSync = await processMatchResults(id, col, resultStr, { mvpId, scoringSystem });
             if (!rankingSync?.success) {
                 const rawErr = rankingSync?.error || 'ranking-sync-failed';
                 console.warn("[ResultForm] ranking error", { id, col, rawErr });
@@ -2959,7 +3082,7 @@ export const openResultForm = async (id, col) => {
             analyticsTiming("match.report_result_ms", performance.now() - resultT0);
             showToast(
                 "DATOS GUARDADOS",
-                rankingSync?.skipped ? "Resultado guardado (ranking ya procesado)." : "Ranking actualizado",
+                rankingSync?.skipped ? `Resultado guardado (${getScoringSystemLabel(scoringSystem)}).` : `Ranking actualizado · ${getScoringSystemLabel(scoringSystem)}`,
                 "success"
             );
             window.closeMatchModal();
@@ -3116,14 +3239,23 @@ window.animateSelectionAndAdd = (uid, mid, col, idx, eventOrNull) => {
 };
 
 
-window.addGuest = (mid, col, extra) => {
+window.addGuest = async (mid, col, extra) => {
     const name = document.getElementById('guest-name').value.trim();
     const level = document.getElementById('guest-level').value || 2.5;
     const pala = document.getElementById('guest-pala').value.trim() || 'Desconocida';
     
     if (!name) return showToast("ERROR", "Nombre requerido", "error");
     
-    const guestId = `GUEST_${name}_${level}_${pala}`;
+    const guestProfile = await ensureGuestProfile({
+        name,
+        level: parseFloat(level),
+        source: 'match_service',
+        extra: { palaFavorita: pala }
+    }).catch((e) => {
+        console.error('ensureGuestProfile failed', e);
+        return null;
+    });
+    const guestId = guestProfile?.id || `GUEST_${name}_${level}_${pala}`;
     
     if (mid === 'NEW') {
         const u = { id: guestId, nombreUsuario: name + ' (Inv)', nivel: parseFloat(level), fotoPerfil: './imagenes/Logojafs.png', isGuest: true };
@@ -3133,7 +3265,7 @@ window.addGuest = (mid, col, extra) => {
     } else {
         window.executeMatchAction('add', mid, col, { uid: guestId, idx: extra.idx });
     }
-    showToast('Invitado', 'Se ha añadido al squad');
+    showToast('Invitado', `Se ha guardado ${name} con nivel ${Number(level).toFixed(1)}`, 'success');
 };
  
 window.selectUserForNew = (uid, forceIdx = null) => {

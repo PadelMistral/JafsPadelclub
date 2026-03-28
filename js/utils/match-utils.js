@@ -234,14 +234,19 @@ export function parseGuestMeta(uid) {
   const s = String(uid);
   if (!s.startsWith("GUEST_") && !s.startsWith("invitado_") && !s.startsWith("manual_")) return null;
   const parts = s.split("_");
-  if (parts.length >= 4) {
+  if (parts.length >= 4 && Number.isFinite(parseFloat(parts[parts.length - 2]))) {
     const levelRaw = parts[parts.length - 2];
     const level = parseFloat(levelRaw);
     const nameRaw = parts.slice(1, parts.length - 2).join(" ");
     const name = nameRaw.replace(/_/g, " ").trim() || "Invitado";
     return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
   }
-  const name = (parts[1] || "Invitado").replace(/_/g, " ").trim() || "Invitado";
+  const joinedName = parts.slice(1).join(" ").replace(/_/g, " ").trim() || "Invitado";
   const level = parseFloat(parts[2]);
+  if (Number.isFinite(level) && parts.length === 3) {
+    const name = (parts[1] || "Invitado").replace(/_/g, " ").trim() || "Invitado";
+    return { name, level, raw: s };
+  }
+  const name = joinedName;
   return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
 }

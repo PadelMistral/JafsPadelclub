@@ -8,6 +8,7 @@ import {
     query, where, orderBy, serverTimestamp, onSnapshot, writeBatch,
     arrayUnion, arrayRemove, increment
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
+import { ensureGuestProfile } from './services/guest-player-service.js';
 
 initAppUI('events');
 
@@ -617,13 +618,20 @@ async function saveNewEvent() {
         };
 
         if (invitados.length) {
-            payload.inscritos = invitados.map((inv, i) => ({
-                uid: `invitado_${Date.now()}_${i}`,
-                nombre: inv.nombre,
-                nivel: inv.nivel,
+            const guestProfiles = await Promise.all(
+                invitados.map((inv) => ensureGuestProfile({
+                    name: inv.nombre,
+                    level: inv.nivel,
+                    source: 'event_create',
+                }))
+            );
+            payload.inscritos = guestProfiles.map((guest) => ({
+                uid: guest.id,
+                nombre: guest.nombre,
+                nivel: guest.nivel,
                 inscritoEn: new Date().toISOString(),
                 invitado: true,
-                aprobado: true, // Invitados se añaden directamente como aprobados
+                aprobado: true,
             }));
         }
 

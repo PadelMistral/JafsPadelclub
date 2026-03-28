@@ -82,9 +82,16 @@ export function renderThemeSelector(containerId) {
                      data-theme="${t.id}"
                      onclick="window.setTheme('${t.id}')"
                      title="${t.desc}">
-                    <div class="theme-preview-dot" style="background: ${t.color}; box-shadow: 0 0 12px ${t.color}40;"></div>
-                    <span class="theme-icon">${t.icon}</span>
-                    <span class="theme-name">${t.name}</span>
+                    <div class="theme-preview ${t.id}">
+                        <span class="theme-icon">${t.icon}</span>
+                    </div>
+                    <div class="theme-option-head">
+                        <div class="theme-option-copy">
+                            <span class="theme-name">${t.name}</span>
+                            <span class="theme-desc">${t.desc}</span>
+                        </div>
+                        <span class="theme-accent" style="background:${t.color}; box-shadow:0 0 18px ${t.color}66;"></span>
+                    </div>
                 </div>
             `).join('')}
         </div>

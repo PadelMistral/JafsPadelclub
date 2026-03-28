@@ -15,8 +15,9 @@ import {
 } from "./config/elo-system.js";
 import { checkAchievements } from "./achievement-service.js";
 import { calculateGlicko2Delta, applyRankingAdjustments, calculateNewLevel } from "./services/rating-engine.js";
-import { buildMatchPersistencePatch } from "./utils/match-utils.js";
+import { buildMatchPersistencePatch, parseGuestMeta } from "./utils/match-utils.js";
 import { SistemaPuntuacionAvanzado } from "./services/sistema-puntuacion.js";
+import { ATP_TEST_SYSTEM_VERSION, calculateAtpMatchDeltas } from "./pruebaElo.js";
 
 const puntuacionAvanzada = new SistemaPuntuacionAvanzado();
 
@@ -31,6 +32,36 @@ function getSeasonDescriptor(dateLike = null) {
     key: `${safeDate.getFullYear()}-T${quarter}`,
     label: `T${quarter} ${safeDate.getFullYear()}`,
   };
+}
+
+/**
+ * Strips 'undefined' values recursively to avoid Firebase errors
+ */
+function sanitizeForFirestore(obj) {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== "object") return obj;
+
+  // Preserve special Firestore objects (FieldValue, Timestamp, DocumentReference)
+  if (
+    obj.constructor?.name === "FieldValue" ||
+    obj.constructor?.name === "Timestamp" ||
+    obj.constructor?.name === "DocumentReference" ||
+    (obj._delegate && obj._modelId) ||
+    typeof obj.toMillis === "function"
+  ) {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) return obj.map(v => sanitizeForFirestore(v));
+
+  const result = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const val = sanitizeForFirestore(obj[key]);
+      result[key] = val === undefined ? null : val;
+    }
+  }
+  return result;
 }
 
 function normalizeResultString(resultStr = "") {
@@ -169,7 +200,10 @@ function calcSkillAdjustment(baseDelta, player, posKey, surface) {
 function getSafePlayerDoc(p, fallbackId = null) {
   if (!p) return null;
   const id = p.id || fallbackId;
-  const isGuest = String(id || "").startsWith("GUEST_");
+  // If isGuest was explicitly provided in the object, respect it. 
+  // Otherwise check if ID starts with GUEST_
+  const idStr = String(id || "");
+  const isGuest = (p.isGuest === true) || idStr.startsWith("GUEST_") || idStr.startsWith("invitado_") || idStr.startsWith("manual_");
   const baseRating = resolvePlayerRating(p);
   return {
     ...p,
@@ -180,6 +214,98 @@ function getSafePlayerDoc(p, fallbackId = null) {
     glickoRD: Number(p.glickoRD || 80),
     glickoVol: Number(p.glickoVol || 0.06),
   };
+}
+
+function findEventParticipantMeta(evData, uid) {
+  if (!evData || !uid) return null;
+  const idStr = String(uid);
+  let entry = (evData.inscritos || []).find((item) => String(item?.uid || item?.id || item?.nombre || "") === idStr);
+  if (entry) return entry;
+  if (Array.isArray(evData.teams)) {
+    for (const team of evData.teams) {
+      const found = (team?.players || []).find((item) => String(item?.uid || item?.id || item?.nombre || "") === idStr);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function resolveGuestFallbackMeta({ uid, index = -1, match = {}, eventEntry = null, partner = null }) {
+  const rawId = String(uid || "");
+  const parsedGuest = parseGuestMeta(rawId);
+  const directName =
+    match?.playerNames?.[index] ||
+    match?.nombresJugadores?.[index] ||
+    match?.guestNames?.[index] ||
+    match?.invitados?.[index]?.nombre ||
+    eventEntry?.nombre ||
+    eventEntry?.nombreUsuario ||
+    null;
+  const directLevel = Number(
+    eventEntry?.nivel ??
+    match?.guestLevels?.[index] ??
+    match?.playerLevels?.[index] ??
+    match?.invitados?.[index]?.nivel ??
+    parsedGuest?.level ??
+    NaN,
+  );
+
+  const partnerLevel = Number(partner?.nivel || NaN);
+  const fallbackLevel = Number.isFinite(directLevel)
+    ? directLevel
+    : (Number.isFinite(partnerLevel) ? Math.max(1.0, Math.min(7.0, partnerLevel - 0.25)) : 2.5);
+  const fallbackName = directName || parsedGuest?.name || (rawId.length > 15 ? `Invitado ${rawId.slice(0, 4)}` : rawId || "Invitado");
+
+  return {
+    nombre: String(fallbackName || "Invitado").trim() || "Invitado",
+    nivel: fallbackLevel,
+  };
+}
+
+function resolveCompetitiveRating(player = null) {
+  if (!player) return ELO_CONFIG.BASE_RATING;
+  const levelRating = getBaseEloByLevel(Number(player?.nivel || 2.5));
+  const currentRating = resolvePlayerRating(player);
+  if (player?.isGuest) return levelRating;
+  return round2((currentRating * 0.55) + (levelRating * 0.45));
+}
+
+function normalizeGuestOverrides(guestOverrides = {}) {
+  const normalized = {};
+  Object.entries(guestOverrides || {}).forEach(([key, value]) => {
+    if (!value || typeof value !== "object") return;
+    normalized[String(key)] = {
+      uid: String(value.uid || key || ""),
+      name: String(value.name || value.nombre || "").trim(),
+      nivel: Number(value.nivel ?? value.level ?? NaN),
+      index: Number.isFinite(Number(value.index)) ? Number(value.index) : null,
+    };
+  });
+  return normalized;
+}
+
+function findGuestOverride(guestOverrides = {}, uid = "", index = -1) {
+  const uidStr = String(uid || "");
+  const direct = guestOverrides[uidStr];
+  if (direct) return direct;
+  return Object.values(guestOverrides).find((item) => {
+    if (!item) return false;
+    if (String(item.uid || "") === uidStr) return true;
+    return Number.isFinite(Number(item.index)) && Number(item.index) === Number(index);
+  }) || null;
+}
+
+function normalizeManualDeltas(manualDeltas = {}) {
+  const normalized = {};
+  Object.entries(manualDeltas || {}).forEach(([uid, value]) => {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) normalized[String(uid)] = parsed;
+  });
+  return normalized;
+}
+
+function isManualDeltaDefined(manualDeltas = {}, uid = "") {
+  return Object.prototype.hasOwnProperty.call(manualDeltas, String(uid || ""));
 }
 
 function buildPointsBreakdown({
@@ -206,6 +332,44 @@ function buildPointsBreakdown({
     habilidad: skillVal,
     bonusIndividual: bonusVal,
     finalDelta: round2(finalDelta || (base + racha + sorpresa + clutchVal + skillVal + bonusVal))
+  };
+}
+
+function buildTransparentBreakdown({
+  base = 0,
+  streak = 0,
+  surprise = 0,
+  clutch = 0,
+  skill = 0,
+  bonus = 0,
+  finalDelta = 0,
+  extras = {},
+}) {
+  const normalized = {
+    base: round2(base),
+    racha: round2(streak),
+    sorpresa: round2(surprise),
+    clutch: round2(clutch),
+    habilidad: round2(skill),
+    bonusIndividual: round2(bonus),
+  };
+  const subtotal = round2(
+    normalized.base +
+    normalized.racha +
+    normalized.sorpresa +
+    normalized.clutch +
+    normalized.habilidad +
+    normalized.bonusIndividual,
+  );
+  const final = round2(finalDelta);
+  const ajusteBalance = round2(final - subtotal);
+  return {
+    ...extras,
+    ...normalized,
+    subtotalVariables: subtotal,
+    ajusteBalance,
+    totalCalculado: round2(subtotal + ajusteBalance),
+    finalDelta: final,
   };
 }
 
@@ -301,19 +465,429 @@ export function predictEloImpact({
 
 export { getBaseEloByLevel };
 
+async function buildRosterAndContext({ matchId, col, initial, extraMatchData = {}, readDoc }) {
+  let jugadores = Array.isArray(initial?.jugadores) && initial.jugadores.length === 4
+    ? initial.jugadores
+    : Array.isArray(initial?.playerUids) && initial.playerUids.length === 4
+      ? initial.playerUids
+      : Array.isArray(initial?.jugadores) && initial.jugadores.filter(Boolean).length > 0
+        ? initial.jugadores
+        : Array.isArray(initial?.playerUids) && initial.playerUids.filter(Boolean).length > 0
+          ? initial.playerUids
+          : null;
+
+  if (col === "eventoPartidos" && (!jugadores || jugadores.filter(Boolean).length !== 4)) {
+    const eventIdParent = initial?.eventoId || initial?.eventId || null;
+    if (eventIdParent && (initial?.teamAId || initial?.teamBId)) {
+      const ev = await readDoc("eventos", eventIdParent);
+      const teams = Array.isArray(ev?.teams) ? ev.teams : [];
+      const teamA = teams.find((t) => t?.id === initial?.teamAId);
+      const teamB = teams.find((t) => t?.id === initial?.teamBId);
+      const players = [...(teamA?.playerUids || []), ...(teamB?.playerUids || [])];
+      if (players.length >= 4) jugadores = players.slice(0, 4);
+    }
+  }
+
+  if (!initial || !jugadores || jugadores.filter(Boolean).length !== 4) {
+    throw new Error("Match or players invalid");
+  }
+
+  const guestOverrides = normalizeGuestOverrides(extraMatchData?.guestOverrides || {});
+  const match = { ...initial, jugadores: initial.jugadores || initial.playerUids || jugadores };
+  const eventId = match.eventoId || match.eventId || null;
+  let evData = eventId ? await readDoc("eventos", eventId) : null;
+  const roster = [];
+  const matchPlayers = (match.jugadores || []).slice(0, 4);
+
+  for (let i = 0; i < 4; i += 1) {
+    const uid = matchPlayers[i];
+    const override = findGuestOverride(guestOverrides, uid, i);
+
+    if (!uid || uid === "" || uid === "null") {
+      roster.push({
+        ...getSafePlayerDoc({
+          id: `VIRTUAL_${i}_${matchId}`,
+          nombre: override?.name || "Hueco Libre",
+          nivel: Number.isFinite(override?.nivel) ? override.nivel : 2.5,
+          isGuest: true
+        }, `VIRTUAL_${i}`),
+        __exists: false
+      });
+      continue;
+    }
+
+    const userData = await readDoc("usuarios", uid);
+    if (userData) {
+      roster.push({ ...getSafePlayerDoc({ id: uid, ...userData }, uid), __exists: true });
+      continue;
+    }
+
+    const guestData = await readDoc("invitados", uid);
+    if (guestData || override) {
+      const baseGuestData = guestData || {};
+      roster.push({
+        ...getSafePlayerDoc({
+          id: uid,
+          nombre: override?.name || baseGuestData.nombre || baseGuestData.nombreUsuario || parseGuestMeta(uid)?.name || "Invitado",
+          nivel: Number.isFinite(override?.nivel) ? override.nivel : Number(baseGuestData.nivel || 2.5),
+          puntosRanking: Number(baseGuestData.puntosBaseInicial || baseGuestData.puntosRanking || NaN),
+          isGuest: true,
+        }, uid),
+        __exists: false
+      });
+      continue;
+    }
+
+    const partnerIdxOfTeam = i < 2 ? (i === 0 ? 1 : 0) : (i === 2 ? 3 : 2);
+    const partnerId = matchPlayers[partnerIdxOfTeam];
+    const partnerDoc = partnerId ? roster.find((r) => r?.id === partnerId) : null;
+    const guestInfo = parseGuestMeta(uid);
+    if (guestInfo || override) {
+      const eventEntry = findEventParticipantMeta(evData, uid);
+      const guestMeta = resolveGuestFallbackMeta({
+        uid,
+        index: i,
+        match,
+        eventEntry,
+        partner: partnerDoc,
+      });
+      roster.push({
+        ...getSafePlayerDoc({
+          id: uid,
+          nombre: override?.name || guestMeta.nombre,
+          nivel: Number.isFinite(override?.nivel) ? override.nivel : guestMeta.nivel,
+          isGuest: true,
+        }, uid),
+        __exists: false
+      });
+      continue;
+    }
+
+    if (evData) {
+      const pEntry = findEventParticipantMeta(evData, uid);
+      if (pEntry) {
+        roster.push({
+          ...getSafePlayerDoc({
+            id: uid,
+            nombre: override?.name || pEntry.nombre || pEntry.nombreUsuario || String(uid),
+            nivel: Number.isFinite(override?.nivel) ? override.nivel : Number(pEntry.nivel || 2.5),
+            isGuest: true,
+          }, uid),
+          __exists: false
+        });
+        continue;
+      }
+    }
+
+    const guestMeta = resolveGuestFallbackMeta({
+      uid,
+      index: i,
+      match,
+      eventEntry: findEventParticipantMeta(evData, uid),
+      partner: partnerDoc,
+    });
+    roster.push({
+      ...getSafePlayerDoc({
+        id: uid,
+        nombre: override?.name || guestMeta.nombre,
+        nivel: Number.isFinite(override?.nivel) ? override.nivel : guestMeta.nivel,
+        isGuest: true,
+      }, uid),
+      __exists: false,
+    });
+  }
+
+  return { match, jugadores, roster, evData, eventId };
+}
+
+function computeMatchScoring({ matchId, col, resultStr, extraMatchData = {}, match, roster }) {
+  const normalizedResult = normalizeResultString(resultStr);
+  const parsed = parseMatchResult(normalizedResult);
+  const pointDetails = estimatePointDetailsFromSets(normalizedResult);
+  const isComp = col === "partidosReto" || match.tipo === "reto";
+  const modeMult = isComp ? 1.0 : 0.95;
+  const matchFactor = calculateMatchFactor(parsed);
+  const teamA = roster.slice(0, 2).filter(Boolean);
+  const teamB = roster.slice(2, 4).filter(Boolean);
+  if (teamA.length !== 2 || teamB.length !== 2) throw new Error("Teams incomplete after fallback.");
+
+  const teamARating = (resolveCompetitiveRating(teamA[0]) + resolveCompetitiveRating(teamA[1])) / 2;
+  const teamBRating = (resolveCompetitiveRating(teamB[0]) + resolveCompetitiveRating(teamB[1])) / 2;
+  const expectedA = computeExpectedScore(teamARating, teamBRating);
+  const winnerIsA = parsed.winnerTeam === "A";
+  const dynamicKs = roster.map((p) => (p && !p.isGuest ? getDynamicKFactor(p) : null));
+  const nonGuestKs = dynamicKs.filter((k) => Number.isFinite(k));
+  const kCombined = nonGuestKs.length
+    ? nonGuestKs.reduce((acc, k) => acc + k, 0) / nonGuestKs.length
+    : ELO_CONFIG.K.STABLE;
+  const provisionalDeltas = [0, 0, 0, 0];
+  const allAdjs = [null, null, null, null];
+  const calcContexts = [null, null, null, null];
+  const teamKind = col === "eventoPartidos" ? "evento" : (match.tipo || (col === "partidosReto" ? "reto" : "amistoso"));
+
+  for (let i = 0; i < 4; i += 1) {
+    const player = roster[i];
+    if (!player || player.isGuest) {
+      provisionalDeltas[i] = 0;
+      continue;
+    }
+
+    const amITeamA = i < 2;
+    const didWin = (amITeamA && winnerIsA) || (!amITeamA && !winnerIsA);
+    const actualScore = didWin ? 1 : 0;
+    const misAliados = amITeamA ? teamA : teamB;
+    const companero = misAliados.find((p) => p && p.id !== player.id) || null;
+    const misRivales = amITeamA ? teamB : teamA;
+    const margenSetsFormatted = {
+      juegosMios: didWin ? Math.max(parsed.teamAGames, parsed.teamBGames) : Math.min(parsed.teamAGames, parsed.teamBGames),
+      juegosRivales: didWin ? Math.min(parsed.teamAGames, parsed.teamBGames) : Math.max(parsed.teamAGames, parsed.teamBGames),
+      setsMios: didWin ? Math.max(parsed.teamASets, parsed.teamBSets) : Math.min(parsed.teamASets, parsed.teamBSets),
+      setsRivales: didWin ? Math.min(parsed.teamASets, parsed.teamBSets) : Math.max(parsed.teamASets, parsed.teamBSets)
+    };
+
+    const ctx = {
+      jugador: { ...player, puntosRanking: resolveCompetitiveRating(player) },
+      companero: companero ? { ...companero, puntosRanking: resolveCompetitiveRating(companero) } : null,
+      rivales: misRivales.filter(Boolean).map((r) => ({ ...r, puntosRanking: resolveCompetitiveRating(r) })),
+      resultado: actualScore,
+      tipoPartido: String(teamKind),
+      margenSets: margenSetsFormatted
+    };
+
+    const calculo = puntuacionAvanzada.calcularCambio(ctx);
+    calcContexts[i] = calculo;
+    provisionalDeltas[i] = calculo.limiteAplicado;
+    allAdjs[i] = calculo.factoresAdicionales;
+    player._temp_base = calculo.cambioElo;
+    player._temp_bonus = calculo.factoresAdicionales.companero + calculo.factoresAdicionales.racha + calculo.factoresAdicionales.margenSets;
+    player._temp_adjs = {
+      streak: calculo.factoresAdicionales.racha,
+      surprise: 0,
+      clutch: calculo.factoresAdicionales.margenSets,
+      skill: calculo.factoresAdicionales.companero
+    };
+  }
+
+  const rawGains = provisionalDeltas.filter((d) => d > 0).reduce((a, b) => a + b, 0);
+  const rawLosses = Math.abs(provisionalDeltas.filter((d) => d < 0).reduce((a, b) => a + b, 0));
+  if (rawGains > 0 && rawLosses > 0 && Math.abs(rawGains - rawLosses) > 0.5) {
+    const balancedMag = (rawGains + rawLosses) / 2;
+    const gainScale = balancedMag / rawGains;
+    const lossScale = balancedMag / rawLosses;
+    for (let i = 0; i < 4; i += 1) {
+      if (provisionalDeltas[i] > 0) provisionalDeltas[i] *= gainScale;
+      else if (provisionalDeltas[i] < 0) provisionalDeltas[i] *= lossScale;
+    }
+  }
+
+  const manualDeltas = normalizeManualDeltas(extraMatchData?.manualDeltas || {});
+  if (Object.keys(manualDeltas).length) {
+    for (let i = 0; i < 4; i += 1) {
+      const player = roster[i];
+      if (!player || player.isGuest) continue;
+      if (!isManualDeltaDefined(manualDeltas, player.id)) continue;
+      provisionalDeltas[i] = Number(manualDeltas[player.id]);
+      player._temp_base = Number(manualDeltas[player.id]);
+      player._temp_bonus = 0;
+      player._temp_adjs = { streak: 0, surprise: 0, clutch: 0, skill: 0 };
+    }
+  }
+
+  const allocations = [];
+  const changes = [];
+  let totalDelta = 0;
+  const teamADeltas = [provisionalDeltas[0], provisionalDeltas[1]];
+  const teamBDeltas = [provisionalDeltas[2], provisionalDeltas[3]];
+
+  for (let i = 0; i < 4; i += 1) {
+    const player = roster[i];
+    const amITeamA = i < 2;
+    const didWin = (amITeamA && winnerIsA) || (!amITeamA && !winnerIsA);
+    const delta = Number.isFinite(provisionalDeltas[i]) ? Number(round2(provisionalDeltas[i])) : 0;
+    const expected = amITeamA ? expectedA : 1 - expectedA;
+    const baseDelta = player?._temp_base ?? delta;
+    const bonusDelta = player?._temp_bonus ?? 0;
+    const subAdjs = player?._temp_adjs || {};
+
+    if (!player || player.isGuest) {
+      const guestBreakdown = buildTransparentBreakdown({
+        base: delta,
+        finalDelta: delta,
+        extras: { guest: true },
+      });
+      allocations.push({
+        uid: player?.id || null,
+        name: player?.nombre || player?.nombreUsuario || "Invitado",
+        team: amITeamA ? "A" : "B",
+        baseDelta: delta,
+        delta,
+        isGuest: true,
+        level: Number(player?.nivel || 2.5),
+        substrings: guestBreakdown,
+      });
+      continue;
+    }
+
+    totalDelta += delta;
+    const oldPoints = resolvePlayerRating(player);
+    const newPoints = clampNumber(oldPoints + delta, ELO_CONFIG.MIN_RATING, ELO_CONFIG.MAX_RATING);
+    const levelBefore = Number(player.nivel || levelFromRating(oldPoints));
+    const calculo = calcContexts[i];
+    const manualMode = isManualDeltaDefined(manualDeltas, player.id);
+    let levelAfter = levelBefore;
+    if (manualMode) levelAfter = levelFromRating(newPoints);
+    else if (calculo && Number.isFinite(calculo.nuevoNivelCambio)) {
+      levelAfter = Math.max(1.0, Math.min(7.0, levelBefore + calculo.nuevoNivelCambio));
+    }
+
+    const progressAfter = buildLevelProgressState({ rating: newPoints, levelOverride: levelAfter });
+    const levelBand = getLevelBandByRating(newPoints);
+    const transparentBreakdown = manualMode
+      ? buildTransparentBreakdown({
+          base: delta,
+          finalDelta: delta,
+          extras: {
+            manual: true,
+            note: String(extraMatchData?.manualReason || "Ajuste manual admin"),
+          },
+        })
+      : buildTransparentBreakdown({
+          base: Number(player?._temp_base || delta),
+          streak: Number(subAdjs.streak || 0),
+          surprise: Number(subAdjs.surprise || 0),
+          clutch: Number(subAdjs.clutch || 0),
+          skill: Number(subAdjs.skill || 0),
+          bonus: Number(bonusDelta || 0),
+          finalDelta: delta,
+          extras: {
+            desgloseReal: calculo?.desgloseReal || null,
+          },
+        });
+
+    const analysis = {
+      systemVersion: manualMode ? "v8_admin_manual" : "v8_avanzado",
+      matchId,
+      matchCollection: col,
+      won: didWin,
+      delta,
+      pointsBefore: oldPoints,
+      pointsAfter: newPoints,
+      levelBefore,
+      levelAfter,
+      levelProgressAfter: progressAfter.progressPct,
+      levelBand: levelBand.label,
+      sets: normalizedResult,
+      resultStats: {
+        teamASets: parsed.teamASets,
+        teamBSets: parsed.teamBSets,
+        teamAGames: parsed.teamAGames,
+        teamBGames: parsed.teamBGames,
+        gameDiff: parsed.gameDiff,
+      },
+      prediction: Math.round(expected * 100),
+      breakdown: manualMode
+        ? transparentBreakdown
+        : {
+            ...(calculo || buildPointsBreakdown({
+              baseDelta,
+              streak: subAdjs.streak || 0,
+              surprise: subAdjs.surprise || 0,
+              clutch: subAdjs.clutch || 0,
+              skill: subAdjs.skill || 0,
+              bonus: bonusDelta,
+            })),
+            ...transparentBreakdown,
+          },
+      timestamp: new Date().toISOString(),
+    };
+
+    allocations.push({
+      uid: player.id,
+      name: player.nombre || player.nombreUsuario || player.id,
+      team: amITeamA ? "A" : "B",
+      baseDelta,
+      bonusDelta,
+      delta,
+      isGuest: false,
+      level: Number(player?.nivel || 2.5),
+      ratingBefore: oldPoints,
+      ratingAfter: newPoints,
+      levelAfter,
+      levelProgress: progressAfter.progressPct,
+      substrings: transparentBreakdown,
+      analysis,
+    });
+    changes.push({ uid: player.id, delta, analysis });
+  }
+
+  return {
+    normalizedResult,
+    parsed,
+    pointDetails,
+    roster,
+    teamA,
+    teamB,
+    expectedA,
+    teamARating,
+    teamBRating,
+    kCombined,
+    modeMult,
+    matchFactor,
+    winnerIsA,
+    allocations,
+    changes,
+    totalDelta,
+    teamADeltas,
+    teamBDeltas,
+    manualMode: Object.keys(manualDeltas).length > 0,
+  };
+}
+
+export async function previewMatchResults(matchId, col, resultStr, extraMatchData = {}) {
+  const initial = await getDocument(col, matchId);
+  const readDoc = async (collectionName, id) => getDocument(collectionName, id);
+  const built = await buildRosterAndContext({ matchId, col, initial, extraMatchData, readDoc });
+  const computed = computeMatchScoring({ matchId, col, resultStr, extraMatchData, match: built.match, roster: built.roster });
+  return {
+    success: true,
+    preview: true,
+    roster: built.roster,
+    match: built.match,
+    summary: {
+      systemVersion: String(extraMatchData?.scoringSystem || "default").toLowerCase() === "atp_test" ? ATP_TEST_SYSTEM_VERSION : ELO_SYSTEM_VERSION,
+      zeroSumCheck: round2(computed.totalDelta),
+      kCombined: round2(computed.kCombined),
+      expectedA: round2(computed.expectedA),
+      teamADeltas: computed.teamADeltas.map((d) => round2(d)),
+      teamBDeltas: computed.teamBDeltas.map((d) => round2(d)),
+      manualMode: computed.manualMode,
+    },
+    allocations: computed.allocations,
+    changes: computed.changes,
+  };
+}
+
 export async function processMatchResults(matchId, col, resultStr, extraMatchData = {}) {
   try {
     const initial = await getDocument(col, matchId);
-    let jugadores = Array.isArray(initial?.jugadores)
+    const guestOverrides = normalizeGuestOverrides(extraMatchData?.guestOverrides || {});
+    const manualDeltas = normalizeManualDeltas(extraMatchData?.manualDeltas || {});
+    const scoringSystem = String(extraMatchData?.scoringSystem || "default").toLowerCase();
+    const activeSystemVersion = scoringSystem === "atp_test" ? ATP_TEST_SYSTEM_VERSION : ELO_SYSTEM_VERSION;
+    let jugadores = Array.isArray(initial?.jugadores) && initial.jugadores.length === 4
       ? initial.jugadores
-      : col === "eventoPartidos" && Array.isArray(initial?.playerUids) && initial.playerUids.length === 4
+      : Array.isArray(initial?.playerUids) && initial.playerUids.length === 4
         ? initial.playerUids
-        : null;
+        : Array.isArray(initial?.jugadores) && initial.jugadores.filter(Boolean).length > 0
+          ? initial.jugadores
+          : Array.isArray(initial?.playerUids) && initial.playerUids.filter(Boolean).length > 0
+            ? initial.playerUids
+            : null;
 
     if (col === "eventoPartidos" && (!jugadores || jugadores.filter(Boolean).length !== 4)) {
-      const eventId = initial?.eventoId || initial?.eventId || null;
-      if (eventId && (initial?.teamAId || initial?.teamBId)) {
-        const ev = await getDocument("eventos", eventId);
+      const eventId_parent = initial?.eventoId || initial?.eventId || null;
+      if (eventId_parent && (initial?.teamAId || initial?.teamBId)) {
+        const ev = await getDocument("eventos", eventId_parent);
         const teams = Array.isArray(ev?.teams) ? ev.teams : [];
         const teamA = teams.find(t => t?.id === initial?.teamAId);
         const teamB = teams.find(t => t?.id === initial?.teamBId);
@@ -328,10 +902,14 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
       return { success: false, error: "Match or players invalid" };
     }
 
+    console.log(`[ELO_V11_STRICT] Processing ${col}/${matchId} at ${new Date().toISOString()}`);
     return await runTransaction(db, async (transaction) => {
       const matchRef = doc(db, col, matchId);
       const matchSnap = await transaction.get(matchRef);
-      if (!matchSnap.exists()) throw new Error("Match does not exist.");
+      if (!matchSnap.exists()) {
+        console.warn(`[ELO_V11] Match ${matchId} not found in ${col}. Skipping update.`);
+        return { success: false, error: "Match doesn't exist" };
+      }
 
       const matchRaw = matchSnap.data();
       const match = { ...matchRaw, jugadores: matchRaw.jugadores || matchRaw.playerUids || jugadores };
@@ -355,51 +933,140 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
       const modeMult = isComp ? 1.0 : 0.95;
       const matchFactor = calculateMatchFactor(parsed);
       const capAbs = isComp ? ELO_CONFIG.CAPS.COMPETITIVE_ABS : ELO_CONFIG.CAPS.FRIENDLY_ABS;
+      // ─── EVENT CONTEXT READ ───
+      const _eventId = match.eventoId || match.eventId || null;
+      let evData = null;
+      if (_eventId) {
+        const evSnap = await transaction.get(doc(db, "eventos", _eventId));
+        if (evSnap.exists()) evData = evSnap.data();
+      }
 
       const roster = [];
-      for (const uid of match.jugadores) {
-        if (!uid) {
-          roster.push(null);
-          continue;
+      const matchPlayers = (match.jugadores || []).slice(0, 4);
+
+      for (let i = 0; i < 4; i++) {
+        const uid = matchPlayers[i];
+        const override = findGuestOverride(guestOverrides, uid, i);
+        
+        // Final fallback for null/empty slots to ensure 2vs2
+        if (!uid || uid === "" || uid === "null") {
+           roster.push({
+             ...getSafePlayerDoc({
+               id: `VIRTUAL_${i}_${matchId}`,
+               nombre: override?.name || "Hueco Libre",
+               nivel: Number.isFinite(override?.nivel) ? override.nivel : 2.5,
+               isGuest: true
+             }, `VIRTUAL_${i}`),
+             __exists: false
+           });
+           continue;
         }
 
-        if (String(uid).startsWith("GUEST_")) {
-          const parts = String(uid).split("_");
-          roster.push(
-            getSafePlayerDoc(
-              {
-                id: uid,
-                nombre: parts[1] || "Invitado",
-                nivel: Number(parts[2] || 2.5),
-                isGuest: true,
-              },
-              uid,
-            ),
-          );
-          continue;
-        }
-
+        // 1. Try standard Firestore user
         const userRef = doc(db, "usuarios", uid);
         const userSnap = await transaction.get(userRef);
         if (userSnap.exists()) {
           roster.push({ ...getSafePlayerDoc({ id: uid, ...userSnap.data() }, uid), __exists: true });
-        } else {
-          // Fallback for missing user record (e.g. deleted or guest not correctly prefixed)
-          roster.push({ ...getSafePlayerDoc({ 
-            id: uid, 
-            nombre: "Jugador " + uid.slice(0, 4), 
-            nivel: 2.5,
-            isGuest: true 
-          }, uid), __exists: false });
+          continue;
         }
+
+        const guestRef = doc(db, "invitados", uid);
+        const guestSnap = await transaction.get(guestRef);
+        if (guestSnap.exists()) {
+          const guestData = guestSnap.data() || {};
+          roster.push({
+            ...getSafePlayerDoc({
+              id: uid,
+              nombre: override?.name || guestData.nombre || guestData.nombreUsuario || parseGuestMeta(uid)?.name || "Invitado",
+              nivel: Number.isFinite(override?.nivel) ? override.nivel : Number(guestData.nivel || 2.5),
+              puntosRanking: Number(guestData.puntosBaseInicial || guestData.puntosRanking || NaN),
+              isGuest: true,
+            }, uid),
+            __exists: false,
+          });
+          continue;
+        }
+
+        const partnerIdxOfTeam = i < 2 ? (i === 0 ? 1 : 0) : (i === 2 ? 3 : 2);
+        const partnerId = matchPlayers[partnerIdxOfTeam];
+        const partnerDoc = partnerId ? roster.find((r) => r?.id === partnerId) : null;
+
+        // 2. Try synthetic Guest Metadata (GUEST_name_level_...) or manual guest ids
+        const guestInfo = parseGuestMeta(uid);
+        if (guestInfo || override) {
+          const eventEntry = findEventParticipantMeta(evData, uid);
+          const guestMeta = resolveGuestFallbackMeta({
+            uid,
+            index: i,
+            match,
+            eventEntry,
+            partner: partnerDoc,
+          });
+          roster.push({
+            ...getSafePlayerDoc(
+              {
+                id: uid,
+                nombre: override?.name || guestMeta.nombre,
+                nivel: Number.isFinite(override?.nivel) ? override.nivel : guestMeta.nivel,
+                isGuest: true,
+              },
+              uid,
+            ),
+            __exists: false
+          });
+          continue;
+        }
+
+        // 3. Try Event Registration Fallback
+        if (evData) {
+          const pEntry = findEventParticipantMeta(evData, uid);
+          if (pEntry) {
+            roster.push({
+              ...getSafePlayerDoc(
+                {
+                  id: uid,
+                  nombre: override?.name || pEntry.nombre || pEntry.nombreUsuario || String(uid),
+                  nivel: Number.isFinite(override?.nivel) ? override.nivel : Number(pEntry.nivel || 2.5),
+                  isGuest: true,
+                },
+                uid,
+              ),
+              __exists: false
+            });
+            continue;
+          }
+        }
+
+        // 4. Final Fallback (Unknown user -> Treat as Guest with best-effort name/level)
+        const guestMeta = resolveGuestFallbackMeta({
+          uid,
+          index: i,
+          match,
+          eventEntry: findEventParticipantMeta(evData, uid),
+          partner: partnerDoc,
+        });
+
+        roster.push({
+          ...getSafePlayerDoc(
+            {
+              id: uid,
+              nombre: override?.name || guestMeta.nombre,
+              nivel: Number.isFinite(override?.nivel) ? override.nivel : guestMeta.nivel,
+              isGuest: true,
+            },
+            uid,
+          ),
+          __exists: false,
+        });
       }
+
 
       const teamA = roster.slice(0, 2).filter(Boolean);
       const teamB = roster.slice(2, 4).filter(Boolean);
       if (teamA.length !== 2 || teamB.length !== 2) throw new Error("Teams incomplete after fallback.");
 
-      const teamARating = (resolvePlayerRating(teamA[0]) + resolvePlayerRating(teamA[1])) / 2;
-      const teamBRating = (resolvePlayerRating(teamB[0]) + resolvePlayerRating(teamB[1])) / 2;
+      const teamARating = (resolveCompetitiveRating(teamA[0]) + resolveCompetitiveRating(teamA[1])) / 2;
+      const teamBRating = (resolveCompetitiveRating(teamB[0]) + resolveCompetitiveRating(teamB[1])) / 2;
       const expectedA = computeExpectedScore(teamARating, teamBRating);
       const winnerIsA = parsed.winnerTeam === "A";
 
@@ -414,30 +1081,25 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
       let eventLoserTeamId = null;
       let eventWinnerName = null;
       let eventLoserName = null;
-      const eventId = match.eventoId || match.eventId || null;
-      let evData = {};
+      // eventId and evData are already declared above for roster discovery
+      if (!evData) evData = {}; 
       let winSnapData = {};
       let loseSnapData = {};
       let winRef = null;
       let loseRef = null;
 
-      if (col === "eventoPartidos" && eventId) {
-        const teamAId_ev = match.teamAId || match.equipoAUid || null;
-        const teamBId_ev = match.teamBId || match.equipoBUid || null;
-        if (teamAId_ev && teamBId_ev) {
-          eventWinnerTeamId = winnerIsA ? teamAId_ev : teamBId_ev;
-          eventLoserTeamId = winnerIsA ? teamBId_ev : teamAId_ev;
-          eventWinnerName = winnerIsA ? (match.teamAName || match.equipoA || null) : (match.teamBName || match.equipoB || null);
-          eventLoserName = winnerIsA ? (match.teamBName || match.equipoB || null) : (match.teamAName || match.equipoA || null);
-
-          // Read event doc
-          const evRef = doc(db, "eventos", eventId);
-          const evSnap = await transaction.get(evRef);
-          evData = evSnap.exists() ? evSnap.data() : {};
-
-          // Read standings docs
-          const winKey = `${eventId}_${eventWinnerTeamId}`;
-          const loseKey = `${eventId}_${eventLoserTeamId}`;
+        if (col === "eventoPartidos" && _eventId) {
+          const teamAId_ev = match.teamAId || match.equipoAUid || null;
+          const teamBId_ev = match.teamBId || match.equipoBUid || null;
+          if (teamAId_ev && teamBId_ev) {
+            eventWinnerTeamId = winnerIsA ? teamAId_ev : teamBId_ev;
+            eventLoserTeamId = winnerIsA ? teamBId_ev : teamAId_ev;
+            eventWinnerName = winnerIsA ? (match.teamAName || match.equipoA || null) : (match.teamBName || match.equipoB || null);
+            eventLoserName = winnerIsA ? (match.teamBName || match.equipoB || null) : (match.teamAName || match.equipoA || null);
+  
+            // Read standings docs
+          const winKey = `${_eventId}_${eventWinnerTeamId}`;
+          const loseKey = `${_eventId}_${eventLoserTeamId}`;
           winRef = doc(db, "eventoClasificacion", winKey);
           loseRef = doc(db, "eventoClasificacion", loseKey);
           const winSnap = await transaction.get(winRef);
@@ -453,6 +1115,14 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
       const levelDeltas = [0, 0, 0, 0];
       const allAdjs = [null, null, null, null];
       const calcContexts = [null, null, null, null];
+      const atpComputation = scoringSystem === "atp_test"
+        ? calculateAtpMatchDeltas({
+            roster,
+            parsed,
+            col,
+            matchType: match.tipo,
+          })
+        : null;
       
       for (let i = 0; i < 4; i += 1) {
         const player = roster[i];
@@ -478,18 +1148,18 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         };
 
         const ctx = {
-            jugador: player,
-            companero: companero,
-            rivales: misRivales.filter(Boolean),
+            jugador: { ...player, puntosRanking: resolveCompetitiveRating(player) },
+            companero: companero ? { ...companero, puntosRanking: resolveCompetitiveRating(companero) } : null,
+            rivales: misRivales.filter(Boolean).map((r) => ({ ...r, puntosRanking: resolveCompetitiveRating(r) })),
             resultado: actualScore,
-            tipoPartido: String(match.tipo || col === 'eventoPartidos' ? 'evento' : 'amistoso'),
+            tipoPartido: String(col === "eventoPartidos" ? "evento" : (match.tipo || (col === "partidosReto" ? "reto" : "amistoso"))),
             margenSets: margenSetsFormatted
         };
 
-        const calculo = puntuacionAvanzada.calcularCambio(ctx);
+        const calculo = atpComputation?.contexts?.[i] || puntuacionAvanzada.calcularCambio(ctx);
         calcContexts[i] = calculo;
         
-        provisionalDeltas[i] = calculo.sumaTotal;
+        provisionalDeltas[i] = calculo.limiteAplicado;
         levelDeltas[i] = calculo.nuevoNivelCambio;
         
         player._temp_base = calculo.cambioElo;
@@ -504,7 +1174,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         console.log(`[ELO AVANZADO] Player ${player.id?.slice(0,6)} | Win:${didWin} | BaseElo:${calculo.cambioElo} | Factores:${JSON.stringify(calculo.factoresAdicionales)} | Limite:${calculo.limiteAplicado} | NivelDelta:${calculo.nuevoNivelCambio}`);
       }
 
-      const bonusReason = "Glicko-2 Hybrid";
+      const bonusReason = scoringSystem === "atp_test" ? "ATP Hybrid Competitive" : "Glicko-2 Hybrid";
       // Ensure individual records are prioritized over team averages
       const teamADeltas = [provisionalDeltas[0], provisionalDeltas[1]];
       const teamBDeltas = [provisionalDeltas[2], provisionalDeltas[3]];
@@ -514,6 +1184,32 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
       const changes = [];
       const allocations = [];
       let totalDelta = 0;
+
+      // Collective Zero-Sum Balance: Ensure total gains magnitude matches total losses magnitude
+      // to maintain league stability and prevent inflation from provisional high-K players.
+      const rawGains = provisionalDeltas.filter(d => d > 0).reduce((a,b) => a + b, 0);
+      const rawLosses = Math.abs(provisionalDeltas.filter(d => d < 0).reduce((a,b) => a + b, 0));
+      
+      if (rawGains > 0 && rawLosses > 0 && Math.abs(rawGains - rawLosses) > 0.5) {
+          const balancedMag = (rawGains + rawLosses) / 2;
+          const gainScale = balancedMag / rawGains;
+          const lossScale = balancedMag / rawLosses;
+          for (let i = 0; i < 4; i++) {
+              if (provisionalDeltas[i] > 0) provisionalDeltas[i] *= gainScale;
+              else if (provisionalDeltas[i] < 0) provisionalDeltas[i] *= lossScale;
+          }
+      }
+
+      if (Object.keys(manualDeltas).length) {
+        for (let i = 0; i < 4; i += 1) {
+          const player = roster[i];
+          if (!player || player.isGuest || !isManualDeltaDefined(manualDeltas, player.id)) continue;
+          provisionalDeltas[i] = Number(manualDeltas[player.id]);
+          player._temp_base = Number(manualDeltas[player.id]);
+          player._temp_bonus = 0;
+          player._temp_adjs = { streak: 0, surprise: 0, clutch: 0, skill: 0 };
+        }
+      }
 
       for (let i = 0; i < 4; i += 1) {
         const player = roster[i];
@@ -526,12 +1222,55 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const subAdjs = player?._temp_adjs || {};
 
         if (!player || player.isGuest) {
+          const guestBreakdown = buildTransparentBreakdown({
+            base: delta,
+            finalDelta: delta,
+            extras: {
+              guest: true,
+              desgloseReal: calcContexts[i]?.desgloseReal || null,
+            },
+          });
+          const guestOldPoints = player ? resolvePlayerRating(player) : 0;
+          const guestNewPoints = clampNumber(guestOldPoints + delta, ELO_CONFIG.MIN_RATING, ELO_CONFIG.MAX_RATING);
+          const guestLevelBefore = Number(player?.nivel || levelFromRating(guestOldPoints));
+          const guestLevelAfter = scoringSystem === "atp_test"
+            ? levelFromRating(guestNewPoints)
+            : Math.max(1.0, Math.min(7.0, guestLevelBefore + Number(calcContexts[i]?.nuevoNivelCambio || 0)));
+          if (player?.id && player?.isGuest) {
+            const guestRef = doc(db, "invitados", String(player.id));
+            transaction.set(guestRef, sanitizeForFirestore({
+              uid: String(player.id),
+              nombre: player.nombre || player.nombreUsuario || "Invitado",
+              nombreUsuario: player.nombreUsuario || player.nombre || "Invitado",
+              nombreNormalizado: String(player.nombre || player.nombreUsuario || "Invitado").trim().toLowerCase(),
+              isGuestProfile: true,
+              puntosRanking: guestNewPoints,
+              rating: guestNewPoints,
+              nivel: Number(guestLevelAfter.toFixed(4)),
+              victorias: Math.max(0, Number(player.victorias || 0) + (didWin ? 1 : 0)),
+              partidosJugados: Math.max(0, Number(player.partidosJugados || 0) + 1),
+              rachaActual: didWin
+                ? (Number(player.rachaActual || 0) > 0 ? Number(player.rachaActual || 0) + 1 : 1)
+                : (Number(player.rachaActual || 0) < 0 ? Number(player.rachaActual || 0) - 1 : -1),
+              ultimoResultado: didWin ? "victoria" : "derrota",
+              lastMatchDate: serverTimestamp(),
+              puntosBaseInicial: Number(player.puntosBaseInicial || getBaseEloByLevel(guestLevelBefore)),
+              nivelBaseInicial: Number(player.nivelBaseInicial || guestLevelBefore),
+              scoringSystem,
+              updatedAt: serverTimestamp(),
+            }), { merge: true });
+          }
           allocations.push({
             uid: player?.id || null,
+            name: player?.nombre || player?.nombreUsuario || "Invitado",
             team: amITeamA ? "A" : "B",
             baseDelta: delta,
             delta: delta,
             isGuest: true,
+            ratingBefore: guestOldPoints,
+            ratingAfter: guestNewPoints,
+            levelAfter: guestLevelAfter,
+            substrings: guestBreakdown,
           });
           continue;
         }
@@ -540,11 +1279,14 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const oldPoints = resolvePlayerRating(player);
         const newPoints = clampNumber(oldPoints + delta, ELO_CONFIG.MIN_RATING, ELO_CONFIG.MAX_RATING);
         const levelBefore = Number(player.nivel || levelFromRating(oldPoints));
+        const manualMode = isManualDeltaDefined(manualDeltas, player.id);
         
         // 3. Aplicar Nivel (Skill Level) Avanzado
         const calculo = calcContexts[i];
         let levelAfter = levelBefore;
-        if (calculo && Number.isFinite(calculo.nuevoNivelCambio)) {
+        if (manualMode) {
+            levelAfter = levelFromRating(newPoints);
+        } else if (calculo && Number.isFinite(calculo.nuevoNivelCambio)) {
             levelAfter = Math.max(1.0, Math.min(7.0, levelBefore + calculo.nuevoNivelCambio));
         }
 
@@ -558,8 +1300,30 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const currentPosElo = Number(player?.elo?.[posKey] || oldPoints);
         const currentSurfElo = Number(player?.elo?.[surface] || oldPoints);
 
+        const transparentBreakdown = manualMode
+          ? buildTransparentBreakdown({
+              base: delta,
+              finalDelta: delta,
+              extras: {
+                manual: true,
+                note: String(extraMatchData?.manualReason || "Ajuste manual admin"),
+              },
+            })
+          : buildTransparentBreakdown({
+              base: Number(player?._temp_base || delta),
+              streak: Number(subAdjs.streak || 0),
+              surprise: Number(subAdjs.surprise || 0),
+              clutch: Number(subAdjs.clutch || 0),
+              skill: Number(subAdjs.skill || 0),
+              bonus: Number(bonusDelta || 0),
+              finalDelta: delta,
+              extras: {
+                desgloseReal: calculo?.desgloseReal || null,
+              },
+            });
+
         const analysis = {
-          systemVersion: "v8_avanzado",
+          systemVersion: manualMode ? "v8_admin_manual" : activeSystemVersion,
           matchId,
           matchCollection: col,
           won: didWin,
@@ -579,19 +1343,24 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
             gameDiff: parsed.gameDiff,
           },
           prediction: Math.round(expected * 100),
-          breakdown: calculo || buildPointsBreakdown({ 
-              baseDelta, 
-              streak: subAdjs.streak || 0, 
-              surprise: subAdjs.surprise || 0,
-              clutch: subAdjs.clutch || 0,
-              skill: subAdjs.skill || 0,
-              bonus: bonusDelta 
-          }),
+          breakdown: manualMode
+            ? transparentBreakdown
+            : {
+                ...(calculo || buildPointsBreakdown({ 
+                  baseDelta, 
+                  streak: subAdjs.streak || 0, 
+                  surprise: subAdjs.surprise || 0,
+                  clutch: subAdjs.clutch || 0,
+                  skill: subAdjs.skill || 0,
+                  bonus: bonusDelta,
+                })),
+                ...transparentBreakdown,
+              },
           timestamp: new Date().toISOString(),
         };
 
 
-        if (player.__exists !== false && !player.isGuest) {
+        if (player.__exists === true && !player.isGuest && player.id) {
           const baseNivel = Number.isFinite(Number(player.nivelBaseInicial))
             ? Number(player.nivelBaseInicial)
             : levelBefore;
@@ -622,7 +1391,13 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
           // Only write elo sub-indices if they resolve to real numbers
           if (posKey && Number.isFinite(currentPosElo + delta)) userUpdate[`elo.${posKey}`] = currentPosElo + delta;
           if (surface && Number.isFinite(currentSurfElo + delta)) userUpdate[`elo.${surface}`] = currentSurfElo + delta;
-          transaction.update(doc(db, "usuarios", player.id), userUpdate);
+          
+          try {
+            transaction.update(doc(db, "usuarios", String(player.id)), sanitizeForFirestore(userUpdate));
+          } catch (updateErr) {
+            console.error(`[ELO_V11] Failed to update user ${player.id}:`, updateErr);
+            throw updateErr;
+          }
         }
 
         // Save rankingLog — timestamp must be a real Firestore Timestamp for query ordering
@@ -630,7 +1405,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const logTimestamp = match.fecha?.seconds
           ? match.fecha   // Use match date for chronological ordering
           : serverTimestamp();
-        transaction.set(doc(db, "rankingLogs", logId), {
+        transaction.set(doc(db, "rankingLogs", logId), sanitizeForFirestore({
           uid: player.id,
           matchId,
           matchCol: col,
@@ -645,9 +1420,10 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
           type: col === 'eventoPartidos' ? 'TORNEO' : col === 'partidosReto' ? 'RETO' : 'AMISTOSO',
           seasonKey: getSeasonDescriptor(match?.fecha).key,
           seasonLabel: getSeasonDescriptor(match?.fecha).label,
+          scoringSystem,
           details: analysis,
           timestamp: logTimestamp,
-        });
+        }));
 
         allocations.push({
           uid: player.id,
@@ -655,14 +1431,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
           baseDelta,
           bonusDelta,
           delta,
-          substrings: {
-            base: Number(player?._temp_base || delta),
-            racha: Number(subAdjs.streak || 0),
-            sorpresa: Number(subAdjs.surprise || 0),
-            clutch: Number(subAdjs.clutch || 0),
-            habilidad: Number(subAdjs.skill || 0),
-            bonusIndividual: Number(bonusDelta || 0),
-          },
+          substrings: transparentBreakdown,
           ratingBefore: oldPoints,
           ratingAfter: newPoints,
           levelAfter,
@@ -672,7 +1441,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         changes.push({ uid: player.id, delta, analysis });
       }
 
-      transaction.set(doc(db, "matchPointDetails", matchId), {
+      transaction.set(doc(db, "matchPointDetails", matchId), sanitizeForFirestore({
         matchId,
         col,
         sets: normalizedResult,
@@ -681,12 +1450,13 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         points: pointDetails.points,
         playerAllocations: allocations,
         zeroSumCheck: totalDelta,
-        systemVersion: ELO_SYSTEM_VERSION,
+        systemVersion: activeSystemVersion,
+        scoringSystem,
         createdAt: serverTimestamp(),
-      });
+      }));
 
       // ─── WRITE: Event standings using PRE-READ data ───
-      if (col === "eventoPartidos" && eventId && eventWinnerTeamId && eventLoserTeamId && winRef && loseRef) {
+      if (col === "eventoPartidos" && _eventId && eventWinnerTeamId && eventLoserTeamId && winRef && loseRef) {
           const ptsWin = Number(evData?.puntosVictoria || 2);
           const ptsLoss = Number(evData?.puntosDerrota || 1);
           const teamAGames = Number(parsed?.teamAGames || 0);
@@ -701,8 +1471,8 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
           const losePA = Number(loseSnapData.puntosPerdidos || 0) + loseGamesAgainst;
           transaction.set(
             winRef,
-            {
-              eventoId: eventId,
+            sanitizeForFirestore({
+              eventoId: _eventId,
               uid: eventWinnerTeamId,
               nombre: eventWinnerName || winSnapData.nombre || eventWinnerTeamId,
               pj: Number(winSnapData.pj || 0) + 1,
@@ -711,13 +1481,13 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
               puntosGanados: winPF,
               puntosPerdidos: winPA,
               diferencia: winPF - winPA,
-            },
+            }),
             { merge: true },
           );
           transaction.set(
             loseRef,
-            {
-              eventoId: eventId,
+            sanitizeForFirestore({
+              eventoId: _eventId,
               uid: eventLoserTeamId,
               nombre: eventLoserName || loseSnapData.nombre || eventLoserTeamId,
               pj: Number(loseSnapData.pj || 0) + 1,
@@ -726,42 +1496,58 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
               puntosGanados: losePF,
               puntosPerdidos: losePA,
               diferencia: losePF - losePA,
-            },
+            }),
             { merge: true },
           );
       }
 
-      transaction.update(matchRef, {
-        ...buildMatchPersistencePatch({ state: "jugado", resultStr: normalizedResult }),
-        ...(eventWinnerTeamId ? { ganadorTeamId: eventWinnerTeamId, ganador: winnerIsA ? "A" : "B" } : {}),
-        ...(col === "eventoPartidos" ? { standingsProcessedAt: serverTimestamp(), standingsProcessedResult: normalizedResult } : {}),
-        eloSummary: {
-          systemVersion: ELO_SYSTEM_VERSION,
-          expectedA: round2(expectedA),
-          teamARating: round2(teamARating),
-          teamBRating: round2(teamBRating),
-          teamADeltas: teamADeltas.map(d => round2(d)),
-          teamBDeltas: teamBDeltas.map(d => round2(d)),
-          // Added detailed player data for the hacker UI breakdown
-          playerData: allocations.map(a => ({
-              uid: a.uid,
-              name: roster.find(r => r?.id === a.uid)?.nombreUsuario || 'Jugador',
-              delta: round2(a.delta),
-              breakdown: a.substrings // sub-adjustments
-          })),
-          teamADelta: round2(teamADeltas.reduce((a,b)=>a+b,0)/2),
-          teamBDelta: round2(teamBDeltas.reduce((a,b)=>a+b,0)/2),
-          kCombined: round2(kCombined),
-          modeMult,
-          dominanceFactor: round2(matchFactor),
-          bonusReason,
-          zeroSumCheck: totalDelta,
-          updatedAt: serverTimestamp(),
-        },
-        rankingProcessedAt: serverTimestamp(),
-        rankingProcessedResult: normalizedResult,
-        rankingProcessedBy: auth.currentUser?.uid || null,
-      });
+        // Use set with merge: true instead of update to be more resilient
+        transaction.set(matchRef, sanitizeForFirestore({
+          ...buildMatchPersistencePatch({ state: "jugado", resultStr: normalizedResult }),
+          ...(eventWinnerTeamId ? { ganadorTeamId: eventWinnerTeamId, ganador: winnerIsA ? "A" : "B" } : {}),
+          ...(col === "eventoPartidos" ? { standingsProcessedAt: serverTimestamp(), standingsProcessedResult: normalizedResult } : {}),
+          eloSummary: {
+            systemVersion: activeSystemVersion,
+            scoringSystem,
+            expectedA: round2(expectedA),
+            teamARating: round2(teamARating),
+            teamBRating: round2(teamBRating),
+            teamADeltas: teamADeltas.map(d => round2(d)),
+            teamBDeltas: teamBDeltas.map(d => round2(d)),
+            // Added detailed player data for the hacker UI breakdown
+            playerData: allocations.map(a => ({
+                uid: a.uid,
+                name: (function() {
+                  const p = roster.find(r => r?.id === a.uid);
+                  return p?.nombre || p?.nombreUsuario || 'Jugador';
+                })(),
+                delta: round2(a.delta),
+                breakdown: sanitizeForFirestore(a.substrings || {}) // sub-adjustments
+            })),
+            teamADelta: round2(teamADeltas.reduce((a,b)=>a+b,0)/2),
+            teamBDelta: round2(teamBDeltas.reduce((a,b)=>a+b,0)/2),
+            kCombined: round2(kCombined),
+            modeMult,
+            dominanceFactor: round2(atpComputation?.dominance || matchFactor),
+            bonusReason,
+            zeroSumCheck: totalDelta,
+            updatedAt: serverTimestamp(),
+            manualOverride: Boolean(Object.keys(manualDeltas).length),
+          },
+          eventoId: _eventId,
+          eventMatchId: match.eventMatchId || null,
+          eventTeamAId: match.eventTeamAId || null,
+          eventTeamBId: match.eventTeamBId || null,
+          rankingProcessedResult: normalizedResult,
+          rankingProcessedAt: serverTimestamp(),
+          rankingProcessedBy: auth.currentUser?.uid || null,
+          scoringSystem,
+          scoringSystemVersion: activeSystemVersion,
+          eventRecord: {
+            eventoId: _eventId,
+            // Add other relevant event-specific data here if needed
+          },
+        }), { merge: true });
 
       // After success, trigger background check for achievements
       roster.forEach((p, idx) => {
@@ -787,7 +1573,8 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         skipped: false,
         changes,
         summary: {
-          systemVersion: ELO_SYSTEM_VERSION,
+          systemVersion: activeSystemVersion,
+          scoringSystem,
           zeroSumCheck: totalDelta,
           kCombined: round2(kCombined),
           expectedA: round2(expectedA),

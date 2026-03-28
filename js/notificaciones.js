@@ -30,10 +30,12 @@ import {
   initPushNotifications,
   relaunchOneSignal,
   sendPushNotification,
+  sendExternalPush,
 } from "./modules/push-notifications.js";
 import { toDateSafe } from "./utils/match-utils.js";
 
 let currentUser = null;
+let currentUserDoc = null;
 let currentFilter = "all";
 let unsubNotifs = null;
 let notifications = [];
@@ -165,6 +167,7 @@ observeCoreSession({
   },
   onReady: async ({ user, userDoc }) => {
     currentUser = user;
+    currentUserDoc = userDoc;
     try {
       applyNotificationPageCopy();
       await injectHeader(userDoc);
@@ -648,14 +651,59 @@ async function updatePushStatusUI() {
     };
 
     const btnTestPush = document.getElementById("btn-test-push");
+    const isAdmin = currentUserDoc?.rol === "admin";
+
     if (btnTestPush) {
+      if (!isAdmin) {
+        btnTestPush.style.display = "none";
+      } else {
+        btnTestPush.style.display = "flex";
+        btnTestPush.onclick = async () => {
+          // 1. Prueba Local (App abierta)
+          await sendPushNotification(
+            "ACCESO CONCEDIDO (App Abierta)",
+            "Este aviso confirma que tu dispositivo permite notificaciones. Ahora probaremos el fondo...",
+            "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff",
+          );
+          
+          // 2. Prueba Externa (Segundo Plano / OneSignal)
+          setTimeout(async () => {
+             if (currentUser?.uid) {
+               await sendExternalPush({
+                 title: "TEST ONESIGNAL (Segundo Plano)",
+                 message: "¡Excelente! Has recibido este aviso por el canal real de OneSignal.",
+                 uids: [currentUser.uid],
+                 url: "notificaciones.html",
+                 data: { type: "test", from: "diag_btn" }
+               });
+             }
+          }, 3000);
+
+          showToast("Doble test lanzado", "Tienes 3 segundos para cerrar la app y probar el fondo real.", "info");
+        };
+      }
+    }
+
+    if (btnTestPush && currentUser?.uid) {
+      btnTestPush.style.display = "flex";
       btnTestPush.onclick = async () => {
         await sendPushNotification(
-          "Prueba completada",
-          "Tus avisos parecen estar funcionando correctamente.",
+          "TEST LOCAL",
+          "Si ves este aviso, el permiso local funciona. Ahora lanzamos la prueba real de segundo plano.",
           "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff",
         );
-        showToast("Prueba enviada", "Si no la ves, abre la ayuda de esta misma pantalla.", "info");
+
+        setTimeout(async () => {
+          await sendExternalPush({
+            title: "TEST SEGUNDO PLANO",
+            message: "Si este aviso llega con la app minimizada o cerrada, el canal real ya funciona.",
+            uids: [currentUser.uid],
+            url: "notificaciones.html",
+            data: { type: "test", from: "notif_test_button" }
+          });
+        }, 2500);
+
+        showToast("Prueba lanzada", "Minimiza la app unos segundos para verificar el segundo plano.", "info");
       };
     }
   } catch (e) {

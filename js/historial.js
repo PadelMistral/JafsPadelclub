@@ -5,6 +5,7 @@ import { initAppUI, showToast } from './ui-core.js';
 import { injectHeader, injectNavbar, initBackground, setupModals } from './modules/ui-loader.js?v=6.5';
 import { getFriendlyTeamName } from './utils/team-utils.js';
 import { getMatchPlayers, getMatchTeamPlayerIds, getResultSetsString, isCancelledMatch, isExpiredOpenMatch, parseGuestMeta } from './utils/match-utils.js';
+import { shareMatchPoster } from './utils/share-utils.js';
 
 let currentUser = null;
 let allMatches = [];
@@ -125,7 +126,7 @@ function sortAndRender() {
         list = list.filter(m => {
             const players = m.jugadores || [];
             return players.some(uid => {
-                if (uid?.startsWith('GUEST_')) return uid.toLowerCase().includes(searchQuery);
+                if (parseGuestMeta(uid)) return getPlayerName(uid).toLowerCase().includes(searchQuery);
                 const name = userMap[uid]?.name?.toLowerCase() || '';
                 return name.includes(searchQuery);
             }) || (userMap[m.creador]?.name?.toLowerCase().includes(searchQuery));
@@ -149,7 +150,7 @@ function sortAndRender() {
 
 function getPlayerName(uid) {
     if (!uid) return 'Libre';
-    if (uid.startsWith('GUEST_')) return parseGuestMeta(uid)?.name || uid.split('_')[1] || 'Invitado';
+    if (parseGuestMeta(uid)) return parseGuestMeta(uid)?.name || 'Invitado';
     return userMap[uid]?.name || 'Jugador';
 }
 
@@ -196,7 +197,7 @@ async function renderMatchesFiltered(filtered) {
         // Players Avatar List
         const pList = (m.jugadores || []).map(uid => {
             if (!uid) return `<div class="p-avatar-mini empty"><i class="fas fa-plus"></i></div>`;
-            if (uid.startsWith('GUEST_')) return `<div class="p-avatar-mini guest" title="${uid.split('_')[1]}"><i class="fas fa-user-secret"></i></div>`;
+            if (parseGuestMeta(uid)) return `<div class="p-avatar-mini guest" title="${getPlayerName(uid)}"><i class="fas fa-user-secret"></i></div>`;
             const u = userMap[uid];
             const name = u?.name || 'Jugador';
             const photo = u?.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
@@ -277,9 +278,9 @@ async function showMatchDetail(m) {
     while (normalizedPlayers.length < 4) normalizedPlayers.push(null);
     const players = await Promise.all(normalizedPlayers.map(async uid => {
         if (!uid) return { name: 'Libre', level: 0 };
-        if (uid.startsWith('GUEST_')) return { name: parseGuestMeta(uid)?.name || uid.split('_')[1], isGuest: true };
+        if (parseGuestMeta(uid)) return { name: getPlayerName(uid), level: Number(parseGuestMeta(uid)?.level || 2.5), isGuest: true };
         const d = await getDocument('usuarios', uid);
-        return { name: d?.nombreUsuario || d?.nombre || 'Jugador', photo: d?.fotoPerfil || d?.fotoURL, id: uid };
+        return { name: d?.nombreUsuario || d?.nombre || 'Jugador', photo: d?.fotoPerfil || d?.fotoURL, id: uid, level: Number(d?.nivel || 0) };
     }));
 
     // AI Analysis Validation
@@ -337,6 +338,11 @@ async function showMatchDetail(m) {
             <div class="match-score-display text-center py-6">
                 <span class="score-value block font-black text-4xl text-white tracking-[4px] font-display mb-2 drop-shadow-lg">${getResultSetsString(m) || '0-0'}</span>
                 <span class="badge ${m.isEvent ? 'badge-danger' : (m.isComp ? 'badge-warning' : 'badge-primary')}">${m.isEvent ? ' TORNEO/EVENTO OFICIAL' : (m.isComp ? ' RETO OFICIAL' : ' AMISTOSO')}</span>
+            </div>
+            <div class="flex-row gap-2 mb-5">
+                <button class="btn-premium-v7 sm flex-1" data-share-history-poster>
+                    <i class="fas fa-share-nodes mr-2"></i> COMPARTIR CARTEL
+                </button>
             </div>
 
             <!-- Court View -->
@@ -422,6 +428,19 @@ async function showMatchDetail(m) {
             </div>
         </div>
     `;
+    content.querySelector('[data-share-history-poster]')?.addEventListener('click', async () => {
+        const teamA = [players[0]?.name, players[1]?.name].filter(Boolean);
+        const teamB = [players[2]?.name, players[3]?.name].filter(Boolean);
+        const levelsA = [players[0]?.level, players[1]?.level].filter((v) => Number.isFinite(Number(v)));
+        const levelsB = [players[2]?.level, players[3]?.level].filter((v) => Number.isFinite(Number(v)));
+        const when = date.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        try {
+            await shareMatchPoster({ title: 'CARTEL DEL PARTIDO', teamA, teamB, levelsA, levelsB, when, club: 'JAFS PADEL CLUB' });
+        } catch (e) {
+            console.error('share history poster failed', e);
+            showToast('Cartel', 'No se pudo generar el cartel.', 'error');
+        }
+    });
 }
 
 function generateMatchNarrative(m, p, logs, diary) {
@@ -519,19 +538,25 @@ function renderPlayerCard(p, log, teamIdx) {
 function formatEloBreakdown(log) {
     if (!log || !log.details || !log.details.breakdown) return '';
     const bd = log.details.breakdown;
+    const scoringSystem = String(log?.scoringSystem || log?.details?.systemVersion || "default").toLowerCase();
+    const scoringLabel = scoringSystem.includes("atp") ? "ATP Hybrid Competitive" : "ELO Hibrido Club";
     const rows = [
-        { label: 'Base Glicko-2', value: bd.base, icon: 'fa-calculator', col: '#00d4ff' },
+        { label: scoringSystem.includes("atp") ? 'Base ATP' : 'Base Glicko-2', value: bd.base, icon: 'fa-calculator', col: '#00d4ff' },
         { label: 'Racha', value: bd.racha, icon: 'fa-fire', col: '#f59e0b' },
         { label: 'Sorpresa', value: bd.sorpresa, icon: 'fa-bolt', col: '#a78bfa' },
         { label: 'Clutch', value: bd.clutch, icon: 'fa-crosshairs', col: '#f97316' },
         { label: 'Habilidad', value: bd.habilidad, icon: 'fa-star', col: '#22c55e' },
+        { label: 'Balance', value: bd.ajusteBalance, icon: 'fa-scale-balanced', col: '#38bdf8' },
     ].filter(r => r.value !== undefined && r.value !== null && r.value !== 0);
 
     if (!rows.length) return '';
 
     return `
         <div class="mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,0.06)">
-            <div class="text-[9px] font-black text-muted uppercase tracking-widest mb-2">Desglose ELO</div>
+            <div class="flex-row between items-center mb-2">
+                <div class="text-[9px] font-black text-muted uppercase tracking-widest">Desglose ELO</div>
+                <div class="text-[8px] font-black uppercase tracking-widest" style="color:${scoringSystem.includes("atp") ? "#fbbf24" : "#00d4ff"}">${scoringLabel}</div>
+            </div>
             <div class="flex-col gap-1">
                 ${rows.map(r => `
                     <div class="flex-row between items-center px-2 py-1 rounded-lg" style="background:rgba(255,255,255,0.03)">
@@ -544,6 +569,10 @@ function formatEloBreakdown(log) {
                         </span>
                     </div>
                 `).join('')}
+            </div>
+            <div class="mt-2 px-2 py-2 rounded-lg flex-row between items-center" style="background:rgba(255,255,255,0.04)">
+                <span class="text-[9px] text-muted font-bold">Suma real</span>
+                <span class="text-[10px] font-black text-white">${Number(bd.totalCalculado || bd.finalDelta || 0).toFixed(2)}</span>
             </div>
         </div>
     `;

@@ -49,6 +49,7 @@ import { computeGroupTable } from "./event-tournament-engine.js";
 import { shareMatchResult, shareMatchPoster } from "./utils/share-utils.js";
 import { getFriendlyTeamName, isUnknownTeamName as sharedIsUnknownTeamName } from "./utils/team-utils.js";
 import { scoreMatchForUser } from "./services/matchmaking-service.js";
+import { buildStableGuestId } from "./services/guest-player-service.js";
 
 
 
@@ -499,7 +500,7 @@ function renderWelcome() {
   const snapshot = getCompetitiveState(d).snapshot;
   const pts = snapshot.rating;
   const lvl = Number(d?.nivel || 2.5).toFixed(2);
-  const streak = snapshot.streak;
+  const streak = Number.isFinite(Number(d?.computedStreak)) ? Number(d.computedStreak) : snapshot.streak;
   const played = snapshot.played;
 
   const el = (id) => document.getElementById(id);
@@ -661,6 +662,7 @@ async function refreshTacticalStats() {
         streakEl.textContent = (currentStreak > 0 ? "+" : "") + currentStreak;
         streakEl.className = "hv2-xp-val " + (currentStreak > 0 ? "text-sport-green" : currentStreak < 0 ? "text-sport-red" : "");
     }
+    if (currentUserData) currentUserData.computedStreak = currentStreak;
 
     // Find Partner
     let topPartnerUid = null;
@@ -2234,78 +2236,7 @@ function maybeCreateEventDayNotice() {
 
 
 /* Tactical Stats — Nemesis & Partner */
-async function refreshTacticalStats() {
-  const elNemesis = document.getElementById("stat-nemesis");
-  const elPartner = document.getElementById("stat-partner");
-  if (!elNemesis && !elPartner) return;
-  if (!currentUser?.uid || !allMatches.length) return;
 
-  const myUid = currentUser.uid;
-  const myHistory = dedupeEventLinkedMatches(allMatches).filter(
-    (m) => isFinishedMatch(m) && getNormalizedPlayers(m).includes(myUid)
-  );
-
-  if (!myHistory.length) {
-    if (elNemesis) elNemesis.textContent = "---";
-    if (elPartner) elPartner.textContent = "---";
-    return;
-  }
-
-  const rivals = {}; // uid -> { wins, losses }
-  const partners = {}; // uid -> count
-
-  myHistory.forEach((m) => {
-    const players = getNormalizedPlayers(m);
-    const side = getTeamSide(m, myUid);
-    const winner = resolveWinnerTeam(m);
-    if (!side || !winner) return;
-
-    const isWin = (winner === "A" && side === 1) || (winner === "B" && side === 2);
-    const myTeam = side === 1 ? players.slice(0, 2) : players.slice(2, 4);
-    const oppTeam = side === 1 ? players.slice(2, 4) : players.slice(0, 2);
-
-    myTeam.forEach((p) => {
-      if (p && p !== myUid) partners[p] = (partners[p] || 0) + 1;
-    });
-
-    oppTeam.forEach((r) => {
-      if (r) {
-        if (!rivals[r]) rivals[r] = { wins: 0, losses: 0 };
-        if (isWin) rivals[r].wins++;
-        else rivals[r].losses++;
-      }
-    });
-  });
-
-  let nemesisId = null;
-  let maxLosses = -1;
-  Object.entries(rivals).forEach(([rid, stats]) => {
-    if (stats.losses > maxLosses) {
-      maxLosses = stats.losses;
-      nemesisId = rid;
-    } else if (stats.losses === maxLosses && nemesisId) {
-      if (stats.wins < rivals[nemesisId].wins) nemesisId = rid;
-    }
-  });
-
-  let partnerId = null;
-  let maxPlayed = -1;
-  Object.entries(partners).forEach(([pid, count]) => {
-    if (count > maxPlayed) {
-      maxPlayed = count;
-      partnerId = pid;
-    }
-  });
-
-  if (nemesisId && elNemesis) {
-    const name = await resolvePlayerName(nemesisId);
-    elNemesis.textContent = name.split(" ")[0].toUpperCase().slice(0, 8);
-  }
-  if (partnerId && elPartner) {
-    const name = await resolvePlayerName(partnerId);
-    elPartner.textContent = name.split(" ")[0].toUpperCase().slice(0, 8);
-  }
-}
 
 /* Match data */
 async function mergeMatches(col, list) {
@@ -3641,8 +3572,7 @@ function renderProposalConfirmForm(propSnap) {
 }
 
 function buildGuestId(name) {
-    const safe = String(name || "Invitado").trim().replace(/\s+/g, "_");
-    return `GUEST_${safe}_2.5_0`;
+    return buildStableGuestId(name || "Invitado");
 }
 
 function updateProposalPreview(propSnap) {

@@ -3,16 +3,17 @@ import { db, auth, observerAuth, getDocument, updateDocument, addDocument, getDo
 import { collection, collectionGroup, query, orderBy, limit, serverTimestamp, deleteDoc, doc, setDoc, getDocs, deleteField } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI, showToast } from "./ui-core.js";
 import { MAX_PLAYERS } from "./config/match-constants.js";
-import { levelFromRating, ELO_SYSTEM_VERSION } from "./config/elo-system.js";
+import { levelFromRating, ELO_SYSTEM_VERSION, getBaseEloByLevel } from "./config/elo-system.js";
 import { sendCoreNotification } from "./core/core-engine.js";
 import { getFriendlyTeamName, isUnknownTeamName as sharedIsUnknownTeamName } from "./utils/team-utils.js";
 import { openResultForm } from "./match-service.js";
 import { logAdminAudit } from "./services/audit-service.js";
 import { validateMatchAdminPayload } from "./services/admin-validator.js";
 import { addPlayerHistoryEntry, addPlayerHistoryEntries } from "./services/player-history-service.js";
-import { buildMatchPersistencePatch, getResultSetsString } from "./utils/match-utils.js";
+import { buildMatchPersistencePatch, getResultSetsString, parseGuestMeta } from "./utils/match-utils.js";
 
 let users = [];
+let guestProfiles = [];
 let matchesArr = [];
 let eventsArr = [];
 let apoingRecords = [];
@@ -22,6 +23,7 @@ let me = null;
 let proposalsArr = [];
 let auditLogs = [];
 let rankingLogsArray = [];
+let adminRecalcModalState = null;
 
 document.addEventListener("DOMContentLoaded", () => {
     initAppUI("admin");
@@ -86,6 +88,7 @@ function bindTabs() {
 function bindFilters() {
     document.getElementById("users-search")?.addEventListener("input", renderUsers);
     document.getElementById("users-role-filter")?.addEventListener("change", renderUsers);
+    document.getElementById("guest-search")?.addEventListener("input", renderGuests);
     document.getElementById("matches-filter")?.addEventListener("change", renderMatches);
     document.getElementById("matches-type-filter")?.addEventListener("change", renderMatches);
     document.getElementById("matches-user-search")?.addEventListener("input", renderMatches);
@@ -122,47 +125,59 @@ function bindSystemActions() {
         window.deleteMatchesByFilter(action);
     });
 
-    document.getElementById("btn-recalc-history")?.addEventListener("click", async () => {
-        if (!(await confirmAdminAction({ title: "RECONSTR_HISTORICA", message: "Se va a reconstruir todo el historial de puntos ELO desde el base_level. ¿Proceder?", confirmLabel: "EXECUTE_REBUILD", danger: true }))) return;
-        
-        const indicator = document.getElementById("recalc-indicator");
-        const bar = document.getElementById("recalc-bar");
-        const pctEl = document.getElementById("recalc-pct");
-        const statusEl = document.getElementById("recalc-status");
-
-        if (indicator) {
-            indicator.classList.remove("hidden");
-            indicator.classList.add("flex");
-        }
-
-        const onProgress = (e) => {
-            const { pct, current, total, matchId } = e.detail;
-            if (bar) bar.style.width = `${pct}%`;
-            if (pctEl) pctEl.textContent = `${pct}%`;
-            if (statusEl) statusEl.textContent = `Procesando match ${current}/${total} [${matchId.substring(0,8)}...]`;
-        };
-
-        window.addEventListener('adminRecalcProgress', onProgress);
-        
-        showToast("Procesando...", "Reconstruyendo kernel ELO...", "info");
-        try {
-            const res = await window.RESTORE_AND_RECALC_FROM_BASE();
-            if (res && res.success) {
-                showToast("ÉXITO", "Sincronización histórica completa", "success");
-                await refreshAll();
-            }
-        } catch (e) {
-            console.error(e);
-            showToast("Error", "Fallo crítico en reconstrucción", "error");
-        } finally {
-            window.removeEventListener('adminRecalcProgress', onProgress);
-            if (indicator) {
-                indicator.classList.add("hidden");
-                indicator.classList.remove("flex");
-            }
-        }
-    });
+    document.getElementById("btn-recalc-history")?.addEventListener("click", () => runHistoricalRecalc("default"));
+    document.getElementById("btn-recalc-history-atp")?.addEventListener("click", () => runHistoricalRecalc("atp_test"));
+    document.getElementById("btn-create-guest-profile")?.addEventListener("click", window.createGuestProfileAdmin);
 } // end of onReady
+
+async function runHistoricalRecalc(systemKey = "default") {
+    const isAtp = systemKey === "atp_test";
+    const confirmed = await confirmAdminAction({
+        title: isAtp ? "PRUEBA ATP" : "RECONSTR_HISTORICA",
+        message: isAtp
+            ? "Se va a reconstruir todo el historial desde el base_level usando el sistema ATP de prueba. ¿Proceder?"
+            : "Se va a reconstruir todo el historial de puntos ELO desde el base_level. ¿Proceder?",
+        confirmLabel: isAtp ? "PROBAR ATP" : "EXECUTE_REBUILD",
+        danger: true
+    });
+    if (!confirmed) return;
+
+    const indicator = document.getElementById("recalc-indicator");
+    const bar = document.getElementById("recalc-bar");
+    const pctEl = document.getElementById("recalc-pct");
+    const statusEl = document.getElementById("recalc-status");
+
+    if (indicator) {
+        indicator.classList.remove("hidden");
+        indicator.classList.add("flex");
+    }
+
+    const onProgress = (e) => {
+        const { pct, current, total, matchId } = e.detail;
+        if (bar) bar.style.width = `${pct}%`;
+        if (pctEl) pctEl.textContent = `${pct}%`;
+        if (statusEl) statusEl.textContent = `${isAtp ? "ATP" : "ELO"} · Procesando match ${current}/${total} [${String(matchId || "").substring(0,8)}...]`;
+    };
+
+    window.addEventListener("adminRecalcProgress", onProgress);
+    showToast("Procesando...", isAtp ? "Reconstruyendo sistema ATP de prueba..." : "Reconstruyendo kernel ELO...", "info");
+    try {
+        const res = isAtp ? await window.RESTORE_AND_RECALC_FROM_BASE_ATP() : await window.RESTORE_AND_RECALC_FROM_BASE();
+        if (res?.success) {
+            showToast("ÉXITO", isAtp ? "Reconstrucción ATP completada" : "Sincronización histórica completa", "success");
+            await refreshAll();
+        }
+    } catch (e) {
+        console.error(e);
+        showToast("Error", "Fallo crítico en reconstrucción", "error");
+    } finally {
+        window.removeEventListener("adminRecalcProgress", onProgress);
+        if (indicator) {
+            indicator.classList.add("hidden");
+            indicator.classList.remove("flex");
+        }
+    }
+}
 
 function normalizeTeamName(value) {
     return String(value || "").trim().toLowerCase();
@@ -357,8 +372,9 @@ async function refreshAll() {
     if (btn) btn.classList.add("fa-spin");
 
     try {
-        const [uSnap, amSnap, reSnap, evSnapPartidos, evSnapTorneos, apoSnap, devicesSnap, propSnap, auditSnap, rLogsSnap] = await Promise.all([
+        const [uSnap, guestSnap, amSnap, reSnap, evSnapPartidos, evSnapTorneos, apoSnap, devicesSnap, propSnap, auditSnap, rLogsSnap] = await Promise.all([
             getDocsSafe(query(collection(db, "usuarios"), orderBy("puntosRanking", "desc"))),
+            getDocsSafe(query(collection(db, "invitados"), orderBy("nombre", "asc"))),
             getDocsSafe(collection(db, "partidosAmistosos")),
             getDocsSafe(collection(db, "partidosReto")),
             getDocsSafe(collection(db, "eventoPartidos")),
@@ -370,6 +386,7 @@ async function refreshAll() {
         ]);
 
         users = (uSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
+        guestProfiles = (guestSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
         matchesArr = [
             ...(amSnap?.docs || []).map(d => ({ id: d.id, col: "partidosAmistosos", ...d.data() })),
             ...(reSnap?.docs || []).map(d => ({ id: d.id, col: "partidosReto", ...d.data() })),
@@ -403,6 +420,7 @@ async function refreshAll() {
 
         renderDashboard();
         renderUsers();
+        renderGuests();
         renderPending();
         renderMatches();
         renderEvents();
@@ -582,6 +600,36 @@ function formatShortText(value = "", max = 180) {
 
 function getUserById(uid) {
     return users.find((u) => u.id === uid) || null;
+}
+
+function resolveGuestDisplayName(uid, match = null) {
+    const guest = parseGuestMeta(uid);
+    if (guest?.name) return guest.name;
+    const ids = getMatchPlayersNormalized(match);
+    const idx = ids.findIndex((entry) => String(entry || "") === String(uid || ""));
+    const direct =
+        match?.playerNames?.[idx] ||
+        match?.nombresJugadores?.[idx] ||
+        match?.guestNames?.[idx] ||
+        match?.invitados?.[idx]?.nombre ||
+        null;
+    if (direct) return String(direct).trim();
+    return "Invitado";
+}
+
+function resolveUserDisplayName(uid, match = null) {
+    const safeUid = String(uid || "").trim();
+    if (!safeUid || safeUid === "null" || safeUid === "undefined") return "LIBRE";
+    if (
+        safeUid.startsWith("GUEST_") ||
+        safeUid.startsWith("invitado_") ||
+        safeUid.startsWith("manual_")
+    ) {
+        return resolveGuestDisplayName(safeUid, match);
+    }
+    const user = getUserById(safeUid);
+    if (user) return user.nombreUsuario || user.nombre || user.email || "Jugador";
+    return "Jugador";
 }
 
 function getUserTeamSide(match, uid) {
@@ -787,20 +835,23 @@ function renderUsers() {
         else if (notifPermission === "granted" && stat.count === 0) { notifLabel = "Sin dispositivo"; notifClass = "acc-badge text-amber-300"; }
         else if (notifPermission === "granted") { notifLabel = "Sin suscripción"; notifClass = "acc-badge text-amber-300"; }
         const seenStr = stat.lastSeenAt ? stat.lastSeenAt.toLocaleDateString("es-ES") : "N/D";
+        const displayName = escapeHtml(u.nombreUsuario || u.nombre || "SIN NOMBRE");
+        const displayEmail = escapeHtml(u.email || "Sin email");
+        const avatarMarkup = renderAdminAvatar(u);
         
         return `
         <div class="admin-acc-v9" id="user-acc-${u.id}">
             <div class="acc-header" onclick="window.toggleAcc('user-acc-${u.id}')">
-                <div class="acc-icon-box">
-                    <img src="${u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png'}" onerror="this.src='./imagenes/Logojafs.png'">
-                </div>
+                <div class="acc-icon-box acc-icon-box--user">${avatarMarkup}</div>
                 <div class="acc-main">
-                    <span class="acc-title">${u.nombreUsuario || u.nombre || "SIN NOMBRE"}</span>
-                    <span class="acc-sub">${u.email}</span>
+                    <span class="acc-title">${displayName}</span>
+                    <span class="acc-sub">${displayEmail}</span>
                 </div>
                 <div class="acc-badges">
                     <span class="acc-badge">${u.puntosRanking || 1000} Pts</span>
                     <span class="acc-badge">${u.rol || 'Jugador'}</span>
+                    <span class="acc-badge ${hasIcs ? 'is-online' : 'is-offline'}"><i class="fas ${hasIcs ? 'fa-link' : 'fa-link-slash'}"></i> ${hasIcs ? 'ICS OK' : 'SIN ICS'}</span>
+                    <span class="${notifClass}"><i class="fas fa-bell"></i> ${notifLabel}</span>
                 </div>
                 <i class="fas fa-chevron-down acc-chevron"></i>
             </div>
@@ -860,6 +911,78 @@ function renderUsers() {
             </div>
         </div>
         `;
+    }).join("");
+}
+
+function renderGuests() {
+    const container = document.getElementById("guest-accordion-container");
+    if (!container) return;
+    const search = String(document.getElementById("guest-search")?.value || "").trim().toLowerCase();
+    const rows = guestProfiles
+        .filter((g) => {
+            const haystack = `${g.nombre || ""} ${g.nombreUsuario || ""} ${g.id}`.toLowerCase();
+            return !search || haystack.includes(search);
+        })
+        .sort((a, b) => String(a.nombre || a.nombreUsuario || "").localeCompare(String(b.nombre || b.nombreUsuario || ""), "es"));
+
+    if (!rows.length) {
+        container.innerHTML = `<div class="text-center opacity-35 py-10 uppercase text-[10px] tracking-widest">No hay perfiles de invitados guardados</div>`;
+        return;
+    }
+
+    container.innerHTML = rows.map((g) => {
+        const guestName = escapeHtml(g.nombre || g.nombreUsuario || "Invitado");
+        const avatar = renderAdminAvatar({ nombre: g.nombre || g.nombreUsuario, fotoPerfil: g.fotoPerfil, fotoURL: g.fotoURL });
+        const points = Number(g.puntosRanking || g.rating || g.puntosBaseInicial || getBaseEloByLevel(Number(g.nivel || 2.5)));
+        const basePoints = Number(g.puntosBaseInicial || getBaseEloByLevel(Number(g.nivelBaseInicial || g.nivel || 2.5)));
+        return `
+        <div class="admin-acc-v9" id="guest-acc-${g.id}">
+            <div class="acc-header" onclick="window.toggleAcc('guest-acc-${g.id}')">
+                <div class="acc-icon-box acc-icon-box--user">${avatar}</div>
+                <div class="acc-main">
+                    <span class="acc-title">${guestName}</span>
+                    <span class="acc-sub">Perfil competitivo oculto · ${escapeHtml(g.id)}</span>
+                </div>
+                <div class="acc-badges">
+                    <span class="acc-badge">${points.toFixed(0)} pts</span>
+                    <span class="acc-badge">Nivel ${Number(g.nivel || 2.5).toFixed(2)}</span>
+                    <span class="acc-badge">${Number(g.partidosJugados || 0)} PJ</span>
+                </div>
+                <i class="fas fa-chevron-down acc-chevron"></i>
+            </div>
+            <div class="acc-content">
+                <div class="admin-grid-v9">
+                    <div class="admin-field-group">
+                        <label>Nombre visible</label>
+                        <input type="text" class="input-v9" id="g-name-${g.id}" value="${guestName}">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Nivel actual</label>
+                        <input type="number" min="1" max="7" step="0.01" class="input-v9" id="g-level-${g.id}" value="${Number(g.nivel || 2.5).toFixed(2)}">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Nivel base inicial</label>
+                        <input type="number" min="1" max="7" step="0.01" class="input-v9" id="g-base-level-${g.id}" value="${Number(g.nivelBaseInicial || g.nivel || 2.5).toFixed(2)}">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Puntos actuales</label>
+                        <input type="number" step="0.1" class="input-v9" id="g-points-${g.id}" value="${points.toFixed(2)}">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Puntos base iniciales</label>
+                        <input type="number" step="0.1" class="input-v9" id="g-base-points-${g.id}" value="${basePoints.toFixed(2)}">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Racha actual</label>
+                        <input type="number" step="1" class="input-v9" id="g-streak-${g.id}" value="${Number(g.rachaActual || 0)}">
+                    </div>
+                </div>
+                <div class="flex-row gap-3 mt-6">
+                    <button class="btn-v9 primary flex-1" onclick="window.saveGuestProfileAdmin('${g.id}')">GUARDAR PERFIL</button>
+                    <button class="btn-v9 danger" onclick="window.deleteGuestProfileAdmin('${g.id}')"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+        </div>`;
     }).join("");
 }
 
@@ -929,12 +1052,9 @@ function renderMatches() {
         const res = getResultSetsString(m) || '--';
         const playerIds = getMatchPlayersNormalized(m).filter(Boolean);
         const playerNames = playerIds.map(uid => {
-            if (String(uid).startsWith('GUEST_')) {
-                const name = String(uid).split('_').slice(1).join(' ');
-                return `<span class="text-[10px] text-amber-400">${name || 'Invitado'}</span>`;
-            }
-            const u = users.find(u => u.id === uid);
-            return `<span class="text-[10px] text-white/70">${u?.nombreUsuario || u?.nombre || uid.slice(0,8)}</span>`;
+            const label = resolveUserDisplayName(uid, m);
+            const isGuest = String(uid).startsWith('GUEST_') || String(uid).startsWith('invitado_') || String(uid).startsWith('manual_');
+            return `<span class="text-[10px] ${isGuest ? 'text-amber-400' : 'text-white/70'}">${escapeHtml(label)}</span>`;
         }).join(' · ') || '<span class="text-[10px] opacity-30">Sin jugadores</span>';
         const eloProcessed = m.rankingProcessedAt ? '✅ Procesado' : (isPlayed(m) ? '⚠️ Sin ELO' : '—');
         const eloStatusColor = m.rankingProcessedAt ? 'text-green-400' : (isPlayed(m) ? 'text-amber-400' : 'opacity-30');
@@ -1057,22 +1177,7 @@ function getMatchPlayersNormalized(m) {
 function getMatchUsersVsLabel(m) {
     const ids = getMatchPlayersNormalized(m).map(uid => String(uid || ""));
     const names = ids.map((uid) => {
-        if (!uid || uid === "" || uid === "null" || uid === "undefined") return "LIBRE";
-        const low = String(uid).toLowerCase();
-        
-        if (low.startsWith("manual_") || low.startsWith("guest_") || low.startsWith("invitado_")) {
-            const parts = uid.split("_");
-            let raw = parts[1] || "";
-            if (!raw || /^\d+$/.test(raw)) {
-                raw = parts[2] || "Invitado";
-            }
-            return (raw.replace(/_/g, " ").trim() || "Invitado").toUpperCase();
-        }
-        
-        const u = users.find((entry) => entry.id === uid);
-        if (u) return (u.nombreUsuario || u.nombre || "Jugador").toUpperCase();
-        
-        return "JUGADOR " + uid.slice(0, 4).toUpperCase();
+        return resolveUserDisplayName(uid, m).toUpperCase();
     });
     
     const fallbackA = m.teamAName || m.equipoA || m.equipoAName || "";
@@ -1104,6 +1209,8 @@ function formatAdminEloSummary(match) {
     const teamA = Number(summary.teamADelta || 0);
     const teamB = Number(summary.teamBDelta || 0);
     const expectedA = Number(summary.expectedA || 0);
+    const scoringSystem = String(summary.scoringSystem || "default").toLowerCase();
+    const scoringLabel = scoringSystem === "atp_test" ? "ATP Hybrid Competitive" : "ELO Hibrido Club";
     
     // Detailed Hacker Breakdown
     const pData = Array.isArray(summary.playerData) ? summary.playerData : [];
@@ -1116,6 +1223,15 @@ function formatAdminEloSummary(match) {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     ${pData.map(p => {
                         const b = p.breakdown || {};
+                        const breakdownRows = [
+                            ["Base", b.base || 0],
+                            ["Streak", b.racha || 0],
+                            ["Upset", b.sorpresa || 0],
+                            ["Clutch", b.clutch || 0],
+                            ["Skill", b.habilidad || 0],
+                            ["Bonus", b.bonusIndividual || 0],
+                            ["Balance", b.ajusteBalance || 0],
+                        ];
                         return `
                         <div class="bg-black/40 border border-white/5 rounded-xl p-3 flex-col gap-2">
                             <div class="flex-row between items-center mb-1">
@@ -1123,12 +1239,11 @@ function formatAdminEloSummary(match) {
                                 <span class="text-[11px] font-black ${p.delta >= 0 ? 'text-[#39ff14]' : 'text-red-400'}">${p.delta >= 0 ? '+' : ''}${p.delta}</span>
                             </div>
                             <div class="grid grid-cols-2 gap-x-4 gap-y-1 opacity-60 text-[8px] uppercase font-bold tracking-tighter">
-                                <div class="flex-row between"><span>Base</span><span class="${b.base >= 0 ? 'text-white' : 'text-red-300'}">${b.base || 0}</span></div>
-                                <div class="flex-row between"><span>Streak</span><span class="${b.racha >= 0 ? 'text-white' : 'text-red-300'}">${b.racha || 0}</span></div>
-                                <div class="flex-row between"><span>Upset</span><span class="${b.sorpresa >= 0 ? 'text-white' : 'text-red-300'}">${b.sorpresa || 0}</span></div>
-                                <div class="flex-row between"><span>Clutch</span><span class="${b.clutch >= 0 ? 'text-white' : 'text-red-300'}">${b.clutch || 0}</span></div>
-                                <div class="flex-row between"><span>Skill</span><span class="${b.habilidad >= 0 ? 'text-white' : 'text-red-300'}">${b.habilidad || 0}</span></div>
-                                <div class="flex-row between"><span>Bonus</span><span class="${b.bonusIndividual >= 0 ? 'text-white' : 'text-red-300'}">${b.bonusIndividual || 0}</span></div>
+                                ${breakdownRows.map(([label, value]) => `<div class="flex-row between"><span>${label}</span><span class="${Number(value) >= 0 ? 'text-white' : 'text-red-300'}">${Number(value || 0).toFixed(2)}</span></div>`).join('')}
+                            </div>
+                            <div class="flex-row between items-center mt-2 px-2 py-2 rounded-lg bg-white/5 border border-white/5">
+                                <span class="text-[8px] uppercase tracking-widest text-white/45">Variables calculadas</span>
+                                <span class="text-[9px] font-black text-white">${Number(b.totalCalculado || p.delta || 0).toFixed(2)} = ${Number(b.finalDelta || p.delta || 0).toFixed(2)}</span>
                             </div>
                         </div>
                         `;
@@ -1140,6 +1255,10 @@ function formatAdminEloSummary(match) {
 
     return `
         <div class="bg-[#020617]/80 border border-white/10 rounded-2xl p-4 flex-col gap-3">
+            <div class="flex-row between items-center mb-3">
+                <span class="text-[8px] font-black uppercase tracking-[0.25em] text-white/40">Scoring_System</span>
+                <span class="px-2 py-1 rounded-full border border-white/10 text-[9px] font-black uppercase tracking-widest ${scoringSystem === "atp_test" ? "text-amber-300" : "text-[#00e5ff]"}">${scoringLabel}</span>
+            </div>
             ${breakdownHtml}
             
             <div class="divider-admin opacity-20"></div>
@@ -1354,6 +1473,26 @@ function escapeHtml(raw = "") {
     return div.innerHTML;
 }
 
+function getInitialsFromName(name = "") {
+    return String(name || "")
+        .trim()
+        .split(/\s+/)
+        .map((part) => part?.[0] || "")
+        .join("")
+        .slice(0, 2)
+        .toUpperCase() || "?";
+}
+
+function renderAdminAvatar(user = {}) {
+    const name = escapeHtml(user.nombreUsuario || user.nombre || "Jugador");
+    const initials = escapeHtml(getInitialsFromName(user.nombreUsuario || user.nombre || "Jugador"));
+    const photo = String(user.fotoPerfil || user.fotoURL || user.photoURL || "").trim();
+    if (photo) {
+        return `<img src="${escapeHtml(photo)}" alt="${name}" onerror="this.outerHTML='<span class=&quot;acc-avatar-fallback&quot;>${initials}</span>'">`;
+    }
+    return `<span class="acc-avatar-fallback">${initials}</span>`;
+}
+
 function confirmAdminAction({
     title = "Confirmar acción",
     message = "¿Quieres continuar?",
@@ -1529,6 +1668,86 @@ window.saveMatchAdmin = async (id, col) => {
     refreshAll();
 };
 
+window.createGuestProfileAdmin = async () => {
+    const name = String(document.getElementById("guest-create-name")?.value || "").trim();
+    const level = Number(document.getElementById("guest-create-level")?.value || 2.5);
+    if (!name) return showToast("Invitados", "Indica un nombre para el invitado", "warning");
+    if (!Number.isFinite(level)) return showToast("Invitados", "Indica un nivel válido", "warning");
+    const guestId = `GUEST_${name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_${Math.round(level * 100)}`;
+    try {
+        await setDoc(doc(db, "invitados", guestId), {
+            uid: guestId,
+            nombre: name,
+            nombreUsuario: name,
+            nombreNormalizado: name.toLowerCase(),
+            isGuestProfile: true,
+            nivel: Number(level.toFixed(2)),
+            nivelBaseInicial: Number(level.toFixed(2)),
+            puntosBaseInicial: getBaseEloByLevel(level),
+            puntosRanking: getBaseEloByLevel(level),
+            rating: getBaseEloByLevel(level),
+            partidosJugados: 0,
+            victorias: 0,
+            rachaActual: 0,
+            updatedAt: serverTimestamp(),
+            createdBy: auth.currentUser?.uid || null,
+        }, { merge: true });
+        showToast("Invitados", "Perfil de invitado guardado", "success");
+        const nameEl = document.getElementById("guest-create-name");
+        if (nameEl) nameEl.value = "";
+        await refreshAll();
+    } catch (e) {
+        console.error(e);
+        showToast("Invitados", "No se pudo guardar el perfil", "error");
+    }
+};
+
+window.saveGuestProfileAdmin = async (guestId) => {
+    if (!guestId) return;
+    const name = String(document.getElementById(`g-name-${guestId}`)?.value || "").trim();
+    const level = Number(document.getElementById(`g-level-${guestId}`)?.value || 2.5);
+    const baseLevel = Number(document.getElementById(`g-base-level-${guestId}`)?.value || level || 2.5);
+    const points = Number(document.getElementById(`g-points-${guestId}`)?.value || getBaseEloByLevel(level));
+    const basePoints = Number(document.getElementById(`g-base-points-${guestId}`)?.value || getBaseEloByLevel(baseLevel));
+    const streak = Number(document.getElementById(`g-streak-${guestId}`)?.value || 0);
+    if (!name) return showToast("Invitados", "El invitado necesita nombre", "warning");
+    try {
+        await setDoc(doc(db, "invitados", guestId), {
+            uid: guestId,
+            nombre: name,
+            nombreUsuario: name,
+            nombreNormalizado: name.toLowerCase(),
+            isGuestProfile: true,
+            nivel: Number(level.toFixed(2)),
+            nivelBaseInicial: Number(baseLevel.toFixed(2)),
+            puntosRanking: Number(points.toFixed(2)),
+            rating: Number(points.toFixed(2)),
+            puntosBaseInicial: Number(basePoints.toFixed(2)),
+            rachaActual: Number(streak || 0),
+            updatedAt: serverTimestamp(),
+            updatedBy: auth.currentUser?.uid || null,
+        }, { merge: true });
+        showToast("Invitados", "Perfil actualizado", "success");
+        await refreshAll();
+    } catch (e) {
+        console.error(e);
+        showToast("Invitados", "No se pudo actualizar", "error");
+    }
+};
+
+window.deleteGuestProfileAdmin = async (guestId) => {
+    if (!guestId) return;
+    if (!(await confirmAdminAction({ title: "Eliminar invitado", message: "Se eliminará el perfil competitivo del invitado. Los partidos no se borran, pero perderás esta referencia guardada.", confirmLabel: "Eliminar", danger: true }))) return;
+    try {
+        await deleteDoc(doc(db, "invitados", guestId));
+        showToast("Invitados", "Perfil eliminado", "success");
+        await refreshAll();
+    } catch (e) {
+        console.error(e);
+        showToast("Invitados", "No se pudo eliminar", "error");
+    }
+};
+
 window.openAdminMatchResultModal = async (id, col) => {
     try {
         await openResultForm(id, col);
@@ -1582,6 +1801,244 @@ window.resetMatchAdmin = async (id, col) => {
     refreshAll();
 };
 
+function getAdminKnownUser(uid) {
+    return users.find((u) => u.id === uid) || null;
+}
+
+function getAdminMatchPlayers(match) {
+    return (match?.jugadores || match?.playerUids || []).filter((_, idx) => idx < 4);
+}
+
+function resolveAdminSlotIdentity(match, uid, index) {
+    const known = getAdminKnownUser(uid);
+    if (known) {
+        return {
+            uid,
+            name: known.nombreUsuario || known.nombre || known.email || uid,
+            level: Number(known.nivel || levelFromRating(known.puntosRanking || known.rating || 1000)),
+            isGuest: false,
+        };
+    }
+
+    const parsed = parseGuestMeta(uid);
+    const fallbackName =
+        match?.playerNames?.[index] ||
+        match?.nombresJugadores?.[index] ||
+        match?.guestNames?.[index] ||
+        parsed?.name ||
+        (String(uid || "").length > 12 ? "Invitado" : String(uid || "Invitado"));
+    const fallbackLevel = Number(
+        match?.guestLevels?.[index] ??
+        match?.playerLevels?.[index] ??
+        match?.invitados?.[index]?.nivel ??
+        parsed?.level ??
+        2.5
+    );
+
+    return {
+        uid,
+        name: fallbackName,
+        level: Number.isFinite(fallbackLevel) ? fallbackLevel : 2.5,
+        isGuest: true,
+    };
+}
+
+function ensureAdminRecalcModal() {
+    let modal = document.getElementById("modal-admin-elo-recalc");
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.id = "modal-admin-elo-recalc";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:980px;width:min(96vw,980px);">
+            <div class="modal-header">
+                <h3 class="modal-title">Recalculo ELO del partido</h3>
+                <button class="close-btn" type="button" data-admin-recalc-close>&times;</button>
+            </div>
+            <div class="modal-body" id="admin-elo-recalc-body" style="max-height:82vh;overflow:auto;"></div>
+        </div>
+    `;
+    modal.addEventListener("click", (event) => {
+        if (event.target === modal || event.target.closest("[data-admin-recalc-close]")) {
+            modal.classList.remove("active");
+        }
+    });
+    document.body.appendChild(modal);
+    return modal;
+}
+
+function buildAdminRecalcGuestOverridesFromForm() {
+    const overrides = {};
+    document.querySelectorAll("[data-guest-editor-row]").forEach((row) => {
+        const uid = row.getAttribute("data-guest-uid") || "";
+        const index = Number(row.getAttribute("data-guest-index") || -1);
+        const name = row.querySelector("[data-guest-name]")?.value?.trim() || "";
+        const nivel = Number(row.querySelector("[data-guest-level]")?.value || NaN);
+        if (!uid) return;
+        overrides[uid] = { uid, index, name, nivel };
+    });
+    return overrides;
+}
+
+function buildAdminManualDeltaMapFromForm() {
+    const manual = {};
+    document.querySelectorAll("[data-manual-delta-uid]").forEach((input) => {
+        const uid = input.getAttribute("data-manual-delta-uid");
+        const raw = String(input.value || "").trim();
+        if (!uid || !raw) return;
+        const parsed = Number(raw.replace(",", "."));
+        if (Number.isFinite(parsed)) manual[uid] = parsed;
+    });
+    return manual;
+}
+
+function renderAdminRecalcPreview(preview) {
+    const mount = document.getElementById("admin-elo-recalc-preview");
+    if (!mount) return;
+    if (!preview?.success) {
+        mount.innerHTML = `<div class="admin-empty">No se pudo generar la vista previa.</div>`;
+        return;
+    }
+
+    const rows = (preview.allocations || []).map((row) => {
+        const delta = Number(row?.delta || 0);
+        const sign = delta > 0 ? "+" : "";
+        const isGuest = Boolean(row?.isGuest);
+        return `
+            <div class="admin-card" style="padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:18px;background:rgba(255,255,255,.04);display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;">
+                <div>
+                    <div style="font-weight:800;color:#fff;">${row?.name || row?.uid || "Jugador"}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,.62);">${isGuest ? "Invitado" : `Rating ${Math.round(row?.ratingBefore || 0)} -> ${Math.round(row?.ratingAfter || 0)}`}</div>
+                </div>
+                <div style="font-weight:900;color:${delta >= 0 ? "#4ade80" : "#f87171"};">${sign}${delta.toFixed(2)}</div>
+                ${isGuest ? `<div style="font-size:11px;color:rgba(255,255,255,.52);">Nivel ${Number(row?.level || 2.5).toFixed(2)}</div>` : `<input data-manual-delta-uid="${row.uid}" class="admin-input" type="number" step="0.1" placeholder="Manual" style="width:92px;padding:10px 12px;border-radius:12px;background:rgba(9,12,22,.8);border:1px solid rgba(255,255,255,.12);color:#fff;" />`}
+            </div>
+        `;
+    }).join("");
+
+    mount.innerHTML = `
+        <div class="admin-grid-2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px;">
+            <div class="admin-card" style="padding:14px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);">
+                <div style="font-size:11px;color:rgba(255,255,255,.58);">Expectativa equipo A</div>
+                <div style="font-size:24px;font-weight:900;color:#fff;">${Number(preview.summary?.expectedA || 0).toFixed(2)}</div>
+            </div>
+            <div class="admin-card" style="padding:14px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);">
+                <div style="font-size:11px;color:rgba(255,255,255,.58);">Balance global</div>
+                <div style="font-size:24px;font-weight:900;color:#fff;">${Number(preview.summary?.zeroSumCheck || 0).toFixed(2)}</div>
+            </div>
+        </div>
+        <div style="display:grid;gap:10px;">${rows}</div>
+    `;
+}
+
+async function refreshAdminRecalcPreview() {
+    if (!adminRecalcModalState) return;
+    const guestOverrides = buildAdminRecalcGuestOverridesFromForm();
+    adminRecalcModalState.guestOverrides = guestOverrides;
+    const { previewMatchResults } = await import("./ranking-service.js");
+    const preview = await previewMatchResults(
+        adminRecalcModalState.id,
+        adminRecalcModalState.col,
+        adminRecalcModalState.resultStr,
+        { guestOverrides }
+    );
+    adminRecalcModalState.preview = preview;
+    renderAdminRecalcPreview(preview);
+}
+
+async function openAdminRecalcModal(id, col, resultStr) {
+    const match = matchesArr.find((m) => m.id === id && m.col === col) || await getDocument(col, id);
+    if (!match) throw new Error("No se encontro el partido.");
+    const modal = ensureAdminRecalcModal();
+    const body = document.getElementById("admin-elo-recalc-body");
+    const players = getAdminMatchPlayers(match);
+    const slots = players.map((uid, index) => resolveAdminSlotIdentity(match, uid, index));
+    const guestRows = slots
+        .map((slot, index) => {
+            if (!slot?.isGuest) return "";
+            return `
+                <div data-guest-editor-row data-guest-uid="${slot.uid}" data-guest-index="${index}" class="admin-card" style="padding:14px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:12px;">
+                    <input data-guest-name class="admin-input" value="${String(slot.name || "").replace(/"/g, "&quot;")}" placeholder="Nombre invitado" style="padding:12px 14px;border-radius:12px;background:rgba(9,12,22,.8);border:1px solid rgba(255,255,255,.12);color:#fff;" />
+                    <input data-guest-level class="admin-input" type="number" min="1" max="7" step="0.01" value="${Number(slot.level || 2.5).toFixed(2)}" style="padding:12px 14px;border-radius:12px;background:rgba(9,12,22,.8);border:1px solid rgba(255,255,255,.12);color:#fff;" />
+                </div>
+            `;
+        })
+        .filter(Boolean)
+        .join("");
+
+    body.innerHTML = `
+        <div style="display:grid;gap:18px;">
+            <div class="admin-card" style="padding:16px;border-radius:20px;background:linear-gradient(135deg,rgba(23,32,59,.95),rgba(8,11,22,.95));border:1px solid rgba(255,255,255,.08);">
+                <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:6px;">Marcador del recalculo</div>
+                <div style="font-size:28px;font-weight:900;color:#fff;letter-spacing:.04em;">${resultStr}</div>
+                <div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,.68);">${slots.map((slot) => slot.name).join(" · ")}</div>
+            </div>
+            ${guestRows ? `<div style="display:grid;gap:10px;"><div style="font-size:12px;font-weight:800;color:#fff;">Invitados o perfiles no detectados</div>${guestRows}</div>` : ""}
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button type="button" id="btn-admin-preview-recalc" class="btn btn-ghost">Ver simulacion</button>
+                <button type="button" id="btn-admin-apply-recalc" class="btn btn-primary">Guardar calculo</button>
+                <button type="button" id="btn-admin-apply-manual-recalc" class="btn btn-danger">Guardar puntos manuales</button>
+            </div>
+            <div id="admin-elo-recalc-preview"></div>
+        </div>
+    `;
+
+    adminRecalcModalState = { id, col, resultStr, match, slots, guestOverrides: {}, preview: null };
+    modal.classList.add("active");
+
+    document.getElementById("btn-admin-preview-recalc")?.addEventListener("click", refreshAdminRecalcPreview);
+    document.getElementById("btn-admin-apply-recalc")?.addEventListener("click", async () => {
+        const guestOverrides = buildAdminRecalcGuestOverridesFromForm();
+        await persistAdminGuestOverrides(guestOverrides);
+        await updateDocument(col, id, { rankingProcessedAt: null });
+        const { processMatchResults } = await import("./ranking-service.js");
+        const res = await processMatchResults(id, col, resultStr, { guestOverrides });
+        if (!res?.success) throw new Error(res?.error || "No se pudo recalcular.");
+        showToast("EXITO", "Calculo ELO guardado", "success");
+        modal.classList.remove("active");
+        await refreshAll();
+    });
+    document.getElementById("btn-admin-apply-manual-recalc")?.addEventListener("click", async () => {
+        const guestOverrides = buildAdminRecalcGuestOverridesFromForm();
+        const manualDeltaMap = buildAdminManualDeltaMapFromForm();
+        if (!Object.keys(manualDeltaMap).length) {
+            showToast("AVISO", "Introduce al menos un delta manual", "info");
+            return;
+        }
+        await persistAdminGuestOverrides(guestOverrides);
+        await updateDocument(col, id, { rankingProcessedAt: null });
+        const { processMatchResults } = await import("./ranking-service.js");
+        const res = await processMatchResults(id, col, resultStr, {
+            guestOverrides,
+            manualDeltas: manualDeltaMap,
+            manualReason: "Ajuste manual desde admin"
+        });
+        if (!res?.success) throw new Error(res?.error || "No se pudo guardar el ajuste manual.");
+        showToast("EXITO", "Puntuacion manual guardada", "success");
+        modal.classList.remove("active");
+        await refreshAll();
+    });
+
+    if (guestRows) {
+        body.querySelectorAll("[data-guest-name],[data-guest-level]").forEach((input) => {
+            input.addEventListener("change", () => refreshAdminRecalcPreview().catch(console.error));
+        });
+    }
+    await refreshAdminRecalcPreview();
+}
+
+async function persistAdminGuestOverrides(guestOverrides = {}) {
+    const entries = Object.values(guestOverrides || {}).filter((item) => item?.uid && item?.name && Number.isFinite(Number(item?.nivel)));
+    await Promise.all(entries.map((item) => setDoc(doc(db, "invitados", String(item.uid)), {
+        nombre: String(item.name || "Invitado").trim(),
+        nombreNormalizado: String(item.name || "Invitado").trim().toLowerCase(),
+        nivel: Number(item.nivel),
+        puntosBaseInicial: getBaseEloByLevel(Number(item.nivel)),
+        updatedAt: serverTimestamp(),
+        source: "admin_recalc_match",
+    }, { merge: true })));
+}
+
 window.recalcMatchEloLegacy = async (id, col, resultStr) => {
     return window.recalcMatchEloSafe(id, col, resultStr);
 };
@@ -1590,26 +2047,11 @@ window.recalcMatchEloSafe = async (id, col, resultStr) => {
     if (!resultStr || resultStr === "--") {
         return showToast("ERROR", "No hay resultado para recalcular", "error");
     }
-    const confirmed = await confirmAdminAction({
-        title: "Recalcular ELO",
-        message: `Se recalculara el ELO para el marcador ${resultStr}.`,
-        confirmLabel: "Recalcular",
-    });
-    if (!confirmed) return;
-    showToast("SISTEMA", "Recalculando ELO...", "info");
     try {
-        await updateDocument(col, id, { rankingProcessedAt: null });
-        const { processMatchResults } = await import("./ranking-service.js");
-        const res = await processMatchResults(id, col, resultStr);
-        if (res?.success && !res?.skipped) {
-            showToast("EXITO", `ELO recalculado para ${res.changes?.length || 0} jugadores`, "success");
-        } else {
-            showToast("INFO", res?.error || "Respuesta inesperada del sistema", "warn");
-        }
+        await openAdminRecalcModal(id, col, resultStr);
     } catch (e) {
         showToast("ERROR", e?.message || "Fallo en recalculo", "error");
     }
-    refreshAll();
 };
 
 window.recalcMatchElo = window.recalcMatchEloSafe;
@@ -2115,7 +2557,7 @@ function renderGlobalHistory() {
     }
 
     const userDict = {};
-    users.forEach(u => userDict[u.id] = u.nombre || u.email);
+    users.forEach(u => userDict[u.id] = u.nombreUsuario || u.nombre || u.email || "Jugador");
 
     tbody.innerHTML = rankingLogsArray.map(log => {
         const dateStr = log.timestamp?.toDate ? log.timestamp.toDate().toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : 'Desconocida';
@@ -2123,7 +2565,7 @@ function renderGlobalHistory() {
         const sign = d > 0 ? '+' : '';
         const clr = d > 0 ? 'text-sport-green glow-green-sm' : (d < 0 ? 'text-danger glow-red-sm' : 'text-muted');
         const mType = (log.matchCollection || '').replace('partidos','').replace('evento','Torneo ').toUpperCase() || 'Partido';
-        const uName = userDict[log.uid] || log.uid;
+        const uName = userDict[log.uid] || resolveGuestDisplayName(log.uid) || "Jugador";
         const details = log.details || {};
         
         return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors">

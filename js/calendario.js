@@ -892,9 +892,13 @@ async function syncApoingReservations(force = false) {
                 const currentUid = (typeof auth !== "undefined" && auth?.currentUser?.uid) || (typeof currentUser !== "undefined" && currentUser?.uid) || null;
                 if (currentUid) {
                     const { createNotification } = await import("./services/notification-service.js");
+                    const nearbyOpenMatches = findOpenMatchesNearApoingReservation(apoingEvents);
+                    const nearbySummary = nearbyOpenMatches.length
+                        ? ` Tienes ${nearbyOpenMatches.length} partida${nearbyOpenMatches.length > 1 ? "s" : ""} abierta${nearbyOpenMatches.length > 1 ? "s" : ""} compatible${nearbyOpenMatches.length > 1 ? "s" : ""} en ese tramo.`
+                        : "";
                     if (myFutureCount > apoingMyFutureCountLast) {
                         showToast("Apoing", "Nueva reserva detectada.", "success");
-                        createNotification(currentUid, "Reserva Apoing", "Nueva reserva detectada en tu calendario.", "info", "calendario.html", { type: "apoing_new" });
+                        createNotification(currentUid, "Reserva Apoing", `Nueva reserva detectada en tu calendario.${nearbySummary}`, "info", "calendario.html", { type: "apoing_new", nearbyOpenMatches: nearbyOpenMatches.map((m) => m.id) });
                     } else {
                         showToast("Apoing", "Reserva cancelada.", "warning");
                         createNotification(currentUid, "Cancelación Apoing", "Se ha eliminado una reserva de tu calendario.", "warning", "calendario.html", { type: "apoing_removed" });
@@ -1526,6 +1530,21 @@ function resolveTeamDisplayName(match, side) {
 function shortName(name) {
     if (!name) return "Jugador";
     return name.split(" ").slice(0, 2).join(" ");
+}
+
+function findOpenMatchesNearApoingReservation(events = []) {
+    const now = Date.now();
+    const myUpcoming = (events || [])
+        .filter((e) => isApoingMine(e) && e?.dtStart instanceof Date && e.dtStart.getTime() >= now)
+        .sort((a, b) => a.dtStart - b.dtStart);
+    if (!myUpcoming.length) return [];
+
+    return allMatches.filter((match) => {
+        if (String(match?.estado || "").toLowerCase() !== "abierto") return false;
+        const matchDate = toDateSafe(match?.fecha);
+        if (!matchDate) return false;
+        return myUpcoming.some((ev) => Math.abs(matchDate.getTime() - ev.dtStart.getTime()) <= (3 * 60 * 60 * 1000));
+    }).slice(0, 3);
 }
 
 function getWeatherStateFromCode(code) {

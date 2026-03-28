@@ -347,29 +347,44 @@ async function renderRankUserModal(uid) {
         const tipo = log.type || (col === "eventoPartidos" ? "TORNEO" : col === "partidosReto" ? "RETO" : "AMISTOSO");
         const newTotal = Number(log.newTotal || 0);
 
-        let rivalesTexto = "Sin datos de rivales";
+        let rivalesTexto = "Buscando rivales...";
         try {
-          const match = log.matchId ? await getMatchById(log.matchId).catch(() => null) : null;
+          const matchId = log.matchId || "";
+          const matchCol = log.matchCollection || col || "partidosAmistosos";
+          const match = matchId ? await getMatchById(matchId).catch(() => null) : null;
+          
           if (match) {
             const arr = match.jugadores || match.playerUids || [];
             const myIdx = arr.findIndex(x => x === uid);
+            
             if (myIdx !== -1 && arr.length >= 4) {
               const rivalUids = myIdx < 2 ? arr.slice(2, 4) : arr.slice(0, 2);
               const rivalNames = await Promise.all(rivalUids.map(async r => {
-                if (!r) return "?";
-                if (String(r).startsWith("GUEST_")) return String(r).split("_")[1] || "Invitado";
+                if (!r) return "Vacio";
+                // 1. Try Synthetic Guest
+                const guest = parseGuestMeta(r);
+                if (guest) return guest.name;
+                
+                // 2. Try Cache / Local list
                 const cu = users.find(x => x.id === r);
                 if (cu) return cu.nombreUsuario || cu.nombre || "Jugador";
+                
+                // 3. Try Remote / Event Fallback
                 const du = await getDocument("usuarios", r).catch(() => null);
-                return du?.nombreUsuario || du?.nombre || "Jugador";
+                if (du) return du.nombreUsuario || du.nombre || "Jugador";
+                
+                // 4. Final Fallback (Event dummy / UID)
+                return String(r).length > 15 ? "Jugador " + String(r).slice(0, 4) : String(r);
               }));
               rivalesTexto = `vs <span class="font-bold text-white">${rivalNames.join(" &amp; ")}</span>`;
             } else if (match.teamAName || match.teamBName) {
               const myTeam = myIdx < 2 ? "A" : "B";
-              rivalesTexto = `vs <span class="font-bold text-white">${myTeam === "A" ? (match.teamBName || "Equipo B") : (match.teamAName || "Equipo A")}</span>`;
+              rivalesTexto = `vs <span class="font-bold text-white text-[10px] uppercase">${myTeam === "A" ? (match.teamBName || "Pareja B") : (match.teamAName || "Pareja A")}</span>`;
+            } else {
+               rivalesTexto = "Partido sin rivales registrados";
             }
           }
-        } catch (_) {}
+        } catch (_) { rivalesTexto = "Error cargando rivales"; }
 
         const won = log.won ?? diff >= 0;
         return `
@@ -403,6 +418,12 @@ async function renderRankUserModal(uid) {
             <span class="rank-user-name">${name}</span>
             <span class="rank-user-meta">#${rank > 0 ? rank : "--"} · ${Math.round(points)} pts · Nivel ${level.toFixed(2)}</span>
           </div>
+        </div>
+        <div class="rank-break-grid" style="margin-top:14px;">
+          <div class="rank-break-row"><span>Puntos actuales</span><b class="text-white">${Math.round(points)}</b></div>
+          <div class="rank-break-row"><span>Para subir</span><b class="text-sport-green">+${state.pointsToUp}</b></div>
+          <div class="rank-break-row"><span>Para bajar</span><b class="text-sport-red">-${state.pointsToDown}</b></div>
+          <div class="rank-break-row"><span>Ventana de nivel</span><b class="text-primary">${state.prevLevel.toFixed(2)} - ${state.nextLevel.toFixed(2)}</b></div>
         </div>
         <div class="rank-progress-wrap">
           <div class="rank-progress-info">
@@ -448,6 +469,8 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
     const logDoc = logId ? await getDocument("rankingLogs", logId) : null;
     const match = matchId ? await getMatchById(matchId) : null;
     const detail = logDoc?.details?.breakdown || logDoc?.details?.puntosDetalle || {};
+    const systemVersion = String(logDoc?.details?.systemVersion || "");
+    const real = detail?.desgloseReal || {};
     let factors = [];
     if (detail.factoresAdicionales) {
         // v8 Advanced Scoring
@@ -455,7 +478,8 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
             ["Elo Dinámico", detail.cambioElo],
             ["Ajuste Equipo", detail.factoresAdicionales?.companero],
             ["Racha / Bonus", detail.factoresAdicionales?.racha],
-            ["Set Margin", detail.factoresAdicionales?.margenSets]
+            ["Set Margin", detail.factoresAdicionales?.margenSets],
+            ["Equilibrio final", detail.ajusteBalance]
         ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
         
         if (detail.sumaTotal && detail.limiteAplicado && Math.abs(detail.sumaTotal) > Math.abs(detail.limiteAplicado)) {
@@ -469,7 +493,21 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         ["Factor Sorpresa", detail.sorpresa || detail.surprise],
         ["Por Sets/Juegos", detail.clutch || detail.sets],
         ["Ajuste Nivel", detail.habilidad || detail.skill],
+        ["Equilibrio final", detail.ajusteBalance],
         ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
+    }
+
+    if (systemVersion.includes("atp")) {
+      factors = factors.concat([
+        ["Expectativa", real.esperado],
+        ["K Factor", real.K],
+        ["Seed Individual", real.seedIndividual],
+        ["Gap Compa", real.diferenciaConCompanero],
+        ["Reparto", real.repartoPareja],
+        ["Dominancia", real.dominance],
+        ["Rating Pareja", real.teamRating],
+        ["Rating Rival", real.rivalRating],
+      ].filter(([, v]) => v !== undefined && v !== null && v !== 0));
     }
 
     const diff = Number(logDoc?.diff || 0);
@@ -557,6 +595,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         </div>
 
         <div class="rank-break-level">Nivel ${levelBefore ? levelBefore.toFixed(2) : "--"} → ${levelAfter ? levelAfter.toFixed(2) : "--"}</div>
+        <div class="rank-break-level">Variables ${num(detail.totalCalculado || diff, 2)} = Delta final ${num(detail.finalDelta || diff, 2)}</div>
         ${
           beforeProgress && afterProgress
             ? `

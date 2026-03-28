@@ -2,14 +2,17 @@ import { db } from "./firebase-service.js";
 import { collection, getDocs, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { processMatchResults } from "./ranking-service.js";
 import { ELO_CONFIG, ELO_SYSTEM_VERSION, ratingFromLevel, levelFromRating } from "./config/elo-system.js";
+import { ATP_TEST_SYSTEM_VERSION } from "./pruebaElo.js";
 import { getResultSetsString } from "./utils/match-utils.js";
 
-window.WIPE_AND_RECALC_ALL_MATCHES = async function () {
+async function runFullRecalculation(scoringSystem = "default") {
     const t0 = performance.now();
-    console.log(`⚡ [${ELO_SYSTEM_VERSION}] STARTING FULL RECALCULATION...`);
+    const activeVersion = scoringSystem === "atp_test" ? ATP_TEST_SYSTEM_VERSION : ELO_SYSTEM_VERSION;
+    console.log(`⚡ [${activeVersion}] STARTING FULL RECALCULATION...`);
 
     // 1. Reset all users
     const usersSnap = await getDocs(collection(db, "usuarios"));
+    const guestsSnap = await getDocs(collection(db, "invitados"));
     let batch = writeBatch(db);
     let count = 0;
 
@@ -36,8 +39,41 @@ window.WIPE_AND_RECALC_ALL_MATCHES = async function () {
             nivelProgresoPct: 50,
             nivelRango: "Bronce",
             lastMatchAnalysis: null,
-            eloSystemVersion: ELO_SYSTEM_VERSION,
+            eloSystemVersion: activeVersion,
         });
+        count++;
+        if (count % 400 === 0) {
+            await batch.commit();
+            batch = writeBatch(db);
+        }
+    }
+    await batch.commit();
+
+    batch = writeBatch(db);
+    count = 0;
+    for (const d of guestsSnap.docs) {
+        const g = d.data();
+        const baseLevel = Number.isFinite(Number(g?.nivelBaseInicial))
+            ? Number(g.nivelBaseInicial)
+            : Number.isFinite(Number(g?.nivel))
+                ? Number(g.nivel)
+                : 2.5;
+        const startRating = Number.isFinite(Number(g?.puntosBaseInicial))
+            ? Number(g.puntosBaseInicial)
+            : Number(ratingFromLevel(baseLevel) || ELO_CONFIG.BASE_RATING || 1000);
+        const startLevel = Number(levelFromRating(startRating) || baseLevel || 2.5);
+
+        batch.set(d.ref, {
+            puntosRanking: startRating,
+            rating: startRating,
+            nivel: startLevel,
+            partidosJugados: 0,
+            victorias: 0,
+            rachaActual: 0,
+            lastMatchAnalysis: null,
+            eloSystemVersion: activeVersion,
+            updatedAt: serverTimestamp(),
+        }, { merge: true });
         count++;
         if (count % 400 === 0) {
             await batch.commit();
@@ -98,6 +134,7 @@ window.WIPE_AND_RECALC_ALL_MATCHES = async function () {
             await processMatchResults(match.id, match.col, resStr, {
                 mvpId: match.data.mvp,
                 surface: match.data.superficie || match.data.surface,
+                scoringSystem,
             });
             successCount++;
         } catch (e) {
@@ -107,7 +144,10 @@ window.WIPE_AND_RECALC_ALL_MATCHES = async function () {
     }
 
     const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-    return { success: true, processed: successCount, errors: errorCount, elapsed, errorList };
-};
+    return { success: true, processed: successCount, errors: errorCount, elapsed, errorList, systemVersion: activeVersion, scoringSystem };
+}
 
+window.WIPE_AND_RECALC_ALL_MATCHES = () => runFullRecalculation("default");
+window.WIPE_AND_RECALC_ALL_MATCHES_ATP = () => runFullRecalculation("atp_test");
 window.RESTORE_AND_RECALC_FROM_BASE = window.WIPE_AND_RECALC_ALL_MATCHES;
+window.RESTORE_AND_RECALC_FROM_BASE_ATP = window.WIPE_AND_RECALC_ALL_MATCHES_ATP;

@@ -7,6 +7,43 @@ let onlineNexusCurrentUid = null;
 let onlineNexusViewerIsAdmin = false;
 let onlineNexusRoleResolvedFor = null;
 
+function ensureRuntimePolishStyles() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('runtime-polish-style')) return;
+    const style = document.createElement('style');
+    style.id = 'runtime-polish-style';
+    style.textContent = `
+      .page-content, .profile-page, .admin-page-shell { width: min(100%, 1460px); margin-inline: auto; }
+      .card, .card-premium-v7, .settings-card, .history-card-premium, .ai-insight-card, .stat-card-v9, .nexus-item-v9, .kpi-card, .online-nexus-item {
+        border-radius: 24px !important;
+        border: 1px solid rgba(255,255,255,0.10) !important;
+        background:
+          radial-gradient(circle at top left, rgba(0,212,255,0.12), transparent 32%),
+          linear-gradient(180deg, rgba(10,16,30,0.96), rgba(6,11,22,0.98)) !important;
+        box-shadow: 0 18px 42px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+      }
+      .modal-card {
+        border-radius: 28px !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        background:
+          radial-gradient(circle at top left, rgba(0,212,255,0.14), transparent 30%),
+          linear-gradient(180deg, rgba(10,15,28,0.98), rgba(5,9,18,0.99)) !important;
+        box-shadow: 0 32px 80px rgba(0,0,0,0.56), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+      }
+      .modal-header { padding: 16px 18px 12px !important; }
+      .modal-body { padding: 16px 18px 18px !important; }
+      .toast, .soft-prompt-card {
+        border-radius: 22px !important;
+        box-shadow: 0 22px 52px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+      }
+      @media (max-width: 768px) {
+        .page-content, .profile-page, .admin-page-shell { width: 100%; }
+        .card, .card-premium-v7, .settings-card, .history-card-premium, .ai-insight-card, .stat-card-v9, .nexus-item-v9, .kpi-card { border-radius: 20px !important; }
+      }
+    `;
+    document.head.appendChild(style);
+}
+
 function ensureGlobalBootStyles() {
     if (typeof document === 'undefined') return;
     if (document.getElementById('app-boot-inline-style')) return;
@@ -489,6 +526,7 @@ export function initAppUI(activePageName) {
     }
 
     initGlobalFeedbackHooks();
+    ensureRuntimePolishStyles();
     ensureGlobalBackgroundLayer();
     ensureErrorBoundaryLayer();
     ensureBootLoader();
@@ -700,12 +738,24 @@ function ensureToastContainerStyles(container) {
     const needsFallback = styles.position === 'static' || Number(styles.zIndex || 0) < 1000;
     if (!needsFallback) return;
 
-    container.style.position = 'fixed';
-    container.style.top = 'calc(72px + env(safe-area-inset-top, 0px))';
-    container.style.right = '12px';
-    container.style.left = window.innerWidth <= 640 ? '12px' : 'auto';
-    container.style.maxWidth = window.innerWidth <= 640 ? 'none' : '360px';
-    container.style.zIndex = '99999';
+    if (window.innerWidth <= 640) {
+        // Mobile positioning: floating top stack
+        container.style.position = 'fixed';
+        container.style.top = 'calc(72px + env(safe-area-inset-top, 0px))';
+        container.style.bottom = 'auto';
+        container.style.left = '16px';
+        container.style.right = '16px';
+        container.style.maxWidth = 'none';
+        container.style.zIndex = '999999';
+    } else {
+        // Desktop positioning: Top Right
+        container.style.position = 'fixed';
+        container.style.top = 'calc(72px + env(safe-area-inset-top, 0px))';
+        container.style.right = '12px';
+        container.style.left = 'auto';
+        container.style.maxWidth = '360px';
+        container.style.zIndex = '999999';
+    }
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
     container.style.gap = '10px';
