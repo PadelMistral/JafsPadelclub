@@ -2,7 +2,7 @@
    JafsPadel Service Worker v4 — PWA + Background Push Ready
    =============================================================== */
 
-const CACHE_NAME = "jafs-padel-v10";
+const CACHE_NAME = "jafs-padel-v12";
 const BASE_PATH = new URL(self.registration.scope || "/").pathname.replace(/\/$/, "");
 const withBase = (path) =>
   path.startsWith("http")
@@ -57,13 +57,34 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   if (new URL(request.url).origin !== self.location.origin) return;
 
+  const url = new URL(request.url);
+  const isHtml = request.mode === "navigate" || request.destination === "document";
+  const isAsset = ["script", "style", "worker"].includes(request.destination) || /\.(js|css)$/i.test(url.pathname);
+
+  if (isHtml || isAsset) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy).catch(() => null));
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          return caches.match(withBase("/offline.html")) || caches.match(withBase("/"));
+        })
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
       return fetch(request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy).catch(() => null));
           return response;
         })
         .catch(() =>

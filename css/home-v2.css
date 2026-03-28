@@ -1091,8 +1091,21 @@ body.home-booting {
 }
 
 .hv2-club-feed {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 480px;
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+.hv2-club-feed::-webkit-scrollbar {
+  width: 4px;
+}
+.hv2-club-feed::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 10px;
 }
 
 .hv2-club-card {
@@ -1100,6 +1113,7 @@ body.home-booting {
   grid-template-columns: auto 1fr auto;
   gap: 10px;
   align-items: start;
+  flex-shrink: 0;
   padding: 12px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1414,6 +1428,7 @@ body.home-booting {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
   padding: 12px 14px 46px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.07);

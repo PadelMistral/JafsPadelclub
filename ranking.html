@@ -35,6 +35,80 @@
         .podium-item:hover {
             transform: translateY(-5px) scale(1.02);
         }
+
+        .system-visual-grid {
+            display: grid;
+            grid-template-columns: 1.25fr .95fr;
+            gap: 16px;
+        }
+
+        .system-chart-card,
+        .system-explain-card {
+            background: rgba(2, 6, 23, 0.56);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .system-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: .12em;
+            color: rgba(255,255,255,.72);
+            padding: 9px 12px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.03);
+            margin-top: 8px;
+        }
+
+        .system-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 9px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .14em;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #e2e8f0;
+            background: rgba(255,255,255,0.04);
+        }
+
+        .level-curve {
+            position: relative;
+            min-height: 180px;
+            overflow: hidden;
+        }
+
+        .level-curve::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+              linear-gradient(to top, rgba(255,255,255,0.08) 1px, transparent 1px) 0 0 / 100% 25%,
+              linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 20% 100%;
+            opacity: .7;
+        }
+
+        .curve-label {
+            position: absolute;
+            font-size: 9px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .14em;
+            color: rgba(255,255,255,.55);
+        }
+
+        @media (max-width: 900px) {
+            .system-visual-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 
@@ -81,6 +155,50 @@
             </div>
         </div>
 
+
+        <section class="system-chart-card mb-10 animate-fade-in" style="animation-delay:0.12s;">
+            <div class="flex-row items-center border-b border-white/5 pb-2 mb-4">
+                <h3 class="text-xs font-black text-white uppercase tracking-widest"><i class="fas fa-chart-line text-primary mr-2"></i> Lectura del sistema nuevo</h3>
+            </div>
+            <div class="system-visual-grid">
+                <div class="system-chart-card">
+                    <div class="flex-row between items-center mb-3">
+                        <span class="system-pill"><i class="fas fa-wave-square"></i> Curva de nivel</span>
+                        <span class="system-pill"><i class="fas fa-scale-balanced"></i> Transparencia</span>
+                    </div>
+                    <div class="level-curve rounded-xl">
+                        <div class="curve-label" style="left:8px; bottom:10px;">Puntos</div>
+                        <div class="curve-label" style="right:8px; top:8px;">MÃ¡s arriba, mÃ¡s exigente</div>
+                        <div class="curve-label" style="right:8px; bottom:10px;">Subir / bajar</div>
+                        <svg preserveAspectRatio="none" class="w-full h-full absolute inset-0 rounded-xl" viewBox="0 0 100 100">
+                            <defs>
+                                <linearGradient id="rankGlow2" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" stop-color="#0ea5e9" />
+                                    <stop offset="50%" stop-color="#22c55e" />
+                                    <stop offset="100%" stop-color="#f59e0b" />
+                                </linearGradient>
+                            </defs>
+                            <path d="M0,84 Q18,78 36,58 T72,26 T100,12 L100,100 L0,100 Z" fill="url(#rankGlow2)" opacity="0.12"/>
+                            <path d="M0,84 Q18,78 36,58 T72,26 T100,12" fill="none" stroke="url(#rankGlow2)" stroke-width="3.2" stroke-linecap="round"/>
+                            <circle cx="18" cy="78" r="2.2" fill="#38bdf8"/>
+                            <circle cx="50" cy="46" r="2.2" fill="#22c55e"/>
+                            <circle cx="84" cy="18" r="2.2" fill="#f59e0b"/>
+                        </svg>
+                    </div>
+                    <div class="system-line"><span>Base</span><b>Expectativa de pareja vs pareja</b></div>
+                    <div class="system-line"><span>Ajustes</span><b>Racha, sorpresa, clutch y equilibrio</b></div>
+                    <div class="system-line"><span>Regla visible</span><b>Base + ajustes + equilibrio = delta final</b></div>
+                </div>
+                <div class="system-explain-card text-[10px] text-white/70 leading-relaxed font-medium">
+                    <p class="mb-3">La app enseÃ±a el delta final y tambiÃ©n cÃ³mo se construye. Cada lÃ­nea del desglose suma o resta y el resultado coincide con el total del partido.</p>
+                    <ul class="flex-col gap-2 list-none pl-0">
+                        <li class="flex items-center gap-2"><i class="fas fa-users text-primary w-3"></i> <span>Los puntos parten de la fuerza de las dos parejas completas, incluidos invitados si tienen nivel guardado.</span></li>
+                        <li class="flex items-center gap-2"><i class="fas fa-fire text-orange-400 w-3"></i> <span>La racha influye, pero no se esconde: aparece como una variable separada.</span></li>
+                        <li class="flex items-center gap-2"><i class="fas fa-layer-group text-cyan-300 w-3"></i> <span>La barra de progreso indica dÃ³nde estÃ¡s dentro de tu tramo de nivel y cuÃ¡ntos puntos faltan para subir o bajar.</span></li>
+                    </ul>
+                </div>
+            </div>
+        </section>
 
         <div class="ranking-podium-v7 animate-fade-in mb-10">
             <!-- Podium Rank 2 -->

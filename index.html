@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -69,13 +69,6 @@
                 </button>
             </form>
 
-            <div class="auth-divider">
-                <span>o</span>
-            </div>
-
-            <button type="button" id="googleLogin" class="btn btn-ghost w-full">
-                <i class="fab fa-google"></i> Continuar con Google
-            </button>
 
             <div class="auth-footer">
                 <a href="recuperar.html" class="auth-link">¿Olvidaste tu contraseña?</a>
@@ -253,11 +246,13 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            margin: 20px 0;
-            color: rgba(255, 255, 255, 0.35);
-            font-size: 0.7rem;
+            margin: 15px auto;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.65rem;
             text-transform: uppercase;
             letter-spacing: 2px;
+            width: 100%;
+            max-width: 280px;
         }
 
         .auth-divider::before,
@@ -265,26 +260,38 @@
             content: "";
             flex: 1;
             height: 1px;
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.08);
         }
 
         .btn-ghost {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             color: #fff;
+            padding: 14px;
+            font-weight: 700;
+            width: 100%;
+            max-width: 300px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
         }
 
         .auth-footer {
             display: flex;
             flex-direction: column;
             gap: 8px;
-            margin-top: 20px;
+            margin-top: 18px;
             text-align: center;
+            width: 100%;
         }
 
         .auth-sep {
             height: 1px;
-            background: rgba(255, 255, 255, 0.05);
+            width: 40px;
+            margin: 4px auto;
+            background: rgba(255, 255, 255, 0.08);
         }
 
         .auth-transitioning .auth-screen {
