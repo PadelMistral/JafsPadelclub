@@ -2,15 +2,21 @@
 import { auth, db, observerAuth, getDocument } from './firebase-service.js';
 import { collection, getDocs, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { initAppUI, showToast } from './ui-core.js';
-import { injectHeader, injectNavbar, initBackground, setupModals } from './modules/ui-loader.js?v=6.5';
+import { injectHeader, injectNavbar, initBackground, setupModals } from './modules/ui-loader.js';
 import { getFriendlyTeamName } from './utils/team-utils.js';
 import { getMatchPlayers, getMatchTeamPlayerIds, getResultSetsString, isCancelledMatch, isExpiredOpenMatch, parseGuestMeta } from './utils/match-utils.js';
 import { shareMatchPoster } from './utils/share-utils.js';
+import { getCachedIdentity, resolveIdentity, seedIdentityCache } from './services/identity-service.js';
 
 let currentUser = null;
 let allMatches = [];
 
 let userMap = {};
+
+function toValidDate(value) {
+    const date = value?.toDate ? value.toDate() : new Date(value || 0);
+    return Number.isNaN(date?.getTime?.()) ? null : date;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     initAppUI('historial');
@@ -25,8 +31,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.filter-tab').forEach(tab => {
         tab.addEventListener('click', (e) => {
-            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.filter-tab').forEach(t => {
+                t.classList.remove('active');
+                t.setAttribute('aria-selected', 'false');
+            });
             e.target.classList.add('active');
+            e.target.setAttribute('aria-selected', 'true');
             sortAndRender();
         });
     });
@@ -67,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 photo: d.data().fotoPerfil || d.data().fotoURL
             };
         });
+        seedIdentityCache(Object.entries(userMap).map(([uid, value]) => ({ uid, nombre: value.name, fotoURL: value.photo })));
 
         const list = [];
         snapA.forEach(d => list.push({ id: d.id, col: "partidosAmistosos", ...d.data(), isComp: false }));
@@ -80,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const isT1 = currentIdx >= 0 && currentIdx < 2;
             const rawSets = getResultSetsString(m).trim().split(/\s+/);
             const sets = rawSets.filter(s => s !== '0-0' && s.includes('-'));
-            const matchDate = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha || 0);
+            const matchDate = toValidDate(m.fecha);
             const isAutoCanceled = isExpiredOpenMatch({ ...m, jugadores: players });
             const finalStatus = (isCancelledMatch(m) || isAutoCanceled) ? 'anulado' : (m.estado || 'abierto');
 
@@ -150,6 +161,8 @@ function sortAndRender() {
 
 function getPlayerName(uid) {
     if (!uid) return 'Libre';
+    const cached = getCachedIdentity(uid);
+    if (cached?.name) return cached.name;
     if (parseGuestMeta(uid)) return parseGuestMeta(uid)?.name || 'Invitado';
     return userMap[uid]?.name || 'Jugador';
 }
@@ -188,11 +201,24 @@ async function renderMatchesFiltered(filtered) {
             side: 'B',
             fallback: 'Pareja B'
         });
+        const matchDateLabel = m.timestamp instanceof Date && !Number.isNaN(m.timestamp.getTime())
+            ? m.timestamp.toLocaleDateString('es-ES')
+            : 'fecha desconocida';
+        const cardAriaLabel = `${teamA} contra ${teamB}, ${isAnulada ? 'partido anulado' : `resultado ${result}`}, ${matchDateLabel}`;
         
+        const safeDate = m.timestamp instanceof Date && !Number.isNaN(m.timestamp.getTime()) ? m.timestamp : null;
         const item = document.createElement('div');
         item.className = `history-card-premium ${m.isParticipant ? (m.won ? 'won' : 'lost') : 'neutral'} ${isAnulada ? 'canceled' : ''} animate-up`;
         item.style.animationDelay = `${i * 0.05}s`;
+        item.setAttribute('role', 'button');
+        item.tabIndex = 0;
+        item.setAttribute('aria-label', cardAriaLabel);
         item.onclick = () => showMatchDetail(m);
+        item.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            showMatchDetail(m);
+        });
 
         // Players Avatar List
         const pList = (m.jugadores || []).map(uid => {
@@ -209,8 +235,8 @@ async function renderMatchesFiltered(filtered) {
         item.innerHTML = `
             <div class="h-card-inner">
                 <div class="h-card-date">
-                    <span class="day">${m.timestamp.getDate()}</span>
-                    <span class="month">${m.timestamp.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()}</span>
+                    <span class="day">${safeDate ? safeDate.getDate() : '--'}</span>
+                    <span class="month">${safeDate ? safeDate.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase() : '---'}</span>
                 </div>
                 
                 <div class="h-card-content">
@@ -245,46 +271,55 @@ async function renderMatchesFiltered(filtered) {
 async function showMatchDetail(m) {
     const content = document.getElementById('match-detail-content');
     const modal = document.getElementById('modal-match-detail');
+    if (!content || !modal || !m?.id) return;
 
     content.innerHTML = '<div class="p-10 text-center"><div class="spinner-neon mx-auto mb-4"></div><span class="text-muted text-sm">Analizando partido...</span></div>';
     modal.classList.add('active');
 
-    // Fetch points logs
-    let logsSnap = await window.getDocsSafe(query(collection(db, "rankingLogs"), where("matchId", "==", m.id)));
-    if (logsSnap.empty && getResultSetsString(m) && m?.col) {
-        try {
-            const { processMatchResults } = await import("./ranking-service.js");
-            await processMatchResults(m.id, m.col, getResultSetsString(m), {
-                mvpId: m.mvp || m.mvpId || null,
-                surface: m.superficie || m.surface || "indoor",
-            });
-            logsSnap = await window.getDocsSafe(query(collection(db, "rankingLogs"), where("matchId", "==", m.id)));
-        } catch (e) {
-            console.warn("Historial ranking auto-process failed", e);
+    try {
+        // Fetch points logs
+        let logsSnap = await window.getDocsSafe(query(collection(db, "rankingLogs"), where("matchId", "==", m.id)));
+        if (logsSnap.empty && getResultSetsString(m) && m?.col) {
+            try {
+                const { processMatchResults } = await import("./ranking-service.js");
+                await processMatchResults(m.id, m.col, getResultSetsString(m), {
+                    mvpId: m.mvp || m.mvpId || null,
+                    surface: m.superficie || m.surface || "indoor",
+                });
+                logsSnap = await window.getDocsSafe(query(collection(db, "rankingLogs"), where("matchId", "==", m.id)));
+            } catch (e) {
+                console.warn("Historial ranking auto-process failed", e);
+            }
         }
-    }
-    const logs = {};
-    logsSnap.forEach((row) => {
-        const data = row.data() || {};
-        const uid = data.uid;
-        if (!uid) return;
-        if (!logs[uid]) logs[uid] = { ...data, diff: 0, __entries: [] };
-        logs[uid].diff = Number(logs[uid].diff || 0) + Number(data.diff || 0);
-        logs[uid].__entries.push(data);
-    });
+        const logs = {};
+        logsSnap.forEach((row) => {
+            const data = row.data() || {};
+            const uid = data.uid;
+            if (!uid) return;
+            if (!logs[uid]) logs[uid] = { ...data, diff: 0, __entries: [] };
+            logs[uid].diff = Number(logs[uid].diff || 0) + Number(data.diff || 0);
+            logs[uid].__entries.push(data);
+        });
 
-    // Fetch Players
-    const normalizedPlayers = getMatchPlayers(m);
-    while (normalizedPlayers.length < 4) normalizedPlayers.push(null);
-    const players = await Promise.all(normalizedPlayers.map(async uid => {
-        if (!uid) return { name: 'Libre', level: 0 };
-        if (parseGuestMeta(uid)) return { name: getPlayerName(uid), level: Number(parseGuestMeta(uid)?.level || 2.5), isGuest: true };
-        const d = await getDocument('usuarios', uid);
-        return { name: d?.nombreUsuario || d?.nombre || 'Jugador', photo: d?.fotoPerfil || d?.fotoURL, id: uid, level: Number(d?.nivel || 0) };
-    }));
+        // Fetch Players
+        const normalizedPlayers = getMatchPlayers(m);
+        while (normalizedPlayers.length < 4) normalizedPlayers.push(null);
+        const players = await Promise.all(normalizedPlayers.map(async uid => {
+            if (!uid) return { id: null, name: 'Libre', level: 0 };
+            if (parseGuestMeta(uid)) {
+                return {
+                    id: uid,
+                    name: getPlayerName(uid),
+                    level: Number(parseGuestMeta(uid)?.level || 2.5),
+                    isGuest: true
+                };
+            }
+            const d = await getDocument('usuarios', uid);
+            return { name: d?.nombreUsuario || d?.nombre || 'Jugador', photo: d?.fotoPerfil || d?.fotoURL, id: uid, level: Number(d?.nivel || 0) };
+        }));
 
-    // AI Analysis Validation
-    if (!getResultSetsString(m)) {
+        // AI Analysis Validation
+        if (!getResultSetsString(m)) {
         content.innerHTML = `
             <div class="center py-20 flex-col items-center gap-4 animate-fade-in">
                 <div class="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex center mb-2 opacity-50">
@@ -306,22 +341,22 @@ async function showMatchDetail(m) {
                 <button class="btn-premium-v7 sm mt-8" onclick="document.getElementById('modal-match-detail').classList.remove('active')">ENTENDIDO</button>
             </div>
         `;
-        return;
-    }
-
-    // Fetch Diary Entries (Simple check for current user or generic query)
-    let diaryContext = null;
-    if (currentUser) {
-        const userDoc = await getDocument('usuarios', currentUser.uid);
-        if (userDoc && userDoc.diario) {
-            diaryContext = userDoc.diario.find(e => e.matchId === m.id);
+            return;
         }
-    }
 
-    const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
-    const chronicle = generateMatchNarrative(m, players, logs, diaryContext);
+        // Fetch Diary Entries (Simple check for current user or generic query)
+        let diaryContext = null;
+        if (currentUser) {
+            const userDoc = await getDocument('usuarios', currentUser.uid);
+            if (userDoc && userDoc.diario) {
+                diaryContext = userDoc.diario.find(e => e.matchId === m.id);
+            }
+        }
 
-    content.innerHTML = `
+        const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
+        const chronicle = generateMatchNarrative(m, players, logs, diaryContext);
+
+        content.innerHTML = `
         <div class="modal-sheet-handle mx-auto w-12 h-1 bg-white opacity-20 rounded-full mb-4"></div>
         <div class="modal-header">
             <div>
@@ -346,13 +381,17 @@ async function showMatchDetail(m) {
             </div>
 
             <!-- Court View -->
-            <div class="modal-players-court flex-col gap-4 mb-6">
-                <div class="modal-court-team flex-row justify-between bg-glass p-4 rounded-xl border border-white/5 shadow-inner">
+            <div class="modal-match-stage mb-6">
+                <div class="modal-court-team modal-stage-side bg-glass p-4 rounded-xl border border-white/5 shadow-inner">
                     ${renderPlayerCard(players[0], logs[players[0]?.id], 0)}
                     ${renderPlayerCard(players[1], logs[players[1]?.id], 0)}
                 </div>
-                <div class="modal-court-vs text-center text-xs font-black text-muted tracking-widest my-[-10px] z-10 bg-void px-2 mx-auto rounded-full border border-white/10">VS</div>
-                <div class="modal-court-team flex-row justify-between bg-glass p-4 rounded-xl border border-white/5 shadow-inner">
+                <div class="modal-stage-score">
+                    <div class="modal-stage-vs">VS</div>
+                    <div class="modal-stage-result">${getResultSetsString(m) || '0-0'}</div>
+                    <div class="modal-stage-caption">${m.isEvent ? 'Evento' : (m.isComp ? 'Reto' : 'Amistoso')}</div>
+                </div>
+                <div class="modal-court-team modal-stage-side bg-glass p-4 rounded-xl border border-white/5 shadow-inner">
                     ${renderPlayerCard(players[2], logs[players[2]?.id], 1)}
                     ${renderPlayerCard(players[3], logs[players[3]?.id], 1)}
                 </div>
@@ -364,42 +403,42 @@ async function showMatchDetail(m) {
                     <i class="fas fa-chart-bar text-primary"></i>
                     RESUMEN ELO DEL PARTIDO
                 </div>
-                <div class="grid gap-2" style="grid-template-columns: 1fr 1fr">
+                <div class="elo-summary-grid">
                     
-                    <div class="px-3 py-2 rounded-xl border" style="background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.07)">
-                        <div class="text-[9px] font-black text-white uppercase truncate mb-1">${players[0]?.name || 'Jugador'}</div>
+                    <div class="elo-summary-card">
+                        <div class="elo-summary-player">${players[0]?.name || 'Jugador'}</div>
                         ${logs[players[0]?.id] ? `
-                        <div class="text-sm font-black ${Number(logs[players[0]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
+                        <div class="elo-summary-delta ${Number(logs[players[0]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
                             ${Number(logs[players[0]?.id]?.diff || 0) >= 0 ? '+' : ''}${Math.round(Number(logs[players[0]?.id]?.diff || 0))} PTS
                         </div>
                         ${formatEloBreakdown(logs[players[0]?.id])}
                         ` : '<div class="text-[9px] text-muted">Sin calculo</div>'}
                     </div>
                     
-                    <div class="px-3 py-2 rounded-xl border" style="background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.07)">
-                        <div class="text-[9px] font-black text-white uppercase truncate mb-1">${players[1]?.name || 'Jugador'}</div>
+                    <div class="elo-summary-card">
+                        <div class="elo-summary-player">${players[1]?.name || 'Jugador'}</div>
                         ${logs[players[1]?.id] ? `
-                        <div class="text-sm font-black ${Number(logs[players[1]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
+                        <div class="elo-summary-delta ${Number(logs[players[1]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
                             ${Number(logs[players[1]?.id]?.diff || 0) >= 0 ? '+' : ''}${Math.round(Number(logs[players[1]?.id]?.diff || 0))} PTS
                         </div>
                         ${formatEloBreakdown(logs[players[1]?.id])}
                         ` : '<div class="text-[9px] text-muted">Sin calculo</div>'}
                     </div>
                     
-                    <div class="px-3 py-2 rounded-xl border" style="background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.07)">
-                        <div class="text-[9px] font-black text-white uppercase truncate mb-1">${players[2]?.name || 'Jugador'}</div>
+                    <div class="elo-summary-card">
+                        <div class="elo-summary-player">${players[2]?.name || 'Jugador'}</div>
                         ${logs[players[2]?.id] ? `
-                        <div class="text-sm font-black ${Number(logs[players[2]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
+                        <div class="elo-summary-delta ${Number(logs[players[2]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
                             ${Number(logs[players[2]?.id]?.diff || 0) >= 0 ? '+' : ''}${Math.round(Number(logs[players[2]?.id]?.diff || 0))} PTS
                         </div>
                         ${formatEloBreakdown(logs[players[2]?.id])}
                         ` : '<div class="text-[9px] text-muted">Sin calculo</div>'}
                     </div>
                     
-                    <div class="px-3 py-2 rounded-xl border" style="background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.07)">
-                        <div class="text-[9px] font-black text-white uppercase truncate mb-1">${players[3]?.name || 'Jugador'}</div>
+                    <div class="elo-summary-card">
+                        <div class="elo-summary-player">${players[3]?.name || 'Jugador'}</div>
                         ${logs[players[3]?.id] ? `
-                        <div class="text-sm font-black ${Number(logs[players[3]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
+                        <div class="elo-summary-delta ${Number(logs[players[3]?.id]?.diff || 0) >= 0 ? 'text-sport-green' : 'text-danger'}">
                             ${Number(logs[players[3]?.id]?.diff || 0) >= 0 ? '+' : ''}${Math.round(Number(logs[players[3]?.id]?.diff || 0))} PTS
                         </div>
                         ${formatEloBreakdown(logs[players[3]?.id])}
@@ -427,7 +466,18 @@ async function showMatchDetail(m) {
                 ` : ''}
             </div>
         </div>
-    `;
+        `;
+    } catch (error) {
+        console.error("showMatchDetail error:", error);
+        content.innerHTML = `
+            <div class="p-8 text-center flex-col gap-4">
+                <i class="fas fa-triangle-exclamation text-danger text-3xl"></i>
+                <h3 class="text-sm font-black uppercase tracking-widest">No se pudo abrir el partido</h3>
+                <p class="text-xs text-muted">La tarjeta existe, pero el detalle vino incompleto o se cortó la carga.</p>
+                <button class="btn-premium-v7 sm" onclick="document.getElementById('modal-match-detail')?.classList.remove('active')">CERRAR</button>
+            </div>
+        `;
+    }
     content.querySelector('[data-share-history-poster]')?.addEventListener('click', async () => {
         const teamA = [players[0]?.name, players[1]?.name].filter(Boolean);
         const teamB = [players[2]?.name, players[3]?.name].filter(Boolean);
@@ -527,6 +577,17 @@ function renderPlayerCard(p, log, teamIdx) {
                     <span class="text-[8px] text-muted font-bold">PTS</span>
                 </div>
                 ${eloTip ? `<span class="text-[9px] font-bold" style="color:rgba(255,255,255,0.45)">${eloTip}</span>` : ''}
+                <span class="text-[8px] font-bold text-center leading-tight" style="color:rgba(255,255,255,0.52); max-width:96px;">
+                    ${!hasDelta
+                        ? 'Sin impacto ELO en este calculo'
+                        : delta >= 12
+                            ? 'Gran impulso competitivo'
+                            : delta > 0
+                                ? 'Suma solida para seguir subiendo'
+                                : delta <= -12
+                                    ? 'Castigo fuerte en este partido'
+                                    : 'Ajuste leve dentro del tramo'}
+                </span>
             </div>
         </div>
     `;
@@ -552,27 +613,27 @@ function formatEloBreakdown(log) {
     if (!rows.length) return '';
 
     return `
-        <div class="mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,0.06)">
-            <div class="flex-row between items-center mb-2">
-                <div class="text-[9px] font-black text-muted uppercase tracking-widest">Desglose ELO</div>
-                <div class="text-[8px] font-black uppercase tracking-widest" style="color:${scoringSystem.includes("atp") ? "#fbbf24" : "#00d4ff"}">${scoringLabel}</div>
+        <div class="elo-breakdown">
+            <div class="elo-breakdown-head">
+                <div class="elo-breakdown-title">Desglose ELO</div>
+                <div class="elo-breakdown-system" style="color:${scoringSystem.includes("atp") ? "#fbbf24" : "#00d4ff"}">${scoringLabel}</div>
             </div>
-            <div class="flex-col gap-1">
+            <div class="elo-breakdown-rows">
                 ${rows.map(r => `
-                    <div class="flex-row between items-center px-2 py-1 rounded-lg" style="background:rgba(255,255,255,0.03)">
-                        <div class="flex-row items-center gap-2">
+                    <div class="elo-breakdown-row">
+                        <div class="elo-breakdown-label">
                             <i class="fas ${r.icon} text-[9px]" style="color:${r.col}"></i>
-                            <span class="text-[9px] text-muted font-bold">${r.label}</span>
+                            <span>${r.label}</span>
                         </div>
-                        <span class="text-[10px] font-black ${Number(r.value) >= 0 ? 'text-sport-green' : 'text-danger'}">
+                        <span class="elo-breakdown-value ${Number(r.value) >= 0 ? 'text-sport-green' : 'text-danger'}">
                             ${Number(r.value) >= 0 ? '+' : ''}${Number(r.value).toFixed(1)}
                         </span>
                     </div>
                 `).join('')}
             </div>
-            <div class="mt-2 px-2 py-2 rounded-lg flex-row between items-center" style="background:rgba(255,255,255,0.04)">
-                <span class="text-[9px] text-muted font-bold">Suma real</span>
-                <span class="text-[10px] font-black text-white">${Number(bd.totalCalculado || bd.finalDelta || 0).toFixed(2)}</span>
+            <div class="elo-breakdown-total">
+                <span>Suma real</span>
+                <span>${Number(bd.totalCalculado || bd.finalDelta || 0).toFixed(2)}</span>
             </div>
         </div>
     `;

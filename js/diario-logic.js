@@ -812,7 +812,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   window.showAIAnalysis = async () => {
-    const { initVecinaChat, toggleChat } = await import("./modules/vecina-chat.js?v=6.5");
+    const { initVecinaChat, toggleChat } = await import("./modules/vecina-chat.js");
     initVecinaChat();
     toggleChat();
   };

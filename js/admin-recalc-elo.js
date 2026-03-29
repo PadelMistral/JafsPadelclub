@@ -1,13 +1,46 @@
 import { db } from "./firebase-service.js";
 import { collection, getDocs, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { processMatchResults } from "./ranking-service.js";
-import { ELO_CONFIG, ELO_SYSTEM_VERSION, ratingFromLevel, levelFromRating } from "./config/elo-system.js";
-import { ATP_TEST_SYSTEM_VERSION } from "./pruebaElo.js";
+import { ELO_CONFIG, ratingFromLevel, levelFromRating } from "./config/elo-system.js";
 import { getResultSetsString } from "./utils/match-utils.js";
+import { getCompetitiveSystemVersion, normalizeScoringSystem } from "./services/competitive-engine.js";
+
+function parseDecimalLevel(value, fallback = NaN) {
+    if (typeof value === "string") {
+        const parsed = Number(value.replace(",", ".").trim());
+        return Number.isFinite(parsed) ? parsed : fallback;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function resolveInitialSeed(entry = {}) {
+    const baseLevel = Number.isFinite(parseDecimalLevel(entry?.nivelBaseInicial))
+        ? parseDecimalLevel(entry.nivelBaseInicial)
+        : Number.isFinite(parseDecimalLevel(entry?.nivel))
+            ? parseDecimalLevel(entry.nivel)
+            : 2.5;
+
+    const storedBaseRating = Number(entry?.puntosBaseInicial);
+    const inferredLevel = Number.isFinite(storedBaseRating) ? Number(levelFromRating(storedBaseRating)) : NaN;
+    const mismatch = Number.isFinite(inferredLevel) ? Math.abs(inferredLevel - baseLevel) : 0;
+    const repairedSeed = !Number.isFinite(storedBaseRating) || mismatch > 0.19;
+    const startRating = repairedSeed
+        ? Number(ratingFromLevel(baseLevel) || ELO_CONFIG.BASE_RATING || 1000)
+        : storedBaseRating;
+
+    return {
+        baseLevel,
+        startRating,
+        startLevel: Number(baseLevel || 2.5),
+        repairedSeed,
+    };
+}
 
 async function runFullRecalculation(scoringSystem = "default") {
     const t0 = performance.now();
-    const activeVersion = scoringSystem === "atp_test" ? ATP_TEST_SYSTEM_VERSION : ELO_SYSTEM_VERSION;
+    const activeSystem = normalizeScoringSystem(scoringSystem);
+    const activeVersion = getCompetitiveSystemVersion(activeSystem);
     console.log(`⚡ [${activeVersion}] STARTING FULL RECALCULATION...`);
 
     // 1. Reset all users
@@ -15,23 +48,19 @@ async function runFullRecalculation(scoringSystem = "default") {
     const guestsSnap = await getDocs(collection(db, "invitados"));
     let batch = writeBatch(db);
     let count = 0;
+    let repairedSeedCount = 0;
 
     for (const d of usersSnap.docs) {
         const u = d.data();
-        const baseLevel = Number.isFinite(Number(u?.nivelBaseInicial))
-            ? Number(u.nivelBaseInicial)
-            : Number.isFinite(Number(u?.nivel))
-                ? Number(u.nivel)
-                : 2.5;
-        const startRating = Number.isFinite(Number(u?.puntosBaseInicial))
-            ? Number(u.puntosBaseInicial)
-            : Number(ratingFromLevel(baseLevel) || ELO_CONFIG.BASE_RATING || 1000);
-        const startLevel = Number(levelFromRating(startRating) || baseLevel || 2.5);
+        const { baseLevel, startRating, startLevel, repairedSeed } = resolveInitialSeed(u);
+        if (repairedSeed) repairedSeedCount += 1;
 
         batch.update(d.ref, {
             puntosRanking: startRating,
             rating: startRating,
             nivel: startLevel,
+            nivelBaseInicial: baseLevel,
+            puntosBaseInicial: startRating,
             partidosJugados: 0,
             victorias: 0,
             rachaActual: 0,
@@ -53,20 +82,15 @@ async function runFullRecalculation(scoringSystem = "default") {
     count = 0;
     for (const d of guestsSnap.docs) {
         const g = d.data();
-        const baseLevel = Number.isFinite(Number(g?.nivelBaseInicial))
-            ? Number(g.nivelBaseInicial)
-            : Number.isFinite(Number(g?.nivel))
-                ? Number(g.nivel)
-                : 2.5;
-        const startRating = Number.isFinite(Number(g?.puntosBaseInicial))
-            ? Number(g.puntosBaseInicial)
-            : Number(ratingFromLevel(baseLevel) || ELO_CONFIG.BASE_RATING || 1000);
-        const startLevel = Number(levelFromRating(startRating) || baseLevel || 2.5);
+        const { baseLevel, startRating, startLevel, repairedSeed } = resolveInitialSeed(g);
+        if (repairedSeed) repairedSeedCount += 1;
 
         batch.set(d.ref, {
             puntosRanking: startRating,
             rating: startRating,
             nivel: startLevel,
+            nivelBaseInicial: baseLevel,
+            puntosBaseInicial: startRating,
             partidosJugados: 0,
             victorias: 0,
             rachaActual: 0,
@@ -134,7 +158,7 @@ async function runFullRecalculation(scoringSystem = "default") {
             await processMatchResults(match.id, match.col, resStr, {
                 mvpId: match.data.mvp,
                 surface: match.data.superficie || match.data.surface,
-                scoringSystem,
+                scoringSystem: activeSystem,
             });
             successCount++;
         } catch (e) {
@@ -144,7 +168,16 @@ async function runFullRecalculation(scoringSystem = "default") {
     }
 
     const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-    return { success: true, processed: successCount, errors: errorCount, elapsed, errorList, systemVersion: activeVersion, scoringSystem };
+    return {
+        success: true,
+        processed: successCount,
+        errors: errorCount,
+        elapsed,
+        errorList,
+        systemVersion: activeVersion,
+        scoringSystem: activeSystem,
+        repairedSeedCount,
+    };
 }
 
 window.WIPE_AND_RECALC_ALL_MATCHES = () => runFullRecalculation("default");

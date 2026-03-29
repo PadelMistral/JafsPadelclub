@@ -24,7 +24,7 @@ import {
   injectNavbar,
   initBackground,
   setupModals,
-} from "./modules/ui-loader.js?v=6.5";
+} from "./modules/ui-loader.js";
 import { AI } from './ai-engine.js';
 import { PredictiveEngine } from './predictive-engine.js';
 import { RivalIntelligence } from './rival-intelligence.js';
@@ -41,7 +41,12 @@ import {
 import { isFinishedMatch, isCancelledMatch, resolveWinnerTeam } from "./utils/match-utils.js";
 import { getAIMemory, primeAIMemory } from "./ai/ai-memory.js";
 import { addPlayerHistoryEntry } from "./services/player-history-service.js";
+import { syncComputedStreakForUser } from "./services/streak-service.js";
+import { installScreenErrorMonitoring } from "./services/error-monitor.js";
 const APOING_PROFILE_DEBUG = true;
+installScreenErrorMonitoring("perfil", () => ({
+  viewedUserUid: auth?.currentUser?.uid || null,
+}));
 function escapeProfileHtml(raw = "") {
   const div = document.createElement("div");
   div.textContent = String(raw || "");
@@ -417,6 +422,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       subscribeDoc("usuarios", profileUid, async (docData) => {
         if (docData) {
+          docData.computedStreak = await syncComputedStreakForUser(profileUid, docData, {
+            maxLogs: 80,
+            skipPersist: !viewingOwnProfile,
+          });
           const primedMemory = await primeAIMemory(profileUid).catch(() => null);
           if (primedMemory && !docData.aiMemory) docData.aiMemory = primedMemory;
           userData = docData;
@@ -508,7 +517,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // V7 Stats Cards
     const levelVal = (data.nivel || 2.5).toFixed(2);
     const ptsVal = Math.round(data.puntosRanking || 1000);
-    const streakVal = data.rachaActual || 0;
+    const streakVal = Number.isFinite(Number(data.computedStreak)) ? Number(data.computedStreak) : (data.rachaActual || 0);
     
     const lvlEl = document.getElementById("p-nivel");
     const ptsEl = document.getElementById("p-puntos");
@@ -1809,7 +1818,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   
   // Theme Manager Init
-  import("./modules/theme-manager.js?v=6.5").then(m => m.renderThemeSelector("theme-selector-container")).catch(console.error);
+  import("./modules/theme-manager.js").then(m => m.renderThemeSelector("theme-selector-container")).catch(console.error);
   
   function setActionBusy(buttonId, busy, loadingText = '...') {
     const btn = document.getElementById(buttonId);

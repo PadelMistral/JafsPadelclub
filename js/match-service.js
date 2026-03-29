@@ -27,6 +27,7 @@ import { analyticsCount, analyticsTiming } from "./core/analytics.js";
 import { rateLimitCheck } from "./core/rate-limit.js";
 import { getDivisionByRating } from "./config/elo-system.js";
 import { ensureGuestProfile } from "./services/guest-player-service.js";
+import { resolveIdentity } from "./services/identity-service.js";
 
 /*
   PROD_AUDIT_NEXT_PHASE (analysis only):
@@ -960,7 +961,7 @@ window.executeCreateMatch = async (dateStr, hour) => {
     
     const createT0 = performance.now();
     try {
-        const { showLoading, hideLoading } = await import('./modules/ui-loader.js?v=6.5');
+        const { showLoading, hideLoading } = await import('./modules/ui-loader.js');
         showLoading("Creando partido en la Matrix...");
 
         const creatorDoc = await getDocument('usuarios', auth.currentUser.uid);
@@ -1093,7 +1094,7 @@ window.executeCreateMatch = async (dateStr, hour) => {
         if (window.closeMatchModal) window.closeMatchModal();
         else document.getElementById('modal-match')?.classList.remove('active');
     } catch(e) {
-        const { hideLoading } = await import('./modules/ui-loader.js?v=6.5');
+        const { hideLoading } = await import('./modules/ui-loader.js');
         hideLoading();
         handleOperationError(e);
     }
@@ -2147,7 +2148,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             const rl = rateLimitCheck(`match_${action}:${user.uid}:${id}`, { windowMs: 5 * 60 * 1000, max: 12, minIntervalMs: 1800 });
             if (!rl.ok) return showToast("BLOQUEADO", "Demasiadas acciones repetidas. Espera unos segundos.", "warning");
         }
-        const { showLoading, hideLoading } = await import('./modules/ui-loader.js?v=6.5');
+        const { showLoading, hideLoading } = await import('./modules/ui-loader.js');
         const labels = { 'join': 'Uniéndose...', 'leave': 'Abandonando...', 'delete': 'Cancelando...', 'remove': 'Procesando...', 'add': 'Añadiendo...' };
         showLoading(labels[action] || "Sincronizando...", true);
 
@@ -2438,7 +2439,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             if(window.closeMatchModal) window.closeMatchModal();
         }
     } catch(e) { 
-        const { hideLoading } = await import('./modules/ui-loader.js?v=6.5');
+        const { hideLoading } = await import('./modules/ui-loader.js');
         hideLoading();
         handleOperationError(e); 
     }
@@ -2560,8 +2561,10 @@ async function getPlayerName(uid) {
     if (!uid) return 'Anónimo';
     const eventName = getEventUserName(uid);
     if (eventName) return eventName;
+    const identity = await resolveIdentity(uid).catch(() => null);
+    if (identity?.name) return identity.name;
     const g = parseGuestMeta(uid);
-    if (g) return g.name;
+    if (g?.name) return g.name;
     if (uid.startsWith('invitado_') || uid.startsWith('manual_')) {
         const token = uid.split('_')[1];
         return token && Number.isNaN(Number(token)) ? token : 'Invitado';
@@ -3070,7 +3073,7 @@ export const openResultForm = async (id, col) => {
                     "Resultado subido",
                     `${meName} subió el resultado: ${resultStr}.`,
                     "result_uploaded",
-                    "puntosRanking.html",
+                    "ranking.html",
                     { type: "result_uploaded", matchId: id, dedupId: `result_uploaded_${id}` },
                 );
             }

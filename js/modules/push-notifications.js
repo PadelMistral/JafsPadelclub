@@ -527,13 +527,26 @@ function scheduleSoftPrompt() {
     if (localStorage.getItem('notif_soft_prompt_completed') === 'true') return;
     
     setTimeout(() => {
-        showSoftPrompt();
+        showSoftPrompt().catch(() => {});
     }, 6000); // 6 seconds delay
 }
 
 async function showSoftPrompt() {
-    if (notifPermission !== 'default' || document.getElementById('notif-soft-prompt')) return;
+    notifPermission = typeof Notification !== "undefined" ? Notification.permission : "unsupported";
+    if (document.getElementById('notif-soft-prompt')) return;
     if (localStorage.getItem('notif_soft_prompt_completed') === 'true') return;
+    if (notifPermission === 'denied' || notifPermission === 'unsupported') return;
+    if (notifPermission === 'granted') {
+        try {
+            const status = await checkNotificationStatus();
+            if (status?.backgroundReady || status?.oneSignalRegistered) {
+                localStorage.setItem('notif_soft_prompt_completed', 'true');
+                document.getElementById('notif-soft-prompt')?.remove();
+            }
+        } catch (_) {}
+        return;
+    }
+    if (notifPermission !== 'default') return;
     
     const div = document.createElement('div');
     div.id = 'notif-soft-prompt';
@@ -573,8 +586,30 @@ async function showSoftPrompt() {
     };
     
     document.getElementById('btn-notif-activate').onclick = async () => {
-        div.remove();
-        await requestNotificationPermission(true);
+        const btn = document.getElementById('btn-notif-activate');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Activando...';
+        }
+        const ok = await requestNotificationPermission(true);
+        if (ok) {
+            localStorage.setItem('notif_soft_prompt_completed', 'true');
+            div.remove();
+            showToast('Avisos activados para este dispositivo.', 'success');
+            return;
+        }
+        const permissionNow = typeof Notification !== "undefined" ? Notification.permission : notifPermission;
+        if (permissionNow === 'granted') {
+            localStorage.setItem('notif_soft_prompt_completed', 'true');
+            div.remove();
+            showToast('Permiso concedido. Terminando de enlazar avisos en segundo plano...', 'info');
+            return;
+        }
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Activar';
+        }
+        showToast('No se pudo activar el permiso de avisos en este momento.', 'warning');
     };
 }
 

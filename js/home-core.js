@@ -50,6 +50,8 @@ import { shareMatchResult, shareMatchPoster } from "./utils/share-utils.js";
 import { getFriendlyTeamName, isUnknownTeamName as sharedIsUnknownTeamName } from "./utils/team-utils.js";
 import { scoreMatchForUser } from "./services/matchmaking-service.js";
 import { buildStableGuestId } from "./services/guest-player-service.js";
+import { resolveIdentity, seedIdentityCache } from "./services/identity-service.js";
+import { syncComputedStreakForUser } from "./services/streak-service.js";
 
 
 
@@ -81,6 +83,7 @@ let activeEventStandingsId = null;
 let proposalUsersCache = [];
 let proposalListUnsub = null;
 let proposalChatUnsub = null;
+let proposalMetaUnsub = null;
 let activeProposalId = null;
 let activeProposalMeta = null;
 let proposalInlineMode = false;
@@ -236,23 +239,14 @@ function applyHomeMatchCache({ complete = false } = {}) {
 async function resolvePlayerName(uid) {
   if (!uid) return null;
   const sUid = String(uid);
-  const guestMeta = parseGuestMeta(sUid);
-  if (guestMeta) return guestMeta.name || "Invitado";
-  if (playerNameCache.has(uid)) return playerNameCache.get(uid);
-  
-  const eventName = getEventUserName(uid);
-  if (eventName) return eventName;
-
-  try {
-    const userDoc = await getDocument("usuarios", uid);
-    const name = userDoc?.nombreUsuario || userDoc?.nombre || "Jugador";
-    const photo = userDoc?.fotoPerfil || userDoc?.fotoURL || userDoc?.photoURL || "";
-    playerNameCache.set(uid, name);
-    if (photo) playerPhotoCache.set(uid, photo);
-    return name;
-  } catch {
-    return "Jugador";
-  }
+  if (playerNameCache.has(sUid)) return playerNameCache.get(sUid);
+  const identity = await resolveIdentity(sUid, {
+    currentUserId: currentUser?.uid,
+    currentUserData,
+  });
+  if (identity?.name) playerNameCache.set(sUid, identity.name);
+  if (identity?.photo) playerPhotoCache.set(sUid, identity.photo);
+  return identity?.name || "Jugador";
 }
 
 async function preloadPlayerNames(matches) {
@@ -271,23 +265,17 @@ function getPlayerDisplayName(uid) {
   if (!uid || String(uid).includes("LIBRE")) return "LIBRE";
   const sUid = String(uid);
   
-  // 1. Try Guest/Manual meta-ID (name encoded in UID)
-  const guestMeta = parseGuestMeta(sUid);
-  if (guestMeta && guestMeta.name && isNaN(guestMeta.name)) return guestMeta.name;
-  
-  // 2. Try Event Cache (pre-indexed during event loading)
   const eventName = getEventUserName(sUid);
   if (eventName) return eventName;
+  const guestMeta = parseGuestMeta(sUid);
+  if (guestMeta?.name && isNaN(guestMeta.name)) return guestMeta.name;
 
   // 3. Current User check
   if (uid === currentUser?.uid)
     return currentUserData?.nombreUsuario || currentUserData?.nombre || "Tú";
 
-  // 4. Global Map (loaded from resolvePlayerName)
-  const cached = playerNameCache.get(uid);
+  const cached = playerNameCache.get(sUid);
   if (cached) return cached;
-
-  // 5. Hard fallback for manual_X without meta
   if (sUid.startsWith("manual_")) {
     return "Invitado";
   }
@@ -352,6 +340,8 @@ document.addEventListener("DOMContentLoaded", () => {
       cleanup();
       currentUser = user;
       currentUserData = userDoc || {};
+      currentUserData.computedStreak = await syncComputedStreakForUser(user.uid, currentUserData, { maxLogs: 60 });
+      seedIdentityCache([{ uid: user.uid, ...currentUserData }]);
       if (showHomeWelcome) {
         beginHomeEntryOverlay(currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador");
       } else {
@@ -609,14 +599,13 @@ async function refreshTacticalStats() {
     if (!currentUser?.uid || !allMatches.length) return;
     
     const myUid = currentUser.uid;
-    const finishedMatches = allMatches.filter(m => isFinishedMatch(m));
+    const finishedMatches = dedupeEventLinkedMatches(allMatches).filter(m => isFinishedMatch(m));
     const opponentWins = new Map(); // Opponent -> times they beat me
     const teammateCounts = new Map(); // Teammate -> times played together
-    
-    let currentStreak = 0;
-    let streakBroken = false;
+    const currentStreak = Number.isFinite(Number(currentUserData?.computedStreak))
+        ? Number(currentUserData.computedStreak)
+        : Number(currentUserData?.rachaActual || 0);
 
-    // Process matches in reverse chronological order for streak
     const sorted = [...finishedMatches].sort((a,b) => toDateSafe(b.fecha) - toDateSafe(a.fecha));
 
     for (const m of sorted) {
@@ -626,16 +615,6 @@ async function refreshTacticalStats() {
         const winnerTeam = resolveWinnerTeam(m);
         const myTeam = players.indexOf(myUid) < 2 ? "A" : "B";
         const won = winnerTeam === myTeam;
-
-        // Streak
-        if (!streakBroken) {
-            if (currentStreak === 0) currentStreak = won ? 1 : -1;
-            else if ((won && currentStreak > 0) || (!won && currentStreak < 0)) {
-                currentStreak += won ? 1 : -1;
-            } else {
-                streakBroken = true;
-            }
-        }
 
         // Opponents and Partners
         const myTeammate = myTeam === "A" 
@@ -1000,7 +979,9 @@ function refreshRecommendations() {
   const now = Date.now();
   const pts = Number(currentUserData?.puntosRanking || 1000);
   const lvl = Number(currentUserData?.nivel || 2.5).toFixed(2);
-  const streak = Number(currentUserData?.rachaActual || 0);
+  const streak = Number.isFinite(Number(currentUserData?.computedStreak))
+    ? Number(currentUserData.computedStreak)
+    : Number(currentUserData?.rachaActual || 0);
   const myMatches = allMatches.filter((m) => getNormalizedPlayers(m).includes(currentUser?.uid));
   const nextMatch = myMatches
     .filter((m) => !isFinishedMatch(m) && !isCancelledMatch(m))
@@ -1206,7 +1187,9 @@ function buildPulseFormCard() {
     .map((m) => Number(scoreMatchForUser(m, currentUserData || currentUser || {}, getPlayerMeta, getMatchmakingContext()).total || 0))
     .slice(0, 8);
   const avgOpportunity = avgFit.length ? Math.round(avgFit.reduce((a, b) => a + b, 0) / avgFit.length) : 0;
-  const streak = Number(currentUserData?.rachaActual || 0);
+  const streak = Number.isFinite(Number(currentUserData?.computedStreak))
+    ? Number(currentUserData.computedStreak)
+    : Number(currentUserData?.rachaActual || 0);
 
   return {
     tone: "form",
@@ -2130,16 +2113,21 @@ function sameDay(a, b) {
 }
 
 function maybeCreateEventDayNotice() {
-  // Desactivado para evitar overlays repetitivos
-  return;
-  const next = getMineUpcomingEventMatches()[0];
+  if (document.getElementById("today-match-modal")) return;
+  const next = getMyRelevantMatches()
+    .filter((m) => !isFinishedMatch(m))
+    .filter((m) => {
+      const matchDate = toDateSafe(m?.fecha);
+      return matchDate && matchDate.getTime() >= Date.now() - 15 * 60 * 1000;
+    })
+    .sort((a, b) => (toDateSafe(a?.fecha)?.getTime() || 0) - (toDateSafe(b?.fecha)?.getTime() || 0))[0];
   const d = toDateSafe(next?.fecha);
   if (!next || !d) return;
 
   const today = new Date();
   if (!sameDay(d, today)) return;
 
-  const key = `event_today_premium_v3:${next.id}:${today.toISOString().slice(0, 10)}`;
+  const key = `today_match_modal_v1:${next.id}:${today.toISOString().slice(0, 10)}`;
   try {
     if (localStorage.getItem(key)) return;
   } catch {}
@@ -2150,20 +2138,12 @@ function maybeCreateEventDayNotice() {
   const players = getNormalizedPlayers(next);
   const n = (idx) => String(getPlayerDisplayName(players[idx]) || "Pendiente");
 
-  // Pre-load levels if available
-  const getLvl = (idx) => {
-      const uid = players[idx];
-      if (!uid) return "";
-      if (String(uid).startsWith("GUEST_")) {
-          const m = parseGuestMeta(uid);
-          return m ? `NV ${m.level.toFixed(1)}` : "";
-      }
-      return ""; // Profile levels need async fetch, omitting for sync modal for now
-  };
+  const locationLabel = next.isApoing ? "Reserva Apoing" : next.courtName || next.club || "Pista reservada";
+  const countdownLabel = diffMs <= 0 ? "Tu partido ya está en marcha" : `Faltan ${diffH} horas para el enfrentamiento`;
 
   const modal = document.createElement("div");
-  // Eliminamos el contenido repetido del aviso "Hoy juegas"
-  return null;
+  modal.id = "today-match-modal";
+  modal.className = "event-day-alert";
   modal.innerHTML = `
     <div class="eda-card animate-scale-in">
       <div class="eda-glow"></div>
@@ -2181,31 +2161,34 @@ function maybeCreateEventDayNotice() {
               <div class="eda-p-name">${n(3)}</div>
            </div>
         </div>
-        <div class="eda-venue-info" style="font-size:11px; opacity:0.6; margin-top:14px; text-transform:uppercase; letter-spacing:1.2px; font-weight:800; display:flex; align-items:center; justify-content:center; gap:10px;">
+        <div class="eda-venue-info" style="font-size:11px; opacity:0.72; margin-top:14px; text-transform:uppercase; letter-spacing:1.2px; font-weight:800; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;">
            <span><i class="fas fa-clock text-primary mr-1"></i> ${d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
            <span style="opacity:0.3">|</span>
-           <span><i class="fas fa-map-marker-alt text-primary mr-1"></i> PISTA RESERVADA</span>
+           <span><i class="fas fa-map-marker-alt text-primary mr-1"></i> ${escapeHtml(locationLabel)}</span>
         </div>
       </div>
-      <div class="eda-msg">Faltan <span>${diffH} HORAS</span> para el enfrentamiento.</div>
+      <div class="eda-msg">${escapeHtml(countdownLabel)}</div>
       <div class="eda-actions">
         <button class="btn-eda-share" id="eda-btn-download">
-           <i class="fas fa-file-image mr-2"></i> DESCARGAR CARTEL PNG
+           <i class="fas fa-file-image mr-2"></i> DESCARGAR CARTEL
         </button>
          <button class="btn-premium-v7" style="border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:#fff; font-size:10px;" id="eda-btn-share">
-           <i class="fas fa-share-nodes mr-2"></i> COMPARTIR POR REDES
+           <i class="fas fa-share-nodes mr-2"></i> COMPARTIR
         </button>
-        <button class="btn-eda-close" id="close-eda">CERRAR PANEL</button>
+        <button class="btn-eda-close" id="close-eda">CERRAR</button>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
+  const titleEl = modal.querySelector(".eda-title");
+  if (titleEl) titleEl.textContent = "HOY TIENES PARTIDO";
 
   const prepareMetadata = () => {
     const pNames = players.map(uid => getPlayerDisplayName(uid));
     const levels = players.map(uid => {
-        const u = playerNameCache.get(uid); 
-        return currentUserData?.uid === uid ? Number(currentUserData.nivel || 2.5) : 2.5; 
+        if (uid === currentUser?.uid) return Number(currentUserData?.nivel || 2.5);
+        const guest = typeof uid === "string" && uid.startsWith("GUEST_") ? parseGuestMeta(uid) : null;
+        return Number(guest?.level || 2.5);
     });
     return {
       title: "PARTIDO DE HOY",
@@ -2228,7 +2211,9 @@ function maybeCreateEventDayNotice() {
   
   modal.querySelector("#close-eda").onclick = () => {
     modal.remove();
-    localStorage.setItem(key, "1");
+    try {
+      localStorage.setItem(key, "1");
+    } catch {}
   };
 }
 
@@ -2648,6 +2633,7 @@ function renderMatchCard(match, idx = 0) {
 
   const resultStr = getResultSetsString(match) || "";
   const hasResult = Boolean(resultStr);
+  const winner = finished && hasResult ? resolveWinnerTeam(match) : null;
   const badge = finished
     ? `<span class="hv2-mc-badge ${hasResult ? "closed-badge" : "pending-badge"}">${hasResult ? "CERRADO " + resultStr : "PENDIENTE"}</span>`
     : match.isApoing
@@ -2670,19 +2656,18 @@ function renderMatchCard(match, idx = 0) {
     ? `window.openApoingMatch('${match.id}')` 
     : `window.openMatch('${match.id}','${match.col}')`;
 
+  const teamAClass = winner === "A" ? "team-win" : winner === "B" ? "team-loss" : "";
+  const teamBClass = winner === "B" ? "team-win" : winner === "A" ? "team-loss" : "";
   let winnerBadge = "";
-  if (finished && hasResult) {
-      const winner = resolveWinnerTeam(match);
-      if (winner === "A" || winner === "B") {
-          winnerBadge = `<span class="hv2-mc-winner-badge">Ganador: ${escapeHtml(winner === "A" ? teamALabel : teamBLabel)}</span>`;
-      }
+  if (winner === "A" || winner === "B") {
+      winnerBadge = `<span class="hv2-mc-winner-badge">Ganador: ${escapeHtml(winner === "A" ? teamALabel : teamBLabel)}</span>`;
   }
 
   return `
     <div class="hv2-match-card ${isMine ? "mine-card" : ""} ${finished ? "finished-card" : ""} ${match.isApoing ? "apoing-card" : ""}" style="animation-delay:${delay}ms" onclick="${cardClick}">
       ${badge}
       ${smartBadge}
-      <div class="hv2-mc-team">
+      <div class="hv2-mc-team ${teamAClass}">
         <div class="hv2-mc-avatars">${playerAvatar(players[0])}${playerAvatar(players[1])}</div>
         ${pn(players[0])}
         ${pn(players[1])}
@@ -2692,7 +2677,7 @@ function renderMatchCard(match, idx = 0) {
         <span class="hv2-mc-time">${date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
         <span class="hv2-mc-date">${date.toLocaleDateString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit" })}</span>
       </div>
-      <div class="hv2-mc-team team-right">
+      <div class="hv2-mc-team team-right ${teamBClass}">
         <div class="hv2-mc-avatars">${playerAvatar(players[2])}${playerAvatar(players[3])}</div>
         ${pn(players[2])}
         ${pn(players[3])}
@@ -3140,12 +3125,12 @@ function ensureProposalModal() {
         wrapper.id = "proposal-modal";
         wrapper.className = "modal-overlay";
         wrapper.innerHTML = `
-            <div class="modal-card glass-strong" style="max-width:560px;">
+            <div class="modal-card glass-strong" style="max-width:680px; width:min(92vw,680px);">
                 <div class="modal-header">
                     <h3 class="modal-title">Propuesta de Partido</h3>
                     <button class="close-btn" id="proposal-close-btn">&times;</button>
                 </div>
-                <div class="modal-body scroll-y" style="max-height: 80vh;">
+                <div class="modal-body scroll-y" style="max-height: 72vh;">
                     <div id="proposal-view-list" class="flex-col gap-3"></div>
                     <div id="proposal-view-create" class="flex-col gap-3 hidden"></div>
                     <div id="proposal-view-chat" class="flex-col gap-3 hidden"></div>
@@ -3254,6 +3239,7 @@ async function renderProposalList() {
 function proposalCardHtml(p) {
     const names = Array.isArray(p.participantNames) ? p.participantNames.join(", ") : "";
     const statusLabel = p.status === "rejected" ? "RECHAZADA" : "ABIERTA";
+    const voteSummary = summarizeProposalVotes(p);
     return `
         <div class="p-3 rounded-xl border border-white/10 bg-white/5 flex-col gap-2">
             <div class="flex-row between items-center">
@@ -3262,8 +3248,107 @@ function proposalCardHtml(p) {
             </div>
             <div class="text-[11px] font-bold">${p.title || "Propuesta de partido"}</div>
             <div class="text-[10px] opacity-60">Participantes: ${names || "Sin datos"}</div>
+            <div class="text-[10px] proposal-vote-summary">${escapeHtml(voteSummary)}</div>
         </div>
     `;
+}
+
+function buildProposalVoteOptions() {
+    const today = new Date();
+    return Array.from({ length: 5 }, (_, idx) => {
+        const d = new Date(today);
+        d.setDate(today.getDate() + idx);
+        return {
+            iso: d.toISOString().slice(0, 10),
+            label: d.toLocaleDateString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit" }),
+        };
+    });
+}
+
+function getProposalVoteMap(prop = {}) {
+    const raw = prop?.availabilityVotes;
+    return raw && typeof raw === "object" ? raw : {};
+}
+
+function summarizeProposalVotes(prop = {}) {
+    const votes = Object.values(getProposalVoteMap(prop)).filter(Boolean);
+    if (!votes.length) return "Sin votos aun";
+    const grouped = new Map();
+    votes.forEach((iso) => grouped.set(iso, Number(grouped.get(iso) || 0) + 1));
+    const [bestIso, count] = Array.from(grouped.entries()).sort((a, b) => b[1] - a[1])[0] || [];
+    if (!bestIso) return "Sin votos aun";
+    const label = new Date(`${bestIso}T12:00:00`).toLocaleDateString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit" });
+    return `Fecha favorita: ${label} · ${count} voto${count === 1 ? "" : "s"}`;
+}
+
+function renderProposalVotePanel(prop = {}) {
+    const panel = document.getElementById("proposal-vote-panel");
+    if (!panel || !currentUser?.uid) return;
+    const voteMap = getProposalVoteMap(prop);
+    const myVote = voteMap[currentUser.uid] || "";
+    const options = buildProposalVoteOptions().map((opt) => ({
+        ...opt,
+        count: Object.values(voteMap).filter((iso) => iso === opt.iso).length,
+    }));
+    panel.innerHTML = `
+        <div class="proposal-vote-card">
+            <div class="proposal-vote-head">
+                <div>
+                    <div class="proposal-vote-eyebrow">Disponibilidad rapida</div>
+                    <div class="proposal-vote-title">Elegid el dia con mas apoyo antes de concretar</div>
+                </div>
+                <div class="proposal-vote-meta">${escapeHtml(summarizeProposalVotes(prop))}</div>
+            </div>
+            <div class="proposal-vote-grid">
+                ${options.map((opt) => `
+                    <button type="button" class="proposal-vote-chip ${myVote === opt.iso ? "is-selected" : ""}" data-proposal-vote="${opt.iso}">
+                        <span>${escapeHtml(opt.label)}</span>
+                        <strong>${opt.count}</strong>
+                    </button>
+                `).join("")}
+            </div>
+        </div>
+    `;
+    panel.querySelectorAll("[data-proposal-vote]").forEach((btn) => {
+        btn.addEventListener("click", () => submitProposalAvailabilityVote(prop.id, btn.getAttribute("data-proposal-vote")));
+    });
+}
+
+async function submitProposalAvailabilityVote(proposalId, isoDate) {
+    if (!proposalId || !currentUser?.uid || !isoDate) return;
+    try {
+        await setDoc(doc(db, "propuestasPartido", proposalId), {
+            availabilityVotes: {
+                ...getProposalVoteMap(activeProposalMeta),
+                [currentUser.uid]: isoDate,
+            },
+            updatedAt: serverTimestamp(),
+        }, { merge: true });
+        activeProposalMeta = {
+            ...(activeProposalMeta || {}),
+            id: proposalId,
+            availabilityVotes: {
+                ...getProposalVoteMap(activeProposalMeta),
+                [currentUser.uid]: isoDate,
+            },
+        };
+        renderProposalVotePanel(activeProposalMeta);
+        const meta = activeProposalMeta || (await getDocument("propuestasPartido", proposalId));
+        const targets = (meta?.participantUids || []).filter((uid) => uid && uid !== currentUser.uid);
+        if (targets.length) {
+            await createNotification(
+                targets,
+                "Disponibilidad actualizada",
+                `${currentUserData?.nombreUsuario || currentUserData?.nombre || "Un jugador"} ha marcado un dia en ${meta?.title || "la propuesta"}.`,
+                "proposal_vote",
+                "home.html",
+                { type: "proposal_vote", proposalId, isoDate, dedupId: `proposal_vote_${proposalId}_${currentUser.uid}_${isoDate}` },
+            );
+        }
+    } catch (e) {
+        console.warn("[Proposal] vote failed", e);
+        showToast("Error", "No se pudo guardar tu voto.", "error");
+    }
 }
 
 async function renderProposalCreate() {
@@ -3334,10 +3419,24 @@ async function createProposalChat() {
             createdBy: currentUser.uid,
             participantUids,
             participantNames,
+            availabilityVotes: {
+                [currentUser.uid]: new Date().toISOString().slice(0, 10),
+            },
             status: "open",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
+        const targets = participantUids.filter((uid) => uid && uid !== currentUser.uid);
+        if (targets.length) {
+            await createNotification(
+                targets,
+                "Nueva propuesta de partido",
+                `${currentUserData?.nombreUsuario || currentUserData?.nombre || "Un jugador"} te ha invitado a ${title}.`,
+                "proposal_created",
+                "home.html",
+                { type: "proposal_created", proposalId: ref.id, dedupId: `proposal_created_${ref.id}` },
+            );
+        }
         showToast("Chat creado", "Propuesta abierta con los usuarios seleccionados.", "success");
         openProposalChat(ref.id);
     } catch (e) {
@@ -3347,8 +3446,11 @@ async function createProposalChat() {
 
 function cleanupProposalChat() {
     if (typeof proposalChatUnsub === "function") proposalChatUnsub();
+    if (typeof proposalMetaUnsub === "function") proposalMetaUnsub();
     proposalChatUnsub = null;
+    proposalMetaUnsub = null;
     activeProposalId = null;
+    activeProposalMeta = null;
 }
 
 async function openProposalChat(proposalId) {
@@ -3373,16 +3475,17 @@ async function openProposalChat(proposalId) {
         return;
     }
 
-    activeProposalMeta = propSnap;
+    activeProposalMeta = { id: proposalId, ...propSnap };
     chatEl.innerHTML = `
         <div class="flex-row between items-center">
             <div>
                 <div class="text-[10px] uppercase tracking-widest font-black text-primary">Chat de propuesta</div>
-                <div class="text-[11px] font-bold">${propSnap.title || "Propuesta de partido"}</div>
-                <div class="text-[10px] opacity-60">Participantes: ${(propSnap.participantNames || []).join(", ")}</div>
+                <div class="text-[11px] font-bold" id="proposal-chat-title">${propSnap.title || "Propuesta de partido"}</div>
+                <div class="text-[10px] opacity-60" id="proposal-chat-participants">Participantes: ${(propSnap.participantNames || []).join(", ")}</div>
             </div>
             <button class="btn-ghost" id="proposal-back-list">Volver</button>
         </div>
+        <div id="proposal-vote-panel"></div>
         <div id="proposal-chat-list" class="proposal-chat-list whatsapp"></div>
         <div class="proposal-chat-input whatsapp">
             <input id="proposal-chat-text" class="input" placeholder="Escribe un mensaje...">
@@ -3404,7 +3507,19 @@ async function openProposalChat(proposalId) {
         if (e.key === "Enter") sendProposalMessage(proposalId);
     });
     chatEl.querySelector("#proposal-leave-btn")?.addEventListener("click", () => leaveProposal(proposalId));
-    chatEl.querySelector("#proposal-confirm-btn")?.addEventListener("click", () => toggleProposalConfirm(propSnap));
+    chatEl.querySelector("#proposal-confirm-btn")?.addEventListener("click", () => toggleProposalConfirm(activeProposalMeta || propSnap));
+    renderProposalVotePanel(activeProposalMeta);
+
+    if (typeof proposalMetaUnsub === "function") proposalMetaUnsub();
+    proposalMetaUnsub = onSnapshot(doc(db, "propuestasPartido", proposalId), (snap) => {
+        if (!snap.exists()) return;
+        activeProposalMeta = { id: snap.id, ...snap.data() };
+        const titleEl = chatEl.querySelector("#proposal-chat-title");
+        const participantsEl = chatEl.querySelector("#proposal-chat-participants");
+        if (titleEl) titleEl.textContent = activeProposalMeta.title || "Propuesta de partido";
+        if (participantsEl) participantsEl.textContent = `Participantes: ${(activeProposalMeta.participantNames || []).join(", ")}`;
+        renderProposalVotePanel(activeProposalMeta);
+    });
 
     const chatList = chatEl.querySelector("#proposal-chat-list");
     if (typeof proposalChatUnsub === "function") proposalChatUnsub();

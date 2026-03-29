@@ -2,31 +2,15 @@ import { db } from "../firebase-service.js";
 import { doc, getDoc, setDoc, collection, query, where, limit, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { clampNumber, getBaseEloByLevel } from "../config/elo-system.js";
 import { parseGuestMeta } from "../utils/match-utils.js";
+import {
+  buildStableGuestId,
+  isGuestPlayerId,
+  normalizeGuestName,
+  slugifyGuestName,
+} from "./guest-player-utils.js";
 
 const guestCache = new Map();
-
-export function normalizeGuestName(name = "") {
-  return String(name || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\w\s-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-export function slugifyGuestName(name = "") {
-  const normalized = normalizeGuestName(name).toLowerCase();
-  return normalized.replace(/[\s_]+/g, "_").replace(/[^a-z0-9_]/g, "").replace(/^_+|_+$/g, "") || "invitado";
-}
-
-export function buildStableGuestId(name = "") {
-  return `GUEST_${slugifyGuestName(name)}`;
-}
-
-export function isGuestPlayerId(uid = "") {
-  const value = String(uid || "");
-  return value.startsWith("GUEST_") || value.startsWith("invitado_") || value.startsWith("manual_");
-}
+export { normalizeGuestName, slugifyGuestName, buildStableGuestId, isGuestPlayerId } from "./guest-player-utils.js";
 
 async function findLinkedUserUidByName(name = "") {
   const clean = normalizeGuestName(name);

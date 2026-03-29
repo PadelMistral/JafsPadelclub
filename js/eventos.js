@@ -9,8 +9,15 @@ import {
     arrayUnion, arrayRemove, increment
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
 import { ensureGuestProfile } from './services/guest-player-service.js';
+import { installScreenErrorMonitoring, captureScreenError } from './services/error-monitor.js';
+import { seedIdentityCache, getCachedIdentity } from './services/identity-service.js';
 
 initAppUI('events');
+installScreenErrorMonitoring('eventos', () => ({
+    activeEventId,
+    currentFilter,
+    totalEvents: Array.isArray(allEvents) ? allEvents.length : 0,
+}));
 
 /* ==================== STATE ==================== */
 let currentUser = null;
@@ -114,7 +121,16 @@ document.addEventListener('DOMContentLoaded', () => {
     observerAuth(async (user) => {
         if (!user) return;
         currentUser = user;
-        currentUserData = await getDocument('usuarios', user.uid);
+        try {
+            currentUserData = await getDocument('usuarios', user.uid);
+        } catch (error) {
+            captureScreenError('eventos', error, {
+                source: 'observerAuth:getDocument',
+                meta: { uid: user.uid },
+                tags: ['bootstrap', 'eventos'],
+            });
+            throw error;
+        }
         const isAdmin = currentUserData?.rol === 'Admin';
         const isOrganizer = isAdmin || currentUserData?.esOrganizador === true;
 
@@ -134,6 +150,7 @@ async function preloadUsersForEvents() {
         const snap = await getDocsSafe(collection(db, 'usuarios'));
         const rows = (snap?.docs || []).map(d => ({ uid: d.id, ...d.data() }));
         usersById = new Map(rows.map(u => [u.uid, u]));
+        seedIdentityCache(rows);
     } catch (e) {
         console.error('Error cargando usuarios eventos:', e);
     }
@@ -143,11 +160,13 @@ function resolveInscritoLabel(ins) {
     if (!ins) return 'Jugador';
     const uid = ins.uid || '';
     const isGuest = ins.invitado === true || String(uid).startsWith('invitado_') || String(uid).startsWith('manual_') || ins.manual === true;
+    const cached = getCachedIdentity(uid);
+    if (cached?.name) return cached.name;
     if (!isGuest && usersById.has(uid)) {
         const u = usersById.get(uid);
-        return u.nombreUsuario || u.nombre || u.email || uid;
+        return u.nombreUsuario || u.nombre || u.email || 'Jugador';
     }
-    return ins.nombre || ins.nombreUsuario || uid || 'Invitado';
+    return ins.nombre || ins.nombreUsuario || 'Invitado';
 }
 
 /* ==================== FILTERS ==================== */
@@ -192,7 +211,23 @@ function renderEvents() {
         return;
     }
 
-    container.innerHTML = events.map((ev, i) => buildEventCard(ev, i)).join('');
+    container.innerHTML = events.map((ev, i) => {
+        try {
+            return buildEventCard(ev, i);
+        } catch (err) {
+            console.error('Error renderizando evento', ev?.id, err);
+            return `
+            <article class="event-card-v3 animate-up ev-card-champions" style="animation-delay:${i * 0.06}s">
+                <div class="ev-card-body">
+                    <div class="events-empty" style="min-height:180px;">
+                        <i class="fas fa-triangle-exclamation"></i>
+                        <h3>Evento con datos dañados</h3>
+                        <p>${escapeEventsHtml(ev?.nombre || ev?.id || 'Evento')}</p>
+                    </div>
+                </div>
+            </article>`;
+        }
+    }).join('');
 
     // Añadir listener para clic en tarjeta (excepto botones)
     setTimeout(() => {

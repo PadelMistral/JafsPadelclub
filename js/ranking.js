@@ -13,32 +13,28 @@ import { renderMatchDetail } from "./match-service.js";
 import { getCoreLevelProgressState } from "./core/core-engine.js";
 import { getFriendlyTeamName } from "./utils/team-utils.js";
 import { parseGuestMeta, getNormalizedPlayers, getMatchTeamPlayerIds } from "./utils/match-utils.js";
+import { resolveIdentity, renderIdentityAvatar, seedIdentityCache } from "./services/identity-service.js";
+import { enrichUsersWithComputedStreak, syncComputedStreakForUser } from "./services/streak-service.js";
+import { installScreenErrorMonitoring } from "./services/error-monitor.js";
 
 let users = [];
 let currentUser = null;
 let currentUserData = null;
 let currentSearch = "";
 let currentFilter = "all";
+let currentViewMode = "general";
 const matchCache = new Map();
-
-function getInitials(name = "") {
-  return String(name || "")
-    .trim()
-    .split(/\s+/)
-    .map((w) => w[0] || "")
-    .join("")
-    .slice(0, 2)
-    .toUpperCase() || "?";
-}
+installScreenErrorMonitoring("ranking", () => ({
+  currentFilter,
+  currentSearch,
+  totalUsers: Array.isArray(users) ? users.length : 0,
+}));
 
 function renderAvatarMarkup(user, className = "lb-avatar") {
-  const name = user?.nombreUsuario || user?.nombre || "Jugador";
-  const initials = getInitials(name);
-  const photo = user?.fotoPerfil || user?.fotoURL || user?.photoURL || "";
-  if (photo) {
-    return `<img src="${photo}" class="${className}" alt="${name}" onerror="this.outerHTML='<span class=&quot;${className} avatar-fallback&quot;>${initials}</span>'" />`;
-  }
-  return `<span class="${className} avatar-fallback">${initials}</span>`;
+  return renderIdentityAvatar({
+    name: user?.nombreUsuario || user?.nombre || "Jugador",
+    photo: user?.fotoPerfil || user?.fotoURL || user?.photoURL || "",
+  }, className);
 }
 
 function fmtDate(input) {
@@ -86,6 +82,14 @@ function getTierClass(rank) {
   return "tier-low";
 }
 
+function getTierLabel(rank) {
+  if (rank <= 10) return "TOP 10";
+  if (rank <= 20) return "TOP 20";
+  if (rank <= 30) return "TOP 30";
+  if (rank <= 50) return "TOP 50";
+  return "CLUB";
+}
+
 function getTierStyle(rank, total) {
   if (!Number.isFinite(rank) || rank <= 3) return "";
   let tierSize = 10;
@@ -113,11 +117,12 @@ function getTierStyle(rank, total) {
     hueBase = 210;
   }
   const t = Math.max(0, Math.min(1, tierIndex / Math.max(1, tierSize - 1)));
-  const sat = rank > 50 ? 40 : 70;
-  const light = rank > 50 ? 55 : 58 + Math.round(10 * (1 - t));
-  const tintOpacity = rank > 50 ? 0.06 : 0.12;
-  const hue = hueBase + Math.round(10 * (1 - t));
-  return `--rank-accent:hsl(${hue} ${sat}% ${light}%); --rank-tint:hsla(${hue} ${sat}% ${light}% / ${tintOpacity});`;
+  const sat = rank > 50 ? 28 : Math.round(74 - (t * 26));
+  const light = rank > 50 ? 55 : Math.round(62 - (t * 15));
+  const tintOpacity = rank > 50 ? 0.035 : Number((0.16 - (t * 0.08)).toFixed(3));
+  const accentOpacity = rank > 50 ? 0.4 : Number((0.95 - (t * 0.45)).toFixed(3));
+  const hue = hueBase + Math.round(14 * (1 - t));
+  return `--rank-accent:hsla(${hue} ${sat}% ${light}% / ${accentOpacity}); --rank-tint:hsla(${hue} ${sat}% ${light}% / ${tintOpacity});`;
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -125,6 +130,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   currentUser = auth.currentUser;
   if (currentUser?.uid) {
     currentUserData = (await getDocument("usuarios", currentUser.uid)) || {};
+    currentUserData.computedStreak = await syncComputedStreakForUser(currentUser.uid, currentUserData, { maxLogs: 60 });
+    seedIdentityCache([{ uid: currentUser.uid, ...currentUserData }]);
     await injectHeader(currentUserData || {});
     updateHeader(currentUserData || {});
   } else {
@@ -132,6 +139,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!user?.uid) return;
       currentUser = user;
       currentUserData = (await getDocument("usuarios", user.uid)) || {};
+      currentUserData.computedStreak = await syncComputedStreakForUser(user.uid, currentUserData, { maxLogs: 60 });
+      seedIdentityCache([{ uid: user.uid, ...currentUserData }]);
       await injectHeader(currentUserData || {});
       updateHeader(currentUserData || {});
       renderTable();
@@ -148,16 +157,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     currentFilter = String(e.target.value || "all");
     renderTable();
   });
+  document.getElementById("rank-view-mode")?.addEventListener("change", (e) => {
+    currentViewMode = String(e.target.value || "general");
+    syncRankingView();
+  });
 });
 
 async function loadRanking() {
   const q = query(collection(db, "usuarios"), orderBy("puntosRanking", "desc"), limit(200));
   const snap = await getDocsSafe(q);
   users = (snap?.docs || []).map((d) => ({ id: d.id, ...d.data() }));
+  seedIdentityCache(users.map((u) => ({ uid: u.id, ...u })));
+  await enrichUsersWithComputedStreak(users, 24);
   renderPodium();
   renderTable();
+  syncRankingView();
   const info = document.getElementById("lb-total-info");
-  if (info) info.textContent = `${users.length} jugadores en el top`;
+  if (info) info.textContent = `${Math.max(0, users.length - 3)} puestos desde el top 4`;
+}
+
+function syncRankingView() {
+  const general = document.getElementById("general-ranking-section");
+  const season = document.getElementById("season-ranking-section");
+  if (general) general.classList.toggle("hidden", currentViewMode !== "general");
+  if (season) season.classList.toggle("hidden", currentViewMode !== "season");
 }
 
 function renderPodium() {
@@ -172,7 +195,15 @@ function renderPodium() {
     if (nameEl) nameEl.textContent = (u.nombreUsuario || u.nombre || "Jugador").toUpperCase();
     if (ptsEl) ptsEl.textContent = Math.round(u.puntosRanking || 1000);
     if (avEl) avEl.innerHTML = renderAvatarMarkup(u, "rank-avatar");
-    if (pod) pod.onclick = () => window.openRankUserModal(u.id);
+    if (pod) {
+      pod.onclick = () => window.openRankUserModal(u.id);
+      pod.onkeydown = (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          window.openRankUserModal(u.id);
+        }
+      };
+    }
   }
 }
 
@@ -193,7 +224,7 @@ function renderTable() {
   const filtered = users.filter((u) => {
     const n = (u.nombreUsuario || u.nombre || "").toLowerCase();
     return n.includes(currentSearch) && passesFilter(u);
-  });
+  }).filter((u) => (users.findIndex((x) => x.id === u.id) + 1) > 3);
 
   if (!filtered.length) {
     list.innerHTML = `<div class="p-10 text-center opacity-40 uppercase text-[10px] font-black">No se encontraron jugadores</div>`;
@@ -213,34 +244,73 @@ function renderTable() {
       else if (rank <= 10) rankClass = "rank-elite";
       const tierClass = getTierClass(rank);
       const tierStyle = getTierStyle(rank, users.length);
+      const tierLabel = getTierLabel(rank);
+      const streak = Number(u.computedStreak ?? u.rachaActual ?? 0);
+      const streakLabel = streak > 0 ? `+${streak}` : `${streak}`;
+      const progress = getCoreLevelProgressState({
+        rating: Number(u.puntosRanking || 1000),
+        levelOverride: Number(u.nivel || levelFromRating(u.puntosRanking)),
+      });
+      const visibleProgressPct = buildCenteredProgress(progress.pointsToDown, progress.pointsToUp);
+      const progressHint = progress.pointsToUp <= progress.pointsToDown
+        ? `Subida ${progress.pointsToUp}`
+        : `Bajada ${progress.pointsToDown}`;
       return `
         <div class="ranking-card ${rankClass} ${tierClass} ${isMe ? "me" : ""} animate-up"
              style="animation-delay: ${i * 20}ms; ${tierStyle}"
-             onclick="window.openRankUserModal('${u.id}')">
-          <span class="rank-number-v7 ${rank <= 3 ? "glow" : ""}">${rank}</span>
+             onclick="window.openRankUserModal('${u.id}')"
+             role="button"
+             tabindex="0"
+             aria-label="Abrir perfil competitivo de ${u.nombreUsuario || u.nombre || "Jugador"}"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.openRankUserModal('${u.id}');}">
+          <div class="lb-rank-wrap">
+            <span class="rank-number-v7">${rank}</span>
+            <span class="lb-tier-chip">${tierLabel}</span>
+          </div>
           ${renderAvatarMarkup(u, "lb-avatar")}
           <div class="lb-info">
-            <span class="lb-name">${u.nombreUsuario || u.nombre || "Jugador"} ${isMe ? '<i class="fas fa-user-circle text-[8px] text-primary ml-1"></i>' : ""}</span>
-            <span class="lb-level">Nivel ${lvl}</span>
+            <div class="lb-name-row">
+              <span class="lb-name">${u.nombreUsuario || u.nombre || "Jugador"} ${isMe ? '<i class="fas fa-user-circle text-[8px] text-primary ml-1"></i>' : ""}</span>
+              <span class="lb-level-chip">N ${lvl}</span>
+            </div>
+            <div class="lb-meta-row lb-meta-row-tight">
+              <span class="lb-meta-pill">PJ ${Number(u.partidosJugados || 0)}</span>
+              <span class="lb-meta-pill">W ${Number(u.victorias || 0)}</span>
+              <span class="lb-meta-pill ${streak > 0 ? "is-positive" : streak < 0 ? "is-negative" : ""}">Racha ${streakLabel}</span>
+              <span class="lb-meta-pill">${progressHint}</span>
+            </div>
+                <span>↑ ${progress.pointsToUp} pts · ↓ ${progress.pointsToDown} pts</span>
+              </div>
+            </div>
           </div>
-          <div class="flex-col items-end">
+          <div class="lb-score-col">
             <span class="lb-pts">${pts}</span>
-            <span class="text-[8px] font-bold opacity-40 uppercase tracking-widest">ELO PTS</span>
+            <span class="lb-pts-sub">${visibleProgressPct.toFixed(0)}%</span>
+            <span class="lb-state-chip state-${progress.stateClass}">${progress.stateLabel}</span>
           </div>
         </div>
       `;
     })
     .join("");
 
+  if (currentViewMode === "general" && currentUser?.uid) {
+    requestAnimationFrame(() => {
+      const myCard = list.querySelector(`[onclick*="${currentUser.uid}"]`);
+      if (myCard) {
+        myCard.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }
+    });
+  }
+
   void renderSeasonTable();
 }
 
 function getCurrentSeasonInfo() {
   const now = new Date();
-  const quarter = Math.floor(now.getMonth() / 3) + 1;
+  const month = now.getMonth() + 1;
   return {
-    key: `${now.getFullYear()}-T${quarter}`,
-    label: `T${quarter} ${now.getFullYear()}`,
+    key: `${now.getFullYear()}-${String(month).padStart(2, "0")}`,
+    label: now.toLocaleDateString("es-ES", { month: "long", year: "numeric" }),
   };
 }
 
@@ -282,12 +352,17 @@ async function renderSeasonTable() {
         <span class="rank-number-v7">${i + 1}</span>
         ${renderAvatarMarkup(u, "lb-avatar")}
         <div class="lb-info">
-          <span class="lb-name">${u.nombreUsuario || u.nombre || "Jugador"}</span>
-          <span class="lb-level">Temporada ${season.label}</span>
+          <div class="lb-name-row">
+            <span class="lb-name">${u.nombreUsuario || u.nombre || "Jugador"}</span>
+            <span class="lb-level-chip">TEMP</span>
+          </div>
+          <div class="lb-meta-row lb-meta-row-tight">
+            <span class="lb-meta-pill">${season.label}</span>
+          </div>
         </div>
-        <div class="flex-col items-end">
+        <div class="lb-score-col">
           <span class="lb-pts">${u.seasonPoints >= 0 ? "+" : ""}${u.seasonPoints.toFixed(1)}</span>
-          <span class="text-[8px] font-bold opacity-40 uppercase tracking-widest">TEMP</span>
+          <span class="lb-pts-sub">TEMP</span>
         </div>
       </div>
     `).join("");
@@ -361,20 +436,11 @@ async function renderRankUserModal(uid) {
               const rivalUids = myIdx < 2 ? arr.slice(2, 4) : arr.slice(0, 2);
               const rivalNames = await Promise.all(rivalUids.map(async r => {
                 if (!r) return "Vacio";
-                // 1. Try Synthetic Guest
-                const guest = parseGuestMeta(r);
-                if (guest) return guest.name;
-                
-                // 2. Try Cache / Local list
-                const cu = users.find(x => x.id === r);
-                if (cu) return cu.nombreUsuario || cu.nombre || "Jugador";
-                
-                // 3. Try Remote / Event Fallback
-                const du = await getDocument("usuarios", r).catch(() => null);
-                if (du) return du.nombreUsuario || du.nombre || "Jugador";
-                
-                // 4. Final Fallback (Event dummy / UID)
-                return String(r).length > 15 ? "Jugador " + String(r).slice(0, 4) : String(r);
+                const identity = await resolveIdentity(r, {
+                  currentUserId: currentUser?.uid,
+                  currentUserData,
+                });
+                return identity?.name || (String(r).length > 15 ? "Jugador" : String(r));
               }));
               rivalesTexto = `vs <span class="font-bold text-white">${rivalNames.join(" &amp; ")}</span>`;
             } else if (match.teamAName || match.teamBName) {
@@ -472,6 +538,8 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
     const systemVersion = String(logDoc?.details?.systemVersion || "");
     const real = detail?.desgloseReal || {};
     let factors = [];
+    let diagnostics = [];
+    let transparentRows = [];
     if (detail.factoresAdicionales) {
         // v8 Advanced Scoring
         factors = [
@@ -485,6 +553,13 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         if (detail.sumaTotal && detail.limiteAplicado && Math.abs(detail.sumaTotal) > Math.abs(detail.limiteAplicado)) {
             factors.push(["Ajuste Tope Rígido", Number((detail.limiteAplicado - detail.sumaTotal).toFixed(2))]);
         }
+        transparentRows = [
+            ["Elo base esperado", detail.cambioElo],
+            ["Puntos por compañero", detail.factoresAdicionales?.companero],
+            ["Puntos por racha", detail.factoresAdicionales?.racha],
+            ["Puntos por sets", detail.factoresAdicionales?.margenSets],
+            ["Balance final del sistema", detail.ajusteBalance],
+        ].filter(([, v]) => v !== undefined && v !== null && !Number.isNaN(Number(v)));
     } else {
         // Legacy
         factors = [
@@ -495,10 +570,18 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         ["Ajuste Nivel", detail.habilidad || detail.skill],
         ["Equilibrio final", detail.ajusteBalance],
         ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
+        transparentRows = [
+          ["Base del partido", detail.base],
+          ["Racha", detail.racha || detail.streak],
+          ["Sorpresa", detail.sorpresa || detail.surprise],
+          ["Sets / clutch", detail.clutch || detail.sets],
+          ["Habilidad / skill", detail.habilidad || detail.skill],
+          ["Balance final del sistema", detail.ajusteBalance]
+        ].filter(([, v]) => v !== undefined && v !== null && !Number.isNaN(Number(v)));
     }
 
     if (systemVersion.includes("atp")) {
-      factors = factors.concat([
+      diagnostics = [
         ["Expectativa", real.esperado],
         ["K Factor", real.K],
         ["Seed Individual", real.seedIndividual],
@@ -507,7 +590,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         ["Dominancia", real.dominance],
         ["Rating Pareja", real.teamRating],
         ["Rating Rival", real.rivalRating],
-      ].filter(([, v]) => v !== undefined && v !== null && v !== 0));
+      ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
     }
 
     const diff = Number(logDoc?.diff || 0);
@@ -535,8 +618,12 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         
         async function getFriendlyName(uid) {
             if (!uid) return "Vacío";
+            const identity = await resolveIdentity(uid, {
+              userMap: Object.fromEntries(users.map((user) => [user.id, user])),
+            }).catch(() => null);
+            if (identity?.name) return identity.name;
             const guest = parseGuestMeta(uid);
-            if (guest) return guest.name || "Invitado";
+            if (guest?.name) return guest.name;
             const u = users.find(x => x.id === uid) || await getDocument("usuarios", uid);
             return u?.nombreUsuario || u?.nombre || "Jugador";
         }
@@ -556,13 +643,24 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
             fallback: "Pareja 2",
             side: "B"
         });
+        const renderRosterPills = (ids = []) => ids.map((uid) => {
+            const idx = matchPlayers.indexOf(uid);
+            const label = pNames[idx] || "Jugador";
+            return `<span class="rank-player-pill">${label}</span>`;
+        }).join("");
 
         matchInfoHtml = `
-            <div class="rank-break-match">
-                <div class="flex-col gap-1 items-center mb-2">
+            <div class="rank-break-match premium">
+                <div class="rank-break-versus">
+                    <div class="rank-break-team-block">
                     <span class="text-[10px] font-black text-white/90 uppercase tracking-widest">${t1Names}</span>
+                    <div class="rank-player-pill-row">${renderRosterPills(teamAIds)}</div>
+                    </div>
                     <span class="text-[8px] font-bold text-primary opacity-60">VERSUS</span>
+                    <div class="rank-break-team-block">
                     <span class="text-[10px] font-black text-white/90 uppercase tracking-widest">${t2Names}</span>
+                    <div class="rank-player-pill-row">${renderRosterPills(teamBIds)}</div>
+                    </div>
                 </div>
                 <span class="match-sub">${fmtDate(match.fecha)} · ${match.resultado?.sets || match.resultado || 'Sin resultado'}</span>
             </div>
@@ -573,6 +671,17 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
       <div class="rank-breakdown-card">
         ${matchInfoHtml}
         <div class="rank-break-title">Desglose de puntuación</div>
+        ${transparentRows.length ? `
+        <div class="rank-break-subtitle">Suma visible del cálculo</div>
+        <div class="rank-break-grid rank-break-grid-strong">
+          ${transparentRows.map(([k, v]) => {
+            const val = Number(v);
+            const colorCls = val > 0 ? "text-sport-green" : val < 0 ? "text-sport-red" : "text-white/40";
+            return `<div class="rank-break-row emphasis"><span>${k}</span><b class="${colorCls}">${val > 0 ? "+" : ""}${num(v, 2)}</b></div>`;
+          }).join("")}
+        </div>` : ""}
+        <div class="rank-break-level">Subtotal visible ${num(detail.subtotalVariables ?? detail.totalCalculado ?? diff, 2)} · Ajuste final ${num(detail.ajusteBalance || 0, 2)} · Delta ${num(detail.finalDelta || diff, 2)}</div>
+        <div class="rank-break-subtitle">Variables complementarias</div>
         <div class="rank-break-grid">
           ${factors.map(([k, v]) => {
             const val = Number(v);
@@ -580,6 +689,11 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
             return `<div class="rank-break-row"><span>${k}</span><b class="${colorCls}">${val > 0 ? "+" : ""}${num(v, 2)}</b></div>`;
           }).join("")}
         </div>
+        ${diagnostics.length ? `
+        <div class="rank-break-title" style="margin-top:14px;">Métricas del cálculo</div>
+        <div class="rank-break-grid">
+          ${diagnostics.map(([k, v]) => `<div class="rank-break-row"><span>${k}</span><b class="text-primary">${num(v, 2)}</b></div>`).join("")}
+        </div>` : ""}
         
         <div class="rank-break-total">
           <div class="total-main">

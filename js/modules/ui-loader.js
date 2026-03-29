@@ -104,7 +104,7 @@ function ensureHeaderProfileMenuStyles() {
     style.textContent = `
         .header-profile-wrap{position:relative}
         .header-avatar-btn{background:transparent;border:0;padding:0;cursor:pointer}
-        .header-profile-menu{position:absolute;top:calc(100% + 12px);right:0;min-width:220px;padding:10px;border-radius:18px;border:1px solid rgba(255,255,255,.1);background:linear-gradient(180deg,rgba(5,10,22,.98),rgba(2,6,23,.98));box-shadow:0 20px 48px rgba(2,6,23,.42);display:none;z-index:450;backdrop-filter:blur(18px)}
+        .header-profile-menu{position:absolute;top:calc(100% + 12px);right:0;min-width:240px;padding:10px;border-radius:18px;border:1px solid rgba(255,255,255,.1);background:linear-gradient(180deg,rgba(5,10,22,.98),rgba(2,6,23,.98));box-shadow:0 20px 48px rgba(2,6,23,.42);display:none;z-index:450;backdrop-filter:blur(18px)}
         .header-profile-wrap.open .header-profile-menu{display:block}
         .header-menu-user{padding:10px 12px 12px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:8px}
         .header-menu-name{display:block;color:#fff;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
@@ -112,6 +112,7 @@ function ensureHeaderProfileMenuStyles() {
         .header-menu-action{width:100%;display:flex;align-items:center;gap:10px;padding:12px 12px;border-radius:14px;border:0;background:transparent;color:#e2e8f0;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;cursor:pointer}
         .header-menu-action:hover{background:rgba(255,255,255,.06)}
         .header-menu-action.danger{color:#fca5a5}
+        .header-menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
     `;
     document.head.appendChild(style);
 }
@@ -121,6 +122,8 @@ function bindHeaderProfileMenu(userData = null) {
     const wrap = document.getElementById("header-profile-wrap");
     const toggle = document.getElementById("header-avatar-container");
     const profileBtn = document.getElementById("header-go-profile");
+    const historyBtn = document.getElementById("header-go-history");
+    const racketsBtn = document.getElementById("header-go-palas");
     const logoutBtn = document.getElementById("header-logout");
     if (!wrap || !toggle) return;
 
@@ -133,6 +136,14 @@ function bindHeaderProfileMenu(userData = null) {
     profileBtn?.addEventListener("click", () => {
         closeMenu();
         window.location.href = "perfil.html";
+    });
+    historyBtn?.addEventListener("click", () => {
+        closeMenu();
+        window.location.href = "historial.html";
+    });
+    racketsBtn?.addEventListener("click", () => {
+        closeMenu();
+        window.location.href = "palas.html";
     });
     logoutBtn?.addEventListener("click", async () => {
         closeMenu();
@@ -229,6 +240,10 @@ export async function injectHeader(userData = null) {
                     <div class="header-menu-user">
                         <span class="header-menu-name">${escapeUiLoaderHtml(userData?.nombreUsuario || userData?.nombre || "Jugador")}</span>
                         <span class="header-menu-sub">${escapeUiLoaderHtml(pageMeta.subtitle)}</span>
+                    </div>
+                    <div class="header-menu-grid">
+                        <button class="header-menu-action" id="header-go-history"><i class="fas fa-clock-rotate-left"></i> Historial</button>
+                        <button class="header-menu-action" id="header-go-palas"><i class="fas fa-table-tennis-paddle-ball"></i> Palas</button>
                     </div>
                     <button class="header-menu-action" id="header-go-profile"><i class="fas fa-user"></i> Ir a perfil</button>
                     <button class="header-menu-action danger" id="header-logout"><i class="fas fa-right-from-bracket"></i> Cerrar sesión</button>
@@ -357,14 +372,14 @@ export async function injectNavbar(activePage) {
     
     // Presence Heartbeat
     if (auth.currentUser) {
-        const { updatePresence } = await import('../firebase-service.js?v=6.5');
+        const { updatePresence } = await import('../firebase-service.js');
         updatePresence(auth.currentUser.uid);
         setInterval(() => updatePresence(auth.currentUser.uid), 5 * 60 * 1000); // Every 5 mins
     }
     
     // Initialize AI Coach Chat (creates its own FAB)
     try {
-        const { initVecinaChat } = await import('./vecina-chat.js?v=6.5');
+        const { initVecinaChat } = await import('./vecina-chat.js');
         initVecinaChat();
     } catch(e) {
         logInfo('ai_chat_not_available', { reason: e?.message || 'unknown' });
@@ -375,7 +390,7 @@ export async function injectNavbar(activePage) {
  * Initialize Galaxy Background using centralized module
  */
 export async function initBackground() {
-    const { initGalaxyBackground } = await import('./galaxy-bg.js?v=6.5');
+    const { initGalaxyBackground } = await import('./galaxy-bg.js');
     initGalaxyBackground();
 }
 

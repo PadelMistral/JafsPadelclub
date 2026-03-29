@@ -706,6 +706,42 @@ async function updatePushStatusUI() {
         showToast("Prueba lanzada", "Minimiza la app unos segundos para verificar el segundo plano.", "info");
       };
     }
+
+    if (btnTestPush) {
+      btnTestPush.style.display = "flex";
+      btnTestPush.onclick = async () => {
+        if (!currentUser?.uid) {
+          showToast("Usuario no listo", "Espera unos segundos y vuelve a intentarlo.", "warning");
+          return;
+        }
+
+        await sendPushNotification(
+          isAdmin ? "TEST LOCAL ADMIN" : "TEST LOCAL",
+          "Si ves este aviso, el permiso local funciona. Ahora lanzamos la prueba real de segundo plano.",
+          "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff",
+        );
+
+        setTimeout(async () => {
+          await sendExternalPush({
+            title: isAdmin ? "TEST REAL ONESIGNAL" : "TEST SEGUNDO PLANO",
+            message: isAdmin
+              ? "Si este aviso llega con la app cerrada o minimizada, el canal real de OneSignal ya funciona."
+              : "Si este aviso llega con la app minimizada o cerrada, el canal real ya funciona.",
+            uids: [currentUser.uid],
+            url: "notificaciones.html",
+            data: { type: "test", from: isAdmin ? "diag_btn" : "notif_test_button" }
+          });
+        }, isAdmin ? 3000 : 2500);
+
+        showToast(
+          "Prueba lanzada",
+          isAdmin
+            ? "Minimiza o cierra la app unos segundos para validar el canal real."
+            : "Minimiza la app unos segundos para verificar el segundo plano.",
+          "info",
+        );
+      };
+    }
   } catch (e) {
     console.warn("Push update UI fail:", e);
   }

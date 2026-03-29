@@ -457,7 +457,7 @@ function watchRankingChanges(uid) {
               "Ranking actualizado",
               `Has subido ${gain} ${gain === 1 ? "posición" : "posiciones"} en el ranking.`,
               NOTIF_TYPES.RANKING_UP,
-              "ranking-v3.html",
+              "ranking.html",
               { type: NOTIF_TYPES.RANKING_UP, rankDelta: gain, rank: posNow },
             );
           } else if (posNow && posPrev && posNow > posPrev) {
@@ -467,7 +467,7 @@ function watchRankingChanges(uid) {
               "Ranking actualizado",
               `Has bajado ${loss} ${loss === 1 ? "puesto" : "puestos"} en el ranking.`,
               NOTIF_TYPES.RANKING_DOWN,
-              "ranking-v3.html",
+              "ranking.html",
               { type: NOTIF_TYPES.RANKING_DOWN, rankDelta: -loss, rank: posNow },
             );
           }
@@ -720,7 +720,7 @@ function watchMatchParticipationEvents(uid) {
             "Resultado registrado",
             `Se ha subido resultado en tu partido: ${sets}.`,
             NOTIF_TYPES.RESULT_UPLOADED,
-            "ranking-v3.html",
+            "ranking.html",
             { type: NOTIF_TYPES.RESULT_UPLOADED, matchId, dedupId: `result_evt_${matchId}` },
           );
         }

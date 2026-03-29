@@ -12,6 +12,8 @@ import {
   getLevelBandByRating,
   ratingFromLevel,
 } from "./config/elo-system.js";
+import { resolveIdentity, seedIdentityCache } from "./services/identity-service.js";
+import { syncComputedStreakForUser } from "./services/streak-service.js";
 
 let currentUser = null;
 let currentUserData = null;
@@ -25,8 +27,10 @@ document.addEventListener("DOMContentLoaded", () => {
     onReady: async ({ user, userDoc }) => {
       currentUser = user;
       currentUserData = userDoc || {};
+      currentUserData.computedStreak = await syncComputedStreakForUser(user.uid, currentUserData, { maxLogs: 60 });
+      seedIdentityCache([{ uid: user.uid, ...currentUserData }]);
       await injectHeader(currentUserData);
-      injectNavbar("home");
+      injectNavbar("ranking");
       renderSummary();
       await loadBreakdown();
     },
@@ -35,17 +39,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function resolvePlayerName(uid) {
   if (!uid) return "Jugador";
-  const guest = parseGuestMeta(uid);
-  if (guest) return guest.name || "Invitado";
   if (playerNameCache.has(uid)) return playerNameCache.get(uid);
-  try {
-    const doc = await getDocument("usuarios", uid);
-    const name = doc?.nombreUsuario || doc?.nombre || "Jugador";
-    playerNameCache.set(uid, name);
-    return name;
-  } catch {
-    return "Jugador";
-  }
+  const identity = await resolveIdentity(uid, {
+    currentUserId: currentUser?.uid,
+    currentUserData,
+  });
+  const name = identity?.name || "Jugador";
+  playerNameCache.set(uid, name);
+  return name;
 }
 
 function renderSummary() {
@@ -103,10 +104,19 @@ async function loadBreakdown() {
   if (!listEl || !currentUser?.uid) return;
 
   try {
-    const [logsSnap, diarySnap] = await Promise.all([
-      getDocs(query(collection(db, "rankingLogs"), where("uid", "==", currentUser.uid), orderBy("timestamp", "desc"), limit(60))),
-      getDocs(query(collection(db, "diario"), where("uid", "==", currentUser.uid), orderBy("fecha", "desc"), limit(30))),
-    ]);
+    let logsSnap;
+    let diarySnap;
+    try {
+      [logsSnap, diarySnap] = await Promise.all([
+        getDocs(query(collection(db, "rankingLogs"), where("uid", "==", currentUser.uid), orderBy("timestamp", "desc"), limit(60))),
+        getDocs(query(collection(db, "diario"), where("uid", "==", currentUser.uid), orderBy("fecha", "desc"), limit(30))),
+      ]);
+    } catch {
+      [logsSnap, diarySnap] = await Promise.all([
+        getDocs(query(collection(db, "rankingLogs"), where("uid", "==", currentUser.uid), limit(60))),
+        getDocs(query(collection(db, "diario"), where("uid", "==", currentUser.uid), limit(30))),
+      ]);
+    }
 
     const items = [];
     logsSnap.forEach((d) => items.push({ ...d.data(), id: d.id, type: "match_log" }));

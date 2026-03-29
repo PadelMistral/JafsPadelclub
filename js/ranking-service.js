@@ -14,12 +14,14 @@ import {
   getLevelBandByRating,
 } from "./config/elo-system.js";
 import { checkAchievements } from "./achievement-service.js";
-import { calculateGlicko2Delta, applyRankingAdjustments, calculateNewLevel } from "./services/rating-engine.js";
 import { buildMatchPersistencePatch, parseGuestMeta } from "./utils/match-utils.js";
-import { SistemaPuntuacionAvanzado } from "./services/sistema-puntuacion.js";
-import { ATP_TEST_SYSTEM_VERSION, calculateAtpMatchDeltas } from "./pruebaElo.js";
-
-const puntuacionAvanzada = new SistemaPuntuacionAvanzado();
+import {
+  computeCompetitiveMatchContexts,
+  getCompetitiveSystemLabel,
+  getCompetitiveSystemVersion,
+  normalizeScoringSystem,
+} from "./services/competitive-engine.js";
+import { buildTransparentBreakdown } from "./services/scoring-breakdown-utils.js";
 
 const BONUS_REASON_NONE = "none";
 const BONUS_REASON_MVP = "mvp";
@@ -335,45 +337,6 @@ function buildPointsBreakdown({
   };
 }
 
-function buildTransparentBreakdown({
-  base = 0,
-  streak = 0,
-  surprise = 0,
-  clutch = 0,
-  skill = 0,
-  bonus = 0,
-  finalDelta = 0,
-  extras = {},
-}) {
-  const normalized = {
-    base: round2(base),
-    racha: round2(streak),
-    sorpresa: round2(surprise),
-    clutch: round2(clutch),
-    habilidad: round2(skill),
-    bonusIndividual: round2(bonus),
-  };
-  const subtotal = round2(
-    normalized.base +
-    normalized.racha +
-    normalized.sorpresa +
-    normalized.clutch +
-    normalized.habilidad +
-    normalized.bonusIndividual,
-  );
-  const final = round2(finalDelta);
-  const ajusteBalance = round2(final - subtotal);
-  return {
-    ...extras,
-    ...normalized,
-    subtotalVariables: subtotal,
-    ajusteBalance,
-    totalCalculado: round2(subtotal + ajusteBalance),
-    finalDelta: final,
-  };
-}
-
-
 function estimatePointDetailsFromSets(resultStr) {
   const parsed = parseMatchResult(resultStr);
   const points = [];
@@ -621,50 +584,52 @@ function computeMatchScoring({ matchId, col, resultStr, extraMatchData = {}, mat
     ? nonGuestKs.reduce((acc, k) => acc + k, 0) / nonGuestKs.length
     : ELO_CONFIG.K.STABLE;
   const provisionalDeltas = [0, 0, 0, 0];
-  const allAdjs = [null, null, null, null];
   const calcContexts = [null, null, null, null];
   const teamKind = col === "eventoPartidos" ? "evento" : (match.tipo || (col === "partidosReto" ? "reto" : "amistoso"));
+  const competitiveRun = computeCompetitiveMatchContexts({
+    scoringSystem: extraMatchData?.scoringSystem || "default",
+    roster,
+    parsed,
+    col,
+    matchType: match.tipo,
+    buildDefaultContext: (i, player) => {
+      const amITeamA = i < 2;
+      const didWin = (amITeamA && winnerIsA) || (!amITeamA && !winnerIsA);
+      const actualScore = didWin ? 1 : 0;
+      const misAliados = amITeamA ? teamA : teamB;
+      const companero = misAliados.find((p) => p && p.id !== player.id) || null;
+      const misRivales = amITeamA ? teamB : teamA;
+      return {
+        jugador: { ...player, puntosRanking: resolveCompetitiveRating(player) },
+        companero: companero ? { ...companero, puntosRanking: resolveCompetitiveRating(companero) } : null,
+        rivales: misRivales.filter(Boolean).map((r) => ({ ...r, puntosRanking: resolveCompetitiveRating(r) })),
+        resultado: actualScore,
+        tipoPartido: String(teamKind),
+        margenSets: {
+          juegosMios: didWin ? Math.max(parsed.teamAGames, parsed.teamBGames) : Math.min(parsed.teamAGames, parsed.teamBGames),
+          juegosRivales: didWin ? Math.min(parsed.teamAGames, parsed.teamBGames) : Math.max(parsed.teamAGames, parsed.teamBGames),
+          setsMios: didWin ? Math.max(parsed.teamASets, parsed.teamBSets) : Math.min(parsed.teamASets, parsed.teamBSets),
+          setsRivales: didWin ? Math.min(parsed.teamASets, parsed.teamBSets) : Math.max(parsed.teamASets, parsed.teamBSets),
+        },
+      };
+    },
+  });
 
   for (let i = 0; i < 4; i += 1) {
     const player = roster[i];
-    if (!player || player.isGuest) {
-      provisionalDeltas[i] = 0;
-      continue;
-    }
-
-    const amITeamA = i < 2;
-    const didWin = (amITeamA && winnerIsA) || (!amITeamA && !winnerIsA);
-    const actualScore = didWin ? 1 : 0;
-    const misAliados = amITeamA ? teamA : teamB;
-    const companero = misAliados.find((p) => p && p.id !== player.id) || null;
-    const misRivales = amITeamA ? teamB : teamA;
-    const margenSetsFormatted = {
-      juegosMios: didWin ? Math.max(parsed.teamAGames, parsed.teamBGames) : Math.min(parsed.teamAGames, parsed.teamBGames),
-      juegosRivales: didWin ? Math.min(parsed.teamAGames, parsed.teamBGames) : Math.max(parsed.teamAGames, parsed.teamBGames),
-      setsMios: didWin ? Math.max(parsed.teamASets, parsed.teamBSets) : Math.min(parsed.teamASets, parsed.teamBSets),
-      setsRivales: didWin ? Math.min(parsed.teamASets, parsed.teamBSets) : Math.max(parsed.teamASets, parsed.teamBSets)
-    };
-
-    const ctx = {
-      jugador: { ...player, puntosRanking: resolveCompetitiveRating(player) },
-      companero: companero ? { ...companero, puntosRanking: resolveCompetitiveRating(companero) } : null,
-      rivales: misRivales.filter(Boolean).map((r) => ({ ...r, puntosRanking: resolveCompetitiveRating(r) })),
-      resultado: actualScore,
-      tipoPartido: String(teamKind),
-      margenSets: margenSetsFormatted
-    };
-
-    const calculo = puntuacionAvanzada.calcularCambio(ctx);
+    const calculo = competitiveRun?.contexts?.[i] || null;
     calcContexts[i] = calculo;
-    provisionalDeltas[i] = calculo.limiteAplicado;
-    allAdjs[i] = calculo.factoresAdicionales;
-    player._temp_base = calculo.cambioElo;
-    player._temp_bonus = calculo.factoresAdicionales.companero + calculo.factoresAdicionales.racha + calculo.factoresAdicionales.margenSets;
+    provisionalDeltas[i] = Number(calculo?.limiteAplicado || 0);
+    if (!player || !calculo) continue;
+    player._temp_base = Number(calculo.cambioElo || provisionalDeltas[i] || 0);
+    player._temp_bonus = Number(calculo.factoresAdicionales?.companero || 0)
+      + Number(calculo.factoresAdicionales?.racha || 0)
+      + Number(calculo.factoresAdicionales?.margenSets || 0);
     player._temp_adjs = {
-      streak: calculo.factoresAdicionales.racha,
+      streak: Number(calculo.factoresAdicionales?.racha || 0),
       surprise: 0,
-      clutch: calculo.factoresAdicionales.margenSets,
-      skill: calculo.factoresAdicionales.companero
+      clutch: Number(calculo.factoresAdicionales?.margenSets || 0),
+      skill: Number(calculo.factoresAdicionales?.companero || 0),
     };
   }
 
@@ -708,6 +673,7 @@ function computeMatchScoring({ matchId, col, resultStr, extraMatchData = {}, mat
     const baseDelta = player?._temp_base ?? delta;
     const bonusDelta = player?._temp_bonus ?? 0;
     const subAdjs = player?._temp_adjs || {};
+    totalDelta += delta;
 
     if (!player || player.isGuest) {
       const guestBreakdown = buildTransparentBreakdown({
@@ -728,7 +694,6 @@ function computeMatchScoring({ matchId, col, resultStr, extraMatchData = {}, mat
       continue;
     }
 
-    totalDelta += delta;
     const oldPoints = resolvePlayerRating(player);
     const newPoints = clampNumber(oldPoints + delta, ELO_CONFIG.MIN_RATING, ELO_CONFIG.MAX_RATING);
     const levelBefore = Number(player.nivel || levelFromRating(oldPoints));
@@ -854,7 +819,7 @@ export async function previewMatchResults(matchId, col, resultStr, extraMatchDat
     roster: built.roster,
     match: built.match,
     summary: {
-      systemVersion: String(extraMatchData?.scoringSystem || "default").toLowerCase() === "atp_test" ? ATP_TEST_SYSTEM_VERSION : ELO_SYSTEM_VERSION,
+      systemVersion: getCompetitiveSystemVersion(extraMatchData?.scoringSystem || "default"),
       zeroSumCheck: round2(computed.totalDelta),
       kCombined: round2(computed.kCombined),
       expectedA: round2(computed.expectedA),
@@ -872,8 +837,8 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
     const initial = await getDocument(col, matchId);
     const guestOverrides = normalizeGuestOverrides(extraMatchData?.guestOverrides || {});
     const manualDeltas = normalizeManualDeltas(extraMatchData?.manualDeltas || {});
-    const scoringSystem = String(extraMatchData?.scoringSystem || "default").toLowerCase();
-    const activeSystemVersion = scoringSystem === "atp_test" ? ATP_TEST_SYSTEM_VERSION : ELO_SYSTEM_VERSION;
+    const scoringSystem = normalizeScoringSystem(extraMatchData?.scoringSystem || "default");
+    const activeSystemVersion = getCompetitiveSystemVersion(scoringSystem);
     let jugadores = Array.isArray(initial?.jugadores) && initial.jugadores.length === 4
       ? initial.jugadores
       : Array.isArray(initial?.playerUids) && initial.playerUids.length === 4
@@ -1113,68 +1078,60 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
       // --- INDIVIDUAL CALCULATION (SISTEMA PUNTUACION AVANZADO V8) ---
       const provisionalDeltas = [0, 0, 0, 0];
       const levelDeltas = [0, 0, 0, 0];
-      const allAdjs = [null, null, null, null];
       const calcContexts = [null, null, null, null];
-      const atpComputation = scoringSystem === "atp_test"
-        ? calculateAtpMatchDeltas({
-            roster,
-            parsed,
-            col,
-            matchType: match.tipo,
-          })
-        : null;
-      
-      for (let i = 0; i < 4; i += 1) {
-        const player = roster[i];
-        if (!player || player.isGuest) {
-            provisionalDeltas[i] = 0;
-            continue;
-        }
-        
-        const amITeamA = i < 2;
-        const didWin = (amITeamA && winnerIsA) || (!amITeamA && !winnerIsA);
-        const actualScore = didWin ? 1 : 0;
-        
-        const misAliados = amITeamA ? teamA : teamB;
-        const companero = misAliados.find(p => p && p.id !== player.id) || null;
-        const misRivales = amITeamA ? teamB : teamA;
-
-        // Limpiar stats para el contexto
-        const margenSetsFormatted = {
-            juegosMios: didWin ? Math.max(parsed.teamAGames, parsed.teamBGames) : Math.min(parsed.teamAGames, parsed.teamBGames),
-            juegosRivales: didWin ? Math.min(parsed.teamAGames, parsed.teamBGames) : Math.max(parsed.teamAGames, parsed.teamBGames),
-            setsMios: didWin ? Math.max(parsed.teamASets, parsed.teamBSets) : Math.min(parsed.teamASets, parsed.teamBSets),
-            setsRivales: didWin ? Math.min(parsed.teamASets, parsed.teamBSets) : Math.max(parsed.teamASets, parsed.teamBSets)
-        };
-
-        const ctx = {
+      const teamKind = col === "eventoPartidos" ? "evento" : (match.tipo || (col === "partidosReto" ? "reto" : "amistoso"));
+      const competitiveRun = computeCompetitiveMatchContexts({
+        scoringSystem,
+        roster,
+        parsed,
+        col,
+        matchType: match.tipo,
+        buildDefaultContext: (i, player) => {
+          const amITeamA = i < 2;
+          const didWin = (amITeamA && winnerIsA) || (!amITeamA && !winnerIsA);
+          const actualScore = didWin ? 1 : 0;
+          const misAliados = amITeamA ? teamA : teamB;
+          const companero = misAliados.find((p) => p && p.id !== player.id) || null;
+          const misRivales = amITeamA ? teamB : teamA;
+          return {
             jugador: { ...player, puntosRanking: resolveCompetitiveRating(player) },
             companero: companero ? { ...companero, puntosRanking: resolveCompetitiveRating(companero) } : null,
             rivales: misRivales.filter(Boolean).map((r) => ({ ...r, puntosRanking: resolveCompetitiveRating(r) })),
             resultado: actualScore,
-            tipoPartido: String(col === "eventoPartidos" ? "evento" : (match.tipo || (col === "partidosReto" ? "reto" : "amistoso"))),
-            margenSets: margenSetsFormatted
+            tipoPartido: String(teamKind),
+            margenSets: {
+              juegosMios: didWin ? Math.max(parsed.teamAGames, parsed.teamBGames) : Math.min(parsed.teamAGames, parsed.teamBGames),
+              juegosRivales: didWin ? Math.min(parsed.teamAGames, parsed.teamBGames) : Math.max(parsed.teamAGames, parsed.teamBGames),
+              setsMios: didWin ? Math.max(parsed.teamASets, parsed.teamBSets) : Math.min(parsed.teamASets, parsed.teamBSets),
+              setsRivales: didWin ? Math.min(parsed.teamASets, parsed.teamBSets) : Math.max(parsed.teamASets, parsed.teamBSets),
+            },
+          };
+        },
+      });
+
+      for (let i = 0; i < 4; i += 1) {
+        const player = roster[i];
+        const calculo = competitiveRun?.contexts?.[i] || null;
+        calcContexts[i] = calculo;
+        provisionalDeltas[i] = Number(calculo?.limiteAplicado || 0);
+        levelDeltas[i] = Number(calculo?.nuevoNivelCambio || 0);
+        if (!player || !calculo) continue;
+
+        player._temp_base = Number(calculo.cambioElo || provisionalDeltas[i] || 0);
+        player._temp_bonus = Number(calculo.factoresAdicionales?.companero || 0)
+          + Number(calculo.factoresAdicionales?.racha || 0)
+          + Number(calculo.factoresAdicionales?.margenSets || 0);
+        player._temp_adjs = {
+          streak: Number(calculo.factoresAdicionales?.racha || 0),
+          surprise: 0,
+          clutch: Number(calculo.factoresAdicionales?.margenSets || 0),
+          skill: Number(calculo.factoresAdicionales?.companero || 0),
         };
 
-        const calculo = atpComputation?.contexts?.[i] || puntuacionAvanzada.calcularCambio(ctx);
-        calcContexts[i] = calculo;
-        
-        provisionalDeltas[i] = calculo.limiteAplicado;
-        levelDeltas[i] = calculo.nuevoNivelCambio;
-        
-        player._temp_base = calculo.cambioElo;
-        player._temp_bonus = calculo.factoresAdicionales.companero + calculo.factoresAdicionales.racha + calculo.factoresAdicionales.margenSets;
-        player._temp_adjs = { 
-            streak: calculo.factoresAdicionales.racha, 
-            surprise: 0, 
-            clutch: calculo.factoresAdicionales.margenSets, 
-            skill: calculo.factoresAdicionales.companero 
-        };
-        
-        console.log(`[ELO AVANZADO] Player ${player.id?.slice(0,6)} | Win:${didWin} | BaseElo:${calculo.cambioElo} | Factores:${JSON.stringify(calculo.factoresAdicionales)} | Limite:${calculo.limiteAplicado} | NivelDelta:${calculo.nuevoNivelCambio}`);
+        console.log(`[ELO AVANZADO] Player ${player.id?.slice(0,6)} | BaseElo:${calculo.cambioElo} | Factores:${JSON.stringify(calculo.factoresAdicionales)} | Limite:${calculo.limiteAplicado} | NivelDelta:${calculo.nuevoNivelCambio}`);
       }
 
-      const bonusReason = scoringSystem === "atp_test" ? "ATP Hybrid Competitive" : "Glicko-2 Hybrid";
+      const bonusReason = getCompetitiveSystemLabel(scoringSystem);
       // Ensure individual records are prioritized over team averages
       const teamADeltas = [provisionalDeltas[0], provisionalDeltas[1]];
       const teamBDeltas = [provisionalDeltas[2], provisionalDeltas[3]];
@@ -1220,6 +1177,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
         const baseDelta = player?._temp_base ?? delta;
         const bonusDelta = player?._temp_bonus ?? 0;
         const subAdjs = player?._temp_adjs || {};
+        totalDelta += delta;
 
         if (!player || player.isGuest) {
           const guestBreakdown = buildTransparentBreakdown({
@@ -1275,7 +1233,6 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
           continue;
         }
 
-        totalDelta += delta;
         const oldPoints = resolvePlayerRating(player);
         const newPoints = clampNumber(oldPoints + delta, ELO_CONFIG.MIN_RATING, ELO_CONFIG.MAX_RATING);
         const levelBefore = Number(player.nivel || levelFromRating(oldPoints));
@@ -1528,7 +1485,7 @@ export async function processMatchResults(matchId, col, resultStr, extraMatchDat
             teamBDelta: round2(teamBDeltas.reduce((a,b)=>a+b,0)/2),
             kCombined: round2(kCombined),
             modeMult,
-            dominanceFactor: round2(atpComputation?.dominance || matchFactor),
+            dominanceFactor: round2(competitiveRun?.matchMeta?.dominance || matchFactor),
             bonusReason,
             zeroSumCheck: totalDelta,
             updatedAt: serverTimestamp(),

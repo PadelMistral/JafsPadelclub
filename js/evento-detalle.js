@@ -327,7 +327,7 @@ function setupAddPlayerModal() {
         }
     });
 
-    document.getElementById('btn-confirm-add-player-detalle').addEventListener('click', () => {
+    document.getElementById('btn-confirm-add-player-detalle').addEventListener('click', async () => {
         const type = typeSelect.value;
         const preference = document.getElementById('player-preference-detalle').value;
         const pairCode = document.getElementById('player-pair-code-detalle').value.trim();
@@ -499,7 +499,15 @@ function subscribeEvent() {
                 window._filterInitDone = true;
             }
         }
-        renderPage();
+        try {
+            renderPage();
+        } catch (e) {
+            console.error('Evento detalle renderPage failed:', e);
+            const pane = document.getElementById('pane-info');
+            if (pane) {
+                pane.innerHTML = `<div class="empty-state">No se pudo cargar este evento. Revisa si faltan equipos, grupos o datos del organizador.</div>`;
+            }
+        }
     });
 }
 
@@ -528,10 +536,13 @@ function bindTabs() {
 
 function renderPage() {
     const ev = currentEvent || {};
-        const heroImg = ev.imagen || ev.imageUrl || ev.logoUrl || './imagenes/Logojafs.png';
+    const heroImg = ev.imagen || ev.imageUrl || ev.logoUrl || './imagenes/Logojafs.png';
     const heroBg = document.getElementById('ed-hero-bg');
     if (heroBg) heroBg.style.backgroundImage = `url('${heroImg}')`;
-    document.getElementById('ed-hero-content').innerHTML = `
+    const heroContent = document.getElementById('ed-hero-content');
+    const statsStrip = document.getElementById('ed-stats-strip');
+    if (!heroContent || !statsStrip) return;
+    heroContent.innerHTML = `
         <div class="ed-hero-top">
             <div class="ed-hero-logo" style="background-image:url('${heroImg}')"></div>
             <div class="ed-hero-title-wrap">
@@ -547,7 +558,7 @@ function renderPage() {
     const aprobados = (ev.inscritos || []).filter(i => i.aprobado === true).length;
     const pendientes = (ev.inscritos || []).filter(i => i.aprobado !== true).length;
     const teams = (ev.teams || []).length;
-    document.getElementById('ed-stats-strip').innerHTML = `
+    statsStrip.innerHTML = `
         <div class="ed-stat-box"><span class="ed-stat-val">${aprobados}/${Number(ev.plazasMax || 16)}</span><span class="ed-stat-lbl">Aprobados</span></div>
         <div class="ed-stat-box"><span class="ed-stat-val">${pendientes}</span><span class="ed-stat-lbl">Pendientes</span></div>
         <div class="ed-stat-box"><span class="ed-stat-val">${teams}</span><span class="ed-stat-lbl">Equipos</span></div>
@@ -561,12 +572,17 @@ function renderPage() {
 function renderPane(tab) {
     const pane = document.getElementById(`pane-${tab}`);
     if (!pane || !currentEvent) return;
-    if (tab === 'info') renderInfo(pane);
-    else if (tab === 'participantes') renderParticipantes(pane);
-    else if (tab === 'clasificacion') renderClasificacion(pane);
-    else if (tab === 'partidos') renderMatches(pane);
-    else if (tab === 'bracket') renderBracket(pane);
-    else if (tab === 'organizador') renderOrganizador(pane);
+    try {
+        if (tab === 'info') renderInfo(pane);
+        else if (tab === 'participantes') renderParticipantes(pane);
+        else if (tab === 'clasificacion') renderClasificacion(pane);
+        else if (tab === 'partidos') renderMatches(pane);
+        else if (tab === 'bracket') renderBracket(pane);
+        else if (tab === 'organizador') renderOrganizador(pane);
+    } catch (e) {
+        console.error(`Evento detalle pane "${tab}" failed:`, e);
+        pane.innerHTML = `<div class="empty-state">No se pudo cargar esta sección del evento.</div>`;
+    }
 }
 
 function renderInfo(pane) {
@@ -580,8 +596,9 @@ function renderInfo(pane) {
         let table = [];
         
         if (myGroup) {
+             const safeGroups = ev.groups || {};
              const groupMatches = eventMatches.filter(m => m.phase === 'group' && m.group === myGroup);
-             const groupTeams = (ev.teams || []).filter(t => (ev.groups[myGroup] || []).includes(t.id));
+             const groupTeams = (ev.teams || []).filter(t => (safeGroups[myGroup] || []).includes(t.id));
              table = computeGroupTable(groupMatches, groupTeams, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
              const idx = table.findIndex(r => r.teamId === myTeam.id);
              if (idx !== -1) {

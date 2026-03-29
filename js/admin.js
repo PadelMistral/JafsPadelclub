@@ -11,6 +11,11 @@ import { logAdminAudit } from "./services/audit-service.js";
 import { validateMatchAdminPayload } from "./services/admin-validator.js";
 import { addPlayerHistoryEntry, addPlayerHistoryEntries } from "./services/player-history-service.js";
 import { buildMatchPersistencePatch, getResultSetsString, parseGuestMeta } from "./utils/match-utils.js";
+import { classifyHealthState } from "./services/pwa-health-utils.js";
+import {
+    resolveAdminActorLabel as resolveAdminActorLabelBase,
+    resolveAdminEntityLabel as resolveAdminEntityLabelBase,
+} from "./services/admin-display-utils.js";
 
 let users = [];
 let guestProfiles = [];
@@ -23,6 +28,7 @@ let me = null;
 let proposalsArr = [];
 let auditLogs = [];
 let rankingLogsArray = [];
+let appErrors = [];
 let adminRecalcModalState = null;
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -100,6 +106,7 @@ function bindFilters() {
 function bindSystemActions() {
     ensureEloActionOptions();
     document.getElementById("btn-broadcast")?.addEventListener("click", runBroadcast);
+    document.getElementById("btn-refresh-pwa-health")?.addEventListener("click", () => renderPwaHealthPanel(true));
     document.getElementById("btn-export-admin-snapshot")?.addEventListener("click", exportAdminSnapshot);
     document.getElementById("btn-execute-maint")?.addEventListener("click", async () => {
         const action = document.getElementById("sys-maint-action")?.value;
@@ -176,6 +183,52 @@ async function runHistoricalRecalc(systemKey = "default") {
             indicator.classList.add("hidden");
             indicator.classList.remove("flex");
         }
+    }
+}
+
+function setHealthValue(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = value;
+    const card = el.closest(".admin-health-item");
+    if (card) {
+        const state = classifyHealthState(id, value);
+        card.dataset.healthState = state;
+        card.title = `${card.querySelector("span")?.textContent || "Estado"}: ${value}`;
+    }
+}
+
+async function renderPwaHealthPanel(showFeedback = false) {
+    try {
+        const swSupported = "serviceWorker" in navigator;
+        const pushSupported = "PushManager" in window;
+        const notificationPermission = typeof Notification !== "undefined" ? Notification.permission : "unsupported";
+        const standalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+        const reg = swSupported ? await navigator.serviceWorker.getRegistration().catch(() => null) : null;
+        const cacheKeys = typeof caches !== "undefined" ? await caches.keys().catch(() => []) : [];
+        const sub = reg?.pushManager ? await reg.pushManager.getSubscription().catch(() => null) : null;
+
+        setHealthValue("admin-health-sw", reg ? (reg.active ? "Activo" : "Registrado") : "No registrado");
+        setHealthValue("admin-health-notif", notificationPermission || "unknown");
+        setHealthValue("admin-health-standalone", standalone ? "Instalada" : "Navegador");
+        setHealthValue("admin-health-cache", cacheKeys.length ? cacheKeys.join(", ") : "Sin cache");
+        setHealthValue("admin-health-scope", reg?.scope || "Sin scope");
+        setHealthValue("admin-health-push", pushSupported ? (sub ? "Suscrito" : "Disponible") : "No soportado");
+        setHealthValue("admin-health-last-check", new Date().toLocaleString("es-ES"));
+
+        if (showFeedback) {
+            showToast("PWA", "Salud tecnica verificada", "success");
+        }
+    } catch (error) {
+        console.warn("PWA health render failed:", error);
+        setHealthValue("admin-health-sw", "Error");
+        setHealthValue("admin-health-notif", "Error");
+        setHealthValue("admin-health-standalone", "Error");
+        setHealthValue("admin-health-cache", "Error");
+        setHealthValue("admin-health-scope", "Error");
+        setHealthValue("admin-health-push", "Error");
+        setHealthValue("admin-health-last-check", "Error");
+        if (showFeedback) showToast("PWA", "No se pudo comprobar la salud tecnica", "warning");
     }
 }
 
@@ -372,7 +425,7 @@ async function refreshAll() {
     if (btn) btn.classList.add("fa-spin");
 
     try {
-        const [uSnap, guestSnap, amSnap, reSnap, evSnapPartidos, evSnapTorneos, apoSnap, devicesSnap, propSnap, auditSnap, rLogsSnap] = await Promise.all([
+        const [uSnap, guestSnap, amSnap, reSnap, evSnapPartidos, evSnapTorneos, apoSnap, devicesSnap, propSnap, auditSnap, rLogsSnap, appErrorsSnap] = await Promise.all([
             getDocsSafe(query(collection(db, "usuarios"), orderBy("puntosRanking", "desc"))),
             getDocsSafe(query(collection(db, "invitados"), orderBy("nombre", "asc"))),
             getDocsSafe(collection(db, "partidosAmistosos")),
@@ -383,6 +436,8 @@ async function refreshAll() {
             getDocsSafe(query(collectionGroup(db, "devices"), limit(2000))),
             getDocsSafe(query(collection(db, "propuestasPartido"), orderBy("createdAt", "desc"), limit(200))),
             getDocsSafe(query(collection(db, "auditLogs"), orderBy("createdAt", "desc"), limit(18))),
+            getDocsSafe(query(collection(db, "rankingLogs"), orderBy("timestamp", "desc"), limit(200))),
+            getDocsSafe(query(collection(db, "appErrors"), orderBy("createdAt", "desc"), limit(20))),
         ]);
 
         users = (uSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
@@ -399,6 +454,7 @@ async function refreshAll() {
         proposalsArr = (propSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
         auditLogs = (auditSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
         rankingLogsArray = (rLogsSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
+        appErrors = (appErrorsSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
 
         deviceStatsByUid = new Map();
         (devicesSnap?.docs || []).forEach((d) => {
@@ -428,8 +484,10 @@ async function refreshAll() {
         renderApoing();
         renderProposals();
         renderAuditFeed();
+        renderAppErrorsFeed();
         renderAdminOpsOverview();
         renderGlobalHistory();
+        await renderPwaHealthPanel();
     } catch (e) {
         console.error("Refresh Error:", e);
         showToast("Error", "Error al sincronizar con Firebase", "error");
@@ -499,6 +557,65 @@ function renderAdminOpsOverview() {
         <span>${escapeHtml(describeAuditLog(latest))}</span>
         <span class="opacity-60">${escapeHtml(formatAuditStamp(latest.createdAt))} · ${escapeHtml(latest.actorEmail || latest.actorUid || "admin")}</span>
     `;
+}
+
+function resolveAdminActorLabel(actorEmail = "", actorUid = "") {
+    return resolveAdminActorLabelBase(actorEmail, actorUid, users);
+}
+
+function resolveAdminEntityLabel(entityType = "", entityId = "") {
+    return resolveAdminEntityLabelBase(entityType, entityId, {
+        users,
+        guestProfiles,
+        matchesArr,
+        eventsArr,
+        getMatchLabel: getMatchUsersVsLabel,
+    });
+}
+
+function formatAppErrorStamp(value) {
+    const d = value?.toDate ? value.toDate() : (value ? new Date(value) : null);
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "sin fecha";
+    return d.toLocaleString("es-ES", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
+function renderAppErrorsFeed() {
+    const box = document.getElementById("admin-app-errors-feed");
+    if (!box) return;
+    if (!appErrors.length) {
+        box.innerHTML = `<div class="audit-feed-empty">Sin errores recientes capturados por la app.</div>`;
+        return;
+    }
+    box.innerHTML = appErrors.map((entry) => {
+        const severity = String(entry.severity || "error").toLowerCase();
+        const screen = String(entry.screen || "unknown");
+        const source = String(entry.source || "runtime");
+        const title = String(entry.message || "Error sin mensaje");
+        const metaBits = [
+            screen !== "unknown" ? `pantalla ${screen}` : null,
+            source ? `fuente ${source}` : null,
+            entry.line ? `linea ${entry.line}` : null,
+            entry.column ? `col ${entry.column}` : null,
+            entry.uid ? `usuario ${resolveAdminEntityLabel("usuarios", entry.uid)}` : null,
+        ].filter(Boolean);
+        const viewport = entry.viewport ? ` · ${entry.viewport}` : "";
+        return `
+            <div class="audit-entry app-error-entry app-error-entry--${severity}">
+                <div class="audit-entry__meta">
+                    <span>${escapeHtml(screen.toUpperCase())}</span>
+                    <span>${escapeHtml(formatAppErrorStamp(entry.createdAt))}${escapeHtml(viewport)}</span>
+                </div>
+                <div class="audit-entry__title">${escapeHtml(title)}</div>
+                <div class="audit-entry__body">${escapeHtml(metaBits.join(" · ") || "Sin contexto adicional")}</div>
+                ${entry.href ? `<div class="audit-entry__body opacity-60">${escapeHtml(String(entry.href).slice(0, 120))}</div>` : ""}
+            </div>
+        `;
+    }).join("");
 }
 
 function getUserMatches(uid) {
@@ -702,7 +819,7 @@ function renderUserHistoryModalContent(user) {
     const auditHtml = relevantAudit.length ? relevantAudit.map((item) => `
         <div class="audit-entry">
             <div class="audit-entry__meta">
-                <span>${escapeHtml(item.actorEmail || item.actorUid || "admin")}</span>
+                <span>${escapeHtml(resolveAdminActorLabel(item.actorEmail, item.actorUid))}</span>
                 <span>${formatAuditStamp(item.createdAt)}</span>
             </div>
             <div class="audit-entry__title">${escapeHtml(String(item.action || "acción").replace(/_/g, " ").toUpperCase())}</div>
@@ -794,13 +911,13 @@ function renderAuditFeed() {
     container.innerHTML = auditLogs.map((item) => `
         <article class="audit-entry">
             <div class="audit-entry__meta">
-                <span>${escapeHtml(item.actorEmail || item.actorUid || "admin")}</span>
+                <span>${escapeHtml(resolveAdminActorLabel(item.actorEmail, item.actorUid))}</span>
                 <span>${formatAuditStamp(item.createdAt)}</span>
             </div>
             <div class="audit-entry__title">${escapeHtml(String(item.action || "acción").replace(/_/g, " ").toUpperCase())}</div>
             <div class="audit-entry__body">
                 <span class="status-highlight">${escapeHtml(item.entityType || "sistema")}</span>
-                <span class="match-highlight">${escapeHtml(item.entityId || "global")}</span>
+                <span class="match-highlight">${escapeHtml(resolveAdminEntityLabel(item.entityType, item.entityId))}</span>
                 · ${escapeHtml(describeAuditLog(item))}
             </div>
         </article>
@@ -1849,10 +1966,13 @@ function ensureAdminRecalcModal() {
     modal = document.createElement("div");
     modal.id = "modal-admin-elo-recalc";
     modal.className = "modal-overlay";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-labelledby", "admin-elo-recalc-title");
     modal.innerHTML = `
         <div class="modal-card glass-strong" style="max-width:980px;width:min(96vw,980px);">
             <div class="modal-header">
-                <h3 class="modal-title">Recalculo ELO del partido</h3>
+                <h3 class="modal-title" id="admin-elo-recalc-title">Recalculo ELO del partido</h3>
                 <button class="close-btn" type="button" data-admin-recalc-close>&times;</button>
             </div>
             <div class="modal-body" id="admin-elo-recalc-body" style="max-height:82vh;overflow:auto;"></div>
@@ -1860,6 +1980,11 @@ function ensureAdminRecalcModal() {
     `;
     modal.addEventListener("click", (event) => {
         if (event.target === modal || event.target.closest("[data-admin-recalc-close]")) {
+            modal.classList.remove("active");
+        }
+    });
+    modal.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
             modal.classList.remove("active");
         }
     });
@@ -1892,6 +2017,106 @@ function buildAdminManualDeltaMapFromForm() {
     return manual;
 }
 
+function formatAdminDelta(value) {
+    const num = Number(value || 0);
+    return `${num > 0 ? "+" : ""}${num.toFixed(2)}`;
+}
+
+function escapeAdminAttr(raw = "") {
+    return String(raw || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+}
+
+function buildAdminCalcRows(breakdown = {}) {
+    const additiveRows = [
+        { label: "Base", value: breakdown?.base },
+        { label: "Racha", value: breakdown?.racha },
+        { label: "Sorpresa", value: breakdown?.sorpresa },
+        { label: "Clutch", value: breakdown?.clutch },
+        { label: "Companero / habilidad", value: breakdown?.habilidad },
+        { label: "Bonus individual", value: breakdown?.bonusIndividual },
+        { label: "Ajuste balance", value: breakdown?.ajusteBalance },
+    ].filter((item) => Number.isFinite(Number(item.value)) && Math.abs(Number(item.value)) > 0.0001);
+
+    const real = breakdown?.desgloseReal || {};
+    const metricRows = [
+        { label: "Esperado", value: real?.esperado },
+        { label: "K", value: real?.K },
+        { label: "Multiplicador", value: real?.multiplicadorTipo },
+        { label: "Dif juegos", value: real?.diferenciaJuegos },
+        { label: "Seed", value: real?.seedIndividual },
+        { label: "Gap companero", value: real?.diferenciaConCompanero },
+        { label: "Dominancia", value: real?.dominance },
+        { label: "Reparto", value: real?.repartoPareja },
+        { label: "Rating pareja", value: real?.teamRating },
+        { label: "Rating rival", value: real?.rivalRating },
+        { label: "Rol", value: real?.roleHint },
+        { label: "Manual", value: breakdown?.manual ? "si" : null },
+        { label: "Invitado", value: breakdown?.guest ? "si" : null },
+    ].filter((item) => item.value !== null && item.value !== undefined && item.value !== "");
+
+    return { additiveRows, metricRows };
+}
+
+function renderAdminDiagnosticCard(row = {}) {
+    const delta = Number(row?.delta || 0);
+    const breakdown = row?.analysis?.breakdown || row?.substrings || {};
+    const { additiveRows, metricRows } = buildAdminCalcRows(breakdown);
+    const formula = additiveRows.length
+        ? additiveRows.map((item) => `${item.label} ${formatAdminDelta(item.value)}`).join(" · ")
+        : `Base ${formatAdminDelta(delta)}`;
+
+    return `
+        <article class="admin-diagnostic-card">
+            <div class="admin-diagnostic-head">
+                <div>
+                    <div class="admin-diagnostic-name">${escapeAdminAttr(row?.name || row?.uid || "Jugador")}</div>
+                    <div class="admin-diagnostic-sub">${row?.isGuest ? "Invitado competitivo" : `Rating ${Math.round(Number(row?.ratingBefore || 0))} -> ${Math.round(Number(row?.ratingAfter || 0))}`}</div>
+                </div>
+                <div class="admin-diagnostic-delta ${delta >= 0 ? "is-pos" : "is-neg"}">${formatAdminDelta(delta)}</div>
+            </div>
+            <div class="admin-diagnostic-topmeta">
+                <span class="admin-chip">${row?.isGuest ? "INVITADO" : "REGISTRADO"}</span>
+                <span class="admin-chip">Nivel ${Number(row?.levelAfter || row?.level || 2.5).toFixed(2)}</span>
+                ${Number.isFinite(Number(row?.levelProgress)) ? `<span class="admin-chip">Progreso ${Math.round(Number(row.levelProgress))}%</span>` : ""}
+            </div>
+            <div class="admin-diagnostic-formula">${formula}</div>
+            <div class="admin-diagnostic-grid">
+                <section class="admin-diagnostic-block">
+                    <h4>Variables sumables</h4>
+                    ${(additiveRows.length ? additiveRows : [{ label: "Base", value: delta }]).map((item) => `
+                        <div class="admin-diagnostic-line">
+                            <span>${item.label}</span>
+                            <strong class="${Number(item.value) >= 0 ? "is-pos" : "is-neg"}">${formatAdminDelta(item.value)}</strong>
+                        </div>
+                    `).join("")}
+                    <div class="admin-diagnostic-line total">
+                        <span>Total calculado</span>
+                        <strong>${formatAdminDelta(breakdown?.totalCalculado ?? delta)}</strong>
+                    </div>
+                </section>
+                <section class="admin-diagnostic-block">
+                    <h4>Metricas explicativas</h4>
+                    <div class="admin-metric-grid">
+                        ${metricRows.length ? metricRows.map((item) => `
+                            <div class="admin-metric-pill">
+                                <span>${item.label}</span>
+                                <strong>${typeof item.value === "number" ? item.value.toFixed(2) : escapeAdminAttr(item.value)}</strong>
+                            </div>
+                        `).join("") : `<div class="admin-empty">Sin métricas adicionales</div>`}
+                    </div>
+                </section>
+            </div>
+            ${row?.isGuest
+                ? `<div class="admin-diagnostic-guest-note">Este invitado entra como perfil competitivo real en el reparto.</div>`
+                : `<input data-manual-delta-uid="${row.uid}" class="admin-input admin-manual-delta-input" type="number" step="0.1" placeholder="Delta manual" />`}
+        </article>
+    `;
+}
+
 function renderAdminRecalcPreview(preview) {
     const mount = document.getElementById("admin-elo-recalc-preview");
     if (!mount) return;
@@ -1900,34 +2125,35 @@ function renderAdminRecalcPreview(preview) {
         return;
     }
 
-    const rows = (preview.allocations || []).map((row) => {
-        const delta = Number(row?.delta || 0);
-        const sign = delta > 0 ? "+" : "";
-        const isGuest = Boolean(row?.isGuest);
-        return `
-            <div class="admin-card" style="padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:18px;background:rgba(255,255,255,.04);display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;">
-                <div>
-                    <div style="font-weight:800;color:#fff;">${row?.name || row?.uid || "Jugador"}</div>
-                    <div style="font-size:11px;color:rgba(255,255,255,.62);">${isGuest ? "Invitado" : `Rating ${Math.round(row?.ratingBefore || 0)} -> ${Math.round(row?.ratingAfter || 0)}`}</div>
-                </div>
-                <div style="font-weight:900;color:${delta >= 0 ? "#4ade80" : "#f87171"};">${sign}${delta.toFixed(2)}</div>
-                ${isGuest ? `<div style="font-size:11px;color:rgba(255,255,255,.52);">Nivel ${Number(row?.level || 2.5).toFixed(2)}</div>` : `<input data-manual-delta-uid="${row.uid}" class="admin-input" type="number" step="0.1" placeholder="Manual" style="width:92px;padding:10px 12px;border-radius:12px;background:rgba(9,12,22,.8);border:1px solid rgba(255,255,255,.12);color:#fff;" />`}
-            </div>
-        `;
-    }).join("");
+    const rows = (preview.allocations || []).map((row) => renderAdminDiagnosticCard(row)).join("");
+    const systemVersion = preview?.summary?.systemVersion || ELO_SYSTEM_VERSION;
+    const systemLabel = String(systemVersion).toLowerCase().includes("atp") ? "ATP Hybrid Competitive" : "ELO Hibrido Club";
 
     mount.innerHTML = `
-        <div class="admin-grid-2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px;">
-            <div class="admin-card" style="padding:14px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);">
-                <div style="font-size:11px;color:rgba(255,255,255,.58);">Expectativa equipo A</div>
-                <div style="font-size:24px;font-weight:900;color:#fff;">${Number(preview.summary?.expectedA || 0).toFixed(2)}</div>
+        <div class="admin-recalc-summary-grid">
+            <div class="admin-recalc-summary-card">
+                <div class="admin-recalc-summary-label">Sistema activo</div>
+                <div class="admin-recalc-summary-value">${systemLabel}</div>
+                <div class="admin-recalc-summary-sub">${escapeAdminAttr(systemVersion)}</div>
             </div>
-            <div class="admin-card" style="padding:14px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);">
-                <div style="font-size:11px;color:rgba(255,255,255,.58);">Balance global</div>
-                <div style="font-size:24px;font-weight:900;color:#fff;">${Number(preview.summary?.zeroSumCheck || 0).toFixed(2)}</div>
+            <div class="admin-recalc-summary-card">
+                <div class="admin-recalc-summary-label">Expectativa equipo A</div>
+                <div class="admin-recalc-summary-value">${Number(preview.summary?.expectedA || 0).toFixed(2)}</div>
+                <div class="admin-recalc-summary-sub">0.50 = partido equilibrado</div>
+            </div>
+            <div class="admin-recalc-summary-card">
+                <div class="admin-recalc-summary-label">Balance global</div>
+                <div class="admin-recalc-summary-value">${Number(preview.summary?.zeroSumCheck || 0).toFixed(2)}</div>
+                <div class="admin-recalc-summary-sub">ideal cerca de 0.00</div>
+            </div>
+            <div class="admin-recalc-summary-card">
+                <div class="admin-recalc-summary-label">Modo manual</div>
+                <div class="admin-recalc-summary-value">${preview.summary?.manualMode ? "SI" : "NO"}</div>
+                <div class="admin-recalc-summary-sub">K medio ${Number(preview.summary?.kCombined || 0).toFixed(2)}</div>
             </div>
         </div>
-        <div style="display:grid;gap:10px;">${rows}</div>
+        <div class="admin-recalc-section-title">Diagnostico por jugador</div>
+        <div class="admin-diagnostic-stack">${rows}</div>
     `;
 }
 
@@ -1967,14 +2193,14 @@ async function openAdminRecalcModal(id, col, resultStr) {
         .join("");
 
     body.innerHTML = `
-        <div style="display:grid;gap:18px;">
-            <div class="admin-card" style="padding:16px;border-radius:20px;background:linear-gradient(135deg,rgba(23,32,59,.95),rgba(8,11,22,.95));border:1px solid rgba(255,255,255,.08);">
-                <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:6px;">Marcador del recalculo</div>
-                <div style="font-size:28px;font-weight:900;color:#fff;letter-spacing:.04em;">${resultStr}</div>
+        <div class="admin-recalc-modal-shell">
+            <div class="admin-recalc-hero">
+                <div class="admin-recalc-hero-label">Marcador del recalculo</div>
+                <div class="admin-recalc-hero-score">${resultStr}</div>
                 <div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,.68);">${slots.map((slot) => slot.name).join(" · ")}</div>
             </div>
-            ${guestRows ? `<div style="display:grid;gap:10px;"><div style="font-size:12px;font-weight:800;color:#fff;">Invitados o perfiles no detectados</div>${guestRows}</div>` : ""}
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            ${guestRows ? `<div style="display:grid;gap:10px;"><div class="admin-recalc-section-title">Invitados o perfiles no detectados</div>${guestRows}</div>` : ""}
+            <div class="admin-recalc-toolbar">
                 <button type="button" id="btn-admin-preview-recalc" class="btn btn-ghost">Ver simulacion</button>
                 <button type="button" id="btn-admin-apply-recalc" class="btn btn-primary">Guardar calculo</button>
                 <button type="button" id="btn-admin-apply-manual-recalc" class="btn btn-danger">Guardar puntos manuales</button>
@@ -1983,8 +2209,19 @@ async function openAdminRecalcModal(id, col, resultStr) {
         </div>
     `;
 
+    const heroPlayers = body.querySelector(".admin-recalc-hero-score")?.nextElementSibling;
+    if (heroPlayers) {
+        heroPlayers.className = "admin-recalc-hero-players";
+        heroPlayers.removeAttribute("style");
+        heroPlayers.textContent = slots.map((slot) => slot.name).join(" · ");
+    }
+
     adminRecalcModalState = { id, col, resultStr, match, slots, guestOverrides: {}, preview: null };
     modal.classList.add("active");
+    body.querySelector("#btn-admin-preview-recalc")?.setAttribute("aria-label", "Ver simulacion detallada del calculo");
+    body.querySelector("#btn-admin-apply-recalc")?.setAttribute("aria-label", "Guardar el calculo automatico del partido");
+    body.querySelector("#btn-admin-apply-manual-recalc")?.setAttribute("aria-label", "Guardar puntos manuales por jugador");
+    body.querySelector("#btn-admin-preview-recalc")?.focus();
 
     document.getElementById("btn-admin-preview-recalc")?.addEventListener("click", refreshAdminRecalcPreview);
     document.getElementById("btn-admin-apply-recalc")?.addEventListener("click", async () => {

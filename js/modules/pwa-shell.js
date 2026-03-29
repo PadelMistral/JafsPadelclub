@@ -4,6 +4,7 @@ import { registerBestServiceWorkerWithRetry } from "./push-notifications.js";
 const INSTALL_BUTTON_ID = "pwa-install-launcher";
 const APP_BANNER_ID = "app-shell-banner";
 const PWA_INSTALLED_FLAG = "pwa_installed_v1";
+const SW_AUTO_CHECK_MS = 4 * 60 * 1000;
 
 function isStandaloneMode() {
   try {
@@ -219,12 +220,44 @@ async function watchServiceWorkerUpdates(pageName) {
     const reg = await navigator.serviceWorker.getRegistration();
     if (!reg) return;
 
+    const safelyApplyUpdate = () => {
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: "SKIP_WAITING", source: "pwa-shell-auto" });
+        return true;
+      }
+      return false;
+    };
+
+    const requestUpdateCheck = async (silent = false) => {
+      try {
+        await reg.update();
+        if (!silent && !reg.waiting) {
+          showToast("Actualizacion", "La app ya esta en la version mas reciente.", "success");
+        }
+        if (reg.waiting) safelyApplyUpdate();
+      } catch (error) {
+        if (!silent) console.warn("PWA update check failed:", error);
+      }
+    };
+
     const showUpdate = () =>
       updateBanner({
         title: "Nueva version disponible",
-        text: "Hay una actualizacion lista para esta app.",
+        text: "Hay una actualizacion lista. La app la aplicara automaticamente al recargar el controlador.",
         actionLabel: "Actualizar",
-        action: () => reg.waiting?.postMessage({ type: "SKIP_WAITING" }),
+        action: async () => {
+          const banner = document.getElementById(APP_BANNER_ID);
+          if (safelyApplyUpdate()) {
+            return;
+          }
+          try {
+            await requestUpdateCheck(true);
+            if (banner) banner.classList.add("hidden");
+            showToast("Actualizacion", "Comprobacion de version ejecutada.", "success");
+          } catch (_) {
+            if (banner) banner.classList.add("hidden");
+          }
+        },
         tone: "success",
         sticky: true,
       });
@@ -238,10 +271,22 @@ async function watchServiceWorkerUpdates(pageName) {
       });
     };
 
-    if (reg.waiting) showUpdate();
+    if (reg.waiting) {
+      showUpdate();
+      window.setTimeout(() => {
+        safelyApplyUpdate();
+      }, 1200);
+    }
 
     reg.addEventListener("updatefound", () => bindInstalling(reg.installing));
     bindInstalling(reg.installing);
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") requestUpdateCheck(true);
+    });
+
+    window.addEventListener("focus", () => requestUpdateCheck(true));
+    window.setInterval(() => requestUpdateCheck(true), SW_AUTO_CHECK_MS);
 
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       // Avoid reload loops: check if we already reloaded in this session or very recently

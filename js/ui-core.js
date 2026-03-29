@@ -532,7 +532,7 @@ export function initAppUI(activePageName) {
     ensureBootLoader();
     if (typeof window !== 'undefined' && !window.__globalGalaxyBooted) {
         window.__globalGalaxyBooted = true;
-        import('./modules/galaxy-bg.js?v=6.5')
+        import('./modules/galaxy-bg.js')
             .then((m) => m?.initGalaxyBackground?.())
             .catch(() => {});
     }
@@ -656,7 +656,7 @@ export function initAppUI(activePageName) {
             
             // Fill data
             try {
-                const { injectHeader, injectNavbar, updateHeader } = await import('./modules/ui-loader.js?v=6.5');
+                const { injectHeader, injectNavbar, updateHeader } = await import('./modules/ui-loader.js');
                 const userData = await getDocument("usuarios", user.uid);
                 
                 // Always inject for private pages
