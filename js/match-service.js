@@ -72,7 +72,7 @@ async function renderExtendedBreakdown(container, matchId) {
             return `
                 <div class="atp-break-card">
                     <div class="flex-row between items-center mb-2">
-                        <span class="text-[10px] font-black text-white uppercase tracking-wider">${(item?.name || item?.uid || "Jugador").toUpperCase()}</span>
+                        <span class="text-[10px] font-black text-white uppercase tracking-wider">${(item?.name || item?.nombre || item?.nombreUsuario || "Jugador").toUpperCase()}</span>
                         <span class="text-[11px] font-black ${delta >= 0 ? "text-sport-green" : "text-danger"}">${delta >= 0 ? "+" : ""}${delta.toFixed(2)}</span>
                     </div>
                     <div class="atp-break-grid">
@@ -217,7 +217,7 @@ export function indexEventUserNames(eventDoc) {
         if (uid && name) map.set(String(uid), String(name));
         if (uid) {
             metaMap.set(String(uid), {
-                name: name || String(uid),
+                name: name || parseGuestMeta(uid)?.name || "Jugador",
                 level: Number(i?.nivel || 2.5),
                 photo: i?.fotoPerfil || i?.fotoURL || "",
             });
@@ -232,7 +232,7 @@ export function indexEventUserNames(eventDoc) {
             if (uid && name) map.set(String(uid), String(name));
             if (uid) {
                 metaMap.set(String(uid), {
-                    name: name || String(uid),
+                    name: name || parseGuestMeta(uid)?.name || "Jugador",
                     level: Number(p?.nivel || 2.5),
                     photo: p?.fotoPerfil || p?.fotoURL || "",
                 });

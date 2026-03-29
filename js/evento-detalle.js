@@ -490,7 +490,7 @@ function subscribeEvent() {
             if (myTeam && !myTeam.playerNames && currentEvent.inscritos) {
                 myTeam.playerNames = myTeam.playerUids.map(uid => {
                     const ins = currentEvent.inscritos.find(i => i.uid === uid);
-                    return ins?.nombre || uid;
+                    return ins?.nombre || resolveParticipantData({ uid })?.name || 'Jugador';
                 });
             }
             // Personal preference: default to my matches if inscribed
@@ -1368,7 +1368,7 @@ window.openTeamEditor = (teamId) => {
     // Ensure current players are in the pool
     (team.playerUids || []).forEach(uid => {
         if (uid && !basePool.some(p => p.uid === uid)) {
-            basePool.push({ uid, name: uid });
+            basePool.push({ uid, name: resolveParticipantData({ uid })?.name || 'Jugador' });
         }
     });
 
@@ -2550,9 +2550,9 @@ window.proponerFechaEvento = async (matchId) => {
     const participantUids = players.filter((uid) => uid && !String(uid).startsWith("GUEST_") && !String(uid).startsWith("invitado_") && !String(uid).startsWith("manual_"));
     const participantNames = participantUids.map((uid) => {
         const reg = registeredUsersById.get(uid);
-        if (reg) return reg.nombreUsuario || reg.nombre || reg.email || uid;
+        if (reg) return reg.nombreUsuario || reg.nombre || reg.email || resolveParticipantData({ uid })?.name || 'Jugador';
         const ins = (currentEvent?.inscritos || []).find((i) => i.uid === uid);
-        return ins?.nombre || ins?.nombreUsuario || uid;
+        return ins?.nombre || ins?.nombreUsuario || resolveParticipantData({ uid })?.name || 'Jugador';
     });
     if (!canOrganizar() && !participantUids.includes(currentUser?.uid)) {
         return showToast("Sin acceso", "Solo participantes del partido pueden entrar al chat.", "warning");

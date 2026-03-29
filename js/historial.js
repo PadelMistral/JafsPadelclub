@@ -378,6 +378,9 @@ async function showMatchDetail(m) {
                 <button class="btn-premium-v7 sm flex-1" data-share-history-poster>
                     <i class="fas fa-share-nodes mr-2"></i> COMPARTIR CARTEL
                 </button>
+                <button class="btn-premium-v7 sm flex-1" data-download-history-poster>
+                    <i class="fas fa-download mr-2"></i> DESCARGAR CARTEL
+                </button>
             </div>
 
             <!-- Court View -->
@@ -489,6 +492,19 @@ async function showMatchDetail(m) {
         } catch (e) {
             console.error('share history poster failed', e);
             showToast('Cartel', 'No se pudo generar el cartel.', 'error');
+        }
+    });
+    content.querySelector('[data-download-history-poster]')?.addEventListener('click', async () => {
+        const teamA = [players[0]?.name, players[1]?.name].filter(Boolean);
+        const teamB = [players[2]?.name, players[3]?.name].filter(Boolean);
+        const levelsA = [players[0]?.level, players[1]?.level].filter((v) => Number.isFinite(Number(v)));
+        const levelsB = [players[2]?.level, players[3]?.level].filter((v) => Number.isFinite(Number(v)));
+        const when = date.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        try {
+            await shareMatchPoster({ title: 'RESULTADO FINAL', teamA, teamB, levelsA, levelsB, when, club: 'JAFS PADEL CLUB', winner: Number((logs[players[0]?.id]?.diff || 0) + (logs[players[1]?.id]?.diff || 0)) >= Number((logs[players[2]?.id]?.diff || 0) + (logs[players[3]?.id]?.diff || 0)) ? 'A' : 'B' });
+        } catch (e) {
+            console.error('download history poster failed', e);
+            showToast('Cartel', 'No se pudo descargar el cartel.', 'error');
         }
     });
 }

@@ -121,6 +121,7 @@ function bindHeaderProfileMenu(userData = null) {
     ensureHeaderProfileMenuStyles();
     const wrap = document.getElementById("header-profile-wrap");
     const toggle = document.getElementById("header-avatar-container");
+    const adminViewBtn = document.getElementById("header-toggle-admin-view");
     const profileBtn = document.getElementById("header-go-profile");
     const historyBtn = document.getElementById("header-go-history");
     const racketsBtn = document.getElementById("header-go-palas");
@@ -144,6 +145,12 @@ function bindHeaderProfileMenu(userData = null) {
     racketsBtn?.addEventListener("click", () => {
         closeMenu();
         window.location.href = "palas.html";
+    });
+    adminViewBtn?.addEventListener("click", () => {
+        closeMenu();
+        const onAdminPage = /(^|\/)admin\.html$/i.test(window.location.pathname || "");
+        localStorage.setItem("jafs_view_mode", onAdminPage ? "user" : "admin");
+        window.location.href = onAdminPage ? "home.html" : "admin.html";
     });
     logoutBtn?.addEventListener("click", async () => {
         closeMenu();
@@ -245,6 +252,7 @@ export async function injectHeader(userData = null) {
                         <button class="header-menu-action" id="header-go-history"><i class="fas fa-clock-rotate-left"></i> Historial</button>
                         <button class="header-menu-action" id="header-go-palas"><i class="fas fa-table-tennis-paddle-ball"></i> Palas</button>
                     </div>
+                    ${isAdmin ? `<button class="header-menu-action" id="header-toggle-admin-view"><i class="fas fa-shield-halved"></i> ${/admin\.html$/i.test(window.location.pathname || "") ? 'Modo usuario' : 'Admin'}</button>` : ``}
                     <button class="header-menu-action" id="header-go-profile"><i class="fas fa-user"></i> Ir a perfil</button>
                     <button class="header-menu-action danger" id="header-logout"><i class="fas fa-right-from-bracket"></i> Cerrar sesión</button>
                 </div>

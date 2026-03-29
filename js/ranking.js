@@ -1,4 +1,4 @@
-import { db, getDocsSafe, getDocument, auth } from "./firebase-service.js";
+﻿import { db, getDocsSafe, getDocument, auth } from "./firebase-service.js";
 import {
   collection,
   query,
@@ -279,9 +279,6 @@ function renderTable() {
               <span class="lb-meta-pill ${streak > 0 ? "is-positive" : streak < 0 ? "is-negative" : ""}">Racha ${streakLabel}</span>
               <span class="lb-meta-pill">${progressHint}</span>
             </div>
-                <span>↑ ${progress.pointsToUp} pts · ↓ ${progress.pointsToDown} pts</span>
-              </div>
-            </div>
           </div>
           <div class="lb-score-col">
             <span class="lb-pts">${pts}</span>
@@ -391,7 +388,7 @@ async function renderRankUserModal(uid) {
     const rank = users.findIndex((x) => x.id === uid) + 1;
     const name = u.nombreUsuario || u.nombre || "Jugador";
     const centeredPct = buildCenteredProgress(state.pointsToDown, state.pointsToUp);
-    if (title) title.textContent = `PERFIL COMPETITIVO · ${name.toUpperCase()}`;
+    if (title) title.textContent = `PERFIL COMPETITIVO Â· ${name.toUpperCase()}`;
 
     // Try ordered query, fallback to unordered if index is missing
     let logs = [];
@@ -401,7 +398,7 @@ async function renderRankUserModal(uid) {
       );
       logs = (logsSnap?.docs || []).map((d) => ({ id: d.id, ...d.data() }));
     } catch (_) {
-      // index not ready yet — fetch without ordering
+      // index not ready yet â€” fetch without ordering
       const logsSnap2 = await getDocsSafe(
         query(collection(db, "rankingLogs"), where("uid", "==", uid), limit(20)),
       );
@@ -482,7 +479,7 @@ async function renderRankUserModal(uid) {
           ${renderAvatarMarkup(u, "rank-user-avatar")}
           <div class="rank-user-main">
             <span class="rank-user-name">${name}</span>
-            <span class="rank-user-meta">#${rank > 0 ? rank : "--"} · ${Math.round(points)} pts · Nivel ${level.toFixed(2)}</span>
+            <span class="rank-user-meta">#${rank > 0 ? rank : "--"} Â· ${Math.round(points)} pts Â· Nivel ${level.toFixed(2)}</span>
           </div>
         </div>
         <div class="rank-break-grid" style="margin-top:14px;">
@@ -501,7 +498,7 @@ async function renderRankUserModal(uid) {
           </div>
           <div class="rank-progress-foot">
             <span>-${state.pointsToDown} pts</span>
-            <span class="text-primary">Nivel ${state.currentLevel.toFixed(2)} · ${Math.round(points)} pts</span>
+            <span class="text-primary">Nivel ${state.currentLevel.toFixed(2)} Â· ${Math.round(points)} pts</span>
             <span>+${state.pointsToUp} pts</span>
           </div>
         </div>
@@ -529,7 +526,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
   area.innerHTML = '<div class="center py-20"><i class="fas fa-spinner fa-spin opacity-20"></i></div>';
   mainModal.classList.add("active");
   mainModal.classList.add("modal-stack-front");
-  if (titleEl) titleEl.textContent = "Desglose de puntuación";
+  if (titleEl) titleEl.textContent = "Desglose de puntuaciÃ³n";
 
   try {
     const logDoc = logId ? await getDocument("rankingLogs", logId) : null;
@@ -543,7 +540,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
     if (detail.factoresAdicionales) {
         // v8 Advanced Scoring
         factors = [
-            ["Elo Dinámico", detail.cambioElo],
+            ["Elo DinÃ¡mico", detail.cambioElo],
             ["Ajuste Equipo", detail.factoresAdicionales?.companero],
             ["Racha / Bonus", detail.factoresAdicionales?.racha],
             ["Set Margin", detail.factoresAdicionales?.margenSets],
@@ -551,11 +548,11 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
         
         if (detail.sumaTotal && detail.limiteAplicado && Math.abs(detail.sumaTotal) > Math.abs(detail.limiteAplicado)) {
-            factors.push(["Ajuste Tope Rígido", Number((detail.limiteAplicado - detail.sumaTotal).toFixed(2))]);
+            factors.push(["Ajuste Tope RÃ­gido", Number((detail.limiteAplicado - detail.sumaTotal).toFixed(2))]);
         }
         transparentRows = [
             ["Elo base esperado", detail.cambioElo],
-            ["Puntos por compañero", detail.factoresAdicionales?.companero],
+            ["Puntos por compaÃ±ero", detail.factoresAdicionales?.companero],
             ["Puntos por racha", detail.factoresAdicionales?.racha],
             ["Puntos por sets", detail.factoresAdicionales?.margenSets],
             ["Balance final del sistema", detail.ajusteBalance],
@@ -564,7 +561,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         // Legacy
         factors = [
         ["Puntos Base", detail.base],
-        ["Bonificación Racha", detail.racha || detail.streak],
+        ["BonificaciÃ³n Racha", detail.racha || detail.streak],
         ["Factor Sorpresa", detail.sorpresa || detail.surprise],
         ["Por Sets/Juegos", detail.clutch || detail.sets],
         ["Ajuste Nivel", detail.habilidad || detail.skill],
@@ -617,7 +614,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         const matchPlayers = Array.isArray(match.jugadores) ? match.jugadores : (Array.isArray(match.playerUids) ? match.playerUids : []);
         
         async function getFriendlyName(uid) {
-            if (!uid) return "Vacío";
+            if (!uid) return "VacÃ­o";
             const identity = await resolveIdentity(uid, {
               userMap: Object.fromEntries(users.map((user) => [user.id, user])),
             }).catch(() => null);
@@ -662,7 +659,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
                     <div class="rank-player-pill-row">${renderRosterPills(teamBIds)}</div>
                     </div>
                 </div>
-                <span class="match-sub">${fmtDate(match.fecha)} · ${match.resultado?.sets || match.resultado || 'Sin resultado'}</span>
+                <span class="match-sub">${fmtDate(match.fecha)} Â· ${match.resultado?.sets || match.resultado || 'Sin resultado'}</span>
             </div>
         `;
     }
@@ -670,9 +667,9 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
     area.innerHTML = `
       <div class="rank-breakdown-card">
         ${matchInfoHtml}
-        <div class="rank-break-title">Desglose de puntuación</div>
+        <div class="rank-break-title">Desglose de puntuaciÃ³n</div>
         ${transparentRows.length ? `
-        <div class="rank-break-subtitle">Suma visible del cálculo</div>
+        <div class="rank-break-subtitle">Suma visible del cÃ¡lculo</div>
         <div class="rank-break-grid rank-break-grid-strong">
           ${transparentRows.map(([k, v]) => {
             const val = Number(v);
@@ -680,7 +677,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
             return `<div class="rank-break-row emphasis"><span>${k}</span><b class="${colorCls}">${val > 0 ? "+" : ""}${num(v, 2)}</b></div>`;
           }).join("")}
         </div>` : ""}
-        <div class="rank-break-level">Subtotal visible ${num(detail.subtotalVariables ?? detail.totalCalculado ?? diff, 2)} · Ajuste final ${num(detail.ajusteBalance || 0, 2)} · Delta ${num(detail.finalDelta || diff, 2)}</div>
+        <div class="rank-break-level">Subtotal visible ${num(detail.subtotalVariables ?? detail.totalCalculado ?? diff, 2)} Â· Ajuste final ${num(detail.ajusteBalance || 0, 2)} Â· Delta ${num(detail.finalDelta || diff, 2)}</div>
         <div class="rank-break-subtitle">Variables complementarias</div>
         <div class="rank-break-grid">
           ${factors.map(([k, v]) => {
@@ -690,7 +687,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
           }).join("")}
         </div>
         ${diagnostics.length ? `
-        <div class="rank-break-title" style="margin-top:14px;">Métricas del cálculo</div>
+        <div class="rank-break-title" style="margin-top:14px;">MÃ©tricas del cÃ¡lculo</div>
         <div class="rank-break-grid">
           ${diagnostics.map(([k, v]) => `<div class="rank-break-row"><span>${k}</span><b class="text-primary">${num(v, 2)}</b></div>`).join("")}
         </div>` : ""}
@@ -708,7 +705,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
           </div>
         </div>
 
-        <div class="rank-break-level">Nivel ${levelBefore ? levelBefore.toFixed(2) : "--"} → ${levelAfter ? levelAfter.toFixed(2) : "--"}</div>
+        <div class="rank-break-level">Nivel ${levelBefore ? levelBefore.toFixed(2) : "--"} â†’ ${levelAfter ? levelAfter.toFixed(2) : "--"}</div>
         <div class="rank-break-level">Variables ${num(detail.totalCalculado || diff, 2)} = Delta final ${num(detail.finalDelta || diff, 2)}</div>
         ${
           beforeProgress && afterProgress
@@ -720,7 +717,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
           </div>
           <div class="level-bar"><div class="level-fill" style="width:${beforeProgress.progressPct}%"></div></div>
           <div class="rank-break-prog-row mt-1">
-            <span>Después (${Math.round(pointsAfter)} pts)</span>
+            <span>DespuÃ©s (${Math.round(pointsAfter)} pts)</span>
             <b>${afterProgress.progressPct.toFixed(2)}%</b>
           </div>
           <div class="level-bar"><div class="level-fill" style="width:${afterProgress.progressPct}%"></div></div>
@@ -747,3 +744,4 @@ window.openRankMatch = async (id, col) => {
   const userDoc = sessionUser?.uid ? await getDocument("usuarios", sessionUser.uid) : {};
   await renderMatchDetail(area, id, col, sessionUser, userDoc);
 };
+
