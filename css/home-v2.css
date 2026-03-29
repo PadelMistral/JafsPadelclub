@@ -2924,6 +2924,85 @@ body.home-booting {
 }
 .proposal-confirm-area {
   margin-top: 8px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.proposal-vote-summary {
+  color: rgba(198, 255, 0, 0.82);
+  font-weight: 700;
+}
+
+.proposal-vote-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+  border-radius: 16px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.proposal-vote-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.proposal-vote-eyebrow {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgba(0, 212, 255, 0.76);
+}
+
+.proposal-vote-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.proposal-vote-meta {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.proposal-vote-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.proposal-vote-chip {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.86);
+  border-radius: 14px;
+  padding: 10px 8px;
+  display: grid;
+  gap: 4px;
+  text-align: center;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.proposal-vote-chip strong {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.proposal-vote-chip.is-selected {
+  border-color: rgba(0, 212, 255, 0.45);
+  background: rgba(0, 212, 255, 0.14);
+  box-shadow: 0 10px 22px rgba(0, 212, 255, 0.18);
+}
+
+.proposal-vote-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(198, 255, 0, 0.35);
 }
 
 @media (max-width: 640px) {
@@ -3285,6 +3364,26 @@ body.home-booting {
     letter-spacing: 1px;
 }
 
+.hv2-mc-team.team-win {
+    background: linear-gradient(180deg, rgba(34, 197, 94, 0.16), rgba(34, 197, 94, 0.05));
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.2);
+}
+
+.hv2-mc-team.team-loss {
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.05));
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.16);
+}
+
+.hv2-mc-team.team-win .hv2-mc-player {
+    color: #86efac;
+}
+
+.hv2-mc-team.team-loss .hv2-mc-player {
+    color: #fca5a5;
+}
+
 .hv2-mc-share-btn {
     position: absolute;
     bottom: 8px;
@@ -3322,6 +3421,18 @@ body.home-booting {
     padding: 20px;
     backdrop-filter: blur(10px);
     animation: fadeIn 0.3s ease;
+}
+
+.event-day-alert {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(2, 6, 23, 0.62);
+    backdrop-filter: blur(10px);
+    z-index: 23000;
 }
 
 .eda-card {
@@ -3456,6 +3567,21 @@ body.home-booting {
 }
 
 @media (max-width: 640px) {
+    .proposal-vote-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .event-day-alert {
+        padding: 12px;
+        align-items: flex-end;
+    }
+
+    .eda-card {
+        max-width: 100%;
+        padding: 22px 16px;
+        border-radius: 24px;
+    }
+
     .home-page {
         gap: 12px;
     }

@@ -1,25 +1,42 @@
-# Tests E2E
+# Tests del proyecto
 
-Base inicial de pruebas automáticas con Playwright para la PWA.
+Estos tests se dejan en el proyecto a proposito.
 
-## Qué cubre esta primera fase
+Sirven para validar la logica mas delicada de la app:
 
-- Carga de páginas críticas.
-- Disponibilidad de `manifest.json`.
-- Disponibilidad de `sw.js`.
-- Smoke test mínimo en escritorio y móvil.
+- sistema de puntuacion y reparto individual
+- progreso de nivel y bandas
+- invitados y nombres estables
+- rachas desde historico
+- desglose transparente de puntos
+- monitor PWA y clasificacion de estados
+- captura tecnica de errores
 
-## Qué falta para que estas pruebas tengan valor real de negocio
+## Como ejecutarlos
 
-- Usuarios de prueba.
-- Dataset o proyecto Firebase de staging.
-- Flujos autenticados: crear partida, unirse, cerrar resultado, recalcular ELO, resetear.
-- Comprobaciones visuales más estrictas.
+Desde la raiz del proyecto:
 
-## Comandos
-
-```bash
-npm install
-npx playwright install
-npm run test:e2e
+```powershell
+node --test tests\*.mjs
 ```
+
+O si quieres lanzar la bateria que hemos ido usando:
+
+```powershell
+node --test tests\scoring-engine.test.mjs tests\streak-and-identity.test.mjs tests\match-utils.test.mjs tests\competitive-engine.test.mjs tests\elo-system.test.mjs tests\guest-player-service.test.mjs tests\scoring-breakdown.test.mjs tests\pwa-health-utils.test.mjs tests\error-monitor.test.mjs tests\identity-utils-more.test.mjs
+```
+
+## Se borran al final?
+
+No es recomendable borrarlos.
+
+Lo correcto es dejarlos en el repo para que cada cambio futuro no rompa:
+
+- ranking
+- invitados
+- eventos
+- rachas
+- panel admin
+- PWA
+
+Estos archivos no afectan al funcionamiento normal de la PWA en produccion.
