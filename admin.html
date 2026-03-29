@@ -343,12 +343,60 @@
                     </div>
                 </div>
 
+                <div class="sys-card-v9">
+                    <div class="sys-card-head"><i class="fas fa-heart-pulse"></i> SALUD PWA Y NOTIFICACIONES</div>
+                    <div class="p-5 flex-col gap-3">
+                        <div id="admin-pwa-health" class="admin-health-grid">
+                            <div class="admin-health-item">
+                                <span>Service Worker</span>
+                                <strong id="admin-health-sw">Comprobando...</strong>
+                            </div>
+                            <div class="admin-health-item">
+                                <span>Permiso notificaciones</span>
+                                <strong id="admin-health-notif">Comprobando...</strong>
+                            </div>
+                            <div class="admin-health-item">
+                                <span>PWA instalada</span>
+                                <strong id="admin-health-standalone">Comprobando...</strong>
+                            </div>
+                            <div class="admin-health-item">
+                                <span>Version cache</span>
+                                <strong id="admin-health-cache">Comprobando...</strong>
+                            </div>
+                            <div class="admin-health-item">
+                                <span>Scope activo</span>
+                                <strong id="admin-health-scope">Comprobando...</strong>
+                            </div>
+                            <div class="admin-health-item">
+                                <span>Push navegador</span>
+                                <strong id="admin-health-push">Comprobando...</strong>
+                            </div>
+                            <div class="admin-health-item">
+                                <span>Ultima verificacion</span>
+                                <strong id="admin-health-last-check">Pendiente</strong>
+                            </div>
+                        </div>
+                        <button id="btn-refresh-pwa-health" class="btn-v9 ghost w-full">
+                            VERIFICAR SALUD PWA
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Audit -->
                 <div class="sys-card-v9 col-span-2">
                     <div class="sys-card-head"><i class="fas fa-receipt"></i> AUDITORÍA DE MOVIMIENTOS TÉCNICOS EN ADMIN</div>
                     <div class="p-5">
                         <div id="admin-audit-feed" class="audit-feed terminal-text max-h-[400px] overflow-y-auto custom-scroll">
                             <div class="audit-feed-empty">Conectando a base de datos...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sys-card-v9 col-span-2">
+                    <div class="sys-card-head"><i class="fas fa-bug"></i> ERRORES RECIENTES DE LA APP</div>
+                    <div class="p-5">
+                        <div id="admin-app-errors-feed" class="audit-feed terminal-text max-h-[340px] overflow-y-auto custom-scroll">
+                            <div class="audit-feed-empty">Esperando telemetría técnica...</div>
                         </div>
                     </div>
                 </div>
@@ -409,7 +457,7 @@
     </div>
   </div>
 
-  <script type="module" src="./js/admin.js?v=10.0"></script>
+  <script type="module" src="./js/admin.js"></script>
   <script type="module">
     import { initPWAShell } from './js/modules/pwa-shell.js';
     initPWAShell('admin');

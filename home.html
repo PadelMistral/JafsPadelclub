@@ -323,7 +323,7 @@
 
     <!-- AI CHAT FLOATING BUTTON (fallback init for home) -->
 
-    <script type="module" src="./js/home-core.js?v=4"></script>
+    <script type="module" src="./js/home-core.js"></script>
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         import { initThemeSystem } from './js/modules/theme-manager.js';
@@ -333,7 +333,7 @@
         initPWAShell('home');
     </script>
     <script type="module">
-        import { initVecinaChat } from './js/modules/vecina-chat.js?v=6.5';
+        import { initVecinaChat } from './js/modules/vecina-chat.js';
         try { initVecinaChat(); } catch (e) { console.warn('Vecina chat init failed', e); }
     </script>
 </body>

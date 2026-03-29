@@ -53,12 +53,12 @@
 
         <section class="filter-section animate-fade-in" style="animation-delay: 0.15s;">
             <div class="filter-row mb-4">
-                <div class="filter-tabs custom-scroll">
-                    <button class="filter-tab active" data-filter="mine">Mis partidos</button>
-                    <button class="filter-tab" data-filter="all">Global</button>
-                    <button class="filter-tab" data-filter="won">Victorias</button>
-                    <button class="filter-tab" data-filter="lost">Derrotas</button>
-                    <button class="filter-tab" data-filter="canceled">Anuladas</button>
+                <div class="filter-tabs custom-scroll" role="tablist" aria-label="Filtros de historial">
+                    <button class="filter-tab active" data-filter="mine" role="tab" aria-selected="true">Mis partidos</button>
+                    <button class="filter-tab" data-filter="all" role="tab" aria-selected="false">Global</button>
+                    <button class="filter-tab" data-filter="won" role="tab" aria-selected="false">Victorias</button>
+                    <button class="filter-tab" data-filter="lost" role="tab" aria-selected="false">Derrotas</button>
+                    <button class="filter-tab" data-filter="canceled" role="tab" aria-selected="false">Anuladas</button>
                 </div>
             </div>
 
@@ -66,10 +66,10 @@
                 <div class="search-box-v7 flex-1">
                     <i class="fas fa-search"></i>
                     <input type="text" id="user-search" placeholder="Filtrar por jugador..."
-                        class="bg-transparent border-none text-white text-sm outline-none w-full font-bold">
+                        class="bg-transparent border-none text-white text-sm outline-none w-full font-bold" aria-label="Buscar jugador en historial">
                 </div>
                 <div class="sort-dropdown">
-                    <select id="sort-matches" class="premium-select-v7">
+                    <select id="sort-matches" class="premium-select-v7" aria-label="Ordenar historial">
                         <option value="date-desc">Mas recientes</option>
                         <option value="date-asc">Mas antiguos</option>
                         <option value="name-asc">Rival (A-Z)</option>
@@ -98,7 +98,7 @@
         </section>
     </main>
 
-    <div id="modal-match-detail" class="modal-overlay bottom-sheet">
+    <div id="modal-match-detail" class="modal-overlay bottom-sheet" role="dialog" aria-modal="true" aria-label="Detalle del partido">
         <div class="modal-sheet" id="match-detail-content"></div>
     </div>
 

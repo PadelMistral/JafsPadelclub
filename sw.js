@@ -2,7 +2,7 @@
    JafsPadel Service Worker v4 — PWA + Background Push Ready
    =============================================================== */
 
-const CACHE_NAME = "jafs-padel-v12";
+const CACHE_NAME = "jafs-padel-runtime";
 const BASE_PATH = new URL(self.registration.scope || "/").pathname.replace(/\/$/, "");
 const withBase = (path) =>
   path.startsWith("http")

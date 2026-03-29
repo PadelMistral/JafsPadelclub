@@ -50,6 +50,10 @@
             padding: 16px;
         }
 
+        section.system-chart-card.mb-10.animate-fade-in[style*="animation-delay:0.12s"] {
+            display: none;
+        }
+
         .system-line {
             display: flex;
             justify-content: space-between;
@@ -116,18 +120,20 @@
     <div class="sport-bg"></div>
 
     <main class="page-content ranking-page">
-        <div class="ranking-header-v7 animate-fade-in text-center mb-6">
+        <section class="ranking-hero-shell animate-fade-in">
+        <div class="ranking-hero-glow"></div>
+        <div class="ranking-header-v7 ranking-hero ranking-hero-title animate-fade-in text-center mb-6">
             <h1 class="page-title-pro">
-              RANKING <span class="text-primary">Luminatis</span> 
+              CLASIFICACIÓN <span class="text-primary">Luminatis</span> 
               <button onclick="window.location.reload()" class="ml-2 opacity-50 hover:opacity-100 transition-opacity" title="Refrescar Ranking">
                 <i class="fas fa-rotate text-xs"></i>
               </button>
               <span class="v3-badge">#</span>
             </h1>
-            <p class="page-sub-pro">Sistema de progresión estable y equilibrado</p>
+            <p class="page-sub-pro">Jerarquía deportiva del club en tiempo real</p>
         </div>
 
-        <div class="elo-explainer-box glass-strong mb-10 animate-fade-in p-4 rounded-2xl flex-col gap-3 border border-primary/20 shadow-glow-sm" style="animation-delay: 0.1s">
+        <div class="elo-explainer-box ranking-hero-explainer glass-strong mb-10 animate-fade-in p-4 rounded-2xl flex-col gap-3 border border-primary/20 shadow-glow-sm hidden" style="animation-delay: 0.1s">
             <div class="flex-row items-center border-b border-white/5 pb-2">
                 <h3 class="text-xs font-black text-white uppercase tracking-widest"><i class="fas fa-chart-line text-primary mr-2"></i> ¿Cómo funciona el ELO V3?</h3>
             </div>
@@ -151,12 +157,20 @@
                         <li class="flex items-center gap-2"><i class="fas fa-layer-group text-primary w-3"></i> <span>Victoria abultada en sets = <b>Multiplicador X</b>.</span></li>
                         <li class="flex items-center gap-2"><i class="fas fa-magnet text-yellow-500 w-3"></i> <span>Fricción High-Elo: Para preservar los Top, subir en nivel 4.0+ cuesta exponencialmente más.</span></li>
                     </ul>
+                    <div class="rank-system-vars">
+                        <span>Expectativa</span>
+                        <span>Compañero</span>
+                        <span>Racha</span>
+                        <span>Marcador</span>
+                        <span>Balance final</span>
+                    </div>
                 </div>
             </div>
         </div>
+        </section>
 
 
-        <section class="system-chart-card mb-10 animate-fade-in" style="animation-delay:0.12s;">
+        <section class="system-chart-card mb-10 animate-fade-in hidden" style="animation-delay:0.12s;">
             <div class="flex-row items-center border-b border-white/5 pb-2 mb-4">
                 <h3 class="text-xs font-black text-white uppercase tracking-widest"><i class="fas fa-chart-line text-primary mr-2"></i> Lectura del sistema nuevo</h3>
             </div>
@@ -200,9 +214,9 @@
             </div>
         </section>
 
-        <div class="ranking-podium-v7 animate-fade-in mb-10">
+            <div class="ranking-podium-v7 animate-fade-in mb-10" aria-label="Podio del ranking">
             <!-- Podium Rank 2 -->
-            <div class="podium-item silver animate-up" id="pod-2" style="animation-delay: 0.1s;">
+            <div class="podium-item silver animate-up" id="pod-2" style="animation-delay: 0.1s;" role="button" tabindex="0" aria-label="Abrir perfil del segundo puesto">
                 <div class="podium-badge"><i class="fas fa-medal"></i></div>
                 <div class="podium-avatar-wrapper" id="p-av-2"></div>
                 <div class="podium-info">
@@ -213,7 +227,7 @@
             </div>
 
             <!-- Podium Rank 1 -->
-            <div class="podium-item gold animate-up" id="pod-1">
+            <div class="podium-item gold animate-up" id="pod-1" role="button" tabindex="0" aria-label="Abrir perfil del primer puesto">
                 <div class="podium-badge gold"><i class="fas fa-crown"></i></div>
                 <div class="podium-avatar-wrapper lg" id="p-av-1"></div>
                 <div class="podium-info">
@@ -224,7 +238,7 @@
             </div>
 
             <!-- Podium Rank 3 -->
-            <div class="podium-item bronze animate-up" id="pod-3" style="animation-delay: 0.2s;">
+            <div class="podium-item bronze animate-up" id="pod-3" style="animation-delay: 0.2s;" role="button" tabindex="0" aria-label="Abrir perfil del tercer puesto">
                 <div class="podium-badge bronze"><i class="fas fa-award"></i></div>
                 <div class="podium-avatar-wrapper" id="p-av-3"></div>
                 <div class="podium-info">
@@ -235,16 +249,20 @@
             </div>
         </div>
 
-        <section class="leaderboard-section animate-fade-in">
+        <section id="general-ranking-section" class="leaderboard-section animate-fade-in">
             <div class="section-header">
-        <h2 class="section-title">Ranking JafsPadel</h2>
-                <span id="lb-total-info" class="lb-total-info">-- jugadores registrados</span>
+        <h2 class="section-title">Clasificación General</h2>
+                <span id="lb-total-info" class="lb-total-info">-- puestos desde el top 4</span>
             </div>
 
-            <div class="flex flex-wrap gap-2 mb-4">
-                <input id="rank-search" class="input" style="max-width:300px;"
-                    placeholder="Buscar jugador por nombre o nivel...">
-                <select id="rank-filter" class="input" style="max-width:150px;">
+            <div class="flex flex-wrap gap-2 mb-4 ranking-toolbar">
+                <select id="rank-view-mode" class="input ranking-filter" style="max-width:170px;" aria-label="Tipo de ranking">
+                    <option value="general">Ranking general</option>
+                    <option value="season">Por temporada</option>
+                </select>
+                <input id="rank-search" class="input ranking-search" style="max-width:300px;"
+                    placeholder="Buscar jugador por nombre o nivel..." aria-label="Buscar jugador en ranking">
+                <select id="rank-filter" class="input ranking-filter" style="max-width:150px;" aria-label="Filtrar ranking">
                     <option value="all">Filtro: Todo</option>
                     <option value="friends">Solo Amigos</option>
                     <option value="pro">Nivel > 4.0</option>
@@ -262,7 +280,7 @@
                 <div class="text-center py-10 opacity-30 font-black uppercase text-xs">Cargando clasificación...</div>
             </div>
         </section>
-        <section class="leaderboard-section animate-fade-in mt-8">
+        <section id="season-ranking-section" class="leaderboard-section animate-fade-in mt-8 hidden">
             <div class="section-header">
                 <h2 class="section-title">Ranking de temporada</h2>
                 <span id="season-total-info" class="lb-total-info">-- temporada</span>
@@ -271,25 +289,77 @@
                 <div class="text-center py-10 opacity-30 font-black uppercase text-xs">Cargando temporada...</div>
             </div>
         </section>
+        <section class="leaderboard-section animate-fade-in mt-8 rank-system-section">
+            <div class="section-header">
+                <h2 class="section-title">Cómo Funciona El Sistema</h2>
+                <span class="lb-total-info">Sistema activo por defecto del club</span>
+            </div>
+            <div class="rank-system-card">
+                <div class="rank-system-graph">
+                    <div class="rank-system-axis axis-y">PUNTOS GANADOS</div>
+                    <div class="rank-system-axis axis-x">NIVEL / DIFICULTAD</div>
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="rank-system-svg">
+                        <defs>
+                            <linearGradient id="rankSystemLine" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#22d3ee" />
+                                <stop offset="55%" stop-color="#a3e635" />
+                                <stop offset="100%" stop-color="#f59e0b" />
+                            </linearGradient>
+                        </defs>
+                        <path d="M6,28 L20,34 L36,42 L52,54 L68,66 L84,78 L96,86" fill="none" stroke="url(#rankSystemLine)" stroke-width="3.2" stroke-linecap="round"/>
+                        <circle cx="20" cy="34" r="2.2" fill="#22d3ee"/>
+                        <circle cx="52" cy="54" r="2.2" fill="#a3e635"/>
+                        <circle cx="84" cy="78" r="2.2" fill="#f59e0b"/>
+                    </svg>
+                    <div class="rank-system-levels">
+                        <span style="left:10%;">Nivel 2.5</span>
+                        <span style="left:35%;">Nivel 3.5</span>
+                        <span style="left:60%;">Nivel 4.5</span>
+                        <span style="left:84%;">Nivel 5.5</span>
+                    </div>
+                    <div class="rank-system-points">
+                        <span style="bottom:68%;">+16</span>
+                        <span style="bottom:51%;">+12</span>
+                        <span style="bottom:33%;">+8</span>
+                        <span style="bottom:15%;">+4</span>
+                    </div>
+                    <div class="rank-system-markers">
+                        <span>Bajo nivel: más margen de subida</span>
+                        <span>Nivel medio: equilibrio competitivo</span>
+                        <span>Nivel alto: menos premio en victorias esperadas</span>
+                        <span>Sorpresa grande: bonus extra si tumbas a favoritos</span>
+                    </div>
+                </div>
+                <div class="rank-system-copy">
+                    <p>El ranking general compara la fuerza real de las dos parejas completas. Después reparte el resultado individual según expectativa, compañero, racha y marcador.</p>
+                    <ul>
+                        <li>Si ganas un partido esperado, sumas poco o normal.</li>
+                        <li>Si ganas por sorpresa o con pareja inferior, sumas más.</li>
+                        <li>Si pierdes siendo favorito, el castigo sube.</li>
+                        <li>Cuanto más alto es tu nivel, más difícil es seguir subiendo muchos puntos.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
     </main>
 
     <div id="modal-match" class="modal-overlay">
-        <div class="modal-card glass-strong">
+        <div class="modal-card glass-strong ranking-breakdown-modal">
             <div class="modal-header">
                 <h3 class="modal-title" id="modal-titulo">DETALLE DE PARTIDA</h3>
                 <button class="close-btn" onclick="window.closeRankingMatchModal()">&times;</button>
             </div>
-            <div class="modal-body scroll-y" id="match-detail-area" style="max-height: 80vh;"></div>
+            <div class="modal-body scroll-y" id="match-detail-area" style="max-height: 74vh;"></div>
         </div>
     </div>
 
     <div id="modal-rank-user" class="modal-overlay">
-        <div class="modal-card glass-strong rank-user-modal">
+        <div class="modal-card glass-strong rank-user-modal ranking-breakdown-modal">
             <div class="modal-header">
                 <h3 class="modal-title" id="rank-user-title">DETALLE DE JUGADOR</h3>
                 <button class="close-btn" onclick="document.getElementById('modal-rank-user')?.classList.remove('active')">&times;</button>
             </div>
-            <div class="modal-body scroll-y" id="rank-user-body" style="max-height: 80vh;"></div>
+            <div class="modal-body scroll-y" id="rank-user-body" style="max-height: 74vh;"></div>
         </div>
     </div>
 
