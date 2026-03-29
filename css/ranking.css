@@ -3507,6 +3507,11 @@
   padding: 4px 6px !important;
   gap: 5px !important;
   border-radius: 14px !important;
+  margin-bottom: 4px !important;
+}
+
+.leaderboard-list {
+  gap: 4px !important;
 }
 
 .ranking-card .lb-avatar {
