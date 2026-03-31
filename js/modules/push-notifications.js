@@ -492,8 +492,16 @@ async function safeLoginToOneSignal(userId) {
                 pushLog("warn", "onesignal_login_method_missing", { uid: userId });
                 return false;
             }
-            
-            // Login unconditionally so OneSignal links the device to the User ID from the start.
+            const subscription = safeGetSubscription(OneSignal);
+            if (!subscription?.id || !subscription?.optedIn) {
+                pushLog("info", "onesignal_login_skipped_until_subscribed", {
+                    uid: userId,
+                    sub_id: subscription?.id || null,
+                    optedIn: !!subscription?.optedIn,
+                });
+                return false;
+            }
+
             await OneSignal.login(userId);
             lastOneSignalLoginUid = userId;
             pushLog("info", "onesignal_login_ok_unconditional", { uid: userId });

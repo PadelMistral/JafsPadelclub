@@ -1398,6 +1398,9 @@ function renderOrganizador(pane) {
                         <i class="fas fa-people-group"></i> Crear equipo
                     </button>
                 </div>
+                <button class="btn btn-success btn-sm w-full mt-2" onclick="window.openManualMatchModalED()">
+                    <i class="fas fa-calendar-plus"></i> Crear / Programar partido manual
+                </button>
                 <div id="group-editor-container" class="mt-2"></div>
             </div>
 
@@ -1541,6 +1544,64 @@ window.deleteTeamED = async (teamId) => {
     }
 };
 
+function sortMatchesChronologically(matches = []) {
+    return [...matches].sort((a, b) => {
+        const aDate = a?.fecha?.toDate ? a.fecha.toDate() : (a?.fecha ? new Date(a.fecha) : null);
+        const bDate = b?.fecha?.toDate ? b.fecha.toDate() : (b?.fecha ? new Date(b.fecha) : null);
+        const aTime = aDate && !Number.isNaN(aDate.getTime()) ? aDate.getTime() : Number.MAX_SAFE_INTEGER;
+        const bTime = bDate && !Number.isNaN(bDate.getTime()) ? bDate.getTime() : Number.MAX_SAFE_INTEGER;
+        if (aTime !== bTime) return aTime - bTime;
+        const phaseOrder = { league: 1, group: 1, knockout: 2, semi: 3, final: 4 };
+        const aPhase = phaseOrder[String(a?.phase || "").toLowerCase()] || 9;
+        const bPhase = phaseOrder[String(b?.phase || "").toLowerCase()] || 9;
+        if (aPhase !== bPhase) return aPhase - bPhase;
+        const aRound = Number(a?.round || 0);
+        const bRound = Number(b?.round || 0);
+        if (aRound !== bRound) return aRound - bRound;
+        return String(a?.id || a?.matchCode || "").localeCompare(String(b?.id || b?.matchCode || ""));
+    });
+}
+
+function getTeamMatches(teamId) {
+    return sortMatchesChronologically(eventMatches.filter((m) => m.teamAId === teamId || m.teamBId === teamId));
+}
+
+function getMatchLabelForAdmin(match = {}) {
+    const phase = matchPhaseLabel(match);
+    const when = match?.fecha
+        ? (() => {
+            const d = match.fecha?.toDate ? match.fecha.toDate() : new Date(match.fecha);
+            return Number.isNaN(d?.getTime?.()) ? "sin fecha" : d.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+        })()
+        : "sin fecha";
+    return `${phase} · ${getFriendlyTeamName({ teamName: match.teamAName, teamId: match.teamAId, side: "A" })} vs ${getFriendlyTeamName({ teamName: match.teamBName, teamId: match.teamBId, side: "B" })} · ${when}`;
+}
+
+function buildTeamPlayerPatch(teamA, teamB) {
+    const teamAPlayers = (teamA?.playerUids || []).filter(Boolean);
+    const teamBPlayers = (teamB?.playerUids || []).filter(Boolean);
+    return {
+        playerUids: [...teamAPlayers, ...teamBPlayers],
+        teamAPlayers,
+        teamBPlayers,
+    };
+}
+
+async function syncLinkedMatchPlayers(matchDoc, teamA, teamB) {
+    if (!matchDoc?.linkedMatchId || !matchDoc?.linkedMatchCollection) return;
+    const patch = buildTeamPlayerPatch(teamA, teamB);
+    await updateDoc(doc(db, matchDoc.linkedMatchCollection, matchDoc.linkedMatchId), {
+        jugadores: patch.playerUids,
+        equipoA: patch.teamAPlayers,
+        equipoB: patch.teamBPlayers,
+        eventTeamAId: teamA?.id || null,
+        eventTeamBId: teamB?.id || null,
+        eventTeamAName: teamA?.name || "",
+        eventTeamBName: teamB?.name || "",
+        updatedAt: serverTimestamp()
+    });
+}
+
 // Team editor: reassign players inside a team with validation.
 window.openTeamEditor = (teamId) => {
     if (!canOrganizar()) return;
@@ -1559,6 +1620,8 @@ window.openTeamEditor = (teamId) => {
             basePool.push({ uid, name: resolveParticipantData({ uid })?.name || 'Jugador' });
         }
     });
+    const pendingTeamMatches = getTeamMatches(teamId).filter((m) => !isFinishedMatch(m));
+    const defaultEffectiveMatchId = pendingTeamMatches[0]?.id || '';
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay active modal-stack-front';
@@ -1578,6 +1641,27 @@ window.openTeamEditor = (teamId) => {
                     <select id="team-edit-p2" class="input">
                         ${basePool.map(p => `<option value="${p.uid}" ${p.uid === team.playerUids?.[1] ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
                     </select>
+                    <div class="mt-3 p-3 rounded-xl bg-white/5 border border-white/10">
+                        <label class="text-[10px] font-black text-muted uppercase tracking-widest">Puntos e historial del evento</label>
+                        <div class="flex-col gap-2 mt-2 text-[10px] text-white/80">
+                            <label class="flex-row gap-2 items-start">
+                                <input type="radio" name="team-edit-history-mode" value="inherit" checked>
+                                <span>El nuevo jugador hereda el historial y los puntos del jugador saliente.</span>
+                            </label>
+                            <label class="flex-row gap-2 items-start">
+                                <input type="radio" name="team-edit-history-mode" value="future">
+                                <span>El jugador anterior conserva lo ya jugado y el cambio se aplica desde un partido concreto.</span>
+                            </label>
+                        </div>
+                        <div id="team-edit-effective-wrap" class="mt-3 hidden">
+                            <label class="text-[10px] font-black text-muted uppercase tracking-widest">Aplicar desde partido</label>
+                            <select id="team-edit-effective-match" class="input mt-2" ${pendingTeamMatches.length ? '' : 'disabled'}>
+                                ${pendingTeamMatches.length
+                                    ? pendingTeamMatches.map((m) => `<option value="${m.id}" ${m.id === defaultEffectiveMatchId ? 'selected' : ''}>${escapeHtml(getMatchLabelForAdmin(m))}</option>`).join('')
+                                    : '<option value="">No hay partidos pendientes</option>'}
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex-row gap-2 mt-4">
                     <button class="btn btn-ghost w-full" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
@@ -1587,6 +1671,14 @@ window.openTeamEditor = (teamId) => {
         </div>
     `;
     document.body.appendChild(overlay);
+    const radios = overlay.querySelectorAll('input[name="team-edit-history-mode"]');
+    const effectiveWrap = overlay.querySelector('#team-edit-effective-wrap');
+    const syncHistoryMode = () => {
+        const selected = overlay.querySelector('input[name="team-edit-history-mode"]:checked')?.value || 'inherit';
+        effectiveWrap?.classList.toggle('hidden', selected !== 'future');
+    };
+    radios.forEach((r) => r.addEventListener('change', syncHistoryMode));
+    syncHistoryMode();
 };
 
 // Persist team changes and propagate to event matches (and linked calendar matches).
@@ -1594,6 +1686,8 @@ window.saveTeamEdit = async (teamId) => {
     if (!currentEvent) return;
     const sel1 = document.getElementById('team-edit-p1')?.value || '';
     const sel2 = document.getElementById('team-edit-p2')?.value || '';
+    const historyMode = document.querySelector('input[name="team-edit-history-mode"]:checked')?.value || 'inherit';
+    const effectiveMatchId = document.getElementById('team-edit-effective-match')?.value || '';
     if (!sel1 || !sel2 || sel1 === sel2) {
         showToast('Equipo inválido', 'Selecciona dos jugadores distintos', 'warning');
         return;
@@ -1609,35 +1703,60 @@ window.saveTeamEdit = async (teamId) => {
         return;
     }
 
+    const previousPlayers = (team.playerUids || []).filter(Boolean);
+    const nextPlayers = [sel1, sel2];
+    const changedPlayers = previousPlayers.length !== nextPlayers.length || previousPlayers.some((uid, idx) => uid !== nextPlayers[idx]);
+    if (!changedPlayers) {
+        showToast('Sin cambios', 'La pareja ya tiene esos jugadores.', 'info');
+        return;
+    }
+
+    const allTeamMatches = getTeamMatches(teamId);
+    const pendingTeamMatches = allTeamMatches.filter((m) => !isFinishedMatch(m));
+    if (historyMode === 'future' && !effectiveMatchId) {
+        showToast('Selecciona el punto de cambio', 'Elige desde quÃ© partido debe entrar la nueva pareja.', 'warning');
+        return;
+    }
+
     const updatedTeams = teams.map(t => {
         if (t.id !== teamId) return t;
-        return { ...t, playerUids: [sel1, sel2] };
+        const substitutionHistory = Array.isArray(t.substitutionHistory) ? [...t.substitutionHistory] : [];
+        substitutionHistory.push({
+            changedAt: new Date().toISOString(),
+            previousPlayerUids: previousPlayers,
+            nextPlayerUids: nextPlayers,
+            mode: historyMode,
+            effectiveMatchId: historyMode === 'future' ? effectiveMatchId : null
+        });
+        return { ...t, playerUids: nextPlayers, substitutionHistory };
     });
 
     try {
         await updateDoc(doc(db, 'eventos', eventId), { teams: updatedTeams, updatedAt: serverTimestamp() });
 
-        // Sync event matches that reference this team
-        const matchesToUpdate = eventMatches.filter(m => m.teamAId === teamId || m.teamBId === teamId);
-        await Promise.all(matchesToUpdate.map(async (m) => {
-            const teamA = updatedTeams.find(t => t.id === m.teamAId);
-            const teamB = updatedTeams.find(t => t.id === m.teamBId);
-            const playerUids = [...(teamA?.playerUids || []), ...(teamB?.playerUids || [])];
+        const futureStartIndex = Math.max(0, pendingTeamMatches.findIndex((m) => m.id === effectiveMatchId));
+        const impactedMatchIds = new Set(
+            historyMode === 'inherit'
+                ? allTeamMatches.map((m) => m.id)
+                : pendingTeamMatches.slice(futureStartIndex).map((m) => m.id)
+        );
+
+        await Promise.all(allTeamMatches.map(async (m) => {
+            const useUpdatedLineup = impactedMatchIds.has(m.id);
+            const teamA = (useUpdatedLineup ? updatedTeams : teams).find(t => t.id === m.teamAId);
+            const teamB = (useUpdatedLineup ? updatedTeams : teams).find(t => t.id === m.teamBId);
+            const playerPatch = buildTeamPlayerPatch(teamA, teamB);
             await updateDoc(doc(db, 'eventoPartidos', m.id), {
-                playerUids,
+                playerUids: playerPatch.playerUids,
+                substitutionMode: historyMode,
+                substitutionEffectiveMatchId: historyMode === 'future' ? effectiveMatchId : null,
+                substitutionApplied: useUpdatedLineup,
                 updatedAt: serverTimestamp()
             });
-            if (m.linkedMatchId && m.linkedMatchCollection) {
-                await updateDoc(doc(db, m.linkedMatchCollection, m.linkedMatchId), {
-                    jugadores: playerUids,
-                    equipoA: teamA?.playerUids || [],
-                    equipoB: teamB?.playerUids || [],
-                    updatedAt: serverTimestamp()
-                });
-            }
+            await syncLinkedMatchPlayers(m, teamA, teamB);
         }));
 
-        showToast('Equipo actualizado', '', 'success');
+        showToast(historyMode === 'inherit' ? 'SustituciÃ³n aplicada con historial' : 'SustituciÃ³n aplicada desde el partido elegido', '', 'success');
         document.querySelectorAll('.modal-overlay').forEach(o => o.classList.contains('modal-stack-front') && o.remove());
     } catch (e) {
         showToast('Error', e.message, 'error');
@@ -1960,6 +2079,156 @@ window.saveMatchTeamEdit = async (matchId) => {
             });
         }
         showToast('Partido actualizado', '', 'success');
+        document.querySelectorAll('.modal-overlay').forEach(o => o.classList.contains('modal-stack-front') && o.remove());
+    } catch (e) {
+        showToast('Error', e.message, 'error');
+    }
+};
+
+window.openManualMatchModalED = () => {
+    if (!canOrganizar()) return;
+    const teams = currentEvent?.teams || [];
+    if (teams.length < 2) return showToast('Faltan equipos', 'Necesitas al menos dos equipos para crear un partido.', 'warning');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active modal-stack-front';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:520px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Crear partido manual</h3>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="flex-col gap-3">
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">Pareja 1</label>
+                    <select id="manual-match-teamA" class="input">
+                        ${teams.map((t) => `<option value="${t.id}">${escapeHtml(t.name || t.id)}</option>`).join('')}
+                    </select>
+                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">Pareja 2</label>
+                    <select id="manual-match-teamB" class="input">
+                        ${teams.map((t, idx) => `<option value="${t.id}" ${idx === 1 ? 'selected' : ''}>${escapeHtml(t.name || t.id)}</option>`).join('')}
+                    </select>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[10px] font-black text-muted uppercase tracking-widest">Fase</label>
+                            <select id="manual-match-phase" class="input mt-2">
+                                <option value="group">Grupos</option>
+                                <option value="league">Liga</option>
+                                <option value="knockout">Eliminatoria</option>
+                                <option value="semi">Semifinal</option>
+                                <option value="final">Final</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-black text-muted uppercase tracking-widest">Ronda</label>
+                            <input id="manual-match-round" type="number" class="input mt-2" min="1" value="1">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[10px] font-black text-muted uppercase tracking-widest">Grupo</label>
+                            <input id="manual-match-group" class="input mt-2" placeholder="A, B..." value="">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-black text-muted uppercase tracking-widest">Fecha y hora</label>
+                            <input id="manual-match-datetime" type="datetime-local" class="input mt-2">
+                        </div>
+                    </div>
+                    <label class="flex-row gap-2 items-center text-[10px] font-bold text-white/80">
+                        <input id="manual-match-link-calendar" type="checkbox" checked>
+                        <span>Crear tambiÃ©n la reserva en calendario</span>
+                    </label>
+                </div>
+                <div class="flex-row gap-2 mt-4">
+                    <button class="btn btn-ghost w-full" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+                    <button class="btn btn-primary w-full" onclick="window.saveManualMatchED()">Crear partido</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+};
+
+window.saveManualMatchED = async () => {
+    if (!currentEvent || !canOrganizar()) return;
+    const teamAId = document.getElementById('manual-match-teamA')?.value || '';
+    const teamBId = document.getElementById('manual-match-teamB')?.value || '';
+    const phase = document.getElementById('manual-match-phase')?.value || 'group';
+    const round = Math.max(1, Number(document.getElementById('manual-match-round')?.value || 1));
+    const group = String(document.getElementById('manual-match-group')?.value || '').trim().toUpperCase();
+    const dateRaw = document.getElementById('manual-match-datetime')?.value || '';
+    const shouldLinkCalendar = !!document.getElementById('manual-match-link-calendar')?.checked;
+
+    if (!teamAId || !teamBId || teamAId === teamBId) {
+        return showToast('Equipos invÃ¡lidos', 'Selecciona dos equipos distintos.', 'warning');
+    }
+
+    const teamA = (currentEvent?.teams || []).find((t) => t.id === teamAId);
+    const teamB = (currentEvent?.teams || []).find((t) => t.id === teamBId);
+    if (!teamA || !teamB) {
+        return showToast('Faltan equipos', 'No se encontraron los equipos seleccionados.', 'error');
+    }
+
+    const matchDate = dateRaw ? new Date(dateRaw) : null;
+    if (dateRaw && Number.isNaN(matchDate?.getTime?.())) {
+        return showToast('Fecha invÃ¡lida', 'Revisa la fecha y hora elegidas.', 'warning');
+    }
+
+    const playerPatch = buildTeamPlayerPatch(teamA, teamB);
+    const matchPayload = {
+        eventoId: currentEvent.id,
+        tipo: 'evento',
+        phase,
+        group: phase === 'group' ? (group || 'A') : group,
+        round,
+        teamAId,
+        teamBId,
+        teamAName: getFriendlyTeamName({ teamName: teamA.name, teamId: teamA.id, side: 'A' }),
+        teamBName: getFriendlyTeamName({ teamName: teamB.name, teamId: teamB.id, side: 'B' }),
+        playerUids: playerPatch.playerUids,
+        ...buildMatchPersistencePatch({ state: 'abierto', resultStr: '' }),
+        ganadorTeamId: null,
+        fecha: matchDate || null,
+        createdAt: serverTimestamp(),
+        createdByManualAdmin: auth.currentUser?.uid || null
+    };
+
+    try {
+        const eventMatchRef = await addDoc(collection(db, 'eventoPartidos'), matchPayload);
+
+        if (matchDate && shouldLinkCalendar && playerPatch.playerUids.length >= 4) {
+            const linkedPayload = {
+                ...buildBaseMatchPayload({
+                    creatorId: auth.currentUser.uid,
+                    organizerId: auth.currentUser.uid,
+                    matchDate,
+                    players: playerPatch.playerUids,
+                    minLevel: 1,
+                    maxLevel: 7,
+                    visibility: 'public',
+                    state: 'abierto',
+                    extra: {
+                        timestamp: serverTimestamp(),
+                    }
+                }),
+                eventoId: currentEvent.id,
+                eventMatchId: eventMatchRef.id,
+                phase,
+                type: 'evento',
+                eventTeamAId: teamAId,
+                eventTeamBId: teamBId,
+                eventTeamAName: teamA.name || '',
+                eventTeamBName: teamB.name || ''
+            };
+            const linkedRef = await addDoc(collection(db, 'partidosAmistosos'), linkedPayload);
+            await updateDoc(doc(db, 'eventoPartidos', eventMatchRef.id), {
+                linkedMatchId: linkedRef.id,
+                linkedMatchCollection: 'partidosAmistosos',
+                updatedAt: serverTimestamp()
+            });
+        }
+
+        showToast('Partido creado', 'El admin ya puede programarlo y moverlo al calendario cuando quiera.', 'success');
         document.querySelectorAll('.modal-overlay').forEach(o => o.classList.contains('modal-stack-front') && o.remove());
     } catch (e) {
         showToast('Error', e.message, 'error');
