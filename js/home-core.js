@@ -134,7 +134,7 @@ function normalizeHomeProductCopy() {
 let apoingEvents = [];
 let apoingLastSyncAt = 0;
 const APOING_SYNC_TTL_MS = 300000; // 5 min
-const APOING_PROXY_URL = "https://europe-west1-padeluminatis.cloudfunctions.net/getApoingICS?url=";
+const APOING_PROXY_URL = `${window.location.origin}/api/apoing-ics?url=`;
 const APOING_PROXY_JINA = "https://r.jina.ai/http://";
 
 /* Player cache (names + photos) */

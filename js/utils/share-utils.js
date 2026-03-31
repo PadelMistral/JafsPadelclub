@@ -366,6 +366,10 @@ export async function generateEventStatusPoster(data = {}) {
     const { 
         eventName = 'TORNEO', 
         organizer = 'JAFS PADEL',
+        eventFormat = 'Evento',
+        registeredCount = 0,
+        teamCount = 0,
+        groupDraw = [],
         logo = '',
         played = [],
         scheduled = [],
@@ -375,6 +379,12 @@ export async function generateEventStatusPoster(data = {}) {
 
     // 1. CALCULATE DYNAMIC HEIGHT
     let dynamicH = 450;
+    if (groupDraw.length) {
+        dynamicH += 100;
+        groupDraw.forEach((group) => {
+             dynamicH += 70 + (Math.max(1, Math.min((group.teams || []).length, 8)) * 34);
+        });
+    }
     if (played.length) dynamicH += 80 + (played.length * 60);
     if (scheduled.length) dynamicH += 80 + (scheduled.length * 65);
     if (pending.length) dynamicH += 80 + (pending.length * 55);
@@ -430,6 +440,41 @@ export async function generateEventStatusPoster(data = {}) {
         ctx.lineWidth = 2;
         ctx.strokeStyle = borderColor;
         ctx.stroke();
+    }
+
+    renderRoundedBlock(currentY, 120, 'rgba(0, 212, 255, 0.25)');
+    ctx.fillStyle = '#00d4ff';
+    ctx.font = '900 28px Rajdhani';
+    ctx.fillText('RESUMEN DEL EVENTO', 110, currentY + 42);
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 22px Rajdhani';
+    ctx.fillText(`FORMATO: ${String(eventFormat).toUpperCase()}`, 110, currentY + 82);
+    ctx.fillText(`USUARIOS REGISTRADOS: ${registeredCount}`, 520, currentY + 82);
+    ctx.fillText(`EQUIPOS: ${teamCount}`, 110, currentY + 112);
+    currentY += 160;
+
+    if (groupDraw.length) {
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = '900 34px Rajdhani';
+        ctx.fillText('SORTEO Y GRUPOS', 80, currentY);
+        currentY += 50;
+
+        for (const group of groupDraw) {
+            const teams = Array.isArray(group.teams) ? group.teams.slice(0, 8) : [];
+            const boxH = 70 + (Math.max(1, teams.length) * 34);
+            renderRoundedBlock(currentY, boxH, 'rgba(251, 191, 36, 0.25)');
+            ctx.fillStyle = '#fbbf24';
+            ctx.font = '900 28px Rajdhani';
+            ctx.fillText(String(group.title || 'Grupo').toUpperCase(), 110, currentY + 40);
+            let rowY = currentY + 78;
+            ctx.fillStyle = '#fff';
+            ctx.font = '800 22px Rajdhani';
+            teams.forEach((teamName, idx) => {
+                ctx.fillText(`${idx + 1}. ${String(teamName).toUpperCase()}`, 120, rowY);
+                rowY += 34;
+            });
+            currentY += boxH + 28;
+        }
     }
 
     // === STANDINGS ===

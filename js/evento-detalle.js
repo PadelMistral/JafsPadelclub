@@ -33,6 +33,18 @@ const formatLabels = {
     league_knockout: 'Liga + Eliminatoria'
 };
 
+function isKnockoutPhaseMatch(match) {
+    const phase = String(match?.phase || "").toLowerCase();
+    return ["knockout", "semi", "semis", "semifinal", "final", "cuartos", "quarter"].includes(phase);
+}
+
+function isGroupLeaguePhaseMatch(match, ev = currentEvent) {
+    const phase = String(match?.phase || "").toLowerCase();
+    if (["group", "liga", "league", "grupos"].includes(phase)) return true;
+    if (!phase && (ev?.formato === "league" || ev?.formato === "league_knockout")) return true;
+    return false;
+}
+
 const getInitials = (name) => {
     if (!name) return 'JP';
     const parts = name.trim().split(' ');
@@ -590,22 +602,24 @@ async function downloadEventStatus() {
     
     showToast('GENERANDO...', 'Compilando datos del torneo', 'info');
 
-    const played = eventMatches.filter(m => isFinishedMatch(m)).map(m => ({
+    const groupStageMatches = eventMatches.filter((m) => isGroupLeaguePhaseMatch(m, ev) && !isKnockoutPhaseMatch(m));
+
+    const played = groupStageMatches.filter(m => isFinishedMatch(m)).map(m => ({
         teamAName: m.teamAName || 'Pareja A',
         teamBName: m.teamBName || 'Pareja B',
         resultado: getResultSetsString(m)
     }));
 
-    const scheduled = eventMatches.filter(m => !isFinishedMatch(m) && m.fecha).map(m => {
+    const scheduled = groupStageMatches.filter(m => !isFinishedMatch(m) && m.fecha).map(m => {
         const d = m.fecha.toDate ? m.fecha.toDate() : new Date(m.fecha);
         return {
             teamAName: m.teamAName || 'Pareja A',
             teamBName: m.teamBName || 'Pareja B',
-            fechaStr: d.toLocaleString('es-ES', { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+            fechaStr: d.toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
         };
     });
 
-    const pending = eventMatches.filter(m => !isFinishedMatch(m) && !m.fecha).map(m => ({
+    const pending = groupStageMatches.filter(m => !isFinishedMatch(m) && !m.fecha).map(m => ({
         teamAName: m.teamAName || 'Pareja A',
         teamBName: m.teamBName || 'Pareja B'
     }));
@@ -619,7 +633,7 @@ async function downloadEventStatus() {
         const groups = ev.formato === 'league' ? { 'General': (ev.teams || []).map(t => t.id) } : (ev.groups || {});
         for (const [gName, tIds] of Object.entries(groups)) {
             const gTeams = tIds.map(id => teamMap.get(id)).filter(Boolean);
-            const matches = eventMatches.filter(m => m.group === gName || (ev.formato === 'league' && m.phase === 'league'));
+            const matches = groupStageMatches.filter(m => m.group === gName || (ev.formato === 'league' && isGroupLeaguePhaseMatch(m, ev)));
             const table = computeGroupTable(matches, gTeams, cfg);
             standings.push({
                 title: ev.formato === 'league' ? 'Liga Regular' : `Grupo ${gName}`,
@@ -635,10 +649,23 @@ async function downloadEventStatus() {
         }
     }
 
+    const approvedCount = (ev.inscritos || []).filter(i => i.aprobado === true).length;
+    const groupsMap = ev.formato === 'league'
+        ? { 'Liga': (ev.teams || []).map((t) => t.id) }
+        : (ev.groups || {});
+    const groupDraw = Object.entries(groupsMap).map(([groupName, teamIds]) => ({
+        title: groupName,
+        teams: (teamIds || []).map((id) => teamMap.get(id)?.name).filter(Boolean)
+    })).filter((group) => group.teams.length);
+
     try {
         await generateEventStatusPoster({
             eventName: ev.nombre || 'Torneo',
             organizer: ev.organizadorNombre || 'JafsPadel',
+            eventFormat: formatLabels[ev.formato] || ev.formato || 'Evento',
+            registeredCount: approvedCount,
+            teamCount: (ev.teams || []).length,
+            groupDraw,
             logo: ev.imagen || ev.imageUrl || '',
             played,
             scheduled,
@@ -834,7 +861,7 @@ function renderClasificacion(pane) {
     const teamMap = new Map(teams.map(t => [t.id, t]));
 
     if (ev.formato === 'league') {
-        const table = computeGroupTable(eventMatches.filter(m => m.phase === 'league'), teams, cfg);
+        const table = computeGroupTable(eventMatches.filter(m => isGroupLeaguePhaseMatch(m, ev) && !isKnockoutPhaseMatch(m)), teams, cfg);
         pane.innerHTML = tableHtml('Clasificación general', table, teamMap, myTeam);
     } else if (ev.formato === 'league_knockout') {
         const groups = ev.groups || {};
@@ -842,7 +869,7 @@ function renderClasificacion(pane) {
         let html = '';
         for (const g of groupKeys) {
             const gTeams = (groups[g] || []).map(id => teamMap.get(id)).filter(Boolean);
-            const table = computeGroupTable(eventMatches.filter(m => m.phase === 'group' && m.group === g), gTeams, cfg);
+            const table = computeGroupTable(eventMatches.filter(m => isGroupLeaguePhaseMatch(m, ev) && !isKnockoutPhaseMatch(m) && m.group === g), gTeams, cfg);
             html += tableHtml(`Grupo ${g}`, table, teamMap, myTeam);
         }
         pane.innerHTML = html || '<div class="empty-state">No hay grupos definidos.</div>';
@@ -974,29 +1001,16 @@ function updateMatchesList(pane) {
     const filterQuery = isSpecialFilter ? '' : searchVal.toLowerCase();
     
     const phaseWeights = { league: 1, group: 1, knockout: 2, semi: 3, final: 4 };
-    const groupsComplete = areGroupsComplete(currentEvent, eventMatches);
-    const myGroup = (() => {
-        if (!myTeam || !currentEvent?.groups) return null;
-        const found = Object.entries(currentEvent.groups).find(([, ids]) => Array.isArray(ids) && ids.includes(myTeam.id));
-        return found ? found[0] : null;
-    })();
-
     const normalizedMatches = eventMatches.map(enrichMatch);
     const filtered = [...normalizedMatches].filter(m => {
         if (isTbdMatch(m)) return false;
-        if (!groupsComplete && (m.phase === 'knockout' || m.phase === 'semi' || m.phase === 'final')) return false;
+        if (!isGroupLeaguePhaseMatch(m, currentEvent)) return false;
+        if (isKnockoutPhaseMatch(m)) return false;
         // Essential: Orphan filter
         if (m.phase === 'league' || m.phase === 'group') {
             const ta = currentEvent.teams?.find(t => t.id === m.teamAId);
             const tb = currentEvent.teams?.find(t => t.id === m.teamBId);
             if (!ta && !tb) return false;
-        }
-
-        // Hide knockout for non-organizers (shown in bracket only)
-        if (!canOrganizar() && (m.phase === 'knockout' || m.phase === 'semi' || m.phase === 'final')) return false;
-        // Non-organizer: show only group matches from user's group (if groups exist)
-        if (!canOrganizar() && (m.phase === 'group' || m.phase === 'league')) {
-            if (currentEvent?.formato !== 'league' && myGroup && m.group && m.group !== myGroup) return false;
         }
         
         // Custom filters
@@ -1014,6 +1028,11 @@ function updateMatchesList(pane) {
         const wA = phaseWeights[a.phase] || 9;
         const wB = phaseWeights[b.phase] || 9;
         if (wA !== wB) return wA - wB;
+        const aDate = a.fecha?.toDate ? a.fecha.toDate() : (a.fecha ? new Date(a.fecha) : null);
+        const bDate = b.fecha?.toDate ? b.fecha.toDate() : (b.fecha ? new Date(b.fecha) : null);
+        const aTime = aDate?.getTime?.() || 0;
+        const bTime = bDate?.getTime?.() || 0;
+        if (aTime !== bTime) return aTime - bTime;
         return (a.round || 0) - (b.round || 0);
     });
     const uniqueSorted = Array.from(sorted.reduce((acc, m) => {
@@ -1035,7 +1054,7 @@ function updateMatchesList(pane) {
             ${isMy && !played ? '<div class="absolute -top-1 -right-1 p-2 bg-primary/20 rounded-bl-xl"><i class="fas fa-star text-[8px] text-primary"></i></div>' : ''}
             <div class="match-header">
                 <span>${matchPhaseLabel(m)}</span>
-                <span>${m.fecha ? new Date(m.fecha?.toDate ? m.fecha.toDate() : m.fecha).toLocaleDateString('es-ES', {hour:'2-digit', minute:'2-digit'}) : 'Fecha por decidir'}</span>
+                <span>${m.fecha ? new Date(m.fecha?.toDate ? m.fecha.toDate() : m.fecha).toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit', hour:'2-digit', minute:'2-digit' }) : 'Fecha por decidir'}</span>
             </div>
             <div class="match-body-v9">
                 <div class="m-team-v9 ${m.ganadorTeamId === m.teamAId ? 'winner' : ''}">

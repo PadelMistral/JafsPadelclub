@@ -214,7 +214,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedEloRange = 30;
 
   const getApoingStorageKey = (uid) => `apoingCalendarUrl:${uid || "anon"}`;
-  const APOING_PROFILE_PROXY_URL = "https://europe-west1-padeluminatis.cloudfunctions.net/getApoingICS?url=";
+  const APOING_PROFILE_PROXY_URL = `${window.location.origin}/api/apoing-ics?url=`;
   const APOING_PROFILE_PROXY_3 = "https://r.jina.ai/http://";
 
   function unfoldIcsLines(raw = "") {

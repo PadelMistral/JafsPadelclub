@@ -87,7 +87,7 @@ function apoingLog(step, data = null) {
 }
 
 const DEFAULT_APOING_ICS_URL = ""; // Empty by default now to avoid confusion
-const APOING_PROXY_URL = "https://europe-west1-padeluminatis.cloudfunctions.net/getApoingICS?url=";
+const APOING_PROXY_URL = `${window.location.origin}/api/apoing-ics?url=`;
 const APOING_PROXY_3 = "https://r.jina.ai/http://";
 const APOING_SYNC_TTL_MS = 120000;
 const CALENDAR_CACHE_KEY = "calendar:matches:v1";

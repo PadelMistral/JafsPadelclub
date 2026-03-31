@@ -656,34 +656,50 @@ async function updatePushStatusUI() {
     if (btnTestPush) {
       btnTestPush.style.display = "flex";
       btnTestPush.onclick = async () => {
+        console.group("[Push Test] Click en boton de prueba");
+        console.log("[Push Test] currentUser:", currentUser);
+        console.log("[Push Test] currentUserDoc:", currentUserDoc);
+        console.log("[Push Test] isAdmin:", isAdmin);
         if (!currentUser?.uid) {
+          console.warn("[Push Test] Abortado: currentUser.uid no disponible");
           showToast("Sesión no lista", "Espera un momento e intenta de nuevo.", "warning");
+          console.groupEnd();
           return;
         }
 
         // 1. Prueba Local (App abierta)
-        await sendPushNotification(
+        console.log("[Push Test] Enviando notificacion local...");
+        const localPushResult = await sendPushNotification(
           isAdmin ? "PRUEBA LOCAL (ADMIN)" : "PRUEBA LOCAL",
           "Esta notificación confirma que el permiso del navegador funciona correctamente.",
           "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff",
         );
+        console.log("[Push Test] Resultado notificacion local:", localPushResult);
         
         // 2. Prueba Externa (Segundo Plano / OneSignal)
+        console.log("[Push Test] Programando push externa en 3000ms para UID:", currentUser.uid);
         showToast("Lanzando prueba real...", "En 3 segundos recibirás el aviso de segundo plano.", "info");
         
         setTimeout(async () => {
+           console.group("[Push Test] Timeout push externa");
            try {
-             await sendExternalPush({
+             const payload = {
                title: isAdmin ? "PRUEBA REAL (ADMIN)" : "PRUEBA SEGUNDO PLANO",
                message: "Excelente. Si ves esto con la app cerrada o el móvil bloqueado, todo está bien conectado.",
                uids: [currentUser.uid],
                url: "notificaciones.html",
-               data: { type: "test", from: "diag_btn" }
-             });
+                data: { type: "test", from: "diag_btn" }
+             };
+             console.log("[Push Test] Payload push externa:", payload);
+             const externalPushResult = await sendExternalPush(payload);
+             console.log("[Push Test] Resultado sendExternalPush:", externalPushResult);
            } catch (e) {
              console.error("External push test failed", e);
+           } finally {
+             console.groupEnd();
            }
         }, 3000);
+        console.groupEnd();
       };
     }
   } catch (e) {

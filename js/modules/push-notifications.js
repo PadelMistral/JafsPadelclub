@@ -18,6 +18,8 @@ const DEVICE_ID_STORAGE_KEY = "onesignal_device_id";
 const DEFAULT_ONESIGNAL_APP_ID = "0f270864-c893-4c44-95cc-393321937fb2";
 const PUSH_DIAG_LOG_KEY = "push_diag_log_v1";
 const PUSH_DIAG_STATE_KEY = "push_diag_state_v1";
+const NOTIF_SOFT_PROMPT_COMPLETED_KEY = "notif_soft_prompt_completed";
+const NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY = "notif_soft_prompt_snooze_until";
 const PUSH_DIAG_MAX = 120;
 const SW_RETRY_ATTEMPTS = 4;
 const SW_RETRY_BASE_MS = 350;
@@ -40,6 +42,7 @@ let oneSignalReady = false;
 let oneSignalInitPromise = null;
 let lastOneSignalLoginUid = null;
 let oneSignalScriptURL = null; // prevent undefined reference
+let softPromptScheduled = false;
 const pushInitByUid = new Map();
 
 function pushLog(level, event, meta = {}) {
@@ -446,7 +449,13 @@ async function safeLoginToOneSignal(userId) {
         });
         return true;
     } catch(e) {
-        pushLog("error", "onesignal_safe_login_error", { error: e?.message || String(e) });
+        const message = e?.message || String(e);
+        if (/409|conflict/i.test(message)) {
+            lastOneSignalLoginUid = userId;
+            pushLog("warn", "onesignal_safe_login_conflict", { uid: userId, error: message });
+            return true;
+        }
+        pushLog("error", "onesignal_safe_login_error", { error: message });
         return false;
     }
 }
@@ -523,9 +532,19 @@ export async function initPushNotifications(uid = null) {
 }
 
 function scheduleSoftPrompt() {
-    if (sessionStorage.getItem('notif_soft_prompt_dismissed')) return;
-    if (localStorage.getItem('notif_soft_prompt_completed') === 'true') return;
-    
+    if (softPromptScheduled) return;
+    const permissionNow = typeof Notification !== "undefined" ? Notification.permission : "unsupported";
+    if (permissionNow === "granted") {
+        localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, "true");
+        document.getElementById("notif-soft-prompt")?.remove();
+        return;
+    }
+    if (permissionNow === "denied" || permissionNow === "unsupported") return;
+    if (localStorage.getItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY) === "true") return;
+    const snoozeUntil = Number(localStorage.getItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY) || 0);
+    if (Number.isFinite(snoozeUntil) && snoozeUntil > Date.now()) return;
+
+    softPromptScheduled = true;
     setTimeout(() => {
         showSoftPrompt().catch(() => {});
     }, 6000); // 6 seconds delay
@@ -533,14 +552,17 @@ function scheduleSoftPrompt() {
 
 async function showSoftPrompt() {
     notifPermission = typeof Notification !== "undefined" ? Notification.permission : "unsupported";
+    softPromptScheduled = false;
     if (document.getElementById('notif-soft-prompt')) return;
-    if (localStorage.getItem('notif_soft_prompt_completed') === 'true') return;
+    if (localStorage.getItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY) === 'true') return;
+    const snoozeUntil = Number(localStorage.getItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY) || 0);
+    if (Number.isFinite(snoozeUntil) && snoozeUntil > Date.now()) return;
     if (notifPermission === 'denied' || notifPermission === 'unsupported') return;
     if (notifPermission === 'granted') {
         try {
             const status = await checkNotificationStatus();
             if (status?.backgroundReady || status?.oneSignalRegistered) {
-                localStorage.setItem('notif_soft_prompt_completed', 'true');
+                localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, 'true');
                 document.getElementById('notif-soft-prompt')?.remove();
             }
         } catch (_) {}
@@ -581,7 +603,7 @@ async function showSoftPrompt() {
     
     document.getElementById('btn-notif-later').onclick = () => {
         div.classList.add('fade-out-down');
-        sessionStorage.setItem('notif_soft_prompt_dismissed', 'true');
+        localStorage.setItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY, String(Date.now() + (12 * 60 * 60 * 1000)));
         setTimeout(() => div.remove(), 400);
     };
     
@@ -593,18 +615,19 @@ async function showSoftPrompt() {
         }
         const ok = await requestNotificationPermission(true);
         if (ok) {
-            localStorage.setItem('notif_soft_prompt_completed', 'true');
+            localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, 'true');
             div.remove();
             showToast('Avisos activados para este dispositivo.', 'success');
             return;
         }
         const permissionNow = typeof Notification !== "undefined" ? Notification.permission : notifPermission;
         if (permissionNow === 'granted') {
-            localStorage.setItem('notif_soft_prompt_completed', 'true');
+            localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, 'true');
             div.remove();
             showToast('Permiso concedido. Terminando de enlazar avisos en segundo plano...', 'info');
             return;
         }
+        localStorage.setItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY, String(Date.now() + (60 * 60 * 1000)));
         if (btn) {
             btn.disabled = false;
             btn.textContent = 'Activar';
@@ -657,7 +680,8 @@ export async function requestNotificationPermission(autoInit = true) {
   notifPermission = Notification.permission;
 
   if (notifPermission === "granted") {
-    localStorage.setItem("notif_soft_prompt_completed", "true");
+    localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, "true");
+    localStorage.removeItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY);
     document.getElementById("notif-soft-prompt")?.remove();
     analyticsSetFlag("notifications.permission", true);
     analyticsCount("notifications.enabled", 1);
@@ -687,7 +711,8 @@ export async function requestNotificationPermission(autoInit = true) {
     notifPermission = Notification.permission;
 
     if (notifPermission === "granted") {
-      localStorage.setItem("notif_soft_prompt_completed", "true");
+      localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, "true");
+      localStorage.removeItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY);
       document.getElementById("notif-soft-prompt")?.remove();
       analyticsSetFlag("notifications.permission", true);
       analyticsCount("notifications.enabled", 1);
@@ -1076,10 +1101,11 @@ export function showNotificationHelpModal() {
  */
 export async function sendExternalPush({ title, message, uids = [], url = "home.html", data = {} }) {
   try {
-    const endpoint = "https://europe-west1-padeluminatis.cloudfunctions.net/sendPush";
+    const endpoint = `${window.location.origin}/api/send-push`;
     if (window.location.protocol === "file:") return;
 
-    console.log("Enviando push externo via Firebase Functions...");
+    console.group("[sendExternalPush] Inicio");
+    console.log("[sendExternalPush] endpoint:", endpoint);
     const payload = {
       titulo: title,
       mensaje: message,
@@ -1087,16 +1113,24 @@ export async function sendExternalPush({ title, message, uids = [], url = "home.
       url: url || "home.html",
       data: data || {},
     };
+    console.log("[sendExternalPush] payload:", payload);
 
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    
+    console.log("[sendExternalPush] status:", res.status, res.statusText);
+    console.log("[sendExternalPush] ok:", res.ok);
+    if (!res.ok) {
+      const responseText = await res.text().catch(() => "");
+      console.warn("[sendExternalPush] response body:", responseText);
+    }
+    console.groupEnd();
     return res.ok;
   } catch (e) {
     console.warn("External push trigger failed:", e);
+    console.groupEnd();
     return false;
   }
 }
