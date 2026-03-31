@@ -182,7 +182,7 @@
                     </div>
                     <div class="level-curve rounded-xl">
                         <div class="curve-label" style="left:8px; bottom:10px;">Puntos</div>
-                        <div class="curve-label" style="right:8px; top:8px;">MÃ¡s arriba, mÃ¡s exigente</div>
+                        <div class="curve-label" style="right:8px; top:8px;">Más arriba, más exigente</div>
                         <div class="curve-label" style="right:8px; bottom:10px;">Subir / bajar</div>
                         <svg preserveAspectRatio="none" class="w-full h-full absolute inset-0 rounded-xl" viewBox="0 0 100 100">
                             <defs>
@@ -204,11 +204,11 @@
                     <div class="system-line"><span>Regla visible</span><b>Base + ajustes + equilibrio = delta final</b></div>
                 </div>
                 <div class="system-explain-card text-[10px] text-white/70 leading-relaxed font-medium">
-                    <p class="mb-3">La app enseÃ±a el delta final y tambiÃ©n cÃ³mo se construye. Cada lÃ­nea del desglose suma o resta y el resultado coincide con el total del partido.</p>
+                    <p class="mb-3">La app enseña el delta final y también cómo se construye. Cada línea del desglose suma o resta y el resultado coincide con el total del partido.</p>
                     <ul class="flex-col gap-2 list-none pl-0">
                         <li class="flex items-center gap-2"><i class="fas fa-users text-primary w-3"></i> <span>Los puntos parten de la fuerza de las dos parejas completas, incluidos invitados si tienen nivel guardado.</span></li>
                         <li class="flex items-center gap-2"><i class="fas fa-fire text-orange-400 w-3"></i> <span>La racha influye, pero no se esconde: aparece como una variable separada.</span></li>
-                        <li class="flex items-center gap-2"><i class="fas fa-layer-group text-cyan-300 w-3"></i> <span>La barra de progreso indica dÃ³nde estÃ¡s dentro de tu tramo de nivel y cuÃ¡ntos puntos faltan para subir o bajar.</span></li>
+                        <li class="flex items-center gap-2"><i class="fas fa-layer-group text-cyan-300 w-3"></i> <span>La barra de progreso indica dónde estás dentro de tu tramo de nivel y cuántos puntos faltan para subir o bajar.</span></li>
                     </ul>
                 </div>
             </div>
@@ -258,7 +258,7 @@
             <div class="flex flex-wrap gap-2 mb-4 ranking-toolbar">
                 <select id="rank-view-mode" class="input ranking-filter" style="max-width:170px;" aria-label="Tipo de ranking">
                     <option value="general">Ranking general</option>
-                    <option value="season">Por temporada</option>
+                    <option value="season">Ranking mensual</option>
                 </select>
                 <input id="rank-search" class="input ranking-search" style="max-width:300px;"
                     placeholder="Buscar jugador por nombre o nivel..." aria-label="Buscar jugador en ranking">
@@ -282,11 +282,15 @@
         </section>
         <section id="season-ranking-section" class="leaderboard-section animate-fade-in mt-8 hidden">
             <div class="section-header">
-                <h2 class="section-title">Ranking de temporada</h2>
-                <span id="season-total-info" class="lb-total-info">-- temporada</span>
+                <h2 class="section-title">Mejores del Mes</h2>
+                <div class="flex-row gap-2 items-center">
+                    <button id="prev-month-btn" class="btn-micro"><i class="fas fa-chevron-left"></i></button>
+                    <span id="season-total-info" class="lb-total-info font-black uppercase text-primary">--</span>
+                    <button id="next-month-btn" class="btn-micro"><i class="fas fa-chevron-right"></i></button>
+                </div>
             </div>
             <div id="season-lb-list" class="leaderboard-list">
-                <div class="text-center py-10 opacity-30 font-black uppercase text-xs">Cargando temporada...</div>
+                <div class="text-center py-10 opacity-30 font-black uppercase text-xs">Cargando mes...</div>
             </div>
         </section>
         <section class="leaderboard-section animate-fade-in mt-8 rank-system-section">

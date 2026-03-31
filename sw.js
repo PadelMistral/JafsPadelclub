@@ -2,6 +2,8 @@
    JafsPadel Service Worker v4 — PWA + Background Push Ready
    =============================================================== */
 
+importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+
 const CACHE_NAME = "jafs-padel-runtime";
 const BASE_PATH = new URL(self.registration.scope || "/").pathname.replace(/\/$/, "");
 const withBase = (path) =>

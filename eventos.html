@@ -38,7 +38,36 @@
             </div>
         </section>
 
-        <!-- Filter Tabs -->
+        <!-- Panel en Tiempo Real -->
+        <section class="events-dashboard-v3 animate-fade-in" style="animation-delay: 0.05s;">
+            <div class="ev-dash-card glass-strong">
+                <div class="ev-dash-header">
+                    <span class="text-[10px] uppercase tracking-[3px] font-black text-primary">Panel en Tiempo Real</span>
+                    <button id="btn-download-ev-poster" class="btn-micro-glass" title="Descargar como cartel de club">
+                        <i class="fas fa-download"></i> <span>DESCARGAR CARTEL</span>
+                    </button>
+                </div>
+                <div class="ev-dash-grid">
+                    <div class="ev-dash-item">
+                        <span class="ev-dash-label">DISPUTADOS</span>
+                        <span class="ev-dash-val" id="count-played">0</span>
+                    </div>
+                    <div class="ev-dash-item">
+                        <span class="ev-dash-label">PROGRAMADOS</span>
+                        <span class="ev-dash-val" id="count-scheduled">0</span>
+                    </div>
+                    <div class="ev-dash-item">
+                        <span class="ev-dash-label">PENDIENTES</span>
+                        <span class="ev-dash-val" id="count-pending">0</span>
+                    </div>
+                    <div class="ev-dash-item">
+                        <span class="ev-dash-label">EN INSCRIPCIÓN</span>
+                        <span class="ev-dash-val" id="count-open">0</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <section class="events-filter-section animate-fade-in" style="animation-delay: 0.08s;">
             <div class="events-filter-scroll">
                 <button class="evf-tab active" data-filter="all"><i class="fas fa-layer-group"></i> Todos</button>

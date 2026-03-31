@@ -3409,6 +3409,95 @@ body.home-booting {
     transform: scale(1.1);
 }
 
+.eda-inline-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(8, 14, 28, 0.95), rgba(15, 23, 42, 1));
+    border: 1px solid rgba(0, 212, 255, 0.15);
+}
+.eda-inline-card.is-finished {
+    border-color: rgba(184, 255, 0, 0.2);
+    background: linear-gradient(135deg, rgba(8, 14, 28, 0.95), rgba(184, 255, 0, 0.03));
+}
+.eda-inline-card .eda-glow {
+    position: absolute;
+    top: -40%;
+    right: -20%;
+    width: 260px;
+    height: 260px;
+    background: radial-gradient(circle, rgba(0, 212, 255, 0.08), transparent 70%);
+    pointer-events: none;
+}
+.eda-inline-card.is-finished .eda-glow {
+    background: radial-gradient(circle, rgba(184, 255, 0, 0.08), transparent 70%);
+}
+.eda-mini-icon {
+    width: 24px;
+    height: 24px;
+    background: rgba(0, 212, 255, 0.1);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #00d4ff;
+}
+.is-finished .eda-mini-icon {
+    background: rgba(184, 255, 0, 0.1);
+    color: #b8ff00;
+}
+.eda-summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+}
+.btn-eda-action {
+    width: 34px;
+    height: 34px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    color: #fff;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+.btn-eda-action:hover {
+    background: rgba(0, 212, 255, 0.15);
+    border-color: rgba(0, 212, 255, 0.3);
+    color: #00d4ff;
+    transform: translateY(-2px);
+}
+.is-finished .btn-eda-action:hover {
+    background: rgba(184, 255, 0, 0.15);
+    border-color: rgba(184, 255, 0, 0.3);
+    color: #b8ff00;
+}
+
+/* Compact Club Card */
+.hv2-club-card.is-compact {
+    padding: 8px 12px;
+    gap: 8px;
+    min-height: 0;
+}
+.hv2-club-icon.compact {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+}
+.hv2-club-card.is-compact .hv2-club-title {
+    margin-top: 0;
+    line-height: 1.2;
+}
+.hv2-club-card.is-compact .hv2-club-eyebrow {
+    margin-bottom: 2px;
+    display: block;
+}
+
 /* EVENT DAY MODAL */
 .event-day-alert {
     position: fixed;

@@ -93,6 +93,81 @@ body {
   display: none;
 }
 
+/* Dashboard */
+.events-dashboard-v3 {
+  margin-bottom: 2rem;
+}
+.ev-dash-card {
+  padding: 1.5rem;
+  border-radius: 2rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+.ev-dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.btn-micro-glass {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 6px 14px;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  letter-spacing: 0.5px;
+}
+.btn-micro-glass:hover {
+  background: var(--primary);
+  color: #020617;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(0, 212, 255, 0.2);
+}
+.ev-dash-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+}
+.ev-dash-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ev-dash-label {
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--text-muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.ev-dash-val {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #fff;
+  font-family: var(--font-display);
+  line-height: 1;
+}
+
+@media (max-width: 768px) {
+  .ev-dash-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  .ev-dash-val {
+    font-size: 1.5rem;
+  }
+}
+
 /* Filtros */
 .events-filter-section {
   margin-bottom: 2rem;
@@ -720,25 +795,6 @@ textarea.input {
 }
 
 .ue-body { flex: 1; z-index: 2; }
-
-.ue-stat-pill {
-    padding: 10px 15px;
-    background: rgba(198, 255, 0, 0.1);
-    border: 1px solid rgba(198, 255, 0, 0.3);
-    border-radius: 15px;
-    color: var(--primary);
-    font-weight: 900;
-    font-size: 14px;
-    z-index: 2;
-}
-    background: rgba(0, 229, 255, 0.1);
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    color: var(--primary);
-}
 
 .ue-body h4 { font-size: 14px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #fff; margin: 0; }
 .ue-body p { font-size: 11px; color: var(--text-muted); margin: 4px 0 0; text-transform: uppercase; font-weight: 700; }
