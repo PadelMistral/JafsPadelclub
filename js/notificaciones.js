@@ -653,9 +653,6 @@ async function updatePushStatusUI() {
     const btnTestPush = document.getElementById("btn-test-push");
     const isAdmin = currentUserDoc?.rol === "Admin";
 
-    const btnTestPush = document.getElementById("btn-test-push");
-    const isAdmin = currentUserDoc?.rol === "Admin";
-
     if (btnTestPush) {
       btnTestPush.style.display = "flex";
       btnTestPush.onclick = async () => {
