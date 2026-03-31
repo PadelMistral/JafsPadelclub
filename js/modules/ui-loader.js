@@ -1,5 +1,5 @@
 /* js/modules/ui-loader.js - Dynamic Layout Injection v5.5 */
-import { getDocument, auth, db, subscribeCol, getDocsSafe, observerAuth as guardAuth, logout } from '../firebase-service.js';
+import { getDocument, updateDocument, auth, db, subscribeCol, getDocsSafe, observerAuth as guardAuth, logout } from '../firebase-service.js';
 import { initThemeSystem } from './theme-manager.js';
 import { logInfo } from '../core/app-logger.js';
 
@@ -146,11 +146,34 @@ function bindHeaderProfileMenu(userData = null) {
         closeMenu();
         window.location.href = "palas.html";
     });
-    adminViewBtn?.addEventListener("click", () => {
+    adminViewBtn?.addEventListener("click", async () => {
         closeMenu();
-        const onAdminPage = /(^|\/)admin\.html$/i.test(window.location.pathname || "");
-        localStorage.setItem("jafs_view_mode", onAdminPage ? "user" : "admin");
-        window.location.href = onAdminPage ? "home.html" : "admin.html";
+        const currentRole = String(userData?.rol || userData?.role || "").toLowerCase();
+        const isAdmin = currentRole.includes("admin");
+        const newRole = isAdmin ? "User" : "Admin";
+        
+        try {
+            // Update Firestore role
+            await updateDocument("usuarios", auth.currentUser.uid, { 
+                rol: newRole,
+                // Ensure they can toggle back if they were an admin
+                ...(isAdmin ? { canToggleAdmin: true } : {})
+            });
+            emitToast("MODO " + newRole.toUpperCase(), "Cambiando permisos...", "success");
+            
+            // Redirect after a short delay to allow Firestore to propagate
+            setTimeout(() => {
+                const onAdminPage = /(^|\/)admin\.html$/i.test(window.location.pathname || "");
+                if (newRole === "Admin") {
+                    window.location.href = "admin.html";
+                } else {
+                    window.location.href = onAdminPage ? "home.html" : window.location.href;
+                }
+            }, 800);
+        } catch (e) {
+            console.error("Error toggling admin view:", e);
+            emitToast("ERROR", "No se pudo cambiar el modo de vista.", "error");
+        }
     });
     logoutBtn?.addEventListener("click", async () => {
         closeMenu();
@@ -171,7 +194,9 @@ function bindHeaderProfileMenu(userData = null) {
 
 function isAdminUser(userData) {
     const role = String(userData?.rol || userData?.role || "").toLowerCase();
-    return role.includes("admin") || (auth.currentUser?.email === "Juanan221091@gmail.com");
+    const canToggle = userData?.canToggleAdmin === true;
+    const isMaster = (auth.currentUser?.email === "Juanan221091@gmail.com");
+    return role.includes("admin") || canToggle || isMaster;
 }
 
 function getCurrentPageMeta() {
@@ -252,7 +277,12 @@ export async function injectHeader(userData = null) {
                         <button class="header-menu-action" id="header-go-history"><i class="fas fa-clock-rotate-left"></i> Historial</button>
                         <button class="header-menu-action" id="header-go-palas"><i class="fas fa-table-tennis-paddle-ball"></i> Palas</button>
                     </div>
-                    ${isAdmin ? `<button class="header-menu-action" id="header-toggle-admin-view"><i class="fas fa-shield-halved"></i> ${/admin\.html$/i.test(window.location.pathname || "") ? 'Modo usuario' : 'Admin'}</button>` : ``}
+                    ${isAdmin ? `
+                        <button class="header-menu-action" id="header-toggle-admin-view" style="color:var(--sport-gold); border: 1px solid rgba(var(--sport-gold-rgb), 0.2); background: rgba(var(--sport-gold-rgb), 0.05); margin-top: 10px;">
+                            <i class="fas fa-shield-halved"></i> 
+                            ${String(userData?.rol || "").toLowerCase() === 'admin' ? 'Ver como Usuario' : 'Activar Admin'}
+                        </button>
+                    ` : ``}
                     <button class="header-menu-action" id="header-go-profile"><i class="fas fa-user"></i> Ir a perfil</button>
                     <button class="header-menu-action danger" id="header-logout"><i class="fas fa-right-from-bracket"></i> Cerrar sesión</button>
                 </div>

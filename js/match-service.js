@@ -298,7 +298,7 @@ function ensurePostMatchSummaryStyles() {
     postMatchSummaryStyleInjected = true;
 }
 
-async function showPostMatchSummaryModal(rankingSync = {}, matchId = null) {
+async function showPostMatchSummaryModal(rankingSync = {}, matchId = null, resultStr = null) {
     const meUid = auth.currentUser?.uid;
     const meChange = (rankingSync?.changes || []).find((c) => c?.uid === meUid);
     const analysis = meChange?.analysis;
@@ -313,6 +313,7 @@ async function showPostMatchSummaryModal(rankingSync = {}, matchId = null) {
     const division = getDivisionByRating(newPts);
     const scoringSystem = String(rankingSync?.summary?.scoringSystem || analysis?.systemVersion || "default");
     const scoringLabel = String(scoringSystem).includes("atp") ? "ATP Hybrid Competitive" : "ELO Hibrido Club";
+    const setsText = resultStr || rankingSync?.summary?.sets || "Completado";
 
     await new Promise((resolve) => {
         const overlay = document.createElement("div");
@@ -325,6 +326,10 @@ async function showPostMatchSummaryModal(rankingSync = {}, matchId = null) {
               <span class="pm-chip">${scoringLabel}</span>
             </div>
             <div class="post-match-main">
+              <div class="pm-cell" style="grid-column: span 4; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; text-align: center;">
+                 <span style="font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.6); text-transform: uppercase;">Resultado Oficial</span>
+                 <div style="font-size: 32px; font-weight: 900; font-style: italic; color: #fff; margin-top: 4px; letter-spacing: -1px;">${setsText}</div>
+              </div>
               <div class="pm-cell"><span>Rating anterior</span><b>${oldPts}</b></div>
               <div class="pm-cell"><span>Rating nuevo</span><b>${newPts}</b></div>
               <div class="pm-cell"><span>Delta</span><b class="${delta >= 0 ? "pm-delta-pos" : "pm-delta-neg"}">${delta >= 0 ? "+" : ""}${delta.toFixed(0)}</b></div>
@@ -2952,16 +2957,9 @@ export const openResultForm = async (id, col) => {
                 </select>
             </div>
 
-            <div class="range-box-v7 flex-col gap-2 mb-8 items-start">
-                <span class="text-[10px] font-black text-primary uppercase tracking-widest pl-1">Sistema de puntuacion</span>
-                <select id="scoring-system-select" class="scoring-select-v7 outline-none cursor-pointer">
-                    <option value="default" class="bg-[#0f172a]" ${scoringSystemCurrent === "default" ? "selected" : ""}>ELO HIBRIDO CLUB</option>
-                    <option value="atp_test" class="bg-[#0f172a]" ${scoringSystemCurrent === "atp_test" ? "selected" : ""}>ATP HYBRID COMPETITIVE</option>
-                </select>
-                <p class="scoring-help-v7">
-                    Se guarda con el partido y sera el sistema usado al calcular puntos, nivel y desglose.
-                </p>
-            </div>
+            <!-- Hidden scoring system, forced to ATP -->
+            <input type="hidden" id="scoring-system-select" value="atp_test">
+
 
             <button class="btn-confirm-v7" id="btn-save-res">
                 <span class="t-main">REGISTRAR DATOS</span>
@@ -3034,7 +3032,7 @@ export const openResultForm = async (id, col) => {
             showToast("Guardando...", "Registrando resultado oficial del partido.", "info");
             const resultStr = res.join(' ');
             const mvpId = document.getElementById('mvp-select')?.value || null;
-            const scoringSystem = String(document.getElementById('scoring-system-select')?.value || scoringSystemCurrent || 'default').toLowerCase();
+            const scoringSystem = 'atp_test';
             const adminOverride = adminEditMode && matchDoc?.rankingProcessedAt != null;
             
             if (adminOverride) {
@@ -3090,7 +3088,7 @@ export const openResultForm = async (id, col) => {
             );
             window.closeMatchModal();
             if (!rankingSync?.skipped) {
-                await showPostMatchSummaryModal(rankingSync, id);
+                await showPostMatchSummaryModal(rankingSync, id, resultStr);
             } else {
                 setTimeout(() => {
                     try { window.location.href = `diario.html?matchId=${id}`; } catch (_) {}

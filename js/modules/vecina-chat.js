@@ -21,7 +21,7 @@ import { calculateCourtCondition } from "../utils/weather-utils.js";
 // --- ATOMIC STATE & CACHE ---
 let chatOpen = false;
 let userData = null;
-let currentPersonality = "coach"; // 'coach' or 'vecina'
+let currentPersonality = "vecina"; // Only one unified robust assistant
 
 const DATA_CACHE = {
   user: null,
@@ -1082,18 +1082,23 @@ function _generateResponse(intent, query) {
         : "Guía Operativa: Usa el Menú para navegar. 'Home' es tu centro de mando, 'Calendario' para logística de pistas, 'Ranking' para objetivos competitivos y 'Diario' para análisis de mejora post-partido.";
   }
 
+  if (intent === "CMD_RESERVE_MATCH") {
+      let msg = "¡Qué buena idea! Montemos un partido. Haz clic en el siguiente botón para iniciar el proceso de creación.<br><br>";
+      msg += `<button class="btn pt-2 pb-2 text-xs font-black bg-primary text-black rounded-lg w-full mt-2" onclick="window.location.href='pantalla-inicial.html#proposal-inline-section'; setTimeout(()=>window.openProposeMatchChat(), 500); window.toggleAiChat();"><i class="fas fa-calendar-plus mr-2"></i> INICIAR PROPUESTA / RESERVA</button>`;
+      return msg;
+  }
+
   if (intent === "CMD_RANKING_TOP") {
     const list = DATA_CACHE.globalUsers.slice()
         .sort((a,b) => (b.puntosRanking || 1000) - (a.puntosRanking || 1000))
         .slice(0, 5);
     
-    let text = currentPersonality === 'vecina' ? "Aquí tienes a los jefazos del club ahora mismo:\n" : "Clasificación General (Top 5):\n";
+    let text = "Clasificación General (Top 5):\n";
     list.forEach((u, i) => {
         const name = (u.nombreUsuario || u.nombre || "Jugador").toUpperCase();
         text += `${i+1}. ${name} (${Math.round(u.puntosRanking || 1000)} pts)\n`;
     });
     
-    if (currentPersonality === 'vecina') text += "\n¡A ver si les bajas de ahí pronto, que se lo tienen muy creído!";
     return text;
   }
 
@@ -1147,6 +1152,7 @@ function _detectIntent(query) {
   if (q.includes("diario") || q.includes("aprender") || q.includes("analiza mis") || q.includes("objetivo")) return "CMD_DIARY_ANALYSIS";
   if (q.includes("elo") || q.includes("puntos") || q.includes("calculo")) return "CMD_ELO_FORMULA";
   if (q.includes("ayuda") || q.includes("como funciona") || q.includes("guia")) return "CMD_TUTORIAL";
+  if (q.includes("reservar partido") || q.includes("reservame partido") || q.includes("crear partido") || q.includes("nuevo partido") || q.includes("abre un partido") || q.includes("montar partido") || q.includes("quiero jugar el dia") || q.includes("reserva")) return "CMD_RESERVE_MATCH";
   return "GENERAL";
 }
 
@@ -1234,22 +1240,7 @@ export function toggleChat(forceOpen = null) {
 }
 
 function switchAiPersonality() {
-    currentPersonality = currentPersonality === 'coach' ? 'vecina' : 'coach';
-    const p = PERSONALITIES[currentPersonality];
-    
-    // Update UI
-    const avatar = document.getElementById('p-avatar-bot');
-    avatar.className = `ai-avatar-box ${currentPersonality}`;
-    
-    const nameEl = document.getElementById('ai-bot-name');
-    nameEl.textContent = p.name.toUpperCase();
-    
-    const msgs = document.getElementById("ai-messages");
-    const botDiv = document.createElement("div");
-    botDiv.className = "ai-msg bot";
-    botDiv.innerHTML = `<p><i>Sistema reiniciado. Personalidad cargada: <b>${p.name}</b>.</i></p>`;
-    msgs.appendChild(botDiv);
-    msgs.scrollTop = msgs.scrollHeight;
+    // Deprecated for simplified interface
 }
 
 window.aiQuickCmd = (cmd, label) => {
@@ -1294,13 +1285,11 @@ export function initVecinaChat() {
   const chatHTML = `
         <div id="vecina-chat-panel" class="ai-chat-panel v14">
             <div class="ai-chat-header border-b border-white-05 px-6">
-                <div class="personality-toggle" onclick="window.switchAiPersonality()">
-                    <div id="p-avatar-bot" class="ai-avatar-box coach">
-                        <i class="fas fa-robot"></i>
-                    </div>
+                <div class="ai-avatar-box vecina">
+                    <i class="fas fa-robot"></i>
                 </div>
-                <div class="ai-header-info flex-1" onclick="window.switchAiPersonality()">
-                    <span id="ai-bot-name" class="ai-title italic font-black uppercase">COACH IA</span>
+                <div class="ai-header-info flex-1">
+                    <span id="ai-bot-name" class="ai-title italic font-black uppercase">ASISTENTE IA</span>
                     <div class="flex-row items-center gap-2">
                         <div class="pulse-dot-green"></div>
                         <span id="ai-bot-tag" class="ai-subtitle tracking-[2px]">VECINA 3.0</span>
@@ -1313,7 +1302,7 @@ export function initVecinaChat() {
             
             <div id="ai-messages" class="ai-chat-body custom-scroll p-6">
                 <div class="ai-msg bot">
-                    <p>Sistema online. Soy tu asistente personal V3.0. Pregúntame sobre tus datos, rivales o el club.</p>
+                    <p>Sistema online. Soy tu asistente personal V3.0. Pregúntame sobre tus datos, rivales, apúntate a partidos automáticamente, o pregúntame por el club.</p>
                 </div>
             </div>
 

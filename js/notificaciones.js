@@ -217,7 +217,7 @@ function loadNotificationsSafeV2(uid) {
     notifListEl.innerHTML = `
       <div class="empty-state-v8">
         <i class="fas fa-exclamation-triangle opacity-20 text-red-400 mb-4 text-4xl"></i>
-        <p>Error al cargar las notificaciones. Revisa tu conexiÃ³n.</p>
+        <p>Error al cargar las notificaciones. Revisa tu conexión.</p>
         <code class="text-[9px] opacity-40 mt-2">${escapeHtml(err?.message || "Error desconocido")}</code>
       </div>
     `;
@@ -378,13 +378,13 @@ async function deleteNotification(id) {
   if (!auth.currentUser) return;
   if (!(await confirmNotificationsAction({
     title: "Eliminar aviso",
-    message: "Se eliminara esta notificacion de tu bandeja.",
+    message: "Se eliminará esta notificación de tu bandeja.",
     confirmLabel: "Eliminar",
     danger: true,
   }))) return;
   try {
     await deleteDoc(doc(db, "notificaciones", id));
-    showToast("Eliminado", "Notificacion borrada", "success");
+    showToast("Eliminado", "Notificación borrada", "success");
   } catch (e) {
     console.error("Firestore error (deleteNotification):", e);
     showToast("Error", "No se pudo borrar", "error");
@@ -417,7 +417,7 @@ function setupGlobalActions() {
         });
       });
       await batch.commit();
-      showToast("Hecho", "Todas las notificaciones marcadas como leidas.", "success");
+      showToast("Hecho", "Todas las notificaciones marcadas como leídas.", "success");
     } catch (e) {
       console.error("Firestore error (markAllAsRead):", e);
     }
@@ -427,7 +427,7 @@ function setupGlobalActions() {
     if (!notifications.length) return;
     if (!(await confirmNotificationsAction({
       title: "Vaciar bandeja",
-      message: "Se eliminaran todos los avisos guardados en esta bandeja.",
+      message: "Se eliminarán todos los avisos guardados en esta bandeja.",
       confirmLabel: "Vaciar",
       danger: true,
     }))) return;
@@ -435,7 +435,7 @@ function setupGlobalActions() {
       const batch = writeBatch(db);
       notifications.forEach((n) => batch.delete(doc(db, "notificaciones", n.id)));
       await batch.commit();
-      showToast("Bandeja vacia", "Se han eliminado todas las notificaciones.", "info");
+      showToast("Bandeja vacía", "Se han eliminado todas las notificaciones.", "info");
     } catch (e) {
       console.error("Firestore error (clearAll):", e);
     }
@@ -470,9 +470,9 @@ function getRecommendedActionLabel(status = {}) {
 function buildFriendlyState(status) {
   if (status.permission === "denied") {
     return {
-      title: "Tus avisos estan bloqueados",
-      summary: "El navegador o el movil tiene los avisos bloqueados para esta app.",
-      support: "Abre la guia, desbloquealos y vuelve a entrar. Si usas movil, conviene tener la PWA instalada.",
+      title: "Tus avisos están bloqueados",
+      summary: "El navegador o el móvil tiene los avisos bloqueados para esta app.",
+      support: "Abre la guía, desbloquéalos y vuelve a entrar. Si usas móvil, conviene tener la PWA instalada.",
       primary: "Ver como activar",
       tone: "blocked",
     };
@@ -651,95 +651,42 @@ async function updatePushStatusUI() {
     };
 
     const btnTestPush = document.getElementById("btn-test-push");
-    const isAdmin = currentUserDoc?.rol === "admin";
+    const isAdmin = currentUserDoc?.rol === "Admin";
 
-    if (btnTestPush) {
-      if (!isAdmin) {
-        btnTestPush.style.display = "none";
-      } else {
-        btnTestPush.style.display = "flex";
-        btnTestPush.onclick = async () => {
-          // 1. Prueba Local (App abierta)
-          await sendPushNotification(
-            "ACCESO CONCEDIDO (App Abierta)",
-            "Este aviso confirma que tu dispositivo permite notificaciones. Ahora probaremos el fondo...",
-            "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff",
-          );
-          
-          // 2. Prueba Externa (Segundo Plano / OneSignal)
-          setTimeout(async () => {
-             if (currentUser?.uid) {
-               await sendExternalPush({
-                 title: "TEST ONESIGNAL (Segundo Plano)",
-                 message: "¡Excelente! Has recibido este aviso por el canal real de OneSignal.",
-                 uids: [currentUser.uid],
-                 url: "notificaciones.html",
-                 data: { type: "test", from: "diag_btn" }
-               });
-             }
-          }, 3000);
-
-          showToast("Doble test lanzado", "Tienes 3 segundos para cerrar la app y probar el fondo real.", "info");
-        };
-      }
-    }
-
-    if (btnTestPush && currentUser?.uid) {
-      btnTestPush.style.display = "flex";
-      btnTestPush.onclick = async () => {
-        await sendPushNotification(
-          "TEST LOCAL",
-          "Si ves este aviso, el permiso local funciona. Ahora lanzamos la prueba real de segundo plano.",
-          "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff",
-        );
-
-        setTimeout(async () => {
-          await sendExternalPush({
-            title: "TEST SEGUNDO PLANO",
-            message: "Si este aviso llega con la app minimizada o cerrada, el canal real ya funciona.",
-            uids: [currentUser.uid],
-            url: "notificaciones.html",
-            data: { type: "test", from: "notif_test_button" }
-          });
-        }, 2500);
-
-        showToast("Prueba lanzada", "Minimiza la app unos segundos para verificar el segundo plano.", "info");
-      };
-    }
+    const btnTestPush = document.getElementById("btn-test-push");
+    const isAdmin = currentUserDoc?.rol === "Admin";
 
     if (btnTestPush) {
       btnTestPush.style.display = "flex";
       btnTestPush.onclick = async () => {
         if (!currentUser?.uid) {
-          showToast("Usuario no listo", "Espera unos segundos y vuelve a intentarlo.", "warning");
+          showToast("Sesión no lista", "Espera un momento e intenta de nuevo.", "warning");
           return;
         }
 
+        // 1. Prueba Local (App abierta)
         await sendPushNotification(
-          isAdmin ? "TEST LOCAL ADMIN" : "TEST LOCAL",
-          "Si ves este aviso, el permiso local funciona. Ahora lanzamos la prueba real de segundo plano.",
+          isAdmin ? "PRUEBA LOCAL (ADMIN)" : "PRUEBA LOCAL",
+          "Esta notificación confirma que el permiso del navegador funciona correctamente.",
           "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff",
         );
-
+        
+        // 2. Prueba Externa (Segundo Plano / OneSignal)
+        showToast("Lanzando prueba real...", "En 3 segundos recibirás el aviso de segundo plano.", "info");
+        
         setTimeout(async () => {
-          await sendExternalPush({
-            title: isAdmin ? "TEST REAL ONESIGNAL" : "TEST SEGUNDO PLANO",
-            message: isAdmin
-              ? "Si este aviso llega con la app cerrada o minimizada, el canal real de OneSignal ya funciona."
-              : "Si este aviso llega con la app minimizada o cerrada, el canal real ya funciona.",
-            uids: [currentUser.uid],
-            url: "notificaciones.html",
-            data: { type: "test", from: isAdmin ? "diag_btn" : "notif_test_button" }
-          });
-        }, isAdmin ? 3000 : 2500);
-
-        showToast(
-          "Prueba lanzada",
-          isAdmin
-            ? "Minimiza o cierra la app unos segundos para validar el canal real."
-            : "Minimiza la app unos segundos para verificar el segundo plano.",
-          "info",
-        );
+           try {
+             await sendExternalPush({
+               title: isAdmin ? "PRUEBA REAL (ADMIN)" : "PRUEBA SEGUNDO PLANO",
+               message: "Excelente. Si ves esto con la app cerrada o el móvil bloqueado, todo está bien conectado.",
+               uids: [currentUser.uid],
+               url: "notificaciones.html",
+               data: { type: "test", from: "diag_btn" }
+             });
+           } catch (e) {
+             console.error("External push test failed", e);
+           }
+        }, 3000);
       };
     }
   } catch (e) {

@@ -145,7 +145,7 @@ export async function shareMatchResult(analysis, matchData) {
 }
 
 // ──────────────────────────────────────────────────
-// MATCH POSTER V2 — With betting odds & player levels
+// MATCH POSTER V3 — Premium Hybrid (Upcoming / Played)
 // ──────────────────────────────────────────────────
 export async function generateMatchPosterImage(matchData = {}) {
     const canvas = document.createElement('canvas');
@@ -153,364 +153,416 @@ export async function generateMatchPosterImage(matchData = {}) {
     canvas.width = 1080;
     canvas.height = 1350;
 
-    // === 1. BACKGROUND — Deep sport gradient ===
+    const isPlayed = Boolean(matchData.sets || matchData.winner);
+    const accentColor = isPlayed ? '#b8ff00' : '#00d4ff';
+
+    // === 1. BACKGROUND ===
     const grad = ctx.createLinearGradient(0, 0, 0, 1350);
-    grad.addColorStop(0, '#040c1e');
-    grad.addColorStop(0.3, '#0a1832');
-    grad.addColorStop(0.7, '#0c1a2e');
-    grad.addColorStop(1, '#030810');
+    grad.addColorStop(0, '#020617');
+    grad.addColorStop(0.3, '#0b1222');
+    grad.addColorStop(0.7, '#070d1a');
+    grad.addColorStop(1, '#02040a');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 1080, 1350);
 
-    // === 2. PADEL COURT BACKGROUND (realistic) ===
-    drawCourtLines(ctx, 1080, 1350, 0.07);
-    // Extra court center circle
+    // === 2. COURT LINES (Realistic) ===
+    drawCourtLines(ctx, 1080, 1350, 0.08);
+    
+    // Ambient circle
     ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(540, 650, 180, 0, Math.PI * 2);
-    ctx.stroke();
-    // Net line
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(120, 675);
-    ctx.lineTo(960, 675);
-    ctx.stroke();
-    ctx.restore();
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(540, 675, 200, 0, Math.PI * 2); ctx.stroke();
 
-    // === 3. DIAGONAL SPORT STRIPES ===
-    ctx.save();
-    // Cyan stripe
-    ctx.globalAlpha = 0.15;
-    ctx.fillStyle = '#00d4ff';
-    ctx.beginPath();
-    ctx.moveTo(-60, 160); ctx.lineTo(1140, 80); ctx.lineTo(1140, 130); ctx.lineTo(-60, 210);
-    ctx.closePath(); ctx.fill();
-    // Lime stripe
-    ctx.fillStyle = '#b8ff00';
-    ctx.beginPath();
-    ctx.moveTo(-60, 215); ctx.lineTo(1140, 135); ctx.lineTo(1140, 175); ctx.lineTo(-60, 255);
-    ctx.closePath(); ctx.fill();
-    // Bottom accent
-    ctx.fillStyle = '#00d4ff';
-    ctx.beginPath();
-    ctx.moveTo(-60, 1180); ctx.lineTo(1140, 1130); ctx.lineTo(1140, 1160); ctx.lineTo(-60, 1210);
-    ctx.closePath(); ctx.fill();
-    ctx.restore();
-
-    // === 4. LOGO ===
+    // === 3. HEADER & LOGO ===
     const logo = await loadImage(matchData.logoUrl || 'imagenes/Logojafs.png');
     if (logo) {
-        ctx.globalAlpha = 0.95;
-        ctx.drawImage(logo, 870, 40, 130, 130);
         ctx.globalAlpha = 1;
+        ctx.drawImage(logo, 70, 60, 110, 110);
     }
 
-    // === 5. HEADER ===
-    ctx.fillStyle = '#b8ff00';
-    ctx.font = '900 52px Rajdhani';
     ctx.textAlign = 'left';
-    ctx.fillText('PADELUMINATIS', 70, 105);
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '700 18px Rajdhani';
-    ctx.letterSpacing = '4px';
-    ctx.fillText((matchData.title || 'PRÓXIMO PARTIDO').toUpperCase(), 72, 135);
+    ctx.fillStyle = accentColor;
+    ctx.font = '900 48px Rajdhani';
+    ctx.fillText('JAFS PADEL CLUB', 200, 105);
+    
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '700 20px Rajdhani';
+    ctx.letterSpacing = '5px';
+    const hTitle = isPlayed ? 'RESULTADO FINAL' : (matchData.title || 'PRÓXIMO PARTIDO');
+    ctx.fillText(hTitle.toUpperCase(), 202, 140);
 
-    // === 6. DATE/TIME BAR ===
-    const meta = matchData.when || 'HORA POR CONFIRMAR';
-    roundRect(ctx, 60, 260, 960, 110, 20, 'rgba(0,180,255,0.14)');
-    ctx.strokeStyle = 'rgba(0,180,255,0.22)';
-    ctx.lineWidth = 1.2;
+    // === 4. DATE/TIME OR SCORE BAR ===
+    const boxY = 240;
+    const boxH = 160;
+    roundRect(ctx, 60, boxY, 960, boxH, 24, 'rgba(255,255,255,0.02)');
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.font = '900 16px Rajdhani';
-    ctx.textAlign = 'center';
-    ctx.fillText('FECHA Y HORA', 540, 296);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 40px Rajdhani';
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,212,255,0.35)';
-    ctx.shadowBlur = 12;
-    ctx.fillText('📅  ' + meta.toUpperCase(), 540, 345);
-    ctx.restore();
 
-    // === 7. TEAMS LAYOUT ===
+    if (isPlayed) {
+        // PREMUM SCORE DISPLAY
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '900 16px Rajdhani';
+        ctx.fillText('MARCADOR FINAL', 540, boxY + 35);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'italic 900 110px Rajdhani';
+        ctx.save();
+        ctx.shadowColor = 'rgba(184, 255, 0, 0.4)';
+        ctx.shadowBlur = 20;
+        ctx.fillText(matchData.sets || 'F', 540, boxY + 125);
+        ctx.restore();
+    } else {
+        // UPCOMING DATE DISPLAY
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '900 16px Rajdhani';
+        ctx.fillText('FECHA DEL ENCUENTRO', 540, boxY + 35);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 44px Rajdhani';
+        ctx.fillText('📅  ' + (matchData.when || 'POR CONFIRMAR').toUpperCase(), 540, boxY + 105);
+    }
+
+    // === 5. TEAM PANELS ===
     const teamA = Array.isArray(matchData.teamA) ? matchData.teamA : [];
     const teamB = Array.isArray(matchData.teamB) ? matchData.teamB : [];
     const levelA = matchData.levelsA || [];
     const levelB = matchData.levelsB || [];
-    const trim = (s = "") => String(s).trim().slice(0, 22);
-
-    // Team A panel
-    roundRect(ctx, 60, 400, 440, 280, 20, 'rgba(0,180,255,0.05)');
-    ctx.strokeStyle = 'rgba(0,212,255,0.15)';
-    ctx.lineWidth = 1.5;
+    const winnerKey = String(matchData.winner || "").toUpperCase();
+    
+    // Team A
+    const isWinnerA = winnerKey === 'A';
+    roundRect(ctx, 60, 440, 440, 320, 24, isWinnerA ? 'rgba(184,255,0,0.07)' : 'rgba(255,255,255,0.03)');
+    ctx.strokeStyle = isWinnerA ? 'rgba(184,255,0,0.3)' : 'rgba(255,255,255,0.1)';
     ctx.stroke();
-
-    // Team A — Cyan accent top
-    ctx.fillStyle = '#00d4ff';
-    ctx.fillRect(60, 400, 440, 4);
-
+    
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(0,212,255,0.5)';
+    ctx.fillStyle = isWinnerA ? '#b8ff00' : 'rgba(255,255,255,0.3)';
     ctx.font = '900 14px Rajdhani';
-    const teamAHead = (teamA[0] || 'JUGADOR 1') + (teamA[1] ? ' & ' + teamA[1] : '');
-    ctx.fillText(teamAHead.toUpperCase(), 280, 435);
-
-    const nameA1 = trim(teamA[0] || 'JUGADOR 1');
-    const nameA2 = trim(teamA[1] || '');
-    ctx.fillStyle = '#e6fbff';
-    ctx.font = '900 50px Rajdhani';
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,212,255,0.25)';
-    ctx.shadowBlur = 10;
-    ctx.fillText(nameA1.toUpperCase(), 280, 500);
-    ctx.restore();
-    if (nameA2) {
-        ctx.font = '700 38px Rajdhani';
-        ctx.fillText(nameA2.toUpperCase(), 280, 548);
+    ctx.fillText('PAREJA 1', 280, 475);
+    if (isWinnerA) {
+        ctx.font = '900 12px Rajdhani';
+        ctx.fillText('🏆 GANADORES', 280, 495);
     }
 
-    // Levels A
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 44px Rajdhani';
+    ctx.fillText(String(teamA[0] || 'PLAYER 1').toUpperCase(), 280, 560);
+    if (teamA[1]) {
+        ctx.fillStyle = '#cccccc';
+        ctx.fillText(String(teamA[1]).toUpperCase(), 280, 615);
+    }
+
     if (levelA.length) {
         ctx.fillStyle = '#b8ff00';
-        ctx.font = '900 24px Rajdhani';
-        const lvlTextA = levelA.map((l, i) => `NV ${Number(l || 0).toFixed(1)}`).join('  ·  ');
-        ctx.fillText(lvlTextA, 280, 600);
+        ctx.font = '900 22px Rajdhani';
+        ctx.fillText(levelA.map(l => `NV ${Number(l || 0).toFixed(1)}`).join('  -  '), 280, 680);
     }
 
-    // Team B panel
-    roundRect(ctx, 580, 400, 440, 280, 20, 'rgba(255,140,0,0.04)');
-    ctx.strokeStyle = 'rgba(255,140,0,0.12)';
-    ctx.lineWidth = 1.5;
+    // VS BADGE
+    ctx.fillStyle = accentColor;
+    ctx.beginPath(); ctx.arc(540, 600, 60, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#020617';
+    ctx.font = '900 40px Rajdhani';
+    ctx.fillText('VS', 540, 615);
+
+    // Team B
+    const isWinnerB = winnerKey === 'B';
+    roundRect(ctx, 580, 440, 440, 320, 24, isWinnerB ? 'rgba(184,255,0,0.07)' : 'rgba(255,255,255,0.03)');
+    ctx.strokeStyle = isWinnerB ? 'rgba(184,255,0,0.3)' : 'rgba(255,255,255,0.1)';
     ctx.stroke();
 
-    // Team B — Orange accent top
-    ctx.fillStyle = '#ff8c00';
-    ctx.fillRect(580, 400, 440, 4);
-
-    ctx.fillStyle = 'rgba(255,140,0,0.5)';
-    ctx.font = '900 14px Rajdhani';
-    const teamBHead = (teamB[0] || 'JUGADOR 3') + (teamB[1] ? ' & ' + teamB[1] : '');
-    ctx.fillText(teamBHead.toUpperCase(), 800, 435);
-
-    const nameB1 = trim(teamB[0] || 'JUGADOR 3');
-    const nameB2 = trim(teamB[1] || '');
-    ctx.fillStyle = '#fff2e0';
-    ctx.font = '900 50px Rajdhani';
-    ctx.save();
-    ctx.shadowColor = 'rgba(255,140,0,0.25)';
-    ctx.shadowBlur = 10;
-    ctx.fillText(nameB1.toUpperCase(), 800, 500);
-    ctx.restore();
-    if (nameB2) {
-        ctx.font = '700 38px Rajdhani';
-        ctx.fillText(nameB2.toUpperCase(), 800, 548);
-    }
-
-    // Levels B
-    if (levelB.length) {
-        ctx.fillStyle = '#ffb347';
-        ctx.font = '900 24px Rajdhani';
-        const lvlTextB = levelB.map((l, i) => `NV ${Number(l || 0).toFixed(1)}`).join('  ·  ');
-        ctx.fillText(lvlTextB, 800, 600);
-    }
-
-    // === 8. VS BADGE — Premium circular ===
-    // Outer glow
-    const vsGrad = ctx.createRadialGradient(540, 540, 0, 540, 540, 90);
-    vsGrad.addColorStop(0, 'rgba(0,212,255,0.25)');
-    vsGrad.addColorStop(1, 'rgba(0,212,255,0)');
-    ctx.fillStyle = vsGrad;
-    ctx.beginPath();
-    ctx.arc(540, 540, 90, 0, Math.PI * 2);
-    ctx.fill();
-    // Circle
-    ctx.fillStyle = '#00d4ff';
-    ctx.beginPath();
-    ctx.arc(540, 540, 58, 0, Math.PI * 2);
-    ctx.fill();
-    // Text
-    ctx.fillStyle = '#040c1e';
-    ctx.font = '900 44px Rajdhani';
     ctx.textAlign = 'center';
-    ctx.fillText('VS', 540, 556);
-
-    // === 9. BETTING ODDS / WIN PROBABILITY ===
-    const avgA = levelA.length ? levelA.reduce((a, b) => a + Number(b || 0), 0) / levelA.length : 2.5;
-    const avgB = levelB.length ? levelB.reduce((a, b) => a + Number(b || 0), 0) / levelB.length : 2.5;
-    const totalLvl = avgA + avgB;
-    const pctA = totalLvl > 0 ? Math.round((avgA / totalLvl) * 100) : 50;
-    const pctB = 100 - pctA;
-
-    if (levelA.length || levelB.length) {
-        // Odds card
-        roundRect(ctx, 140, 730, 800, 140, 20, 'rgba(255,255,255,0.03)');
-        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        ctx.fillStyle = 'rgba(255,255,255,0.35)';
-        ctx.font = '900 14px Rajdhani';
-        ctx.textAlign = 'center';
-        ctx.fillText('⚡ PRONÓSTICO BASADO EN NIVEL', 540, 765);
-
-        // Bar background
-        roundRect(ctx, 200, 785, 680, 28, 14, 'rgba(255,255,255,0.06)');
-
-        // Team A bar (cyan)
-        const barW = 680;
-        const barAW = Math.max(40, (pctA / 100) * barW);
-        ctx.save();
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(200, 785, barAW, 28, pctA >= 98 ? 14 : [14, 0, 0, 14]);
-        else ctx.rect(200, 785, barAW, 28);
-        ctx.clip();
-        const barGradA = ctx.createLinearGradient(200, 0, 200 + barAW, 0);
-        barGradA.addColorStop(0, '#00d4ff');
-        barGradA.addColorStop(1, '#0090ff');
-        ctx.fillStyle = barGradA;
-        ctx.fillRect(200, 785, barAW, 28);
-        ctx.restore();
-
-        // Team B bar (orange) — fill rest
-        ctx.save();
-        ctx.beginPath();
-        const barBStart = 200 + barAW;
-        const barBW = barW - barAW;
-        if (ctx.roundRect) ctx.roundRect(barBStart, 785, barBW, 28, pctB >= 98 ? 14 : [0, 14, 14, 0]);
-        else ctx.rect(barBStart, 785, barBW, 28);
-        ctx.clip();
-        const barGradB = ctx.createLinearGradient(barBStart, 0, 880, 0);
-        barGradB.addColorStop(0, '#ff8c00');
-        barGradB.addColorStop(1, '#ff5500');
-        ctx.fillStyle = barGradB;
-        ctx.fillRect(barBStart, 785, barBW, 28);
-        ctx.restore();
-
-        // Percentages
-        ctx.fillStyle = '#00d4ff';
-        ctx.font = '900 40px Rajdhani';
-        ctx.textAlign = 'left';
-        ctx.fillText(`${pctA}%`, 200, 862);
-
-        ctx.fillStyle = '#ff8c00';
-        ctx.textAlign = 'right';
-        ctx.fillText(`${pctB}%`, 880, 862);
+    ctx.fillStyle = isWinnerB ? '#b8ff00' : 'rgba(255,255,255,0.3)';
+    ctx.font = '900 14px Rajdhani';
+    ctx.fillText('PAREJA 2', 800, 475);
+    if (isWinnerB) {
+        ctx.font = '900 12px Rajdhani';
+        ctx.fillText('🏆 GANADORES', 800, 495);
     }
 
-    // === 10. PISTA DE PADEL ILLUSTRATION (bottom) ===
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 44px Rajdhani';
+    ctx.fillText(String(teamB[0] || 'PLAYER 2').toUpperCase(), 800, 560);
+    if (teamB[1]) {
+        ctx.fillStyle = '#cccccc';
+        ctx.fillText(String(teamB[1]).toUpperCase(), 800, 615);
+    }
+
+    if (levelB.length) {
+        ctx.fillStyle = '#b8ff00';
+        ctx.font = '900 22px Rajdhani';
+        ctx.fillText(levelB.map(l => `NV ${Number(l || 0).toFixed(1)}`).join('  -  '), 800, 680);
+    }
+
+    // === 6. PROGNOSTIC OR WINNER CELEBRATION ===
+    if (!isPlayed && (levelA.length || levelB.length)) {
+        const avgA = levelA.reduce((a, b) => a + Number(b || 0), 0) / levelA.length;
+        const avgB = levelB.reduce((a, b) => a + Number(b || 0), 0) / levelB.length;
+        const pctA = Math.round((avgA / (avgA + avgB)) * 100);
+        const pctB = 100 - pctA;
+
+        roundRect(ctx, 240, 810, 600, 100, 20, 'rgba(255,255,255,0.03)');
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '900 12px Rajdhani';
+        ctx.fillText('PROBABILIDAD DE VICTORIA', 540, 840);
+        
+        // Progress bar
+        roundRect(ctx, 300, 855, 480, 14, 7, 'rgba(255,255,255,0.05)');
+        ctx.fillStyle = '#00d4ff';
+        const barAW = (pctA / 100) * 480;
+        roundRect(ctx, 300, 855, barAW, 14, 7, '#00d4ff');
+        
+        ctx.fillStyle = '#00d4ff'; ctx.font = '900 24px Rajdhani'; ctx.fillText(`${pctA}%`, 270, 870);
+        ctx.fillStyle = '#fff'; ctx.font = '900 24px Rajdhani'; ctx.fillText(`${pctB}%`, 810, 870);
+    } else if (isPlayed) {
+        // Winner text banner at bottom
+        ctx.fillStyle = '#b8ff00';
+        ctx.textAlign = 'center';
+        ctx.font = '900 48px Rajdhani';
+        ctx.fillText('RESULTADO: ' + (matchData.sets || 'Finalizado'), 540, 880);
+        
+        ctx.font = '900 24px Rajdhani';
+        ctx.fillStyle = '#00d4ff';
+        const ptsA = matchData.eloDiffA || 0;
+        const ptsB = matchData.eloDiffB || 0;
+        if (ptsA || ptsB) {
+            ctx.fillText(`+${Math.round(isWinnerA ? ptsA : (isWinnerB ? ptsB : 0))} PUNTOS ELO`, 540, 920);
+        }
+    }
+
+    // === 7. COURT GRAPHIC (BOTTOM) ===
     ctx.save();
-    ctx.globalAlpha = 0.06;
+    ctx.globalAlpha = 0.08;
     ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 3;
-    // Court box
-    ctx.strokeRect(240, 920, 600, 320);
-    // Center line
-    ctx.beginPath();
-    ctx.moveTo(540, 920); ctx.lineTo(540, 1240);
-    ctx.stroke();
-    // Service boxes
-    ctx.beginPath();
-    ctx.moveTo(240, 1080); ctx.lineTo(840, 1080);
-    ctx.stroke();
-    // Service lines
-    ctx.beginPath();
-    ctx.moveTo(390, 920); ctx.lineTo(390, 1080);
-    ctx.moveTo(690, 920); ctx.lineTo(690, 1080);
-    ctx.moveTo(390, 1080); ctx.lineTo(390, 1240);
-    ctx.moveTo(690, 1080); ctx.lineTo(690, 1240);
-    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.strokeRect(340, 1000, 400, 240);
+    ctx.beginPath(); ctx.moveTo(540, 1000); ctx.lineTo(540, 1240); ctx.stroke();
     ctx.restore();
 
-    // === 11. FOOTER ===
-    drawBrandFooter(ctx, 1080, 1350, matchData.club || 'JAFS PADEL');
+    // === 8. FOOTER ===
+    drawBrandFooter(ctx, 1080, 1350, matchData.club || 'JAFS PADEL CLUB');
 
     return canvas.toDataURL('image/png');
 }
 
 export async function shareMatchPoster(matchData = {}) {
-    const dataUrl = await generateMatchPosterImage(matchData);
-    // Siempre descarga para ver el cartel sin forzar el modal de compartir.
-    downloadDataUrl(dataUrl, 'cartel_partido.png');
+    try {
+        const dataUrl = await generateMatchPosterImage(matchData);
+        downloadDataUrl(dataUrl, 'jafspadel_poster.png');
+        return true;
+    } catch (err) {
+        console.error('Poster build fail', err);
+        return false;
+    }
+}
+
+/**
+ * Generates a high-quality poster of the current event status
+ */
+export async function generateEventStatusPoster(data = {}) {
+    const { 
+        eventName = 'TORNEO', 
+        organizer = 'JAFS PADEL',
+        logo = '',
+        played = [],
+        scheduled = [],
+        pending = [],
+        standings = [], // Array of { title, rows: [{teamName, pts, pj, pg, pp, pf, pc}] }
+    } = data;
+
+    // 1. CALCULATE DYNAMIC HEIGHT
+    let dynamicH = 450;
+    if (played.length) dynamicH += 80 + (played.length * 60);
+    if (scheduled.length) dynamicH += 80 + (scheduled.length * 65);
+    if (pending.length) dynamicH += 80 + (pending.length * 55);
+    if (standings.length) {
+        standings.forEach(g => {
+             dynamicH += 80 + (Math.min(g.rows.length, 6) * 45);
+        });
+    }
+    dynamicH += 150;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1080;
+    canvas.height = Math.max(1600, dynamicH);
+
+    // === BACKGROUND ===
+    const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grd.addColorStop(0, '#020617');
+    grd.addColorStop(0.3, '#0a0f2b');
+    grd.addColorStop(0.7, '#071b26');
+    grd.addColorStop(1, '#020617');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw grid background
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= canvas.width; x += 60) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y <= canvas.height; y += 60) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    }
+
+    // === HEADER ===
+    const titleY = 120;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#b8ff00';
+    ctx.font = '900 36px Rajdhani';
+    ctx.fillText('⚡ ESTADO DEL TORNEO', 80, titleY - 40);
+    ctx.fillStyle = '#fff';
+    ctx.font = '900 96px Rajdhani';
+    const cleanEventName = String(eventName).toUpperCase().substring(0, 18);
+    ctx.fillText(cleanEventName, 80, titleY + 50);
+    ctx.fillStyle = '#00d4ff';
+    ctx.font = '800 28px Rajdhani';
+    ctx.fillText(new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase(), 80, titleY + 100);
+
+    let currentY = titleY + 220;
+
+    function renderRoundedBlock(y, h, borderColor) {
+        roundRect(ctx, 80, y, 920, h, 24, 'rgba(0,0,0,0.6)');
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = borderColor;
+        ctx.stroke();
+    }
+
+    // === STANDINGS ===
+    if (standings.length) {
+        ctx.fillStyle = '#b8ff00'; ctx.font = '900 34px Rajdhani'; ctx.fillText('📊 CLASIFICACIONES', 80, currentY);
+        currentY += 50;
+        
+        for (const group of standings) {
+            const rowCount = Math.min(group.rows.length, 6);
+            const boxH = 90 + (rowCount * 45);
+            renderRoundedBlock(currentY, boxH, 'rgba(184, 255, 0, 0.3)');
+            
+            ctx.fillStyle = '#b8ff00'; ctx.font = '900 28px Rajdhani'; ctx.fillText(`GRUPO ${group.title.toUpperCase()}`, 110, currentY + 45);
+            ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '800 16px Rajdhani'; 
+            ctx.fillText('EQUIPO', 120, currentY + 85);
+            ctx.textAlign = 'center'; 
+            ctx.fillText('PJ', 720, currentY + 85); 
+            ctx.fillText('PTS', 920, currentY + 85); 
+            ctx.textAlign = 'left';
+            
+            let rowY = currentY + 130;
+            group.rows.slice(0, 6).forEach((row, i) => {
+                ctx.fillStyle = (i === 0) ? '#fbbf24' : ((i === 1) ? '#94a3b8' : '#fff');
+                const pColor = (i < 2) ? '#b8ff00' : '#fff';
+                ctx.font = '800 22px Rajdhani'; 
+                ctx.fillText(`${i+1}. ${String(row.teamName).toUpperCase()}`, 120, rowY);
+                
+                ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(row.pj, 720, rowY);
+                ctx.fillStyle = pColor; ctx.font = '900 26px Rajdhani'; ctx.fillText(row.pts, 920, rowY); 
+                ctx.textAlign = 'left';
+                rowY += 45;
+            });
+            currentY += boxH + 40;
+        }
+    }
+
+    // === PLAYED MATCHES ===
+    if (played.length) {
+        ctx.fillStyle = '#00d4ff'; ctx.font = '900 34px Rajdhani'; ctx.fillText('🏆 ÚLTIMOS RESULTADOS', 80, currentY);
+        currentY += 50;
+        played.slice(0, 8).forEach(m => {
+            renderRoundedBlock(currentY, 50, 'rgba(0, 212, 255, 0.2)');
+            ctx.fillStyle = '#fff'; ctx.font = '800 20px Rajdhani'; 
+            const nameA = String(m.teamAName || 'Equipo A').substring(0, 18);
+            const nameB = String(m.teamBName || 'Equipo B').substring(0, 18);
+            ctx.fillText(`${nameA}   vs   ${nameB}`, 110, currentY + 33);
+            
+            ctx.textAlign = 'right'; 
+            ctx.fillStyle = '#00d4ff'; ctx.font = '900 24px Rajdhani'; 
+            ctx.fillText(m.resultado || '-', 960, currentY + 34); 
+            ctx.textAlign = 'left';
+            currentY += 65;
+        });
+        currentY += 30;
+    }
+
+    // === SCHEDULED MATCHES ===
+    if (scheduled.length) {
+        ctx.fillStyle = '#ff0055'; ctx.font = '900 34px Rajdhani'; ctx.fillText('🗓️ PRÓXIMOS ENCUENTROS', 80, currentY);
+        currentY += 50;
+        scheduled.slice(0, 6).forEach(m => {
+            renderRoundedBlock(currentY, 50, 'rgba(255, 0, 85, 0.2)');
+            ctx.fillStyle = '#fff'; ctx.font = '800 20px Rajdhani'; 
+            const nameA = String(m.teamAName || 'Equipo A').substring(0, 18);
+            const nameB = String(m.teamBName || 'Equipo B').substring(0, 18);
+            ctx.fillText(`${nameA}   vs   ${nameB}`, 110, currentY + 33);
+            
+            ctx.textAlign = 'right'; 
+            ctx.fillStyle = '#ff0055'; ctx.font = '900 20px Rajdhani'; 
+            ctx.fillText(m.fechaStr || 'FECHA FIJADA', 960, currentY + 33); 
+            ctx.textAlign = 'left';
+            currentY += 65;
+        });
+        currentY += 30;
+    }
+
+    // === PENDING MATCHES ===
+    if (pending.length) {
+        ctx.fillStyle = '#fbbf24'; ctx.font = '900 34px Rajdhani'; ctx.fillText('⏳ PARTIDOS PENDIENTES', 80, currentY);
+        currentY += 50;
+        pending.slice(0, 8).forEach(m => {
+            renderRoundedBlock(currentY, 40, 'rgba(251, 191, 36, 0.2)');
+            ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = '700 18px Rajdhani'; 
+            const nameA = String(m.teamAName || 'Equipo A').substring(0, 18);
+            const nameB = String(m.teamBName || 'Equipo B').substring(0, 18);
+            ctx.fillText(`${nameA}   vs   ${nameB}`, 110, currentY + 27);
+            
+            ctx.textAlign = 'right'; 
+            ctx.fillStyle = '#fbbf24'; ctx.font = '700 16px Rajdhani'; 
+            ctx.fillText('¡PROPONER DÍA!', 960, currentY + 27); 
+            ctx.textAlign = 'left';
+            currentY += 55;
+        });
+    }
+
+    // === FOOTER ===
+    drawBrandFooter(ctx, 1080, canvas.height, organizer || 'JAFS PADEL');
+    const dataUrl = canvas.toDataURL('image/png', 0.95);
+    downloadDataUrl(dataUrl, `estado_${eventName.toLowerCase().replace(/\s+/g, '_')}.png`);
     return true;
 }
 
-// ─── HELPERS ───
+export function downloadDataUrl(url, filename) {
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+}
 
 function drawCourtLines(ctx, w, h, opacity = 0.04) {
-    ctx.save();
-    ctx.strokeStyle = `rgba(255,255,255,${opacity})`;
-    ctx.lineWidth = 2;
-    // Outer court
-    const margin = 100;
-    ctx.strokeRect(margin, margin, w - margin * 2, h - margin * 2);
-    // Center vertical
-    ctx.beginPath();
-    ctx.moveTo(w / 2, margin); ctx.lineTo(w / 2, h - margin);
-    ctx.stroke();
-    // Center horizontal
-    ctx.beginPath();
-    ctx.moveTo(margin, h / 2); ctx.lineTo(w - margin, h / 2);
-    ctx.stroke();
-    // Service line vertical
-    ctx.lineWidth = 1;
-    const quarter = (w - margin * 2) / 4;
-    ctx.beginPath();
-    ctx.moveTo(margin + quarter, margin); ctx.lineTo(margin + quarter, h - margin);
-    ctx.moveTo(w - margin - quarter, margin); ctx.lineTo(w - margin - quarter, h - margin);
-    ctx.stroke();
+    ctx.save(); ctx.strokeStyle = `rgba(255,255,255,${opacity})`; ctx.lineWidth = 2;
+    const margin = 100; ctx.strokeRect(margin, margin, w - margin * 2, h - margin * 2);
+    ctx.beginPath(); ctx.moveTo(w / 2, margin); ctx.lineTo(w / 2, h - margin); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(margin, h / 2); ctx.lineTo(w - margin, h / 2); ctx.stroke();
     ctx.restore();
 }
 
 function roundRect(ctx, x, y, w, h, r, fillColor) {
     ctx.beginPath();
-    if (ctx.roundRect) {
-        ctx.roundRect(x, y, w, h, r);
-    } else {
-        ctx.moveTo(x + r, y);
-        ctx.lineTo(x + w - r, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-    }
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+    else { ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); }
     ctx.closePath();
-    if (fillColor) {
-        ctx.fillStyle = fillColor;
-        ctx.fill();
-    }
+    if (fillColor) { ctx.fillStyle = fillColor; ctx.fill(); }
 }
 
 function drawBrandFooter(ctx, w, h, club) {
-    ctx.fillStyle = '#b8ff00';
-    ctx.font = '900 28px Rajdhani';
-    ctx.textAlign = 'center';
-    ctx.fillText(club.toUpperCase(), w / 2, h - 55);
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '500 16px Rajdhani';
-    ctx.fillText('PADELUMINATIS PRO · COMPARTE EN INSTAGRAM O WHATSAPP', w / 2, h - 25);
-}
-
-function downloadDataUrl(url, filename) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
+    ctx.fillStyle = '#b8ff00'; ctx.font = '900 28px Rajdhani'; ctx.textAlign = 'center'; ctx.fillText(club.toUpperCase(), w / 2, h - 55);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '500 16px Rajdhani'; ctx.fillText('PADELUMINATIS PRO · COMPARTE EN INSTAGRAM O WHATSAPP', w / 2, h - 25);
 }
 
 function loadImage(src) {
     return new Promise((resolve) => {
         if (!src) return resolve(null);
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(null);
+        const img = new Image(); img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img); img.onerror = () => resolve(null);
         img.src = src;
     });
 }

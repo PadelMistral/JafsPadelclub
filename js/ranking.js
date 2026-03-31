@@ -1,4 +1,4 @@
-﻿import { db, getDocsSafe, getDocument, auth } from "./firebase-service.js";
+import { db, getDocsSafe, getDocument, auth } from "./firebase-service.js";
 import {
   collection,
   query,
@@ -302,12 +302,15 @@ function renderTable() {
   void renderSeasonTable();
 }
 
-function getCurrentSeasonInfo() {
-  const now = new Date();
-  const month = now.getMonth() + 1;
+let currentMonthOffset = 0;
+
+function getCurrentSeasonInfo(offset = 0) {
+  const date = new Date();
+  date.setMonth(date.getMonth() + offset);
+  const month = date.getMonth() + 1;
   return {
-    key: `${now.getFullYear()}-${String(month).padStart(2, "0")}`,
-    label: now.toLocaleDateString("es-ES", { month: "long", year: "numeric" }),
+    key: `${date.getFullYear()}-${String(month).padStart(2, "0")}`,
+    label: date.toLocaleDateString("es-ES", { month: "long", year: "numeric" }),
   };
 }
 
@@ -317,8 +320,11 @@ async function renderSeasonTable() {
   if (!list) return;
 
   try {
-    const season = getCurrentSeasonInfo();
+    const season = getCurrentSeasonInfo(currentMonthOffset);
     if (info) info.textContent = season.label;
+    
+    list.innerHTML = `<div class="p-10 text-center opacity-40 uppercase text-[10px] font-black"><i class="fas fa-spinner fa-spin mr-2"></i> Cargando mes...</div>`;
+
     const logsSnap = await getDocsSafe(
       query(collection(db, "rankingLogs"), orderBy("timestamp", "desc"), limit(2500)),
     );
@@ -335,10 +341,12 @@ async function renderSeasonTable() {
       .map((u) => ({ ...u, seasonPoints: Number(totals.get(u.id) || 0) }))
       .filter((u) => u.seasonPoints !== 0)
       .sort((a, b) => b.seasonPoints - a.seasonPoints)
-      .slice(0, 20);
+      .slice(0, 50);
+
+    const isCurrentMonth = currentMonthOffset === 0;
 
     if (!rows.length) {
-      list.innerHTML = `<div class="p-10 text-center opacity-40 uppercase text-[10px] font-black">Sin actividad en la temporada actual</div>`;
+      list.innerHTML = `<div class="p-10 text-center opacity-40 uppercase text-[10px] font-black">Sin actividad en ${season.label}</div>`;
       return;
     }
 
@@ -351,15 +359,15 @@ async function renderSeasonTable() {
         <div class="lb-info">
           <div class="lb-name-row">
             <span class="lb-name">${u.nombreUsuario || u.nombre || "Jugador"}</span>
-            <span class="lb-level-chip">TEMP</span>
+            <span class="lb-level-chip ${isCurrentMonth ? '' : 'bg-white/10 text-white/50'}">MES</span>
           </div>
           <div class="lb-meta-row lb-meta-row-tight">
             <span class="lb-meta-pill">${season.label}</span>
           </div>
         </div>
         <div class="lb-score-col">
-          <span class="lb-pts">${u.seasonPoints >= 0 ? "+" : ""}${u.seasonPoints.toFixed(1)}</span>
-          <span class="lb-pts-sub">TEMP</span>
+          <span class="lb-pts ${u.seasonPoints > 0 ? 'text-sport-green' : 'text-sport-red'}">${u.seasonPoints >= 0 ? "+" : ""}${u.seasonPoints.toFixed(1)}</span>
+          <span class="lb-pts-sub uppercase">PUNTOS</span>
         </div>
       </div>
     `).join("");
@@ -368,6 +376,20 @@ async function renderSeasonTable() {
     list.innerHTML = `<div class="p-10 text-center opacity-40 uppercase text-[10px] font-black">No se pudo cargar la temporada</div>`;
   }
 }
+
+// Attach event listeners to the buttons when DOM loads
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("prev-month-btn")?.addEventListener("click", () => {
+    currentMonthOffset--;
+    renderSeasonTable();
+  });
+  document.getElementById("next-month-btn")?.addEventListener("click", () => {
+    if (currentMonthOffset < 0) {
+      currentMonthOffset++;
+      renderSeasonTable();
+    }
+  });
+});
 
 async function renderRankUserModal(uid) {
   const modal = document.getElementById("modal-rank-user");
@@ -388,7 +410,7 @@ async function renderRankUserModal(uid) {
     const rank = users.findIndex((x) => x.id === uid) + 1;
     const name = u.nombreUsuario || u.nombre || "Jugador";
     const centeredPct = buildCenteredProgress(state.pointsToDown, state.pointsToUp);
-    if (title) title.textContent = `PERFIL COMPETITIVO Â· ${name.toUpperCase()}`;
+    if (title) title.textContent = `PERFIL COMPETITIVO · ${name.toUpperCase()}`;
 
     // Try ordered query, fallback to unordered if index is missing
     let logs = [];
@@ -432,12 +454,12 @@ async function renderRankUserModal(uid) {
             if (myIdx !== -1 && arr.length >= 4) {
               const rivalUids = myIdx < 2 ? arr.slice(2, 4) : arr.slice(0, 2);
               const rivalNames = await Promise.all(rivalUids.map(async r => {
-                if (!r) return "Vacio";
+                if (!r) return "Vacío";
                 const identity = await resolveIdentity(r, {
                   currentUserId: currentUser?.uid,
                   currentUserData,
                 });
-                return identity?.name || (String(r).length > 15 ? "Jugador" : String(r));
+                return identity?.name || "Jugador";
               }));
               rivalesTexto = `vs <span class="font-bold text-white">${rivalNames.join(" &amp; ")}</span>`;
             } else if (match.teamAName || match.teamBName) {
@@ -479,7 +501,7 @@ async function renderRankUserModal(uid) {
           ${renderAvatarMarkup(u, "rank-user-avatar")}
           <div class="rank-user-main">
             <span class="rank-user-name">${name}</span>
-            <span class="rank-user-meta">#${rank > 0 ? rank : "--"} Â· ${Math.round(points)} pts Â· Nivel ${level.toFixed(2)}</span>
+            <span class="rank-user-meta">#${rank > 0 ? rank : "--"} · ${Math.round(points)} pts · Nivel ${level.toFixed(2)}</span>
           </div>
         </div>
         <div class="rank-break-grid" style="margin-top:14px;">
@@ -498,7 +520,7 @@ async function renderRankUserModal(uid) {
           </div>
           <div class="rank-progress-foot">
             <span>-${state.pointsToDown} pts</span>
-            <span class="text-primary">Nivel ${state.currentLevel.toFixed(2)} Â· ${Math.round(points)} pts</span>
+            <span class="text-primary">Nivel ${state.currentLevel.toFixed(2)} · ${Math.round(points)} pts</span>
             <span>+${state.pointsToUp} pts</span>
           </div>
         </div>
@@ -526,7 +548,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
   area.innerHTML = '<div class="center py-20"><i class="fas fa-spinner fa-spin opacity-20"></i></div>';
   mainModal.classList.add("active");
   mainModal.classList.add("modal-stack-front");
-  if (titleEl) titleEl.textContent = "Desglose de puntuaciÃ³n";
+  if (titleEl) titleEl.textContent = "Desglose de puntuación";
 
   try {
     const logDoc = logId ? await getDocument("rankingLogs", logId) : null;
@@ -540,7 +562,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
     if (detail.factoresAdicionales) {
         // v8 Advanced Scoring
         factors = [
-            ["Elo DinÃ¡mico", detail.cambioElo],
+            ["Elo Dinámico", detail.cambioElo],
             ["Ajuste Equipo", detail.factoresAdicionales?.companero],
             ["Racha / Bonus", detail.factoresAdicionales?.racha],
             ["Set Margin", detail.factoresAdicionales?.margenSets],
@@ -548,11 +570,11 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
         
         if (detail.sumaTotal && detail.limiteAplicado && Math.abs(detail.sumaTotal) > Math.abs(detail.limiteAplicado)) {
-            factors.push(["Ajuste Tope RÃ­gido", Number((detail.limiteAplicado - detail.sumaTotal).toFixed(2))]);
+            factors.push(["Ajuste Tope Rígido", Number((detail.limiteAplicado - detail.sumaTotal).toFixed(2))]);
         }
         transparentRows = [
             ["Elo base esperado", detail.cambioElo],
-            ["Puntos por compaÃ±ero", detail.factoresAdicionales?.companero],
+            ["Puntos por compañero", detail.factoresAdicionales?.companero],
             ["Puntos por racha", detail.factoresAdicionales?.racha],
             ["Puntos por sets", detail.factoresAdicionales?.margenSets],
             ["Balance final del sistema", detail.ajusteBalance],
@@ -561,7 +583,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         // Legacy
         factors = [
         ["Puntos Base", detail.base],
-        ["BonificaciÃ³n Racha", detail.racha || detail.streak],
+        ["Bonificación Racha", detail.racha || detail.streak],
         ["Factor Sorpresa", detail.sorpresa || detail.surprise],
         ["Por Sets/Juegos", detail.clutch || detail.sets],
         ["Ajuste Nivel", detail.habilidad || detail.skill],
@@ -614,7 +636,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
         const matchPlayers = Array.isArray(match.jugadores) ? match.jugadores : (Array.isArray(match.playerUids) ? match.playerUids : []);
         
         async function getFriendlyName(uid) {
-            if (!uid) return "VacÃ­o";
+            if (!uid) return "Vacío";
             const identity = await resolveIdentity(uid, {
               userMap: Object.fromEntries(users.map((user) => [user.id, user])),
             }).catch(() => null);
@@ -667,9 +689,9 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
     area.innerHTML = `
       <div class="rank-breakdown-card">
         ${matchInfoHtml}
-        <div class="rank-break-title">Desglose de puntuaciÃ³n</div>
+        <div class="rank-break-title">Desglose de puntuación</div>
         ${transparentRows.length ? `
-        <div class="rank-break-subtitle">Suma visible del cÃ¡lculo</div>
+        <div class="rank-break-subtitle">Suma visible del cálculo</div>
         <div class="rank-break-grid rank-break-grid-strong">
           ${transparentRows.map(([k, v]) => {
             const val = Number(v);
@@ -687,7 +709,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
           }).join("")}
         </div>
         ${diagnostics.length ? `
-        <div class="rank-break-title" style="margin-top:14px;">MÃ©tricas del cÃ¡lculo</div>
+        <div class="rank-break-title" style="margin-top:14px;">Métricas del cálculo</div>
         <div class="rank-break-grid">
           ${diagnostics.map(([k, v]) => `<div class="rank-break-row"><span>${k}</span><b class="text-primary">${num(v, 2)}</b></div>`).join("")}
         </div>` : ""}
@@ -717,7 +739,7 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
           </div>
           <div class="level-bar"><div class="level-fill" style="width:${beforeProgress.progressPct}%"></div></div>
           <div class="rank-break-prog-row mt-1">
-            <span>DespuÃ©s (${Math.round(pointsAfter)} pts)</span>
+            <span>Después (${Math.round(pointsAfter)} pts)</span>
             <b>${afterProgress.progressPct.toFixed(2)}%</b>
           </div>
           <div class="level-bar"><div class="level-fill" style="width:${afterProgress.progressPct}%"></div></div>

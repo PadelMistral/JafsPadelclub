@@ -1471,7 +1471,12 @@ function buildRecentResultUsersVs(match) {
   const bNames = bIds.map((uid) => getPlayerDisplayName(uid)).filter(Boolean);
   const left = getFriendlyTeamName({ playerNames: aNames, fallback: "Pareja 1", side: "A" });
   const right = getFriendlyTeamName({ playerNames: bNames, fallback: "Pareja 2", side: "B" });
-  return `${left} vs ${right}`;
+  
+  const winner = resolveWinnerTeam(match);
+  const colorA = winner === 'A' ? 'var(--sport-gold)' : 'rgba(255,255,255,0.7)';
+  const colorB = winner === 'B' ? 'var(--sport-gold)' : 'rgba(255,255,255,0.7)';
+  
+  return `<span style="color:${colorA}">${left}</span> <span style="opacity:0.3">vs</span> <span style="color:${colorB}">${right}</span>`;
 }
 
 function renderHomeRecentResults() {
@@ -1500,20 +1505,22 @@ function renderHomeRecentResults() {
       hour: "2-digit",
       minute: "2-digit",
     }) || "Sin fecha";
-    const type = String(match.col || "") === "eventoPartidos"
-      ? "Evento"
-      : String(match.col || "") === "partidosReto"
-        ? "Reto"
-        : "Amistoso";
+    const type = String(match.col || "") === "eventoPartidos" ? "Evento" : String(match.col || "") === "partidosReto" ? "Reto" : "Amistoso";
+    
+    const winner = resolveWinnerTeam(match);
+    const scoreColor = winner === 'A' ? 'var(--sport-green)' : (winner === 'B' ? 'var(--sport-gold)' : 'var(--primary)');
+
     return `
-      <article class="hv2-club-card hv2-result-card" onclick="window.openMatch('${match.id}','${match.col}')">
-        <div class="hv2-club-icon match"><i class="fas fa-table-tennis-paddle-ball"></i></div>
+      <article class="hv2-club-card hv2-result-card is-compact" onclick="window.openMatch('${match.id}','${match.col}')">
+        <div class="hv2-club-icon match compact"><i class="fas fa-table-tennis-paddle-ball"></i></div>
         <div class="hv2-club-main">
-          <div class="hv2-club-eyebrow">${type}</div>
-          <div class="hv2-club-title">${escapeHtml(buildRecentResultUsersVs(match))}</div>
-          <div class="hv2-club-text">${escapeHtml(result)}</div>
+          <div class="flex-row between items-center">
+            <span class="hv2-club-eyebrow">${type}</span>
+            <span class="hv2-club-date">${escapeHtml(when)}</span>
+          </div>
+          <div class="hv2-club-title" style="font-size:11px;">${buildRecentResultUsersVs(match)}</div>
+          <div class="hv2-club-text" style="font-size:10px; color:${scoreColor}; font-weight:900;">${escapeHtml(result)}</div>
         </div>
-        <div class="hv2-club-date">${escapeHtml(when)}</div>
       </article>
     `;
   }).join("");
@@ -2101,10 +2108,8 @@ async function createSelfNoticeOnce(key, title, message, link = "home.html", dat
   } catch (_) {}
 }
 
-
-
-
 function sameDay(a, b) {
+  if (!a || !b) return false;
   return (
     a.getDate() === b.getDate() &&
     a.getMonth() === b.getMonth() &&
@@ -2112,108 +2117,124 @@ function sameDay(a, b) {
   );
 }
 
+
+
 function maybeCreateEventDayNotice() {
-  if (document.getElementById("today-match-modal")) return;
-  const next = getMyRelevantMatches()
+  const relevant = getMyRelevantMatches();
+  const next = relevant
     .filter((m) => !isFinishedMatch(m))
     .filter((m) => {
       const matchDate = toDateSafe(m?.fecha);
-      return matchDate && matchDate.getTime() >= Date.now() - 15 * 60 * 1000;
+      return matchDate && sameDay(matchDate, new Date()) && matchDate.getTime() >= Date.now() - 15 * 60 * 1000;
     })
     .sort((a, b) => (toDateSafe(a?.fecha)?.getTime() || 0) - (toDateSafe(b?.fecha)?.getTime() || 0))[0];
-  const d = toDateSafe(next?.fecha);
-  if (!next || !d) return;
 
-  const today = new Date();
-  if (!sameDay(d, today)) return;
+  const recentlyFinished = relevant
+    .filter((m) => isFinishedMatch(m))
+    .filter((m) => {
+      const matchDate = toDateSafe(m?.fecha);
+      return matchDate && sameDay(matchDate, new Date()) && matchDate.getTime() > Date.now() - 4 * 60 * 60 * 1000;
+    })
+    .sort((a, b) => (toDateSafe(b?.fecha)?.getTime() || 0) - (toDateSafe(a?.fecha)?.getTime() || 0))[0];
 
-  const key = `today_match_modal_v1:${next.id}:${today.toISOString().slice(0, 10)}`;
-  try {
-    if (localStorage.getItem(key)) return;
-  } catch {}
+  const match = recentlyFinished || next;
+  if (!match) return;
 
-  const diffMs = d.getTime() - today.getTime();
-  const diffH = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
-  
-  const players = getNormalizedPlayers(next);
-  const n = (idx) => String(getPlayerDisplayName(players[idx]) || "Pendiente");
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (localStorage.getItem(`eda_hidden_${match.id}_${todayStr}`)) return;
 
-  const locationLabel = next.isApoing ? "Reserva Apoing" : next.courtName || next.club || "Pista reservada";
-  const countdownLabel = diffMs <= 0 ? "Tu partido ya está en marcha" : `Faltan ${diffH} horas para el enfrentamiento`;
+  const modalId = `modal-eda-${match.id}`;
+  if (document.getElementById(modalId)) return;
 
-  const modal = document.createElement("div");
-  modal.id = "today-match-modal";
-  modal.className = "event-day-alert";
-  modal.innerHTML = `
-    <div class="eda-card animate-scale-in">
-      <div class="eda-glow"></div>
-      <div class="eda-icon"><i class="fas fa-rocket"></i></div>
-      <div class="eda-title">¡HOY JUEGAS!</div>
-      <div class="eda-match-info">
-        <div class="eda-match-players">
-           <div class="eda-team-col">
-              <div class="eda-p-name">${n(0)}</div>
-              <div class="eda-p-name">${n(1)}</div>
-           </div>
-           <div class="eda-vs-badge">VS</div>
-           <div class="eda-team-col">
-              <div class="eda-p-name">${n(2)}</div>
-              <div class="eda-p-name">${n(3)}</div>
-           </div>
-        </div>
-        <div class="eda-venue-info" style="font-size:11px; opacity:0.72; margin-top:14px; text-transform:uppercase; letter-spacing:1.2px; font-weight:800; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;">
-           <span><i class="fas fa-clock text-primary mr-1"></i> ${d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
-           <span style="opacity:0.3">|</span>
-           <span><i class="fas fa-map-marker-alt text-primary mr-1"></i> ${escapeHtml(locationLabel)}</span>
-        </div>
-      </div>
-      <div class="eda-msg">${escapeHtml(countdownLabel)}</div>
-      <div class="eda-actions">
-        <button class="btn-eda-share" id="eda-btn-download">
-           <i class="fas fa-file-image mr-2"></i> DESCARGAR CARTEL
-        </button>
-         <button class="btn-premium-v7" style="border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:#fff; font-size:10px;" id="eda-btn-share">
-           <i class="fas fa-share-nodes mr-2"></i> COMPARTIR
-        </button>
-        <button class="btn-eda-close" id="close-eda">CERRAR</button>
+  const overlay = document.createElement("div");
+  overlay.id = modalId;
+  overlay.className = "modal-overlay active";
+  overlay.style.zIndex = "10000";
+
+  const d = toDateSafe(match.fecha);
+  const finished = isFinishedMatch(match);
+  const players = getNormalizedPlayers(match);
+  const n = (idx) => {
+      const uid = players[idx];
+      if (!uid) return "Pendiente";
+      if (uid === currentUser?.uid) return "Tú";
+      return getPlayerDisplayName(uid) || "Jugador";
+  };
+
+  const locationLabel = match.isApoing ? "Reserva Apoing" : match.courtName || match.club || "Pista reservada";
+  const resultStr = finished ? (getResultSetsString(match) || "COMPLETADO") : "A LAS " + d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+
+  overlay.innerHTML = `
+    <div class="modal-card glass-strong p-0 overflow-hidden" style="max-width:420px; border-radius: 32px !important;">
+      <div class="hv2-setup-card eda-modal-style" style="border:none; margin:0; width:100%;">
+          <div class="hv2-setup-copy">
+              <span class="hv2-section-title">
+                  <i class="fas ${finished ? "fa-trophy" : "fa-calendar-circle-exclamation"}"></i> 
+                  ${finished ? "PARTIDO FINALIZADO" : "¡HOY TIENES PARTIDO!"}
+              </span>
+              <p class="hv2-setup-text" style="margin-top:4px; opacity:0.6;">${finished ? "Revisa el resultado y descarga tu cartel." : "Nuestra Matrix ha detectado acción hoy en las pistas."}</p>
+              
+              <div class="eda-match-players mt-6 mb-6" style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 20px;">
+                 <div class="eda-team-col">
+                    <div class="eda-p-name" style="font-family:'Rajdhani'; font-weight:900; font-size:13px; color:var(--sport-gold);">${n(0)}</div>
+                    <div class="eda-p-name" style="font-family:'Rajdhani'; font-weight:900; font-size:13px; color:var(--sport-gold);">${n(1)}</div>
+                 </div>
+                 <div class="eda-vs-badge" style="background:var(--primary); color:black;">VS</div>
+                 <div class="eda-team-col text-right">
+                    <div class="eda-p-name" style="font-family:'Rajdhani'; font-weight:900; font-size:13px;">${n(2)}</div>
+                    <div class="eda-p-name" style="font-family:'Rajdhani'; font-weight:900; font-size:13px;">${n(3)}</div>
+                 </div>
+              </div>
+
+              <div class="flex-col gap-1 mb-6">
+                <span class="text-[9px] uppercase opacity-40 font-black tracking-widest">${finished ? "SCORE FINAL" : "DETALLES DE RESERVA"}</span>
+                <span class="text-lg font-black text-white">${finished ? resultStr : escapeHtml(locationLabel)}</span>
+                ${!finished ? `<span class="text-xs font-bold text-primary">${d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>` : ''}
+              </div>
+
+              <div class="flex-row gap-3">
+                  <button class="btn btn-primary flex-1" id="eda-btn-download">
+                      <i class="fas fa-download mr-1"></i> CARTEL
+                  </button>
+                   <button class="btn btn-ghost flex-1" id="eda-btn-close">
+                      CERRAR
+                  </button>
+              </div>
+          </div>
       </div>
     </div>
   `;
-  document.body.appendChild(modal);
-  const titleEl = modal.querySelector(".eda-title");
-  if (titleEl) titleEl.textContent = "HOY TIENES PARTIDO";
+
+  document.body.appendChild(overlay);
 
   const prepareMetadata = () => {
     const pNames = players.map(uid => getPlayerDisplayName(uid));
     const levels = players.map(uid => {
         if (uid === currentUser?.uid) return Number(currentUserData?.nivel || 2.5);
         const guest = typeof uid === "string" && uid.startsWith("GUEST_") ? parseGuestMeta(uid) : null;
-        return Number(guest?.level || 2.5);
+        if (guest) return Number(guest.level || 2.5);
+        return 2.5;
     });
     return {
-      title: "PARTIDO DE HOY",
+      title: finished ? "RESULTADO DEL PARTIDO" : "PARTIDO DE HOY",
       when: d.toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }),
       teamA: [pNames[0], pNames[1]],
       teamB: [pNames[2], pNames[3]],
       levelsA: [levels[0], levels[1]],
       levelsB: [levels[2], levels[3]],
-      club: "JAFS PADEL"
+      winner: finished ? resolveWinnerTeam(match) : null,
+      sets: finished ? getResultSetsString(match) : null,
+      club: "JAFS PADEL CLUB"
     };
   };
-  
-  modal.querySelector("#eda-btn-download").onclick = async () => {
+
+  overlay.querySelector("#eda-btn-download").onclick = async () => {
      await shareMatchPoster(prepareMetadata());
   };
 
-  modal.querySelector("#eda-btn-share").onclick = async () => {
-     window.shareMatch(next.id, next.col);
-  };
-  
-  modal.querySelector("#close-eda").onclick = () => {
-    modal.remove();
-    try {
-      localStorage.setItem(key, "1");
-    } catch {}
+  overlay.querySelector("#eda-btn-close").onclick = () => {
+    overlay.remove();
+    localStorage.setItem(`eda_hidden_${match.id}_${todayStr}`, "1");
   };
 }
 

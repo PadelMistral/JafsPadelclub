@@ -385,7 +385,7 @@ function showRecalcReport(res, title = "Recalculo") {
                     <div class="flex-row between"><span>Tiempo</span><b>${res?.elapsed || "--"}s</b></div>
                 </div>
                 ${errors.length ? `
-                    <div class="text-[10px] font-black text-muted uppercase tracking-widest mb-2">Errores recientes</div>
+                    <div class="text-[10px] font-black text-muted uppercase tracking-widest mb-2">Errores</div>
                     <div class="flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scroll">
                         ${errors.map(e => `<div class="p-2 rounded-lg bg-white/5 border border-white/10 text-[10px]">
                             <div><b>${e.col}</b> · ${e.id}</div>
@@ -406,13 +406,13 @@ window.saveEloConfig = async () => {
 
     try {
         showToast("Guardando...", "Actualizando parámetros de puntuación", "info");
-        await setDoc(doc(db, "systemConfigs", "elo"), {
+        await updateDocument("systemConfigs", "elo", {
             victoryPoints: win,
             lossPoints: loss,
             kFactor: k,
             updatedAt: serverTimestamp(),
-            updatedBy: auth.currentUser.uid
-        }, { merge: true });
+            updatedBy: auth.currentUser?.uid || "admin"
+        });
         
         showToast("Configuración Guardada", "Los nuevos valores se aplicarán a futuros cálculos.", "success");
     } catch (e) {
@@ -911,13 +911,13 @@ function renderAuditFeed() {
     container.innerHTML = auditLogs.map((item) => `
         <article class="audit-entry">
             <div class="audit-entry__meta">
-                <span>${escapeHtml(resolveAdminActorLabel(item.actorEmail, item.actorUid))}</span>
+                <span>${escapeHtml(resolveAdminActorLabel(item.actorEmail, item.actorUid, users))}</span>
                 <span>${formatAuditStamp(item.createdAt)}</span>
             </div>
             <div class="audit-entry__title">${escapeHtml(String(item.action || "acción").replace(/_/g, " ").toUpperCase())}</div>
             <div class="audit-entry__body">
                 <span class="status-highlight">${escapeHtml(item.entityType || "sistema")}</span>
-                <span class="match-highlight">${escapeHtml(resolveAdminEntityLabel(item.entityType, item.entityId))}</span>
+                <span class="match-highlight">${escapeHtml(resolveAdminEntityLabel(item.entityType, item.entityId, { users, guestProfiles, matchesArr, eventsArr }))}</span>
                 · ${escapeHtml(describeAuditLog(item))}
             </div>
         </article>
@@ -1058,7 +1058,7 @@ function renderGuests() {
                 <div class="acc-icon-box acc-icon-box--user">${avatar}</div>
                 <div class="acc-main">
                     <span class="acc-title">${guestName}</span>
-                    <span class="acc-sub">Perfil competitivo oculto · ${escapeHtml(g.id)}</span>
+                    <span class="acc-sub">Perfil competitivo oculto</span>
                 </div>
                 <div class="acc-badges">
                     <span class="acc-badge">${points.toFixed(0)} pts</span>
@@ -2231,7 +2231,7 @@ async function openAdminRecalcModal(id, col, resultStr) {
         const { processMatchResults } = await import("./ranking-service.js");
         const res = await processMatchResults(id, col, resultStr, { guestOverrides });
         if (!res?.success) throw new Error(res?.error || "No se pudo recalcular.");
-        showToast("EXITO", "Calculo ELO guardado", "success");
+        showToast("ÉXITO", "Cálculo ELO guardado", "success");
         modal.classList.remove("active");
         await refreshAll();
     });
@@ -2242,6 +2242,10 @@ async function openAdminRecalcModal(id, col, resultStr) {
             showToast("AVISO", "Introduce al menos un delta manual", "info");
             return;
         }
+        if (!currentUser?.uid) {
+          showToast("Sesión no lista", "Espera un momento e intenta de nuevo.", "warning");
+          return;
+        }
         await persistAdminGuestOverrides(guestOverrides);
         await updateDocument(col, id, { rankingProcessedAt: null });
         const { processMatchResults } = await import("./ranking-service.js");
@@ -2251,7 +2255,7 @@ async function openAdminRecalcModal(id, col, resultStr) {
             manualReason: "Ajuste manual desde admin"
         });
         if (!res?.success) throw new Error(res?.error || "No se pudo guardar el ajuste manual.");
-        showToast("EXITO", "Puntuacion manual guardada", "success");
+        showToast("ÉXITO", "Puntuación manual guardada", "success");
         modal.classList.remove("active");
         await refreshAll();
     });
@@ -2331,7 +2335,7 @@ window.openUserAdminHistory = (uid) => {
     modal.classList.add("active");
     const title = document.getElementById("user-history-admin-title");
     const body = document.getElementById("user-history-admin-body");
-    if (title) title.textContent = `Historial · ${user.nombreUsuario || user.nombre || user.email || uid}`;
+    if (title) title.textContent = `Historial · ${user.nombreUsuario || user.nombre || "Usuario"}`;
     if (body) body.innerHTML = renderUserHistoryModalContent(user);
 };
 

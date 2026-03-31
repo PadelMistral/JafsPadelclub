@@ -84,7 +84,7 @@ export async function resolveIdentity(uid, options = {}) {
 
   const fallback = normalizeIdentity({
     uid: safeUid,
-    nombre: safeUid.length > 15 ? "Invitado" : safeUid,
+    nombre: "Jugador",
   }, safeUid);
   identityCache.set(safeUid, fallback);
   return fallback;

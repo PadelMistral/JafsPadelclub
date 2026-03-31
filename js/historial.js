@@ -470,6 +470,34 @@ async function showMatchDetail(m) {
             </div>
         </div>
         `;
+        content.querySelector('[data-share-history-poster]')?.addEventListener('click', async () => {
+            const teamA = [players[0]?.name, players[1]?.name].filter(Boolean);
+            const teamB = [players[2]?.name, players[3]?.name].filter(Boolean);
+            const levelsA = [players[0]?.level, players[1]?.level].filter((v) => Number.isFinite(Number(v)));
+            const levelsB = [players[2]?.level, players[3]?.level].filter((v) => Number.isFinite(Number(v)));
+            const when = date.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+            try {
+                await shareMatchPoster({ title: 'CARTEL DEL PARTIDO', teamA, teamB, levelsA, levelsB, when, club: 'JAFS PADEL CLUB' });
+            } catch (e) {
+                console.error('share history poster failed', e);
+                showToast('Cartel', 'No se pudo generar el cartel.', 'error');
+            }
+        });
+        content.querySelector('[data-download-history-poster]')?.addEventListener('click', async () => {
+            const teamA = [players[0]?.name, players[1]?.name].filter(Boolean);
+            const teamB = [players[2]?.name, players[3]?.name].filter(Boolean);
+            const levelsA = [players[0]?.level, players[1]?.level].filter((v) => Number.isFinite(Number(v)));
+            const levelsB = [players[2]?.level, players[3]?.level].filter((v) => Number.isFinite(Number(v)));
+            const when = date.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+            try {
+                const logsA = Number((logs[players[0]?.id]?.diff || 0) + (logs[players[1]?.id]?.diff || 0));
+                const logsB = Number((logs[players[2]?.id]?.diff || 0) + (logs[players[3]?.id]?.diff || 0));
+                await shareMatchPoster({ title: 'RESULTADO FINAL', teamA, teamB, levelsA, levelsB, when, club: 'JAFS PADEL CLUB', winner: logsA >= logsB ? 'A' : 'B' });
+            } catch (e) {
+                console.error('download history poster failed', e);
+                showToast('Cartel', 'No se pudo descargar el cartel.', 'error');
+            }
+        });
     } catch (error) {
         console.error("showMatchDetail error:", error);
         content.innerHTML = `
@@ -481,32 +509,6 @@ async function showMatchDetail(m) {
             </div>
         `;
     }
-    content.querySelector('[data-share-history-poster]')?.addEventListener('click', async () => {
-        const teamA = [players[0]?.name, players[1]?.name].filter(Boolean);
-        const teamB = [players[2]?.name, players[3]?.name].filter(Boolean);
-        const levelsA = [players[0]?.level, players[1]?.level].filter((v) => Number.isFinite(Number(v)));
-        const levelsB = [players[2]?.level, players[3]?.level].filter((v) => Number.isFinite(Number(v)));
-        const when = date.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-        try {
-            await shareMatchPoster({ title: 'CARTEL DEL PARTIDO', teamA, teamB, levelsA, levelsB, when, club: 'JAFS PADEL CLUB' });
-        } catch (e) {
-            console.error('share history poster failed', e);
-            showToast('Cartel', 'No se pudo generar el cartel.', 'error');
-        }
-    });
-    content.querySelector('[data-download-history-poster]')?.addEventListener('click', async () => {
-        const teamA = [players[0]?.name, players[1]?.name].filter(Boolean);
-        const teamB = [players[2]?.name, players[3]?.name].filter(Boolean);
-        const levelsA = [players[0]?.level, players[1]?.level].filter((v) => Number.isFinite(Number(v)));
-        const levelsB = [players[2]?.level, players[3]?.level].filter((v) => Number.isFinite(Number(v)));
-        const when = date.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-        try {
-            await shareMatchPoster({ title: 'RESULTADO FINAL', teamA, teamB, levelsA, levelsB, when, club: 'JAFS PADEL CLUB', winner: Number((logs[players[0]?.id]?.diff || 0) + (logs[players[1]?.id]?.diff || 0)) >= Number((logs[players[2]?.id]?.diff || 0) + (logs[players[3]?.id]?.diff || 0)) ? 'A' : 'B' });
-        } catch (e) {
-            console.error('download history poster failed', e);
-            showToast('Cartel', 'No se pudo descargar el cartel.', 'error');
-        }
-    });
 }
 
 function generateMatchNarrative(m, p, logs, diary) {

@@ -12,7 +12,11 @@ import {
   doc,
   getDoc,
   collection,
+  query,
+  where,
+  getDocs,
   addDoc,
+  runTransaction,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI, showToast } from "./ui-core.js";
@@ -23,7 +27,7 @@ initAppUI("profile");
 
 document.addEventListener("DOMContentLoaded", async () => {
   let currentStep = 1;
-  const totalSteps = 5;
+  const totalSteps = 3;
   let currentUser = null;
   let userData = null;
   let wizardData = {};
@@ -120,11 +124,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                         </div>
                         <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
                             <h4 class="text-[9px] font-black text-sport-red uppercase tracking-widest mb-2">Daño Recibido</h4>
-                            <p class="text-xs text-white/80">${entry.tactica?.["da\u00f1oRecibido"] || "N/A"}</p>
+                            <p class="text-xs text-white/80">${entry.tactica?.damageReceived || entry.tactica?.["dañoRecibido"] || "N/A"}</p>
                         </div>
                         <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
                             <h4 class="text-[9px] font-black text-sport-green uppercase tracking-widest mb-2">Daño Infligido</h4>
-                            <p class="text-xs text-white/80">${entry.tactica?.["da\u00f1oInfligido"] || "N/A"}</p>
+                            <p class="text-xs text-white/80">${entry.tactica?.damageInflicted || entry.tactica?.["dañoInfligido"] || "N/A"}</p>
                         </div>
                     </div>
 
@@ -197,8 +201,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
           const match =
             (await getDocument("partidosReto", mId)) ||
-            (await getDocument("partidosAmistosos", mId));
-          if (!match || !match.resultado) {
+            (await getDocument("partidosAmistosos", mId)) ||
+            (await getDocument("eventoPartidos", mId));
+          if (!match || (!match.resultado && match.estado !== "finalizado" && match.estado !== "jugado")) {
             showToast(
               "PARTIDO PENDIENTE",
               "El partido seleccionado aún no tiene resultado registrado. Juega primero, analiza después.",
@@ -240,6 +245,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     for (let i = 1; i <= totalSteps; i++) {
       const bar = document.getElementById(`wb-${i}`);
+      if (!bar) continue;
       if (i <= currentStep) bar.classList.add("active");
       else bar.classList.remove("active");
     }
@@ -255,10 +261,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       title.textContent = "CONTEXTO GLOBAL";
     } else {
       btnPrev.style.display = "block";
-      if (currentStep === 2) title.textContent = "ALINEACIÓN TÁCTICA";
-      if (currentStep === 3) title.textContent = "MÉTRICAS DE RENDIMIENTO";
-      if (currentStep === 4) title.textContent = "BIOMETRÍA Y EMOCIÓN";
-      if (currentStep === 5) title.textContent = "ANÁLISIS FINAL";
+      if (currentStep === 2) title.textContent = "BIOMETRÍA Y EVALUACIÓN";
+      if (currentStep === 3) title.textContent = "ANÁLISIS FINAL";
     }
 
     if (currentStep === totalSteps) {
@@ -339,8 +343,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!selector) return;
 
     try {
-      const { query, collection, where, getDocs } =
-        await import("https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js");
 
       const qA = query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", currentUser.uid));
       const qR = query(collection(db, "partidosReto"), where("jugadores", "array-contains", currentUser.uid));
@@ -353,7 +355,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         ...snapR.docs.map((d) => ({ id: d.id, ...d.data(), type: "Reto" })),
         ...snapE.docs.map((d) => ({ id: d.id, ...d.data(), type: "Torneo/Evento" })),
       ]
-        .filter((m) => m.estado === "jugado")
+        .filter((m) => m.resultado || m.estado === "jugado" || m.estado === "finalizado")
         .sort((a, b) => (b.fecha?.toMillis?.() || 0) - (a.fecha?.toMillis?.() || 0));
 
       selector.innerHTML = '<option value="">-- Selecciona un partido --</option>';
@@ -606,7 +608,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       entry.aiSummary = generateSmartSummary(entry);
       entry.coachNote = generateCoachNote(entry);
 
-      const { runTransaction } = await import("https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js");
       await runTransaction(db, async (transaction) => {
         const userRef = doc(db, "usuarios", currentUser.uid);
         const userSnap = await transaction.get(userRef);

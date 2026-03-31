@@ -9,7 +9,8 @@ import { openResultForm, renderMatchDetail, indexEventUserNames } from './match-
 import { createNotification } from './services/notification-service.js';
 import { ensureGuestProfile } from './services/guest-player-service.js';
 import { getFriendlyTeamName } from './utils/team-utils.js';
-import { buildBaseMatchPayload, buildMatchPersistencePatch, getResultSetsString } from './utils/match-utils.js';
+import { buildBaseMatchPayload, buildMatchPersistencePatch, getResultSetsString, isFinishedMatch } from './utils/match-utils.js';
+import { generateEventStatusPoster } from './utils/share-utils.js';
 
 initAppUI('event-detail');
 
@@ -567,6 +568,88 @@ function renderPage() {
 
     renderActionBar();
     renderPane(document.querySelector('.ed-tab.active')?.dataset.tab || 'info');
+
+    // Action button for downloading status
+    const actionWrap = document.querySelector('.ed-actions-v9') || document.querySelector('.ed-hero-content'); 
+    if (actionWrap && !document.getElementById('btn-download-status')) {
+        const btn = document.createElement('button');
+        btn.id = 'btn-download-status';
+        btn.className = 'btn-ed-secondary sm ml-auto';
+        btn.innerHTML = '<i class="fas fa-file-export mr-1"></i> DESCARGAR ESTADO';
+        btn.onclick = () => downloadEventStatus();
+        
+        // Find a good place to inject it
+        const titleRow = document.querySelector('.ed-hero-title-wrap');
+        if (titleRow) titleRow.appendChild(btn);
+    }
+}
+
+async function downloadEventStatus() {
+    const ev = currentEvent;
+    if (!ev) return;
+    
+    showToast('GENERANDO...', 'Compilando datos del torneo', 'info');
+
+    const played = eventMatches.filter(m => isFinishedMatch(m)).map(m => ({
+        teamAName: m.teamAName || 'Pareja A',
+        teamBName: m.teamBName || 'Pareja B',
+        resultado: getResultSetsString(m)
+    }));
+
+    const scheduled = eventMatches.filter(m => !isFinishedMatch(m) && m.fecha).map(m => {
+        const d = m.fecha.toDate ? m.fecha.toDate() : new Date(m.fecha);
+        return {
+            teamAName: m.teamAName || 'Pareja A',
+            teamBName: m.teamBName || 'Pareja B',
+            fechaStr: d.toLocaleString('es-ES', { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+        };
+    });
+
+    const pending = eventMatches.filter(m => !isFinishedMatch(m) && !m.fecha).map(m => ({
+        teamAName: m.teamAName || 'Pareja A',
+        teamBName: m.teamBName || 'Pareja B'
+    }));
+
+    // Standings
+    const standings = [];
+    const cfg = { win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0 };
+    const teamMap = new Map((ev.teams || []).map(t => [t.id, t]));
+
+    if (ev.formato === 'league' || ev.formato === 'league_knockout') {
+        const groups = ev.formato === 'league' ? { 'General': (ev.teams || []).map(t => t.id) } : (ev.groups || {});
+        for (const [gName, tIds] of Object.entries(groups)) {
+            const gTeams = tIds.map(id => teamMap.get(id)).filter(Boolean);
+            const matches = eventMatches.filter(m => m.group === gName || (ev.formato === 'league' && m.phase === 'league'));
+            const table = computeGroupTable(matches, gTeams, cfg);
+            standings.push({
+                title: ev.formato === 'league' ? 'Liga Regular' : `Grupo ${gName}`,
+                rows: table.map(r => ({
+                    teamName: r.teamName,
+                    pts: r.pts,
+                    pj: r.pj,
+                    pg: r.pg,
+                    pp: r.p,
+                    diff: (r.pf || 0) - (r.pc || 0)
+                }))
+            });
+        }
+    }
+
+    try {
+        await generateEventStatusPoster({
+            eventName: ev.nombre || 'Torneo',
+            organizer: ev.organizadorNombre || 'JafsPadel',
+            logo: ev.imagen || ev.imageUrl || '',
+            played,
+            scheduled,
+            pending,
+            standings
+        });
+        showToast('ÉXITO', 'Cartel descargado', 'success');
+    } catch (e) {
+        console.error(e);
+        showToast('ERROR', 'No se pudo generar el cartel', 'error');
+    }
 }
 
 function renderPane(tab) {
@@ -1084,7 +1167,98 @@ function hasMatchResult(match) {
 
 function renderBracket(pane) {
     if (!currentEvent.bracket || !currentEvent.bracket.length) {
-        pane.innerHTML = `<div class="empty-state">Aún no se ha generado el bracket de eliminatorias.</div>`;
+        // Generar bracket fantasma
+        try {
+            const ev = currentEvent;
+            const nPasan = Number(ev.equiposPorGrupo || 2);
+            const groupsKeys = Object.keys(ev.groups || {});
+            const teamMap = new Map((ev.teams || []).map(t => [t.id, t]));
+            let clasificados = [];
+
+            groupsKeys.forEach(g => {
+                const teamIds = ev.groups[g] || [];
+                const teamsEnGrupo = teamIds.map(id => teamMap.get(id));
+                const groupMatches = eventMatches.filter(m => m.phase === 'group' && m.group === g);
+                const tabla = computeGroupTable(groupMatches, teamsEnGrupo, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+                tabla.forEach((fila, idx) => {
+                    if (idx < nPasan) clasificados.push(teamMap.get(fila.teamId));
+                });
+            });
+
+            if (clasificados.length < 2) {
+                pane.innerHTML = `<div class="empty-state">Aún no se ha generado el bracket de eliminatorias. Faltan clasificados.</div>`;
+                return;
+            }
+
+            const seedingMode = ev.bracketSeeding || 'random';
+            let seededTeams = clasificados.filter(Boolean);
+            if (seedingMode === 'cross' && groupsKeys.length === 2) {
+                const gA = groupsKeys[0];
+                const gB = groupsKeys[1];
+                const teamsA = (ev.groups[gA] || []).map(id => teamMap.get(id)).filter(Boolean);
+                const teamsB = (ev.groups[gB] || []).map(id => teamMap.get(id)).filter(Boolean);
+                const matchesA = eventMatches.filter(m => m.phase === 'group' && m.group === gA);
+                const matchesB = eventMatches.filter(m => m.phase === 'group' && m.group === gB);
+                const tablaA = computeGroupTable(matchesA, teamsA, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+                const tablaB = computeGroupTable(matchesB, teamsB, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+                const aTop = tablaA.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
+                const bTop = tablaB.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
+                const order = [];
+                for (let i = 0; i < nPasan; i++) {
+                    const a = aTop[i];
+                    const b = bTop[nPasan - 1 - i];
+                    if (a && b) order.push(a, b);
+                }
+                for (let i = 0; i < nPasan; i++) {
+                    const b = bTop[i];
+                    const a = aTop[nPasan - 1 - i];
+                    if (a && b) order.push(b, a);
+                }
+                seededTeams = order.filter(Boolean);
+            } else if (seedingMode === 'rank') {
+                const groupMatches = eventMatches.filter(m => m.phase === 'group');
+                const tabla = computeGroupTable(groupMatches, seededTeams, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+                seededTeams = tabla.map(r => teamMap.get(r.teamId)).filter(Boolean);
+            }
+
+            const rounds = generateKnockoutTree(seededTeams, ev.id + '_preview', { shuffle: seedingMode === 'random' });
+            
+            let html = `
+                <div class="mb-4 p-3 bg-primary/20 border border-primary/40 rounded-xl text-center">
+                    <div class="text-[12px] font-black text-primary uppercase tracking-widest mb-1"><i class="fas fa-eye"></i> Simulación en vivo</div>
+                    <div class="text-[10px] text-white/70">Así quedaría el bracket según la clasificación actual.</div>
+                </div>
+                <div class="bracket-container opacity-80" style="pointer-events:none;"><div class="bracket">`;
+            
+            rounds.forEach((round, rIdx) => {
+                const isLast = (rIdx === rounds.length - 1);
+                const isSemi = (rIdx === rounds.length - 2);
+                const label = isLast ? 'FINAL' : (isSemi ? 'SEMIS' : `RONDA ${rIdx + 1}`);
+
+                html += `<div class="bracket-round"><div class="bracket-round-label">${label}</div>`;
+                
+                round.forEach(m => {
+                    const teamA = currentEvent?.teams?.find(t => t.id === m.teamAId);
+                    const teamB = currentEvent?.teams?.find(t => t.id === m.teamBId);
+                    html += `
+                    <div class="bracket-match pending">
+                        <div class="b-team-v9">
+                            <span class="b-name-v9">${getFriendlyTeamName({ teamName: teamA?.name, teamId: teamA?.id, side: 'A' })}</span>
+                            <span class="b-score-v9">-</span>
+                        </div>
+                        <div class="b-team-v9">
+                            <span class="b-name-v9">${getFriendlyTeamName({ teamName: teamB?.name, teamId: teamB?.id, side: 'B' })}</span>
+                            <span class="b-score-v9">-</span>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+            });
+            html += `</div></div>`;
+            pane.innerHTML = html;
+        } catch (e) {
+            pane.innerHTML = `<div class="empty-state">Aún no se ha generado el bracket de eliminatorias.</div>`;
+        }
         return;
     }
 

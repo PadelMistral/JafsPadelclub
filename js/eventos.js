@@ -142,8 +142,69 @@ document.addEventListener('DOMContentLoaded', () => {
         setupFilters();
         setupCreateModal();
         subscribeEvents();
+        setupDashboard();
     });
 });
+
+async function setupDashboard() {
+    const btnDownload = document.getElementById('btn-download-ev-poster');
+    if (btnDownload) {
+        btnDownload.onclick = async () => {
+            const played = document.getElementById('count-played').textContent;
+            const scheduled = document.getElementById('count-scheduled').textContent;
+            const pending = document.getElementById('count-pending').textContent;
+            
+            try {
+                const { shareMatchPoster } = await import('./utils/share-utils.js');
+                await shareMatchPoster({
+                    title: 'ESTADO COMPETICIONES',
+                    teamA: ['EN CURSO', `JUGADOS: ${played}`],
+                    teamB: ['TOTAL ACTIVOS', `PENDIENTES: ${pending}`],
+                    levelsA: [scheduled],
+                    levelsB: ['EVENTOS'],
+                    when: new Date().toLocaleDateString(),
+                    club: 'JAFS PADEL CLUB'
+                });
+            } catch (e) {
+                console.error("Poster creation failed", e);
+                showToast("Error", "No se pudo generar el cartel del dashboard.", "error");
+            }
+        };
+    }
+}
+
+async function updateDashboardStats(events) {
+    let played = 0, scheduled = 0, pending = 0, open = 0;
+    
+    events.forEach(ev => {
+        if (ev.estado === 'inscripcion') open++;
+    });
+    
+    document.getElementById('count-open').textContent = open;
+    
+    // We can't easily count matches of ALL events without many queries
+    // Let's at least count matches from the most recent active events
+    const activeEvents = events.filter(e => e.estado === 'activo').slice(0, 5);
+    
+    for (const ev of activeEvents) {
+        try {
+            const matchesSnap = await getDocsSafe(query(collection(db, 'eventoPartidos'), where('eventoId', '==', ev.id)));
+            matchesSnap.docs.forEach(d => {
+                const m = d.data();
+                if (m.estado === 'jugado') played++;
+                else if (m.estado === 'programado') scheduled++;
+                else pending++;
+            });
+        } catch (e) {
+            console.warn("Failed to fetch matches for dashboard event", ev.id, e);
+        }
+    }
+    
+    document.getElementById('count-played').textContent = played;
+    document.getElementById('count-scheduled').textContent = scheduled;
+    document.getElementById('count-pending').textContent = pending;
+}
+
 
 async function preloadUsersForEvents() {
     try {
@@ -188,6 +249,7 @@ function subscribeEvents() {
     unsubscribeEvents = onSnapshot(q, snap => {
         allEvents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderEvents();
+        updateDashboardStats(allEvents);
     }, err => {
         console.error('Events error:', err);
         renderFallback('Error de conexión. Intenta de nuevo.');
@@ -252,6 +314,7 @@ function renderFallback(msg) {
     const container = document.getElementById('events-container');
     if (container) container.innerHTML = `<div class="events-empty"><i class="fas fa-wifi-slash"></i><h3>Sin conexión</h3><p>${msg}</p></div>`;
 }
+
 
 /* ==================== BUILD CARD ==================== */
 function buildEventCard(ev, idx) {
