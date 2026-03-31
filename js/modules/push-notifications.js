@@ -76,6 +76,61 @@ function persistPushState(state = {}) {
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function requestBrowserPermissionDirect() {
+  if (typeof Notification === "undefined" || typeof Notification.requestPermission !== "function") {
+    return "unsupported";
+  }
+  try {
+    return await Notification.requestPermission();
+  } catch (e) {
+    pushLog("warn", "browser_permission_direct_failed", {
+      error: e?.message || String(e),
+    });
+    return typeof Notification !== "undefined" ? Notification.permission : "unsupported";
+  }
+}
+
+async function requestPermissionThroughOneSignal() {
+  try {
+    await oneSignalExec(async (OneSignal) => {
+      if (!OneSignal?.Notifications?.requestPermission) {
+        throw new Error("onesignal_request_permission_missing");
+      }
+      await Promise.race([
+        OneSignal.Notifications.requestPermission(),
+        wait(5000).then(() => {
+          throw new Error("onesignal_request_permission_timeout");
+        }),
+      ]);
+    });
+  } catch (e) {
+    pushLog("warn", "onesignal_request_permission_failed", {
+      error: e?.message || String(e),
+    });
+  }
+}
+
+async function syncGrantedPermissionWithOneSignal(userId = null) {
+  try {
+    const ok = await ensureOneSignalInitialized();
+    if (!ok) return false;
+
+    await oneSignalExec(async (OneSignal) => {
+      if (OneSignal?.User?.PushSubscription?.optIn) {
+        await OneSignal.User.PushSubscription.optIn();
+      }
+    }).catch(() => {});
+
+    if (userId) await processPushStateMachine(userId);
+    return true;
+  } catch (e) {
+    pushLog("warn", "onesignal_sync_after_grant_failed", {
+      error: e?.message || String(e),
+    });
+    return false;
+  }
+}
+
 async function persistNotifPermissionFlag(state) {
   try {
     const uid = auth.currentUser?.uid;
@@ -678,6 +733,7 @@ async function showDeniedGuide() {
  */
 export async function requestNotificationPermission(autoInit = true) {
   notifPermission = Notification.permission;
+  const userId = auth.currentUser?.uid || null;
 
   if (notifPermission === "granted") {
     localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, "true");
@@ -686,8 +742,9 @@ export async function requestNotificationPermission(autoInit = true) {
     analyticsSetFlag("notifications.permission", true);
     analyticsCount("notifications.enabled", 1);
     persistNotifPermissionFlag("granted").catch(() => {});
-    if (autoInit && auth.currentUser?.uid)
-      initPushNotifications(auth.currentUser.uid).catch(() => {});
+    syncGrantedPermissionWithOneSignal(userId).catch(() => {});
+    if (autoInit && userId)
+      initPushNotifications(userId).catch(() => {});
     return true;
   }
 
@@ -703,12 +760,12 @@ export async function requestNotificationPermission(autoInit = true) {
     const ok = await ensureOneSignalInitialized();
     if (!ok) return false;
 
-    await oneSignalExec(async (OneSignal) => {
-      // In OneSignal v16, optIn handles everything if permission isn't denied
-      await OneSignal.Notifications.requestPermission();
-    });
+    await requestPermissionThroughOneSignal();
 
     notifPermission = Notification.permission;
+    if (notifPermission === "default") {
+      notifPermission = await requestBrowserPermissionDirect();
+    }
 
     if (notifPermission === "granted") {
       localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, "true");
@@ -722,14 +779,16 @@ export async function requestNotificationPermission(autoInit = true) {
         "success",
       );
       persistNotifPermissionFlag("granted").catch(() => {});
-      if (autoInit && auth.currentUser?.uid)
-        initPushNotifications(auth.currentUser.uid).catch(() => {});
+      await syncGrantedPermissionWithOneSignal(userId);
+      if (autoInit && userId)
+        initPushNotifications(userId).catch(() => {});
       return true;
     }
   } catch (e) {
     pushLog("error", "permission_request_error", { error: e?.message || String(e) });
   }
 
+  notifPermission = typeof Notification !== "undefined" ? Notification.permission : notifPermission;
   if (notifPermission === "denied") {
     analyticsSetFlag("notifications.permission", false);
     analyticsCount("notifications.denied", 1);

@@ -1167,11 +1167,6 @@ window.confirmAdvancePhase = () => {
     };
 };
 
-function isKnockoutPhaseMatch(match = {}) {
-    const phase = String(match.phase || "").toLowerCase();
-    return ["knockout", "semi", "semis", "semifinal", "final", "cuartos", "quarter"].includes(phase);
-}
-
 function isGroupPhaseMatch(match = {}, ev = null) {
     const phase = String(match.phase || "").toLowerCase();
     if (["group", "liga", "league", "grupos"].includes(phase)) return true;
