@@ -65,7 +65,13 @@ function ensureNativeAppStyles() {
             filter: saturate(1.22) contrast(1.08) hue-rotate(-8deg);
         }
         body.native-app-shell .app-header {
+            position: fixed !important;
             top: 0;
+            left: 0 !important;
+            right: 0 !important;
+            width: min(100%, 880px) !important;
+            margin-inline: auto !important;
+            z-index: 19000 !important;
             padding-top: calc(env(safe-area-inset-top, 0px) + 10px) !important;
             height: calc(84px + env(safe-area-inset-top, 0px)) !important;
             background:
@@ -76,9 +82,12 @@ function ensureNativeAppStyles() {
             backdrop-filter: blur(26px);
         }
         body.native-app-shell .page-content {
-            padding-top: calc(var(--app-header-h) + 12px) !important;
+            padding-top: calc(var(--app-header-h) + env(safe-area-inset-top, 0px) + 20px) !important;
             padding-bottom: calc(var(--app-nav-h) + env(safe-area-inset-bottom, 0px) + 12px) !important;
             min-height: 100dvh;
+        }
+        body.native-app-shell .page-content > *:first-child {
+            margin-top: 8px !important;
         }
         body.native-app-shell .bottom-nav {
             position: fixed !important;
