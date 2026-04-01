@@ -314,6 +314,8 @@ async function watchServiceWorkerUpdates(pageName) {
 
 export function initPWAShell(pageName = "app") {
   if (typeof window === "undefined" || window.__pwaShellReady) return;
+  const isNativeApp = Boolean(window.Capacitor?.isNativePlatform?.() || ["android", "ios"].includes(window.Capacitor?.getPlatform?.() || ""));
+  if (isNativeApp) return;
   window.__pwaShellReady = true;
 
   let deferredInstallPrompt = null;

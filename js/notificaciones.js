@@ -57,13 +57,14 @@ const btnReloadApp = document.getElementById("btn-reload-app");
 const btnOpenGuide = document.getElementById("btn-open-guide");
 
 function applyNotificationPageCopy() {
-  if (document.title) document.title = "Notificaciones | JafsPadel";
+  const isNativeApp = Boolean(window.Capacitor?.isNativePlatform?.() || ["android", "ios"].includes(window.Capacitor?.getPlatform?.() || ""));
+  if (document.title) document.title = "Notificaciones | PADELUMINATIS";
   const sub = document.querySelector(".page-sub-pro");
-  if (sub) sub.textContent = "Solo tus avisos importantes y su estado";
+  if (sub) sub.textContent = isNativeApp ? "Avisos nativos, segundo plano y bandeja inteligente" : "Solo tus avisos importantes y su estado";
   const expl = document.getElementById("push-status-explanation");
-  if (expl) expl.textContent = "Estamos mirando si tu movil puede recibir avisos de tus partidas y movimientos.";
+  if (expl) expl.textContent = isNativeApp ? "Estamos comprobando tu canal nativo del movil para que los cambios importantes lleguen aunque cierres la app." : "Estamos mirando si tu movil puede recibir avisos de tus partidas y movimientos.";
   const helpGuide = document.getElementById("perm-platform-guide");
-  if (helpGuide) helpGuide.textContent = "Te diremos aqui que hacer con frases simples.";
+  if (helpGuide) helpGuide.textContent = isNativeApp ? "En Android solo necesitas permiso de notificaciones y registro correcto del dispositivo." : "Te diremos aqui que hacer con frases simples.";
   const support = document.getElementById("push-support-copy");
   if (support) support.textContent = "Te diremos la causa mas probable y el boton que mas conviene probar.";
   const guideBtn = document.getElementById("btn-open-guide");
@@ -94,6 +95,12 @@ function applyNotificationPageCopy() {
   if (sdk) sdk.textContent = "SDK: ---";
   const action = document.getElementById("push-action-pill");
   if (action) action.textContent = "Siguiente paso: ---";
+  if (isNativeApp) {
+    document.getElementById("btn-reregister-sw")?.classList.add("hidden");
+    document.getElementById("btn-clean-sw")?.classList.add("hidden");
+    const nativeHint = document.querySelector(".notif-test-hint");
+    if (nativeHint) nativeHint.textContent = "En la APK esta prueba valida el canal nativo y un aviso local. Para recibir avisos reales en segundo plano sigue haciendo falta un emisor remoto.";
+  }
 }
 
 function escapeHtml(raw = "") {

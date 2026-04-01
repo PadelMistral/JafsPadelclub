@@ -5,6 +5,7 @@ import {
   subscribeCol,
   updateDocument,
   uploadProfilePhoto,
+  uploadUserGalleryPhoto,
   getDocument,
 } from "./firebase-service.js";
 import {
@@ -17,6 +18,9 @@ import {
   setDoc,
   doc,
   serverTimestamp,
+  addDoc,
+  deleteDoc,
+  getDoc,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { showToast, countUp, initAppUI } from "./ui-core.js";
 import {
@@ -213,6 +217,39 @@ document.addEventListener("DOMContentLoaded", () => {
   let advStatsCacheAt = 0;
   let selectedEloRange = 30;
 
+  async function loadProfileGallery(uid) {
+    const grid = document.getElementById("profile-gallery-grid");
+    if (!grid || !uid) return;
+    try {
+      const snap = await getDocs(
+        query(collection(db, "usuarios", uid, "gallery"), orderBy("createdAt", "desc"), limit(24)),
+      );
+      if (snap.empty) {
+        grid.innerHTML = `<div class="text-center py-6 opacity-40 text-[10px] font-black uppercase col-span-3">Aun no hay fotos subidas en tu galeria compartida.</div>`;
+        return;
+      }
+      grid.innerHTML = snap.docs.map((entry) => {
+        const item = entry.data() || {};
+        const imageUrl = String(item.url || "").trim();
+        const canEdit = viewingOwnProfile && currentUser?.uid === uid;
+        return `
+          <article class="relative overflow-hidden rounded-2xl border border-white/10 bg-black/20 min-h-[110px]">
+            <img src="${escapeProfileHtml(imageUrl)}" alt="Galeria" class="w-full h-[118px] object-cover">
+            <div class="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-[#020617] via-[#020617cc] to-transparent">
+              <div class="text-[9px] uppercase tracking-widest text-white/70 truncate">${escapeProfileHtml(item.name || "foto")}</div>
+              <div class="flex-row gap-2 mt-2">
+                ${canEdit ? `<button type="button" class="btn btn-primary text-[9px] px-2 py-1" onclick="window.useGalleryPhotoAsProfile('${uid}','${entry.id}')">Perfil</button>` : ``}
+                ${canEdit ? `<button type="button" class="btn btn-ghost text-[9px] px-2 py-1" onclick="window.deleteGalleryPhoto('${uid}','${entry.id}')">Borrar</button>` : ``}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    } catch (_) {
+      grid.innerHTML = `<div class="text-center py-6 opacity-40 text-[10px] font-black uppercase col-span-3">No se pudo cargar la galeria.</div>`;
+    }
+  }
+
   const getApoingStorageKey = (uid) => `apoingCalendarUrl:${uid || "anon"}`;
   const APOING_PROFILE_PROXY_URL = `${window.location.origin}/api/apoing-ics?url=`;
   const APOING_PROFILE_PROXY_3 = "https://r.jina.ai/http://";
@@ -406,11 +443,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const settingsSection = document.getElementById("profile-settings-section");
       if (settingsSection) settingsSection.style.display = viewingOwnProfile ? "" : "none";
+      const gallerySection = document.getElementById("profile-gallery-section");
+      if (gallerySection) gallerySection.style.display = viewingOwnProfile ? "" : "none";
       
       // Read-only mode for other users' profiles
       if (!viewingOwnProfile) {
         // Hide editable elements
-        document.querySelectorAll('.avatar-edit-btn, #upload-photo, #btn-logout, #profile-chat-ia-cta').forEach(el => {
+        document.querySelectorAll('.avatar-edit-btn, #upload-photo, #btn-logout, #profile-chat-ia-cta, #btn-open-gallery-upload, #upload-gallery-photo').forEach(el => {
           if (el) el.style.display = 'none';
         });
         // Disable avatar click
@@ -440,6 +479,7 @@ document.addEventListener("DOMContentLoaded", () => {
           renderDiarioStats(docData.diario || [], docData);
           loadAdvancedCompetitiveStats(profileUid, docData);
           loadVisualIntelligence(profileUid, docData);
+          if (viewingOwnProfile) loadProfileGallery(profileUid);
           maybeFocusApoingSection();
         } else if (!userData) {
           const fallback = {
@@ -2077,5 +2117,67 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch(e) { showToast("Error", "Fallo al subir", "error"); }
     }
   });
+
+  document.getElementById("btn-open-gallery-upload")?.addEventListener("click", () => {
+    if (!ensureOwnProfile()) return;
+    document.getElementById("upload-gallery-photo")?.click();
+  });
+
+  document.getElementById("upload-gallery-photo")?.addEventListener("change", async (e) => {
+    if (!ensureOwnProfile()) return;
+    const files = Array.from(e.target.files || []).filter(Boolean).slice(0, 6);
+    if (!files.length) return;
+    try {
+      showToast("Galeria", "Subiendo imagenes seleccionadas...", "info");
+      for (const file of files) {
+        const url = await uploadUserGalleryPhoto(currentUser.uid, file);
+        await addDoc(collection(db, "usuarios", currentUser.uid, "gallery"), {
+          uid: currentUser.uid,
+          url,
+          name: file.name || "imagen",
+          size: Number(file.size || 0),
+          visibleToAdmin: true,
+          createdAt: serverTimestamp(),
+        });
+      }
+      await loadProfileGallery(currentUser.uid);
+      showToast("Galeria", "Fotos subidas y listas para revision.", "success");
+    } catch (_) {
+      showToast("Error", "No se pudieron subir las fotos.", "error");
+    } finally {
+      e.target.value = "";
+    }
+  });
+
+  window.useGalleryPhotoAsProfile = async (uid, imageId) => {
+    if (!ensureOwnProfile()) return;
+    try {
+      const snap = await getDoc(doc(db, "usuarios", uid, "gallery", imageId));
+      const photo = String(snap.data()?.url || "").trim();
+      if (!photo) return showToast("Galeria", "No se encontro la imagen.", "warning");
+      await updateDocument("usuarios", uid, { fotoPerfil: photo, fotoURL: photo });
+      await loadProfileGallery(uid);
+      showToast("Perfil", "Foto aplicada al perfil.", "success");
+    } catch (_) {
+      showToast("Error", "No se pudo aplicar la foto.", "error");
+    }
+  };
+
+  window.deleteGalleryPhoto = async (uid, imageId) => {
+    if (!ensureOwnProfile()) return;
+    if (!(await confirmProfileAction({
+      title: "Borrar foto",
+      message: "Se eliminara esta imagen de tu galeria compartida.",
+      confirmLabel: "Borrar",
+      danger: true,
+    }))) return;
+    try {
+      await deleteDoc(doc(db, "usuarios", uid, "gallery", imageId));
+      await loadProfileGallery(uid);
+      showToast("Galeria", "Foto eliminada.", "success");
+    } catch (_) {
+      showToast("Error", "No se pudo borrar la foto.", "error");
+    }
+  };
 
 });

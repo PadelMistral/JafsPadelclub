@@ -530,6 +530,16 @@ export function initAppUI(activePageName) {
     ensureGlobalBackgroundLayer();
     ensureErrorBoundaryLayer();
     ensureBootLoader();
+    const nativePlatform = typeof window !== 'undefined' && window.Capacitor?.getPlatform?.();
+    const isNativeApp = typeof window !== 'undefined' && Boolean(window.Capacitor?.isNativePlatform?.() || nativePlatform === 'android' || nativePlatform === 'ios');
+    if (typeof document !== 'undefined') {
+        document.body.classList.toggle('native-app-shell', isNativeApp);
+        document.documentElement.classList.toggle('native-app-shell', isNativeApp);
+        if (isNativeApp) {
+            document.documentElement.style.setProperty('--native-app-top-pad', 'max(env(safe-area-inset-top, 0px), 8px)');
+            document.documentElement.style.setProperty('--native-app-bottom-pad', 'max(env(safe-area-inset-bottom, 0px), 10px)');
+        }
+    }
     if (typeof window !== 'undefined' && !window.__globalGalaxyBooted) {
         window.__globalGalaxyBooted = true;
         import('./modules/galaxy-bg.js')
@@ -563,8 +573,8 @@ export function initAppUI(activePageName) {
     ensureStylesheetAsLast('./css/ux-enhance.css', 'ux-enhance.css');
     ensureStylesheetAsLast('./css/padel-fusion.css', 'padel-fusion.css');
 
-    // Register Service Worker for PWA + automatic updates
-    if ('serviceWorker' in navigator && !window.__swRegisterBound) {
+    // Register Service Worker for PWA + automatic updates only on web.
+    if (!isNativeApp && 'serviceWorker' in navigator && !window.__swRegisterBound) {
         window.__swRegisterBound = true;
 
         const registerSW = () => {

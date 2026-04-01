@@ -39,6 +39,115 @@ function isStandalonePage() {
     return false;
 }
 
+function isNativeApp() {
+    try {
+        const cap = window.Capacitor;
+        if (!cap) return false;
+        if (typeof cap.isNativePlatform === "function") return !!cap.isNativePlatform();
+        const platform = typeof cap.getPlatform === "function" ? cap.getPlatform() : "";
+        return platform === "android" || platform === "ios";
+    } catch (_) {
+        return false;
+    }
+}
+
+function ensureNativeAppStyles() {
+    if (!isNativeApp() || document.getElementById("native-app-shell-styles")) return;
+    const style = document.createElement("style");
+    style.id = "native-app-shell-styles";
+    style.textContent = `
+        html.native-app-shell,
+        body.native-app-shell {
+            background: linear-gradient(180deg, #020617 0%, #071120 45%, #08182b 100%) !important;
+        }
+        body.native-app-shell .sport-bg {
+            opacity: 0.72;
+            filter: saturate(1.1) contrast(1.05);
+        }
+        body.native-app-shell .app-header {
+            top: 0;
+            padding-top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
+            height: calc(78px + env(safe-area-inset-top, 0px)) !important;
+            background: linear-gradient(180deg, rgba(4, 12, 24, 0.96), rgba(6, 20, 35, 0.8)) !important;
+            border: 1px solid rgba(103, 232, 249, 0.16);
+            box-shadow: 0 24px 42px rgba(2, 6, 23, 0.45);
+            backdrop-filter: blur(22px);
+        }
+        body.native-app-shell .page-content {
+            padding-top: calc(var(--app-header-h) + 12px) !important;
+            padding-bottom: calc(var(--app-nav-h) + env(safe-area-inset-bottom, 0px) + 12px) !important;
+        }
+        body.native-app-shell .bottom-nav {
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 6px) !important;
+            background: linear-gradient(180deg, rgba(4, 12, 24, 0.95), rgba(7, 18, 34, 0.98)) !important;
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            box-shadow: 0 22px 40px rgba(2, 6, 23, 0.48);
+            backdrop-filter: blur(24px);
+        }
+        body.native-app-shell .card,
+        body.native-app-shell .card-premium-v7,
+        body.native-app-shell .notif-simple-card,
+        body.native-app-shell .notif-status-hero,
+        body.native-app-shell .profile-section,
+        body.native-app-shell .stat-card-v9,
+        body.native-app-shell .stat-card-v7 {
+            border-color: rgba(103, 232, 249, 0.14) !important;
+            box-shadow: 0 18px 38px rgba(2, 6, 23, 0.3);
+        }
+        body.native-app-shell .page-title-pro,
+        body.native-app-shell .profile-name,
+        body.native-app-shell .pane-title {
+            text-shadow: 0 0 18px rgba(103, 232, 249, 0.12);
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+function bindNativeSwipeNavigation(activePageId, items = []) {
+    if (!isNativeApp() || !activePageId || window.__nativeSwipeNavBound === activePageId) return;
+    const activeIndex = items.findIndex((item) => item.id === activePageId);
+    if (activeIndex === -1) return;
+    window.__nativeSwipeNavBound = activePageId;
+
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
+
+    const canHandleTarget = (target) => {
+        if (!target) return false;
+        const tag = String(target.tagName || "").toLowerCase();
+        if (["input", "textarea", "select", "button", "label"].includes(tag)) return false;
+        if (target.closest("a[href], button, input, textarea, select, [contenteditable='true'], .modal-overlay.active")) return false;
+        return true;
+    };
+
+    document.addEventListener("touchstart", (event) => {
+        const touch = event.changedTouches?.[0];
+        if (!touch || !canHandleTarget(event.target)) {
+            tracking = false;
+            return;
+        }
+        tracking = true;
+        startX = touch.clientX;
+        startY = touch.clientY;
+    }, { passive: true });
+
+    document.addEventListener("touchend", (event) => {
+        if (!tracking) return;
+        tracking = false;
+        const touch = event.changedTouches?.[0];
+        if (!touch) return;
+        const diffX = touch.clientX - startX;
+        const diffY = touch.clientY - startY;
+        if (Math.abs(diffX) < 92 || Math.abs(diffX) < Math.abs(diffY) * 1.45 || Math.abs(diffY) > 72) return;
+
+        const nextIndex = diffX < 0 ? activeIndex + 1 : activeIndex - 1;
+        const nextItem = items[nextIndex];
+        if (!nextItem?.link) return;
+        window.location.href = nextItem.link;
+    }, { passive: true });
+}
+
 function getUserInitials(name = "") {
     const clean = String(name || "").trim();
     if (!clean) return "JP";
@@ -223,6 +332,7 @@ function getCurrentPageMeta() {
  */
 export async function injectHeader(userData = null) {
     if (isPublicPage() || isStandalonePage() || document.querySelector('.app-header')) return;
+    ensureNativeAppStyles();
     if (!userData && auth.currentUser?.uid) {
         try { userData = await getDocument("usuarios", auth.currentUser.uid); } catch (_) {}
     }
@@ -348,6 +458,7 @@ export function updateHeader(userData) {
  */
 export async function injectNavbar(activePage) {
     if (isPublicPage() || isStandalonePage() || document.querySelector('.bottom-nav')) return;
+    ensureNativeAppStyles();
     
     const nav = document.createElement('nav');
     nav.className = 'bottom-nav';
@@ -407,6 +518,7 @@ export async function injectNavbar(activePage) {
             window.location.href = href;
         });
     });
+    bindNativeSwipeNavigation(resolvedActivePage, items);
     
     // Presence Heartbeat
     if (auth.currentUser) {

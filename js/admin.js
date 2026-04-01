@@ -29,6 +29,7 @@ let proposalsArr = [];
 let auditLogs = [];
 let rankingLogsArray = [];
 let appErrors = [];
+let galleryItems = [];
 let adminRecalcModalState = null;
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -101,6 +102,7 @@ function bindFilters() {
     document.getElementById("pending-search")?.addEventListener("input", renderPending);
     document.getElementById("btn-refresh-admin")?.addEventListener("click", refreshAll);
     document.getElementById("btn-refresh-proposals")?.addEventListener("click", refreshProposals);
+    document.getElementById("btn-refresh-gallery")?.addEventListener("click", refreshGalleryAdmin);
 }
 
 function bindSystemActions() {
@@ -425,7 +427,7 @@ async function refreshAll() {
     if (btn) btn.classList.add("fa-spin");
 
     try {
-        const [uSnap, guestSnap, amSnap, reSnap, evSnapPartidos, evSnapTorneos, apoSnap, devicesSnap, propSnap, auditSnap, rLogsSnap, appErrorsSnap] = await Promise.all([
+        const [uSnap, guestSnap, amSnap, reSnap, evSnapPartidos, evSnapTorneos, apoSnap, devicesSnap, propSnap, auditSnap, rLogsSnap, appErrorsSnap, gallerySnap] = await Promise.all([
             getDocsSafe(query(collection(db, "usuarios"), orderBy("puntosRanking", "desc"))),
             getDocsSafe(query(collection(db, "invitados"), orderBy("nombre", "asc"))),
             getDocsSafe(collection(db, "partidosAmistosos")),
@@ -438,6 +440,7 @@ async function refreshAll() {
             getDocsSafe(query(collection(db, "auditLogs"), orderBy("createdAt", "desc"), limit(18))),
             getDocsSafe(query(collection(db, "rankingLogs"), orderBy("timestamp", "desc"), limit(200))),
             getDocsSafe(query(collection(db, "appErrors"), orderBy("createdAt", "desc"), limit(20))),
+            getDocsSafe(query(collectionGroup(db, "gallery"), orderBy("createdAt", "desc"), limit(160))),
         ]);
 
         users = (uSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
@@ -455,6 +458,10 @@ async function refreshAll() {
         auditLogs = (auditSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
         rankingLogsArray = (rLogsSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
         appErrors = (appErrorsSnap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
+        galleryItems = (gallerySnap?.docs || []).map((d) => {
+            const parent = d.ref?.parent?.parent;
+            return { id: d.id, uid: parent?.id || "", ...d.data() };
+        });
 
         deviceStatsByUid = new Map();
         (devicesSnap?.docs || []).forEach((d) => {
@@ -479,6 +486,7 @@ async function refreshAll() {
 
         renderDashboard();
         renderUsers();
+        renderGalleryPanel();
         renderGuests();
         renderPending();
         renderMatches();
@@ -496,6 +504,20 @@ async function refreshAll() {
         showToast("Error", "Error al sincronizar con Firebase", "error");
     } finally {
         if (btn) btn.classList.remove("fa-spin");
+    }
+}
+
+async function refreshGalleryAdmin() {
+    try {
+        const snap = await getDocs(query(collectionGroup(db, "gallery"), orderBy("createdAt", "desc"), limit(160)));
+        galleryItems = snap.docs.map((d) => {
+            const parent = d.ref?.parent?.parent;
+            return { id: d.id, uid: parent?.id || "", ...d.data() };
+        });
+        renderGalleryPanel();
+        showToast("Galeria", "Galeria sincronizada.", "success");
+    } catch (error) {
+        showToast("Error", "No se pudo cargar la galeria.", "error");
     }
 }
 
@@ -1123,6 +1145,45 @@ function renderGuests() {
     }).join("");
 }
 
+function renderGalleryPanel() {
+    const container = document.getElementById("admin-gallery-container");
+    if (!container) return;
+    if (!galleryItems.length) {
+        container.innerHTML = `<div class="text-center opacity-35 py-10 uppercase text-[10px] tracking-widest">No hay fotos compartidas por usuarios.</div>`;
+        return;
+    }
+
+    const grouped = new Map();
+    galleryItems.forEach((item) => {
+        const list = grouped.get(item.uid) || [];
+        list.push(item);
+        grouped.set(item.uid, list);
+    });
+
+    container.innerHTML = Array.from(grouped.entries()).map(([uid, items]) => {
+        const user = users.find((u) => u.id === uid) || {};
+        const name = escapeHtml(user.nombreUsuario || user.nombre || uid || "Usuario");
+        const cards = items.map((item) => `
+            <article class="card card-premium-v7" style="padding:10px; display:grid; gap:8px;">
+                <img src="${escapeHtml(String(item.url || ""))}" alt="${name}" style="width:100%; height:132px; object-fit:cover; border-radius:16px; border:1px solid rgba(255,255,255,.08);">
+                <div class="text-[9px] uppercase tracking-widest opacity-60 truncate">${escapeHtml(item.name || "foto")}</div>
+                <div class="flex-row gap-2">
+                    <button type="button" class="btn-v9 primary sm" onclick="window.applyGalleryPhotoAdmin('${uid}','${item.id}')">Aplicar a perfil</button>
+                    <button type="button" class="btn-v9 ghost sm" onclick="window.open('${escapeHtml(String(item.url || ""))}','_blank')">Abrir</button>
+                </div>
+            </article>
+        `).join("");
+        return `
+            <section class="sys-card-v9 mb-5">
+                <div class="sys-card-head"><i class="fas fa-user"></i> ${name}</div>
+                <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px;">
+                    ${cards}
+                </div>
+            </section>
+        `;
+    }).join("");
+}
+
 function renderPending() {
     const search = String(document.getElementById("pending-search")?.value || "").toLowerCase();
     const data = users.filter(u => (u.status !== 'approved' && !u.aprobado && u.rol !== 'Admin') && (u.email||"").toLowerCase().includes(search));
@@ -1728,6 +1789,22 @@ window.saveUserAdmin = async (uid) => {
     }
     showToast("SISTEMA", "Perfil actualizado", "success");
     refreshAll();
+};
+
+window.applyGalleryPhotoAdmin = async (uid, imageId) => {
+    try {
+        const snap = await getDocs(query(collection(db, "usuarios", uid, "gallery"), limit(120)));
+        const match = snap.docs.find((d) => d.id === imageId);
+        const photo = String(match?.data()?.url || "").trim();
+        if (!photo) return showToast("Galeria", "No se encontro la imagen.", "warning");
+        await updateDocument("usuarios", uid, { fotoPerfil: photo, fotoURL: photo });
+        await logAdminAudit("apply_gallery_photo", "usuarios", uid, { imageId }).catch(() => {});
+        showToast("Galeria", "Foto aplicada al perfil del usuario.", "success");
+        refreshAll();
+    } catch (error) {
+        console.error(error);
+        showToast("Error", "No se pudo aplicar la foto.", "error");
+    }
 };
 
 function normalizePhoneForLink(raw = "") {

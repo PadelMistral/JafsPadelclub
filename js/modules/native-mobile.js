@@ -124,7 +124,7 @@ function bindNativePushListeners() {
         notifications: [
           {
             id: Date.now() % 2147483647,
-            title: notification?.title || "JafsPadelClub",
+            title: notification?.title || "PADELUMINATIS",
             body: notification?.body || "",
             extra: notification?.data || {},
           },
@@ -238,7 +238,7 @@ export async function sendNativeLocalNotification(title, body, meta = {}) {
     notifications: [
       {
         id: Date.now() % 2147483647,
-        title: title || "JafsPadelClub",
+        title: title || "PADELUMINATIS",
         body: body || "",
         extra: meta || {},
       },
