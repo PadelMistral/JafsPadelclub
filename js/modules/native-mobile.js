@@ -405,30 +405,33 @@ async function waitForNativeRegistration(timeoutMs = 12000) {
 
 export async function initNativePushNotifications(uid = null) {
   if (!isNativePlatform()) return false;
+  latestUid = uid || auth.currentUser?.uid || null;
+  const oneSignalState = await initNativeOneSignal(latestUid).catch(() => ({ ok: false }));
+
   const PushNotifications = getPushNotificationsPlugin();
   if (!PushNotifications) {
-    const oneSignalState = await initNativeOneSignal(uid);
     return !!oneSignalState?.ok;
   }
 
-  latestUid = uid || auth.currentUser?.uid || null;
   bindNativePushListeners();
 
-  const permState = await PushNotifications.checkPermissions();
+  const permState = await PushNotifications.checkPermissions().catch(() => ({ receive: "prompt" }));
   let receive = permState?.receive || "prompt";
-  if (receive === "prompt") {
-    const requested = await PushNotifications.requestPermissions();
+  if (receive === "prompt" && oneSignalState?.permission !== "granted") {
+    const requested = await PushNotifications.requestPermissions().catch(() => ({ receive }));
     receive = requested?.receive || receive;
+  } else if (oneSignalState?.permission === "granted") {
+    receive = "granted";
   }
-  if (receive !== "granted") return false;
+  if (receive !== "granted" && !oneSignalState?.ok) return false;
 
-  await PushNotifications.register();
+  await PushNotifications.register().catch(() => {});
   const token = await waitForNativeRegistration().catch(() => "");
   if (token) {
     await persistNativeDeviceToken(latestUid, token);
   }
-  const oneSignalState = await initNativeOneSignal(latestUid).catch(() => ({ ok: false }));
-  return Boolean(token || oneSignalState?.ok);
+  const refreshedOneSignalState = await initNativeOneSignal(latestUid).catch(() => oneSignalState || ({ ok: false }));
+  return Boolean(token || refreshedOneSignalState?.ok);
 }
 
 export async function requestNativePushPermission(uid = null) {
@@ -447,16 +450,7 @@ export async function getNativePushStatus() {
     };
   }
   const PushNotifications = getPushNotificationsPlugin();
-  if (!PushNotifications?.checkPermissions) {
-    return {
-      available: false,
-      permission: "unsupported",
-      registered: false,
-      token: null,
-      platform: getNativePlatform(),
-    };
-  }
-  const permissionState = await PushNotifications.checkPermissions().catch(() => ({ receive: "prompt" }));
+  const permissionState = await PushNotifications?.checkPermissions?.().catch(() => ({ receive: "prompt" }));
   const token = window.__nativePushToken || localStorage.getItem(NATIVE_PUSH_TOKEN_KEY) || null;
   const oneSignal = await getNativeOneSignalState().catch(() => ({
     available: false,

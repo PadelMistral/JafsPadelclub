@@ -69,8 +69,9 @@ function ensureNativeAppStyles() {
             top: 0;
             left: 0 !important;
             right: 0 !important;
-            width: min(100%, 880px) !important;
-            margin-inline: auto !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin-inline: 0 !important;
             z-index: 19000 !important;
             padding-top: calc(env(safe-area-inset-top, 0px) + 10px) !important;
             height: calc(84px + env(safe-area-inset-top, 0px)) !important;
@@ -91,11 +92,12 @@ function ensureNativeAppStyles() {
         }
         body.native-app-shell .bottom-nav {
             position: fixed !important;
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 4px) !important;
+            bottom: 0 !important;
             left: 0 !important;
             right: 0 !important;
-            width: min(100%, 880px) !important;
-            margin-inline: auto !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin-inline: 0 !important;
             transform: none !important;
             background:
                 radial-gradient(circle at top center, rgba(0, 212, 255, 0.14), transparent 30%),
@@ -104,11 +106,14 @@ function ensureNativeAppStyles() {
             box-shadow: 0 22px 40px rgba(2, 6, 23, 0.5), inset 0 1px 0 rgba(255,255,255,0.04);
             backdrop-filter: blur(28px);
             animation: none !important;
+            padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+            border-radius: 0 !important;
         }
         body.native-app-shell .nav-dock-v8 {
-            padding: 9px 12px 10px !important;
+            padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
             gap: 6px !important;
             animation: none !important;
+            border-radius: 0 !important;
         }
         body.native-app-shell .nav-item-v8 {
             min-height: 60px;
