@@ -31,17 +31,26 @@ function buildAbsoluteUrl(pathOrUrl) {
   return `${cleanBase}/${cleanPath}`;
 }
 
-async function sendOneSignalPush({ appId, apiKey, subscriptionIds, title, body, data, url }) {
-  if (!subscriptionIds.length) return { ok: true, skipped: true };
+async function sendOneSignalPush({ appId, apiKey, subscriptionIds = [], externalIds = [], broadcastAll = false, title, body, data, url }) {
+  const cleanSubscriptionIds = Array.isArray(subscriptionIds) ? subscriptionIds.filter(Boolean) : [];
+  const cleanExternalIds = Array.isArray(externalIds) ? externalIds.filter(Boolean) : [];
+  if (!cleanSubscriptionIds.length && !cleanExternalIds.length && !broadcastAll) return { ok: true, skipped: true };
 
   const payload = {
     app_id: appId,
-    include_subscription_ids: subscriptionIds,
     target_channel: "push",
     headings: { en: title },
     contents: { en: body },
     data: toStringMap(data),
   };
+
+  if (cleanSubscriptionIds.length) {
+    payload.include_subscription_ids = cleanSubscriptionIds;
+  } else if (cleanExternalIds.length) {
+    payload.include_aliases = { external_id: cleanExternalIds };
+  } else {
+    payload.included_segments = ["All"];
+  }
 
   if (url) payload.url = url;
 
@@ -60,6 +69,62 @@ async function sendOneSignalPush({ appId, apiKey, subscriptionIds, title, body, 
   }
 
   return { ok: true, result: json };
+}
+
+async function getFcmTokensForUsers(userIds = []) {
+  const db = admin.firestore();
+  const tokens = [];
+
+  for (const uid of userIds) {
+    const cleanUid = String(uid || "").trim();
+    if (!cleanUid) continue;
+
+    const snap = await db
+      .collection("usuarios")
+      .doc(cleanUid)
+      .collection("devices")
+      .where("enabled", "==", true)
+      .where("provider", "==", "fcm")
+      .get();
+
+    snap.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      const token = String(data.token || "").trim();
+      if (token) tokens.push(token);
+    });
+  }
+
+  return Array.from(new Set(tokens));
+}
+
+async function sendFcmPush({ tokens = [], title, body, data = {}, url = "" }) {
+  if (!tokens.length) return { ok: true, skipped: true };
+
+  const message = {
+    tokens,
+    notification: {
+      title: String(title || ""),
+      body: String(body || ""),
+    },
+    data: toStringMap({
+      ...data,
+      url: buildAbsoluteUrl(url || "home.html"),
+    }),
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "default",
+        clickAction: "FCM_PLUGIN_ACTIVITY",
+      },
+    },
+  };
+
+  const response = await admin.messaging().sendEachForMulticast(message);
+  return {
+    ok: true,
+    successCount: response.successCount || 0,
+    failureCount: response.failureCount || 0,
+  };
 }
 
 function hasValidResult(match = {}) {
@@ -327,36 +392,74 @@ exports.sendPush = onRequest(
       const { titulo, mensaje, externalIds = [], url = "home.html", data = {} } = req.body || {};
       if (!titulo || !mensaje) return res.status(400).send("Missing field");
 
+      const cleanExternalIds = Array.isArray(externalIds)
+        ? externalIds.map((x) => String(x || "").trim()).filter(Boolean)
+        : [];
+
       const appId = String(process.env.ONESIGNAL_APP_ID || "").trim();
       const apiKey = String(process.env.ONESIGNAL_REST_API_KEY || "").trim();
-      if (!appId || !apiKey) return res.status(500).send("Missing OneSignal config");
+      const oneSignalReady = Boolean(appId && apiKey);
 
-      const payload = {
-        app_id: appId,
-        target_channel: "push",
-        headings: { es: String(titulo), en: String(titulo) },
-        contents: { es: String(mensaje), en: String(mensaje) },
-        data: { ...data },
-        url,
-      };
+      const tasks = [];
 
-      if (Array.isArray(externalIds) && externalIds.length) {
-        payload.include_aliases = { external_id: externalIds };
-      } else {
-        payload.included_segments = ["All"];
+      if (oneSignalReady) {
+        tasks.push(
+          sendOneSignalPush({
+            appId,
+            apiKey,
+            externalIds: cleanExternalIds,
+            broadcastAll: cleanExternalIds.length === 0,
+            title: String(titulo),
+            body: String(mensaje),
+            data: { ...data },
+            url,
+          }).then((out) => ({
+            provider: "onesignal",
+            ...out,
+          })).catch((error) => ({
+            ok: false,
+            provider: "onesignal",
+            error: error?.message || String(error),
+          })),
+        );
       }
 
-      const response = await fetch("https://api.onesignal.com/notifications", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          Authorization: `Basic ${apiKey}`,
-        },
-        body: JSON.stringify(payload),
-      });
+      if (cleanExternalIds.length) {
+        tasks.push(
+          (async () => {
+            const tokens = await getFcmTokensForUsers(cleanExternalIds);
+            const out = await sendFcmPush({
+              tokens,
+              title: String(titulo),
+              body: String(mensaje),
+              data: { ...data },
+              url,
+            });
+            return {
+              provider: "fcm",
+              tokens: tokens.length,
+              ...out,
+            };
+          })().catch((error) => ({
+            ok: false,
+            provider: "fcm",
+            error: error?.message || String(error),
+          })),
+        );
+      }
 
-      const out = await response.json().catch(() => ({}));
-      res.status(response.status).json(out);
+      if (!tasks.length) {
+        return res.status(500).json({
+          error: "No push providers configured",
+          detail: "Configura OneSignal y/o tokens FCM nativos",
+        });
+      }
+
+      const results = await Promise.all(tasks);
+      return res.status(200).json({
+        ok: results.some((item) => item?.ok),
+        results,
+      });
     } catch (err) {
       logger.error("sendPush failed", { error: err.message });
       res.status(500).send("Internal server error");
