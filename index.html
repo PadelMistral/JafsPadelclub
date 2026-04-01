@@ -76,37 +76,45 @@
                 <a href="registro.html" class="auth-link">Crear nuevo usuario</a>
             </div>
 
-            <section class="app-download-card" aria-labelledby="app-download-title">
-                <div class="app-download-pill">APP MOVIL</div>
-                <h2 id="app-download-title" class="app-download-title">Descarga JafsPadelClub en tu movil</h2>
-                <p id="app-download-copy" class="app-download-copy">
-                    Instala la version Android o abre la guia correcta para iPhone.
-                </p>
-                <a
-                    id="app-download-link"
-                    class="btn btn-primary btn-lg w-full app-download-link"
-                    href="./JafsPadelClub-mobile-debug.apk"
-                    download="JafsPadelClub-mobile-debug.apk"
-                    type="application/vnd.android.package-archive"
-                >
-                    <span class="app-download-link__glow" aria-hidden="true"></span>
-                    <span class="app-download-link__icon"><i class="fas fa-mobile-screen-button"></i></span>
-                    <span class="app-download-link__text">
-                        <strong id="app-download-label">Descargar APK Android</strong>
-                        <small>Instalacion directa desde tu movil</small>
-                    </span>
-                    <span class="app-download-link__arrow" aria-hidden="true"><i class="fas fa-arrow-down"></i></span>
-                </a>
-                <button id="app-download-help" type="button" class="btn-ghost app-download-help">
-                    <i class="fas fa-circle-info"></i>
-                    <span>Como instalarla</span>
-                </button>
-                <p class="app-download-note">
-                    Android descargara la APK. En iPhone te mostramos la guia adecuada, porque iOS no instala archivos APK.
-                </p>
-            </section>
         </div>
     </main>
+
+    <div id="app-download-modal" class="app-download-modal" aria-hidden="true">
+        <div class="app-download-modal__backdrop" data-close-download-modal></div>
+        <section class="app-download-modal__dialog" aria-labelledby="app-download-title">
+            <button id="app-download-close" type="button" class="app-download-modal__close" aria-label="Cerrar">
+                <i class="fas fa-xmark"></i>
+            </button>
+            <div class="app-download-pill">APP MOVIL</div>
+            <h2 id="app-download-title" class="app-download-title">Descarga PADELUMINATIS en tu movil</h2>
+            <p id="app-download-copy" class="app-download-copy">
+                Instala la version Android o abre la guia correcta para iPhone.
+            </p>
+            <a
+                id="app-download-link"
+                class="btn btn-primary btn-lg w-full app-download-link"
+                href="./PADELUMINATIS-mobile-debug.apk"
+                download="PADELUMINATIS-mobile-debug.apk"
+                type="application/vnd.android.package-archive"
+            >
+                <span class="app-download-link__glow" aria-hidden="true"></span>
+                <span class="app-download-link__icon"><i class="fas fa-mobile-screen-button"></i></span>
+                <span class="app-download-link__text">
+                    <strong id="app-download-label">Descargar APK Android</strong>
+                    <small>Instalacion directa desde tu movil</small>
+                </span>
+                <span class="app-download-link__arrow" aria-hidden="true"><i class="fas fa-arrow-down"></i></span>
+            </a>
+            <button id="app-download-help" type="button" class="btn-ghost app-download-help">
+                <i class="fas fa-circle-info"></i>
+                <span>Como instalarla</span>
+            </button>
+            <p class="app-download-note">
+                Android descargara la APK. En iPhone te mostramos la guia adecuada, porque iOS no instala archivos APK.
+            </p>
+            <button id="app-download-later" type="button" class="app-download-later">Seguir en la web</button>
+        </section>
+    </div>
 
     <style>
         .master-loader {
@@ -317,20 +325,44 @@
             width: 100%;
         }
 
-        .app-download-card {
-            margin-top: 22px;
-            padding: 18px 16px;
+        .app-download-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 20000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .app-download-modal.is-open {
+            display: flex;
+        }
+
+        .app-download-modal__backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.76);
+            backdrop-filter: blur(10px);
+        }
+
+        .app-download-modal__dialog {
+            position: relative;
+            z-index: 1;
+            width: min(92vw, 420px);
+            padding: 20px 18px;
             border-radius: 24px;
-            background: linear-gradient(145deg, rgba(8, 14, 30, 0.9), rgba(6, 30, 46, 0.82));
+            background: linear-gradient(145deg, rgba(8, 14, 30, 0.96), rgba(6, 30, 46, 0.92));
             border: 1px solid rgba(0, 212, 255, 0.22);
-            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
             display: grid;
             gap: 10px;
             overflow: hidden;
             position: relative;
+            animation: downloadModalIn 0.24s ease;
         }
 
-        .app-download-card::before {
+        .app-download-modal__dialog::before {
             content: "";
             position: absolute;
             inset: -20% auto auto -10%;
@@ -339,6 +371,22 @@
             border-radius: 50%;
             background: radial-gradient(circle, rgba(0, 212, 255, 0.26) 0%, rgba(0, 212, 255, 0) 72%);
             pointer-events: none;
+        }
+
+        .app-download-modal__close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 38px;
+            height: 38px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
         }
 
         .app-download-pill {
@@ -446,6 +494,16 @@
             max-width: none;
         }
 
+        .app-download-later {
+            border: 0;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.72);
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            padding: 6px 0 0;
+        }
+
         @keyframes appDownloadFloat {
             0%, 100% {
                 transform: translateY(0);
@@ -463,6 +521,18 @@
 
             to {
                 transform: translateX(130%);
+            }
+        }
+
+        @keyframes downloadModalIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px) scale(0.97);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
             }
         }
 
@@ -563,10 +633,32 @@
         const ua = navigator.userAgent || '';
         const isIOS = /iPad|iPhone|iPod/i.test(ua);
         const isAndroid = /Android/i.test(ua);
+        const isNativeApp = Boolean(window.Capacitor?.isNativePlatform?.() || ['android', 'ios'].includes(window.Capacitor?.getPlatform?.() || ''));
+        const downloadModal = document.getElementById('app-download-modal');
         const downloadLink = document.getElementById('app-download-link');
         const downloadLabel = document.getElementById('app-download-label');
         const downloadCopy = document.getElementById('app-download-copy');
         const helpButton = document.getElementById('app-download-help');
+        const closeDownloadModal = document.getElementById('app-download-close');
+        const closeDownloadLater = document.getElementById('app-download-later');
+        const modalDismissKey = 'padeluminatis_download_modal_closed_session';
+
+        const openDownloadModal = () => {
+            if (!downloadModal) return;
+            downloadModal.classList.add('is-open');
+            downloadModal.setAttribute('aria-hidden', 'false');
+        };
+
+        const hideDownloadModal = () => {
+            if (!downloadModal) return;
+            downloadModal.classList.remove('is-open');
+            downloadModal.setAttribute('aria-hidden', 'true');
+            try { sessionStorage.setItem(modalDismissKey, '1'); } catch (_) {}
+        };
+
+        if (isNativeApp && downloadModal) {
+            downloadModal.remove();
+        }
 
         const showInstallGuide = () => {
             if (isIOS) {
@@ -603,6 +695,17 @@
         }
 
         helpButton?.addEventListener('click', showInstallGuide);
+        closeDownloadModal?.addEventListener('click', hideDownloadModal);
+        closeDownloadLater?.addEventListener('click', hideDownloadModal);
+        downloadModal?.querySelector('[data-close-download-modal]')?.addEventListener('click', hideDownloadModal);
+
+        if (!isNativeApp) {
+            let dismissed = false;
+            try { dismissed = sessionStorage.getItem(modalDismissKey) === '1'; } catch (_) {}
+            if (!dismissed) {
+                window.setTimeout(openDownloadModal, 450);
+            }
+        }
     </script>
     <script type="module" src="./js/login.js"></script>
 </body>

@@ -19,6 +19,14 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*');
     }
 
+    // User shared gallery for profile/admin review
+    match /users/{uid}/gallery/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid
+                   && request.resource.size < 8 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
     // Admin / system assets (optional future use)
     match /admin/{allPaths=**} {
       allow read: if signedIn();

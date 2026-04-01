@@ -78,6 +78,29 @@
             </div>
         </section>
 
+        <section id="profile-gallery-section" class="profile-section animate-fade-in" style="animation-delay: 0.09s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-images text-primary mr-2"></i>Galeria compartida</h2>
+            </div>
+            <div class="card card-premium-v7 shadow-cyan/10">
+                <div class="flex-row between items-center gap-3 flex-wrap mb-4">
+                    <div class="flex-col">
+                        <span class="text-[10px] font-black uppercase tracking-widest text-primary">Fotos para tu perfil</span>
+                        <span class="text-[10px] text-white/65">Sube imagenes desde el movil. El admin solo podra ver las que tu subas aqui.</span>
+                    </div>
+                    <div class="flex-row gap-2">
+                        <button id="btn-open-gallery-upload" class="btn btn-primary">
+                            <i class="fas fa-image"></i> Subir fotos
+                        </button>
+                    </div>
+                </div>
+                <input type="file" id="upload-gallery-photo" hidden accept="image/*" multiple>
+                <div id="profile-gallery-grid" class="grid grid-cols-3 gap-3">
+                    <div class="text-center py-6 opacity-40 text-[10px] font-black uppercase col-span-3">Cargando galeria...</div>
+                </div>
+            </div>
+        </section>
+
         <!-- Level Progress Breakdown -->
         <section class="profile-section animate-fade-in" style="animation-delay: 0.1s;">
             <div class="card card-premium-v7 shadow-cyan/10">

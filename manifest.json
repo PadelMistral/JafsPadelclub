@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "JafsPadel Social",
-  "short_name": "JafsPadel",
-  "description": "Aplicacion social de padel para crear partidos, competir, subir de nivel y gestionar resultados.",
+  "name": "PADELUMINATIS",
+  "short_name": "PADELUMINATIS",
+  "description": "Aplicacion de padel con partidos, ranking, alertas y experiencia movil nativa.",
   "lang": "es-ES",
   "dir": "ltr",
   "start_url": "./home.html?source=pwa",

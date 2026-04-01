@@ -273,6 +273,14 @@ service cloud.firestore {
         allow create: if isAdmin() || (signedIn() && request.auth.uid == uid) || isApproved();
         allow update, delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
       }
+
+      // Galeria segura del usuario: el usuario sube fotos y el admin puede revisarlas.
+      match /gallery/{itemId} {
+        allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+        allow create: if signedIn() && request.auth.uid == uid;
+        allow update: if isAdmin() || (signedIn() && request.auth.uid == uid);
+        allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      }
     }
 
     // --- PARTIDOS AMISTOSOS ---
