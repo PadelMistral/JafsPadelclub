@@ -75,6 +75,36 @@
                 <div class="auth-sep"></div>
                 <a href="registro.html" class="auth-link">Crear nuevo usuario</a>
             </div>
+
+            <section class="app-download-card" aria-labelledby="app-download-title">
+                <div class="app-download-pill">APP MOVIL</div>
+                <h2 id="app-download-title" class="app-download-title">Descarga JafsPadelClub en tu movil</h2>
+                <p id="app-download-copy" class="app-download-copy">
+                    Instala la version Android o abre la guia correcta para iPhone.
+                </p>
+                <a
+                    id="app-download-link"
+                    class="btn btn-primary btn-lg w-full app-download-link"
+                    href="./JafsPadelClub-mobile-debug.apk"
+                    download="JafsPadelClub-mobile-debug.apk"
+                    type="application/vnd.android.package-archive"
+                >
+                    <span class="app-download-link__glow" aria-hidden="true"></span>
+                    <span class="app-download-link__icon"><i class="fas fa-mobile-screen-button"></i></span>
+                    <span class="app-download-link__text">
+                        <strong id="app-download-label">Descargar APK Android</strong>
+                        <small>Instalacion directa desde tu movil</small>
+                    </span>
+                    <span class="app-download-link__arrow" aria-hidden="true"><i class="fas fa-arrow-down"></i></span>
+                </a>
+                <button id="app-download-help" type="button" class="btn-ghost app-download-help">
+                    <i class="fas fa-circle-info"></i>
+                    <span>Como instalarla</span>
+                </button>
+                <p class="app-download-note">
+                    Android descargara la APK. En iPhone te mostramos la guia adecuada, porque iOS no instala archivos APK.
+                </p>
+            </section>
         </div>
     </main>
 
@@ -287,6 +317,155 @@
             width: 100%;
         }
 
+        .app-download-card {
+            margin-top: 22px;
+            padding: 18px 16px;
+            border-radius: 24px;
+            background: linear-gradient(145deg, rgba(8, 14, 30, 0.9), rgba(6, 30, 46, 0.82));
+            border: 1px solid rgba(0, 212, 255, 0.22);
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            display: grid;
+            gap: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .app-download-card::before {
+            content: "";
+            position: absolute;
+            inset: -20% auto auto -10%;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 212, 255, 0.26) 0%, rgba(0, 212, 255, 0) 72%);
+            pointer-events: none;
+        }
+
+        .app-download-pill {
+            width: fit-content;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(198, 255, 0, 0.12);
+            border: 1px solid rgba(198, 255, 0, 0.24);
+            color: #dfff8a;
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .app-download-title {
+            margin: 0;
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+        }
+
+        .app-download-copy,
+        .app-download-note {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.72);
+            font-size: 0.86rem;
+            line-height: 1.45;
+        }
+
+        .app-download-link {
+            text-decoration: none;
+            position: relative;
+            overflow: hidden;
+            isolation: isolate;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 18px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #c6ff00 0%, #3cf0ff 48%, #0ea5e9 100%);
+            border: 0;
+            box-shadow: 0 18px 30px rgba(0, 212, 255, 0.28), 0 10px 22px rgba(198, 255, 0, 0.22);
+            animation: appDownloadFloat 2.8s ease-in-out infinite;
+        }
+
+        .app-download-link__glow {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.24) 30%, transparent 55%);
+            transform: translateX(-120%);
+            animation: appDownloadShine 3.2s linear infinite;
+            pointer-events: none;
+        }
+
+        .app-download-link__icon,
+        .app-download-link__arrow {
+            position: relative;
+            z-index: 1;
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(8, 14, 30, 0.16);
+            color: #04111b;
+            font-size: 1.05rem;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+        }
+
+        .app-download-link__text {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            color: #04111b;
+            text-align: left;
+        }
+
+        .app-download-link__text strong {
+            font-size: 1rem;
+            font-weight: 900;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+
+        .app-download-link__text small {
+            font-size: 0.72rem;
+            font-weight: 700;
+            opacity: 0.82;
+            letter-spacing: 0.3px;
+        }
+
+        .app-download-link:hover {
+            transform: translateY(-3px) scale(1.01);
+            box-shadow: 0 24px 42px rgba(0, 212, 255, 0.34), 0 14px 28px rgba(198, 255, 0, 0.28);
+        }
+
+        .app-download-help {
+            max-width: none;
+        }
+
+        @keyframes appDownloadFloat {
+            0%, 100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-2px);
+            }
+        }
+
+        @keyframes appDownloadShine {
+            from {
+                transform: translateX(-120%);
+            }
+
+            to {
+                transform: translateX(130%);
+            }
+        }
+
         .auth-sep {
             height: 1px;
             width: 40px;
@@ -380,6 +559,50 @@
         initThemeSystem();
         initGalaxyBackground();
         initPWAShell('acceso');
+
+        const ua = navigator.userAgent || '';
+        const isIOS = /iPad|iPhone|iPod/i.test(ua);
+        const isAndroid = /Android/i.test(ua);
+        const downloadLink = document.getElementById('app-download-link');
+        const downloadLabel = document.getElementById('app-download-label');
+        const downloadCopy = document.getElementById('app-download-copy');
+        const helpButton = document.getElementById('app-download-help');
+
+        const showInstallGuide = () => {
+            if (isIOS) {
+                alert('En iPhone no se puede instalar una APK. Usa Compartir > Anadir a pantalla de inicio para la version web instalada. Si quieres app nativa iOS, el siguiente paso es sacar una build con Xcode y el archivo GoogleService-Info.plist.');
+                return;
+            }
+
+            if (isAndroid) {
+                alert('Pulsa Descargar APK. Cuando termine la descarga, Android te pedira permiso para instalar la app desde tu navegador. El permiso de notificaciones se pedira dentro de la app al activarlas.');
+                return;
+            }
+
+            alert('Desde Android puedes descargar la APK directamente. Desde iPhone usa la PWA o una futura version TestFlight.');
+        };
+
+        if (isIOS) {
+            downloadLabel.textContent = 'Usar en iPhone';
+            downloadCopy.textContent = 'En iPhone abrimos la guia correcta: PWA instalada ahora o app nativa por TestFlight mas adelante.';
+            downloadLink.removeAttribute('download');
+            downloadLink.setAttribute('href', './');
+            downloadLink.addEventListener('click', (event) => {
+                event.preventDefault();
+                showInstallGuide();
+            });
+        } else if (!isAndroid) {
+            downloadLabel.textContent = 'Ver opciones de app';
+            downloadCopy.textContent = 'En Android puedes descargar la APK. En otros dispositivos mostramos la guia adecuada.';
+            downloadLink.removeAttribute('download');
+            downloadLink.setAttribute('href', './');
+            downloadLink.addEventListener('click', (event) => {
+                event.preventDefault();
+                showInstallGuide();
+            });
+        }
+
+        helpButton?.addEventListener('click', showInstallGuide);
     </script>
     <script type="module" src="./js/login.js"></script>
 </body>
