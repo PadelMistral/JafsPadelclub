@@ -25,6 +25,17 @@ function dataUrlToBase64(dataUrl) {
     return String(dataUrl || '').split(',')[1] || '';
 }
 
+function getNativePlugins() {
+    try {
+        return {
+            Filesystem: window.Capacitor?.Plugins?.Filesystem || null,
+            Share: window.Capacitor?.Plugins?.Share || null,
+        };
+    } catch (_) {
+        return { Filesystem: null, Share: null };
+    }
+}
+
 function buildSocialShareLinks(text = '') {
     const encoded = encodeURIComponent(text || 'Comparte PADELUMINATIS');
     return {
@@ -84,8 +95,7 @@ async function shareImageDataUrl(dataUrl, {
     }
 
     if (isNativeApp()) {
-        const Filesystem = window.Capacitor?.Plugins?.Filesystem;
-        const Share = window.Capacitor?.Plugins?.Share;
+        const { Filesystem, Share } = getNativePlugins();
         if (Filesystem?.writeFile && Share?.share) {
             try {
                 const saved = await Filesystem.writeFile({
@@ -106,6 +116,31 @@ async function shareImageDataUrl(dataUrl, {
 
     showSocialShareFallback(dataUrl, text);
     return false;
+}
+
+async function saveImageToNativeDevice(dataUrl, fileName = 'padeluminatis_poster.png') {
+    if (!isNativeApp()) return false;
+    const { Filesystem, Share } = getNativePlugins();
+    if (!Filesystem?.writeFile || !Share?.share) return false;
+    try {
+        const stamp = Date.now();
+        const cleanName = String(fileName || 'padeluminatis_poster.png').replace(/[^\w.\-]+/g, '_');
+        const saved = await Filesystem.writeFile({
+            path: `${stamp}_${cleanName}`,
+            data: dataUrlToBase64(dataUrl),
+            directory: 'CACHE',
+            recursive: true,
+        });
+        await Share.share({
+            title: 'Guardar o compartir cartel',
+            text: 'Puedes guardarlo o compartirlo por WhatsApp, Instagram o Telegram.',
+            url: saved?.uri,
+            dialogTitle: 'Guardar o compartir',
+        });
+        return true;
+    } catch (_) {
+        return false;
+    }
 }
 
 export async function generateMatchShareImage(analysis, matchData = {}) {
@@ -686,13 +721,22 @@ export async function generateEventStatusPoster(data = {}) {
     // === FOOTER ===
     drawBrandFooter(ctx, 1080, canvas.height, organizer || 'JAFS PADEL');
     const dataUrl = canvas.toDataURL('image/png', 0.95);
-    downloadDataUrl(dataUrl, `estado_${eventName.toLowerCase().replace(/\s+/g, '_')}.png`);
-    return true;
+    return await downloadDataUrl(dataUrl, `estado_${eventName.toLowerCase().replace(/\s+/g, '_')}.png`);
 }
 
-export function downloadDataUrl(url, filename) {
+export async function downloadDataUrl(url, filename) {
+    if (isNativeApp()) {
+        const saved = await saveImageToNativeDevice(url, filename);
+        if (saved) return true;
+    }
     const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return true;
 }
 
 function drawCourtLines(ctx, w, h, opacity = 0.04) {

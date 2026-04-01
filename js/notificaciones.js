@@ -56,16 +56,28 @@ const btnCleanSw = document.getElementById("btn-clean-sw");
 const btnReloadApp = document.getElementById("btn-reload-app");
 const btnOpenGuide = document.getElementById("btn-open-guide");
 
+function isNativeApp() {
+  try {
+    const cap = window.Capacitor;
+    if (!cap) return false;
+    if (typeof cap.isNativePlatform === "function") return !!cap.isNativePlatform();
+    const platform = typeof cap.getPlatform === "function" ? cap.getPlatform() : "";
+    return platform === "android" || platform === "ios";
+  } catch (_) {
+    return false;
+  }
+}
+
 function applyNotificationPageCopy() {
-  const isNativeApp = Boolean(window.Capacitor?.isNativePlatform?.() || ["android", "ios"].includes(window.Capacitor?.getPlatform?.() || ""));
-  if (isNativeApp) document.body.classList.add("notif-native-mode");
+  const nativeMode = isNativeApp();
+  if (nativeMode) document.body.classList.add("notif-native-mode");
   if (document.title) document.title = "Notificaciones | PADELUMINATIS";
   const sub = document.querySelector(".page-sub-pro");
-  if (sub) sub.textContent = isNativeApp ? "Avisos nativos, segundo plano y bandeja inteligente" : "Solo tus avisos importantes y su estado";
+  if (sub) sub.textContent = nativeMode ? "Avisos nativos, segundo plano y bandeja inteligente" : "Solo tus avisos importantes y su estado";
   const expl = document.getElementById("push-status-explanation");
-  if (expl) expl.textContent = isNativeApp ? "Estamos comprobando tu canal nativo del movil para que los cambios importantes lleguen aunque cierres la app." : "Estamos mirando si tu movil puede recibir avisos de tus partidas y movimientos.";
+  if (expl) expl.textContent = nativeMode ? "Estamos comprobando tu canal nativo del movil para que los cambios importantes lleguen aunque cierres la app." : "Estamos mirando si tu movil puede recibir avisos de tus partidas y movimientos.";
   const helpGuide = document.getElementById("perm-platform-guide");
-  if (helpGuide) helpGuide.textContent = isNativeApp ? "En Android solo necesitas permiso de notificaciones y registro correcto del dispositivo." : "Te diremos aqui que hacer con frases simples.";
+  if (helpGuide) helpGuide.textContent = nativeMode ? "En Android solo necesitas permiso de notificaciones y registro correcto del dispositivo." : "Te diremos aqui que hacer con frases simples.";
   const support = document.getElementById("push-support-copy");
   if (support) support.textContent = "Te diremos la causa mas probable y el boton que mas conviene probar.";
   const guideBtn = document.getElementById("btn-open-guide");
@@ -96,7 +108,7 @@ function applyNotificationPageCopy() {
   if (sdk) sdk.textContent = "SDK: ---";
   const action = document.getElementById("push-action-pill");
   if (action) action.textContent = "Siguiente paso: ---";
-  if (isNativeApp) {
+  if (nativeMode) {
     document.getElementById("btn-reregister-sw")?.closest(".notif-support-box")?.classList.add("hidden");
     document.getElementById("notif-status-tags")?.classList.add("hidden");
     document.getElementById("btn-read-all")?.classList.add("hidden");
@@ -478,6 +490,7 @@ function getRecommendedActionLabel(status = {}) {
 }
 
 function buildFriendlyState(status) {
+  const nativeMode = isNativeApp();
   if (status.permission === "denied") {
     return {
       title: "Tus avisos están bloqueados",
@@ -499,13 +512,13 @@ function buildFriendlyState(status) {
   if (status.permission === "default") {
     return {
       title: "Activa los avisos",
-      summary: "Solo falta aceptar el permiso del navegador para este dispositivo.",
-      support: "Pulsa Activar y despues toca Permitir. En iPhone o Android conviene instalar primero la app.",
+      summary: nativeMode ? "Solo falta aceptar el permiso de notificaciones del movil." : "Solo falta aceptar el permiso del navegador para este dispositivo.",
+      support: nativeMode ? "Pulsa Activar y despues toca Permitir para que Android pueda avisarte aunque cierres la app." : "Pulsa Activar y despues toca Permitir. En iPhone o Android conviene instalar primero la app.",
       primary: "Activar",
       tone: "pending",
     };
   }
-  if (!status.swActive) {
+  if (!nativeMode && !status.swActive) {
     return {
       title: "Instala la app PWA",
       summary: "Para recibir avisos con la app cerrada necesitas tener la PWA instalada en el movil o navegador.",

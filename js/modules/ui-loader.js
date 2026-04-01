@@ -78,23 +78,34 @@ function ensureNativeAppStyles() {
         body.native-app-shell .page-content {
             padding-top: calc(var(--app-header-h) + 12px) !important;
             padding-bottom: calc(var(--app-nav-h) + env(safe-area-inset-bottom, 0px) + 12px) !important;
+            min-height: 100dvh;
         }
         body.native-app-shell .bottom-nav {
+            position: fixed !important;
             bottom: calc(env(safe-area-inset-bottom, 0px) + 4px) !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: min(100%, 880px) !important;
+            margin-inline: auto !important;
+            transform: none !important;
             background:
                 radial-gradient(circle at top center, rgba(0, 212, 255, 0.14), transparent 30%),
                 linear-gradient(180deg, rgba(4, 12, 24, 0.95), rgba(7, 18, 34, 0.99)) !important;
             border: 1px solid rgba(148, 163, 184, 0.14);
             box-shadow: 0 22px 40px rgba(2, 6, 23, 0.5), inset 0 1px 0 rgba(255,255,255,0.04);
             backdrop-filter: blur(28px);
+            animation: none !important;
         }
         body.native-app-shell .nav-dock-v8 {
-            padding: 8px 12px 10px !important;
+            padding: 9px 12px 10px !important;
             gap: 6px !important;
+            animation: none !important;
         }
         body.native-app-shell .nav-item-v8 {
-            min-height: 58px;
+            min-height: 60px;
             border-radius: 18px;
+            transition: background-color .18s ease, transform .18s ease, color .18s ease !important;
+            animation: none !important;
         }
         body.native-app-shell .nav-item-v8.active {
             background: linear-gradient(180deg, rgba(0, 212, 255, 0.1), rgba(198, 255, 0, 0.08));
@@ -131,6 +142,30 @@ function ensureNativeAppStyles() {
         }
         body.native-app-shell .header-subtitle {
             color: rgba(198,255,0,0.82);
+        }
+        body.native-app-shell .animate-fade-in,
+        body.native-app-shell .animate-up,
+        body.native-app-shell .animate-scale-in,
+        body.native-app-shell .animate-slide-in {
+            animation-duration: .24s !important;
+            animation-iteration-count: 1 !important;
+            animation-fill-mode: both !important;
+            will-change: auto !important;
+        }
+        body.native-app-shell .sport-bg,
+        body.native-app-shell .app-header,
+        body.native-app-shell .bottom-nav,
+        body.native-app-shell .nav-dock-v8,
+        body.native-app-shell .card,
+        body.native-app-shell .card-premium-v7 {
+            transition: none !important;
+        }
+        body.native-app-shell .loading-overlay,
+        body.native-app-shell .skeleton,
+        body.native-app-shell .shimmer,
+        body.native-app-shell .pulse,
+        body.native-app-shell .loading-pulse {
+            animation-duration: 1.2s !important;
         }
     `;
     document.head.appendChild(style);

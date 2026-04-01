@@ -13,6 +13,7 @@ const NATIVE_ONESIGNAL_ID_KEY = "native_onesignal_id_v1";
 let listenersBound = false;
 let currentRegistrationPromise = null;
 let latestUid = null;
+let oneSignalListenersBound = false;
 
 function getCapacitor() {
   return window.Capacitor || null;
@@ -243,6 +244,11 @@ async function initNativeOneSignal(uid = null) {
   if (!OneSignal) return { ok: false, reason: "plugin_missing" };
 
   try {
+    OneSignal.Debug?.setLogLevel?.(6);
+    OneSignal.Debug?.setAlertLevel?.(0);
+  } catch (_) {}
+
+  try {
     OneSignal.initialize(getConfiguredOneSignalAppId());
   } catch (_) {}
 
@@ -250,29 +256,32 @@ async function initNativeOneSignal(uid = null) {
     if (uid) OneSignal.login(uid);
   } catch (_) {}
 
-  try {
-    OneSignal.Notifications.addEventListener("click", (event) => {
-      const targetUrl =
-        event?.notification?.additionalData?.url ||
-        event?.notification?.additionalData?.link ||
-        event?.notification?.launchURL ||
-        "home.html";
-      if (targetUrl) window.location.href = targetUrl;
-    });
-  } catch (_) {}
+  if (!oneSignalListenersBound) {
+    try {
+      OneSignal.Notifications.addEventListener("click", (event) => {
+        const targetUrl =
+          event?.notification?.additionalData?.url ||
+          event?.notification?.additionalData?.link ||
+          event?.notification?.launchURL ||
+          "home.html";
+        if (targetUrl) window.location.href = targetUrl;
+      });
+    } catch (_) {}
 
-  try {
-    OneSignal.Notifications.addEventListener("permissionChange", () => {});
-  } catch (_) {}
+    try {
+      OneSignal.Notifications.addEventListener("permissionChange", () => {});
+    } catch (_) {}
 
-  try {
-    OneSignal.User.pushSubscription.addEventListener("change", async () => {
-      try {
-        const state = await getNativeOneSignalState();
-        await persistNativeOneSignalSubscription(uid || latestUid || auth.currentUser?.uid || null, state);
-      } catch (_) {}
-    });
-  } catch (_) {}
+    try {
+      OneSignal.User.pushSubscription.addEventListener("change", async () => {
+        try {
+          const state = await getNativeOneSignalState();
+          await persistNativeOneSignalSubscription(uid || latestUid || auth.currentUser?.uid || null, state);
+        } catch (_) {}
+      });
+    } catch (_) {}
+    oneSignalListenersBound = true;
+  }
 
   let permission = "prompt";
   try {
@@ -287,7 +296,30 @@ async function initNativeOneSignal(uid = null) {
     } catch (_) {}
   }
 
-  const state = await getNativeOneSignalState();
+  if (permission === "granted") {
+    try {
+      OneSignal.User?.pushSubscription?.optIn?.();
+    } catch (_) {}
+  }
+
+  let state = await getNativeOneSignalState();
+  if (permission === "granted" && !state.subscriptionId) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 12000) {
+      await new Promise((resolve) => window.setTimeout(resolve, 800));
+      try {
+        OneSignal.User?.pushSubscription?.optIn?.();
+      } catch (_) {}
+      state = await getNativeOneSignalState();
+      if (state.subscriptionId || state.token) break;
+    }
+  }
+
+  if (uid && state.subscriptionId) {
+    try {
+      OneSignal.login(uid);
+    } catch (_) {}
+  }
   if (uid && state.subscriptionId) {
     await persistNativeOneSignalSubscription(uid, state).catch(() => {});
   }
