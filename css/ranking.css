@@ -3707,3 +3707,162 @@
     font-size: 0.44rem;
   }
 }
+
+/* Native APK refinement */
+body.native-app-shell .ranking-page {
+  padding-top: calc(var(--space-lg) + 6px);
+}
+
+body.native-app-shell .ranking-hero-shell,
+body.native-app-shell .leaderboard-section,
+body.native-app-shell .system-chart-card,
+body.native-app-shell .system-explain-card {
+  background:
+    radial-gradient(circle at top right, rgba(0, 212, 255, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(9, 16, 30, 0.96), rgba(6, 12, 24, 0.88)) !important;
+  border: 1px solid rgba(103, 232, 249, 0.12) !important;
+  box-shadow: 0 22px 48px rgba(2, 6, 23, 0.34) !important;
+  border-radius: 28px !important;
+}
+
+body.native-app-shell .ranking-header-v7 {
+  padding: 12px 10px 4px;
+}
+
+body.native-app-shell .page-title-pro {
+  font-size: clamp(1.65rem, 6vw, 2.5rem);
+  letter-spacing: 0.06em;
+}
+
+body.native-app-shell .page-sub-pro {
+  font-size: 0.8rem;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+body.native-app-shell .ranking-podium-v7 {
+  gap: 14px;
+  padding: 24px 10px 12px;
+}
+
+body.native-app-shell .podium-item {
+  max-width: 126px;
+}
+
+body.native-app-shell .podium-avatar-wrapper {
+  width: 72px;
+  height: 72px;
+}
+
+body.native-app-shell .podium-avatar-wrapper.lg {
+  width: 94px;
+  height: 94px;
+}
+
+body.native-app-shell .podium-base.base-gold {
+  height: 72px;
+}
+
+body.native-app-shell .podium-base.base-cyan {
+  height: 54px;
+}
+
+body.native-app-shell .podium-base.base-magenta {
+  height: 46px;
+}
+
+body.native-app-shell .leaderboard-list {
+  gap: 10px !important;
+}
+
+body.native-app-shell .ranking-card {
+  grid-template-columns: 46px 44px minmax(0, 1fr) 90px !important;
+  min-height: 84px !important;
+  padding: 12px 14px !important;
+  gap: 12px !important;
+  border-radius: 22px !important;
+  margin-bottom: 0 !important;
+  background:
+    linear-gradient(135deg, rgba(12, 22, 38, 0.96), rgba(6, 14, 28, 0.9)) !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  box-shadow: 0 20px 40px rgba(2, 6, 23, 0.26) !important;
+}
+
+body.native-app-shell .ranking-card .lb-avatar {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 14px !important;
+}
+
+body.native-app-shell .rank-number-v7 {
+  font-size: 1.02rem !important;
+}
+
+body.native-app-shell .lb-name {
+  font-size: 0.92rem !important;
+  line-height: 1.08 !important;
+}
+
+body.native-app-shell .lb-level-chip {
+  font-size: 0.54rem !important;
+  padding: 4px 8px;
+}
+
+body.native-app-shell .lb-meta-row.lb-meta-row-tight {
+  gap: 6px !important;
+  margin-top: 5px !important;
+}
+
+body.native-app-shell .lb-meta-row.lb-meta-row-tight .lb-meta-pill {
+  font-size: 0.5rem !important;
+  padding: 4px 7px !important;
+}
+
+body.native-app-shell .lb-progress-mini,
+body.native-app-shell .lb-progress-copy,
+body.native-app-shell .lb-progress-track {
+  display: flex !important;
+}
+
+body.native-app-shell .lb-pts {
+  font-size: 1.08rem !important;
+}
+
+body.native-app-shell .lb-pts-sub,
+body.native-app-shell .lb-state-chip {
+  font-size: 0.5rem !important;
+}
+
+body.native-app-shell .rank-match-card {
+  padding: 10px 12px !important;
+  border-radius: 16px !important;
+}
+
+@media (max-width: 640px) {
+  body.native-app-shell .ranking-card {
+    grid-template-columns: 34px 34px minmax(0, 1fr) 68px !important;
+    min-height: 72px !important;
+    padding: 10px 10px !important;
+    gap: 8px !important;
+  }
+
+  body.native-app-shell .ranking-card .lb-avatar {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 11px !important;
+  }
+
+  body.native-app-shell .lb-name {
+    font-size: 0.8rem !important;
+  }
+
+  body.native-app-shell .lb-pts {
+    font-size: 0.92rem !important;
+  }
+
+  body.native-app-shell .lb-meta-row.lb-meta-row-tight .lb-meta-pill,
+  body.native-app-shell .lb-state-chip,
+  body.native-app-shell .lb-pts-sub,
+  body.native-app-shell .lb-level-chip {
+    font-size: 0.42rem !important;
+  }
+}
