@@ -462,9 +462,12 @@ async function refreshAll() {
             const uid = parent ? parent.id : null;
             if (!uid) return;
             const data = d.data() || {};
-            const stat = deviceStatsByUid.get(uid) || { count: 0, enabled: 0, lastSeenAt: null };
+            const stat = deviceStatsByUid.get(uid) || { count: 0, enabled: 0, lastSeenAt: null, native: 0, web: 0 };
             stat.count += 1;
             if (data.enabled) stat.enabled += 1;
+            const platform = String(data.platform || "").toLowerCase();
+            if (platform.includes("native")) stat.native += 1;
+            else stat.web += 1;
             const seen = data.lastSeenAt?.toDate ? data.lastSeenAt.toDate() : (data.lastSeenAt ? new Date(data.lastSeenAt) : null);
             if (seen && (!stat.lastSeenAt || seen > stat.lastSeenAt)) stat.lastSeenAt = seen;
             deviceStatsByUid.set(uid, stat);
@@ -931,7 +934,7 @@ function renderUsers() {
         const okApp = u.status === "approved" || u.aprobado === true || u.rol === "Admin";
         if (!okApp) return false;
         const roleOk = roleFilter === "all" || u.rol === roleFilter;
-        const matchStr = `${u.nombre} ${u.nombreUsuario} ${u.email}`.toLowerCase();
+        const matchStr = `${u.nombre} ${u.nombreUsuario} ${u.email} ${u.telefono || ""}`.toLowerCase();
         return roleOk && matchStr.includes(search);
     });
 
@@ -941,8 +944,11 @@ function renderUsers() {
     container.innerHTML = data.map((u) => {
         const icsUrl = String(u.apoingCalendarUrl || apoingByUid.get(u.id)?.icsUrl || "").trim();
         const hasIcs = icsUrl.length > 0;
+        const phone = String(u.telefono || "").trim();
+        const whatsappUrl = buildWhatsAppUrl(phone, u.nombreUsuario || u.nombre || "Jugador");
+        const phoneDigits = normalizePhoneForLink(phone);
         const notifPermission = String(u.notifPermission || "unknown");
-        const stat = deviceStatsByUid.get(u.id) || { count: 0, enabled: 0, lastSeenAt: null };
+        const stat = deviceStatsByUid.get(u.id) || { count: 0, enabled: 0, lastSeenAt: null, native: 0, web: 0 };
         const adminSnapshot = renderUserAdminSnapshot(u);
         let notifLabel = "Desconocido";
         let notifClass = "acc-badge";
@@ -983,6 +989,10 @@ function renderUsers() {
                         <input type="text" class="input-v9" value="${u.email || ''}" readonly>
                     </div>
                     <div class="admin-field-group">
+                        <label>Telefono</label>
+                        <input type="text" class="input-v9" value="${phone}" id="u-phone-${u.id}" placeholder="+34...">
+                    </div>
+                    <div class="admin-field-group">
                         <label>Nivel Manual</label>
                         <input type="number" step="0.01" class="input-v9" value="${u.nivel || 2.5}" id="u-lvl-${u.id}">
                     </div>
@@ -1017,6 +1027,16 @@ function renderUsers() {
                         <div class="input-v9 flex-row between">
                             <span class="${notifClass}">${notifLabel}</span>
                             <span class="text-[10px] opacity-60">${stat.enabled || 0}/${stat.count || 0} · ${seenStr}</span>
+                        </div>
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Contacto rapido</label>
+                        <div class="input-v9 flex-row between gap-2">
+                            <span>${phone ? escapeHtml(phone) : "Sin telefono"}</span>
+                            <div class="flex-row gap-2">
+                                ${phoneDigits ? `<button type="button" class="btn-v9 ghost sm" onclick="window.open('tel:${phoneDigits}','_self')"><i class="fas fa-phone"></i></button>` : ""}
+                                ${whatsappUrl ? `<button type="button" class="btn-v9 ghost sm" onclick="window.open('${whatsappUrl}','_blank')"><i class="fab fa-whatsapp"></i></button>` : ""}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1659,8 +1679,10 @@ window.toggleAcc = (id) => {
 window.saveUserAdmin = async (uid) => {
     const photoUrl = String(document.getElementById(`u-photo-${uid}`)?.value || "").trim();
     const icsUrl = String(document.getElementById(`u-ics-${uid}`)?.value || "").trim();
+    const phone = String(document.getElementById(`u-phone-${uid}`)?.value || "").trim();
     const data = {
         nombreUsuario: document.getElementById(`u-nick-${uid}`).value,
+        telefono: phone,
         nivel: parseFloat(document.getElementById(`u-lvl-${uid}`).value),
         nivelBaseInicial: parseFloat(document.getElementById(`u-base-lvl-${uid}`).value),
         rol: document.getElementById(`u-rol-${uid}`).value
@@ -1675,6 +1697,7 @@ window.saveUserAdmin = async (uid) => {
     await updateDocument("usuarios", uid, data);
     await logAdminAudit("update_user_profile", "usuarios", uid, {
         nickname: data.nombreUsuario || "",
+        phone: data.telefono || "",
         role: data.rol || "Jugador",
         level: data.nivel || 2.5,
         baseLevel: data.nivelBaseInicial || data.nivel || 2.5,
@@ -1706,6 +1729,20 @@ window.saveUserAdmin = async (uid) => {
     showToast("SISTEMA", "Perfil actualizado", "success");
     refreshAll();
 };
+
+function normalizePhoneForLink(raw = "") {
+    const clean = String(raw || "").replace(/[^\d+]/g, "");
+    if (!clean) return "";
+    if (clean.startsWith("+")) return clean.slice(1).replace(/[^\d]/g, "");
+    return clean.replace(/[^\d]/g, "");
+}
+
+function buildWhatsAppUrl(rawPhone = "", name = "") {
+    const digits = normalizePhoneForLink(rawPhone);
+    if (!digits) return "";
+    const text = encodeURIComponent(`Hola ${String(name || "").trim()}, te escribo desde JafsPadelClub.`);
+    return `https://wa.me/${digits}?text=${text}`;
+}
 
 window.saveMatchAdmin = async (id, col) => {
     let resultStr = document.getElementById(`m-res-${id}`)?.value?.trim() || '';
