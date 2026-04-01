@@ -330,9 +330,9 @@
             inset: 0;
             z-index: 20000;
             display: none;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
-            padding: 20px;
+            padding: clamp(18px, 7vh, 72px) 20px 20px;
         }
 
         .app-download-modal.is-open {
@@ -360,6 +360,7 @@
             overflow: hidden;
             position: relative;
             animation: downloadModalIn 0.24s ease;
+            margin-top: clamp(4px, 4vh, 56px);
         }
 
         .app-download-modal__dialog::before {
@@ -405,9 +406,10 @@
         .app-download-title {
             margin: 0;
             color: #fff;
-            font-size: 1.1rem;
+            font-size: 1.16rem;
             font-weight: 800;
             letter-spacing: 0.4px;
+            padding-right: 34px;
         }
 
         .app-download-copy,
@@ -416,6 +418,29 @@
             color: rgba(255, 255, 255, 0.72);
             font-size: 0.86rem;
             line-height: 1.45;
+        }
+
+        @media (min-width: 900px) {
+            .app-download-modal {
+                padding-top: clamp(28px, 10vh, 110px);
+            }
+
+            .app-download-modal__dialog {
+                width: min(92vw, 448px);
+                margin-top: 0;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .app-download-modal {
+                padding: max(12px, env(safe-area-inset-top, 0px) + 10px) 14px 14px;
+            }
+
+            .app-download-modal__dialog {
+                width: min(100%, 420px);
+                border-radius: 22px;
+            }
         }
 
         .app-download-link {
