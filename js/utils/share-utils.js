@@ -3,6 +3,111 @@
  * Premium match poster with betting odds, player levels, and padel court background.
  */
 
+function isNativeApp() {
+    try {
+        const cap = window.Capacitor;
+        if (!cap) return false;
+        if (typeof cap.isNativePlatform === 'function') return !!cap.isNativePlatform();
+        const platform = typeof cap.getPlatform === 'function' ? cap.getPlatform() : '';
+        return platform === 'android' || platform === 'ios';
+    } catch (_) {
+        return false;
+    }
+}
+
+async function dataUrlToFile(dataUrl, fileName = 'padeluminatis_share.png') {
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    return new File([blob], fileName, { type: 'image/png' });
+}
+
+function dataUrlToBase64(dataUrl) {
+    return String(dataUrl || '').split(',')[1] || '';
+}
+
+function buildSocialShareLinks(text = '') {
+    const encoded = encodeURIComponent(text || 'Comparte PADELUMINATIS');
+    return {
+        whatsapp: `https://wa.me/?text=${encoded}`,
+        telegram: `https://t.me/share/url?url=&text=${encoded}`,
+        instagram: null,
+    };
+}
+
+function showSocialShareFallback(dataUrl, text = '') {
+    const links = buildSocialShareLinks(text);
+    const existing = document.getElementById('poster-share-fallback');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'poster-share-fallback';
+    overlay.className = 'modal-overlay active modal-stack-front';
+    overlay.innerHTML = `
+        <div class="modal-card glass-strong" style="max-width:380px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Compartir cartel</h3>
+                <button class="close-btn" type="button">&times;</button>
+            </div>
+            <div class="modal-body" style="display:grid; gap:12px;">
+                <p class="text-[11px] text-white/70 leading-relaxed">En este dispositivo no se ha abierto la hoja nativa. Puedes descargar el cartel o enviarlo por una app.</p>
+                <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;">
+                    <a href="${links.whatsapp}" target="_blank" rel="noopener" class="btn btn-primary" style="text-decoration:none;"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+                    <a href="${links.telegram}" target="_blank" rel="noopener" class="btn btn-ghost" style="text-decoration:none;"><i class="fab fa-telegram"></i> Telegram</a>
+                    <button type="button" class="btn btn-ghost" data-download-share><i class="fas fa-download"></i> Guardar</button>
+                </div>
+                <p class="text-[10px] text-white/45">Instagram suele usar la hoja nativa del movil. Si no sale directa, guarda el cartel y luego subelo desde Instagram.</p>
+            </div>
+        </div>
+    `;
+    overlay.querySelector('.close-btn')?.addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) overlay.remove();
+    });
+    overlay.querySelector('[data-download-share]')?.addEventListener('click', () => {
+        downloadDataUrl(dataUrl, 'padeluminatis_poster.png');
+        overlay.remove();
+    });
+    document.body.appendChild(overlay);
+}
+
+async function shareImageDataUrl(dataUrl, {
+    title = 'PADELUMINATIS',
+    text = 'Comparte tu cartel',
+    fileName = 'padeluminatis_poster.png',
+} = {}) {
+    const file = await dataUrlToFile(dataUrl, fileName);
+
+    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        try {
+            await navigator.share({ title, text, files: [file] });
+            return true;
+        } catch (_) {}
+    }
+
+    if (isNativeApp()) {
+        const Filesystem = window.Capacitor?.Plugins?.Filesystem;
+        const Share = window.Capacitor?.Plugins?.Share;
+        if (Filesystem?.writeFile && Share?.share) {
+            try {
+                const saved = await Filesystem.writeFile({
+                    path: fileName,
+                    data: dataUrlToBase64(dataUrl),
+                    directory: 'CACHE',
+                });
+                await Share.share({
+                    title,
+                    text,
+                    url: saved?.uri,
+                    dialogTitle: 'Compartir cartel',
+                });
+                return true;
+            } catch (_) {}
+        }
+    }
+
+    showSocialShareFallback(dataUrl, text);
+    return false;
+}
+
 export async function generateMatchShareImage(analysis, matchData = {}) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -134,14 +239,14 @@ export async function generateMatchShareImage(analysis, matchData = {}) {
 
 export async function shareMatchResult(analysis, matchData) {
     const dataUrl = await generateMatchShareImage(analysis, matchData);
-    if (navigator.share) {
-        const blob = await (await fetch(dataUrl)).blob();
-        const file = new File([blob], 'mision_padel.png', { type: 'image/png' });
-        try {
-            await navigator.share({ title: 'Mi resultado JafsPadel', text: `Mision completada. ${analysis.delta >= 0 ? 'Gane' : 'Perdi'} ${Math.abs(analysis.delta)} puntos.`, files: [file] });
-            return true;
-        } catch (e) { downloadDataUrl(dataUrl, 'mision_padel.png'); }
-    } else { downloadDataUrl(dataUrl, 'mision_padel.png'); }
+    const shareText = `Mision completada en PADELUMINATIS. ${analysis.delta >= 0 ? 'Gane' : 'Perdi'} ${Math.abs(analysis.delta)} puntos.`;
+    const ok = await shareImageDataUrl(dataUrl, {
+        title: 'Mi resultado PADELUMINATIS',
+        text: shareText,
+        fileName: 'padeluminatis_resultado.png',
+    });
+    if (!ok) downloadDataUrl(dataUrl, 'padeluminatis_resultado.png');
+    return ok;
 }
 
 // ──────────────────────────────────────────────────
@@ -351,7 +456,15 @@ export async function generateMatchPosterImage(matchData = {}) {
 export async function shareMatchPoster(matchData = {}) {
     try {
         const dataUrl = await generateMatchPosterImage(matchData);
-        downloadDataUrl(dataUrl, 'jafspadel_poster.png');
+        const title = String(matchData.title || 'Cartel PADELUMINATIS');
+        const when = String(matchData.when || '').trim();
+        const shareText = when ? `${title} · ${when}` : `${title} en PADELUMINATIS`;
+        const ok = await shareImageDataUrl(dataUrl, {
+            title,
+            text: shareText,
+            fileName: 'padeluminatis_poster.png',
+        });
+        if (!ok) downloadDataUrl(dataUrl, 'padeluminatis_poster.png');
         return true;
     } catch (err) {
         console.error('Poster build fail', err);

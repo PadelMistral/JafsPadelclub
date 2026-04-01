@@ -1025,18 +1025,20 @@ export async function checkNotificationStatus() {
     if (permission === "prompt") issues.push("permission_default");
     if (blocked) issues.push("permission_denied");
     if (permission === "granted" && !nativeStatus.registered) issues.push("onesignal_not_subscribed");
+    if (permission === "granted" && !nativeStatus.oneSignalRegistered) issues.push("native_onesignal_pending");
     const recommendedAction =
       blocked ? "open_browser_settings" :
       permission === "prompt" ? "request_permission" :
-      !nativeStatus.registered ? "reconnect_onesignal" :
+      !nativeStatus.registered || !nativeStatus.oneSignalRegistered ? "reconnect_onesignal" :
       "none";
-    const backgroundReady = permission === "granted" && nativeStatus.registered;
+    const backgroundReady = permission === "granted" && (nativeStatus.oneSignalRegistered || nativeStatus.registered);
     persistPushState({
       permission,
       backgroundReady,
       issues,
       recommendedAction,
       nativeRegistered: nativeStatus.registered,
+      nativeOneSignalRegistered: nativeStatus.oneSignalRegistered,
     });
     return {
       browserSupported: true,
@@ -1052,10 +1054,10 @@ export async function checkNotificationStatus() {
       oneSignalScriptURL: null,
       appShellScope: null,
       oneSignalScope: null,
-      oneSignalAvailable: false,
-      oneSignalInitialized: false,
-      oneSignalRegistered: nativeStatus.registered,
-      oneSignalSubscriptionId: nativeStatus.token,
+      oneSignalAvailable: !!nativeStatus.oneSignalAvailable,
+      oneSignalInitialized: !!nativeStatus.oneSignalInitialized,
+      oneSignalRegistered: !!nativeStatus.oneSignalRegistered,
+      oneSignalSubscriptionId: nativeStatus.oneSignalSubscriptionId || nativeStatus.token,
       oneSignalError: null,
       backgroundReady,
       issues,

@@ -58,6 +58,7 @@ const btnOpenGuide = document.getElementById("btn-open-guide");
 
 function applyNotificationPageCopy() {
   const isNativeApp = Boolean(window.Capacitor?.isNativePlatform?.() || ["android", "ios"].includes(window.Capacitor?.getPlatform?.() || ""));
+  if (isNativeApp) document.body.classList.add("notif-native-mode");
   if (document.title) document.title = "Notificaciones | PADELUMINATIS";
   const sub = document.querySelector(".page-sub-pro");
   if (sub) sub.textContent = isNativeApp ? "Avisos nativos, segundo plano y bandeja inteligente" : "Solo tus avisos importantes y su estado";
@@ -96,10 +97,12 @@ function applyNotificationPageCopy() {
   const action = document.getElementById("push-action-pill");
   if (action) action.textContent = "Siguiente paso: ---";
   if (isNativeApp) {
-    document.getElementById("btn-reregister-sw")?.classList.add("hidden");
-    document.getElementById("btn-clean-sw")?.classList.add("hidden");
+    document.getElementById("btn-reregister-sw")?.closest(".notif-support-box")?.classList.add("hidden");
+    document.getElementById("notif-status-tags")?.classList.add("hidden");
+    document.getElementById("btn-read-all")?.classList.add("hidden");
+    document.getElementById("btn-test-push")?.setAttribute("data-native", "1");
     const nativeHint = document.querySelector(".notif-test-hint");
-    if (nativeHint) nativeHint.textContent = "En la APK esta prueba valida el canal nativo y un aviso local. Para recibir avisos reales en segundo plano sigue haciendo falta un emisor remoto.";
+    if (nativeHint) nativeHint.textContent = "En la APK esta prueba valida el permiso nativo y el registro del movil. Cuando el emisor remoto este activo, aqui te llegaran tambien en segundo plano.";
   }
 }
 
@@ -627,8 +630,8 @@ async function updatePushStatusUI() {
 
     tagText("push-permission-pill", `Permiso: ${status.permission === "granted" ? "activo" : status.permission === "denied" ? "bloqueado" : "pendiente"}`);
     tagText("push-background-pill", `Segundo plano: ${status.backgroundReady ? "si" : "aun no"}`);
-    tagText("push-channel-pill", `Canal: ${status.oneSignalRegistered ? "listo" : "pendiente"}`);
-    tagText("push-sdk-pill", `SDK: ${status.oneSignalInitialized ? "activo" : status.oneSignalAvailable ? "cargando" : "no listo"}`);
+    tagText("push-channel-pill", `Canal: ${status.oneSignalRegistered ? "OneSignal listo" : "registro pendiente"}`);
+    tagText("push-sdk-pill", `SDK: ${status.oneSignalInitialized ? "nativo activo" : status.oneSignalAvailable ? "cargando" : "no listo"}`);
     tagText("push-action-pill", `Siguiente paso: ${getRecommendedActionLabel(status)}`);
 
     btnRequestPush.onclick = async () => {
@@ -637,7 +640,7 @@ async function updatePushStatusUI() {
         document.getElementById("notif-denied-guide")?.classList.remove("hidden");
         return;
       }
-      if (!status.swActive) {
+      if (!isNativeApp() && !status.swActive) {
         showToast("Instalar app", "Instala primero la PWA y luego vuelve a activar los avisos.", "info");
         return;
       }
@@ -678,14 +681,22 @@ async function updatePushStatusUI() {
         console.log("[Push Test] Enviando notificacion local...");
         const localPushResult = await sendPushNotification(
           isAdmin ? "PRUEBA LOCAL (ADMIN)" : "PRUEBA LOCAL",
-          "Esta notificación confirma que el permiso del navegador funciona correctamente.",
+          isNativeApp()
+            ? "Esta prueba confirma que tu movil ya acepta avisos de PADELUMINATIS."
+            : "Esta notificación confirma que el permiso del navegador funciona correctamente.",
           "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff",
         );
         console.log("[Push Test] Resultado notificacion local:", localPushResult);
         
         // 2. Prueba Externa (Segundo Plano / OneSignal)
         console.log("[Push Test] Programando push externa en 3000ms para UID:", currentUser.uid);
-        showToast("Lanzando prueba real...", "En 3 segundos recibirás el aviso de segundo plano.", "info");
+        showToast(
+          "Lanzando prueba real...",
+          isNativeApp()
+            ? "Si el emisor remoto ya esta activo, deberia llegarte aunque minimices la app."
+            : "En 3 segundos recibirás el aviso de segundo plano.",
+          "info",
+        );
         
         setTimeout(async () => {
            console.group("[Push Test] Timeout push externa");

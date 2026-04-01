@@ -61,28 +61,51 @@ function ensureNativeAppStyles() {
             background: linear-gradient(180deg, #020617 0%, #071120 45%, #08182b 100%) !important;
         }
         body.native-app-shell .sport-bg {
-            opacity: 0.72;
-            filter: saturate(1.1) contrast(1.05);
+            opacity: 0.88;
+            filter: saturate(1.22) contrast(1.08) hue-rotate(-8deg);
         }
         body.native-app-shell .app-header {
             top: 0;
-            padding-top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
-            height: calc(78px + env(safe-area-inset-top, 0px)) !important;
-            background: linear-gradient(180deg, rgba(4, 12, 24, 0.96), rgba(6, 20, 35, 0.8)) !important;
-            border: 1px solid rgba(103, 232, 249, 0.16);
-            box-shadow: 0 24px 42px rgba(2, 6, 23, 0.45);
-            backdrop-filter: blur(22px);
+            padding-top: calc(env(safe-area-inset-top, 0px) + 10px) !important;
+            height: calc(84px + env(safe-area-inset-top, 0px)) !important;
+            background:
+                radial-gradient(circle at top right, rgba(198, 255, 0, 0.16), transparent 34%),
+                linear-gradient(180deg, rgba(4, 12, 24, 0.98), rgba(6, 20, 35, 0.86)) !important;
+            border: 1px solid rgba(103, 232, 249, 0.18);
+            box-shadow: 0 24px 42px rgba(2, 6, 23, 0.45), inset 0 1px 0 rgba(255,255,255,0.06);
+            backdrop-filter: blur(26px);
         }
         body.native-app-shell .page-content {
             padding-top: calc(var(--app-header-h) + 12px) !important;
             padding-bottom: calc(var(--app-nav-h) + env(safe-area-inset-bottom, 0px) + 12px) !important;
         }
         body.native-app-shell .bottom-nav {
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 6px) !important;
-            background: linear-gradient(180deg, rgba(4, 12, 24, 0.95), rgba(7, 18, 34, 0.98)) !important;
-            border: 1px solid rgba(148, 163, 184, 0.12);
-            box-shadow: 0 22px 40px rgba(2, 6, 23, 0.48);
-            backdrop-filter: blur(24px);
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 4px) !important;
+            background:
+                radial-gradient(circle at top center, rgba(0, 212, 255, 0.14), transparent 30%),
+                linear-gradient(180deg, rgba(4, 12, 24, 0.95), rgba(7, 18, 34, 0.99)) !important;
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            box-shadow: 0 22px 40px rgba(2, 6, 23, 0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+            backdrop-filter: blur(28px);
+        }
+        body.native-app-shell .nav-dock-v8 {
+            padding: 8px 12px 10px !important;
+            gap: 6px !important;
+        }
+        body.native-app-shell .nav-item-v8 {
+            min-height: 58px;
+            border-radius: 18px;
+        }
+        body.native-app-shell .nav-item-v8.active {
+            background: linear-gradient(180deg, rgba(0, 212, 255, 0.1), rgba(198, 255, 0, 0.08));
+            box-shadow: inset 0 0 18px rgba(0, 212, 255, 0.08);
+        }
+        body.native-app-shell .nav-icon-v8 {
+            transform: scale(1.05);
+        }
+        body.native-app-shell .nav-label-v8 {
+            color: rgba(255,255,255,0.82);
+            font-weight: 900;
         }
         body.native-app-shell .card,
         body.native-app-shell .card-premium-v7,
@@ -98,6 +121,16 @@ function ensureNativeAppStyles() {
         body.native-app-shell .profile-name,
         body.native-app-shell .pane-title {
             text-shadow: 0 0 18px rgba(103, 232, 249, 0.12);
+        }
+        body.native-app-shell .header-brand,
+        body.native-app-shell .header-actions {
+            transform: translateY(1px);
+        }
+        body.native-app-shell .header-title {
+            letter-spacing: 0.16em;
+        }
+        body.native-app-shell .header-subtitle {
+            color: rgba(198,255,0,0.82);
         }
     `;
     document.head.appendChild(style);
@@ -139,7 +172,7 @@ function bindNativeSwipeNavigation(activePageId, items = []) {
         if (!touch) return;
         const diffX = touch.clientX - startX;
         const diffY = touch.clientY - startY;
-        if (Math.abs(diffX) < 92 || Math.abs(diffX) < Math.abs(diffY) * 1.45 || Math.abs(diffY) > 72) return;
+        if (Math.abs(diffX) < 72 || Math.abs(diffX) < Math.abs(diffY) * 1.3 || Math.abs(diffY) > 84) return;
 
         const nextIndex = diffX < 0 ? activeIndex + 1 : activeIndex - 1;
         const nextItem = items[nextIndex];
