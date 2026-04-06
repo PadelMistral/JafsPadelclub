@@ -33,7 +33,14 @@ function getLocalNotificationsPlugin() {
 
 function getOneSignalPlugin() {
   try {
-    return window.OneSignal || window.plugins?.OneSignal || null;
+    // Priority: Capacitor/Cordova plugin vs Web SDK
+    const plugin = window.plugins?.OneSignal || window.OneSignal || null;
+    // On native, if window.OneSignal is just the Web SDK (it has .init but not .initialize)
+    // we should be careful. The native plugin has .initialize and .Notifications
+    if (isNativePlatform() && plugin && !plugin.initialize && window.plugins?.OneSignal) {
+        return window.plugins.OneSignal;
+    }
+    return plugin;
   } catch (_) {
     return null;
   }
@@ -249,8 +256,12 @@ async function initNativeOneSignal(uid = null) {
   } catch (_) {}
 
   try {
-    OneSignal.initialize(getConfiguredOneSignalAppId());
-  } catch (_) {}
+    const appId = getConfiguredOneSignalAppId();
+    console.log("[NativeOneSignal] Initializing with App ID:", appId);
+    OneSignal.initialize(appId);
+  } catch (err) {
+    console.error("[NativeOneSignal] Initialization failed:", err);
+  }
 
   try {
     if (uid) OneSignal.login(uid);

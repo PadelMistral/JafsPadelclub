@@ -298,6 +298,7 @@ function getConfiguredOneSignalAppId() {
 }
 
 async function ensureOneSignalScript() {
+  if (isNativePlatform()) return false;
   if (window.OneSignal && window.OneSignalDeferred) return true;
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(

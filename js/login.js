@@ -1,5 +1,6 @@
-﻿import { login, loginWithGoogle, getDocument, observerAuth, auth } from './firebase-service.js';
+import { login, loginWithGoogle, getDocument, observerAuth, auth } from './firebase-service.js';
 import { showToast } from './ui-core.js';
+import { AudioManager } from './modules/audio-manager.js';
 import { initPushNotifications } from './modules/push-notifications.js';
 import { getAppBase } from './modules/path-utils.js';
 
@@ -38,8 +39,20 @@ function safeNavigate(url) {
     const current = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
     const target = String(url || '').split('?')[0].toLowerCase();
     if (!target || current === target) return;
+    
     window.__appRedirectLock = true;
-    window.location.replace(url);
+    AudioManager.play('TRANSITION', 0.2);
+    
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#020617;opacity:0;transition:opacity 0.3s ease;pointer-events:none;';
+    document.body.appendChild(overlay);
+    
+    requestAnimationFrame(() => {
+        overlay.style.opacity = '1';
+        setTimeout(() => {
+            window.location.replace(url);
+        }, 300);
+    });
 }
 
 function ensureLoginNoticeNode() {

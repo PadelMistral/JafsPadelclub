@@ -1,6 +1,5 @@
-// ui-core.js - Unified Application Guard & Portal Management (v2.0)
-import { observerAuth, getDocument, subscribeCol, db, getDocsSafe } from './firebase-service.js';
 import { logError, logInfo, logWarn } from './core/app-logger.js';
+import { AudioManager } from './modules/audio-manager.js';
 
 const PUBLIC_PAGES = ['index.html', 'registro.html', 'terms.html', 'privacy.html', 'offline.html'];
 let onlineNexusCurrentUid = null;
@@ -158,12 +157,21 @@ function hideBootLoader(delay = 120) {
     if (typeof document === 'undefined') return;
     const loader = document.getElementById('app-boot-loader');
     if (!loader) return;
+    
+    // Use a smooth CSS transition
     setTimeout(() => {
-        loader.classList.add('hidden');
+        loader.style.transition = 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+        loader.style.opacity = '0';
+        loader.style.transform = 'scale(1.05)';
         document.body.classList.remove('app-boot-pending');
+        
         setTimeout(() => {
             if (loader?.parentNode) loader.remove();
-        }, 420);
+            // Start subtle entrance animations for cards if they exist
+            document.querySelectorAll('.animate-up').forEach((el, i) => {
+                el.style.animationDelay = `${i * 0.05}s`;
+            });
+        }, 600);
     }, delay);
 }
 
@@ -231,10 +239,12 @@ function initGlobalFeedbackHooks() {
 
 
     window.addEventListener('offline', () => {
+        AudioManager.play('ERROR', 0.25);
         showToast('Sin conexión', 'Verifica internet para sincronizar datos.', 'warning');
     });
 
     window.addEventListener('online', () => {
+        AudioManager.play('SUCCESS', 0.25);
         showToast('Conexión restablecida', 'Sincronización reanudada.', 'success');
     });
 }
@@ -276,8 +286,21 @@ function safeNavigate(url) {
     const current = (window.location.pathname.split('/').pop() || '').toLowerCase();
     const target = String(url || '').split('?')[0].toLowerCase();
     if (!target || current === target) return;
+    
     window.__appRedirectLock = true;
-    window.location.replace(url);
+    AudioManager.play('TRANSITION', 0.2);
+    
+    // Simple transition overlay to avoid white flash
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#020617;opacity:0;transition:opacity 0.3s ease;pointer-events:none;';
+    document.body.appendChild(overlay);
+    
+    requestAnimationFrame(() => {
+        overlay.style.opacity = '1';
+        setTimeout(() => {
+            window.location.replace(url);
+        }, 300);
+    });
 }
 
 function toLastSeenDate(value) {
@@ -830,6 +853,10 @@ export function showToast(title, body, type = 'info') {
     let normalizedTitle = typeof title === 'string' ? title.trim() : '';
     let normalizedBody = typeof body === 'string' ? body.trim() : '';
     let normalizedType = typeof type === 'string' ? type.trim().toLowerCase() : 'info';
+ 
+    if (normalizedType === 'error') AudioManager.play('ERROR', 0.4);
+    else if (normalizedType === 'success') AudioManager.play('SUCCESS', 0.4);
+    else AudioManager.play('NOTIF', 0.3);
 
     // Backward compatibility:
     // showToast("Mensaje", "success")

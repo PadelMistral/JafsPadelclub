@@ -2,6 +2,7 @@
 import { getDocument, updateDocument, auth, db, subscribeCol, getDocsSafe, observerAuth as guardAuth, logout } from '../firebase-service.js';
 import { initThemeSystem } from './theme-manager.js';
 import { logInfo } from '../core/app-logger.js';
+import { AudioManager } from './audio-manager.js';
 
 // Initialize theme system immediately  
 initThemeSystem();
@@ -9,6 +10,10 @@ initThemeSystem();
 const PUBLIC_PAGES = ['index.html', 'registro.html'];
 
 function emitToast(title, body = '', type = 'info') {
+    if (type === 'error') AudioManager.play('ERROR', 0.4);
+    else if (type === 'success') AudioManager.play('SUCCESS', 0.4);
+    else AudioManager.play('NOTIF', 0.3);
+
     if (typeof window !== 'undefined' && typeof window.__appToast === 'function') {
         window.__appToast(title, body, type);
         return;
