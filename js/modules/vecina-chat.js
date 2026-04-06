@@ -1,4 +1,4 @@
-﻿/* js/modules/vecina-chat.js - Sentient AI v15.0 "Neural Core" Edition */
+/* js/modules/vecina-chat.js - Sentient AI v15.0 "Neural Core" Edition */
 import { auth, getDocument, db } from "../firebase-service.js";
 import {
   collection,
@@ -21,7 +21,7 @@ import { calculateCourtCondition } from "../utils/weather-utils.js";
 // --- ATOMIC STATE & CACHE ---
 let chatOpen = false;
 let userData = null;
-let currentPersonality = "coach"; // 'coach' or 'vecina'
+let currentPersonality = "vecina"; // Only one unified robust assistant
 
 const DATA_CACHE = {
   user: null,
@@ -88,6 +88,8 @@ async function _syncData() {
       usersSnap,
       openAmis,
       openReto,
+      eventMatchSnap,
+      eventsSnap,
       weatherData,
     ] = await Promise.all([
       getDocument("usuarios", uid),
@@ -130,6 +132,15 @@ async function _syncData() {
           limit(10),
         ),
       ),
+      getDocsSafe(
+        query(
+          collection(db, "eventoPartidos"),
+          where("jugadores", "array-contains", uid),
+          orderBy("fecha", "desc"),
+          limit(15),
+        ),
+      ),
+      getDocsSafe(query(collection(db, "eventos"), limit(10))),
       getDetailedWeather(),
     ]);
 
@@ -140,16 +151,17 @@ async function _syncData() {
     DATA_CACHE.user = uData;
     DATA_CACHE.eloHistory = eloSnap.docs.map((d) => d.data());
     DATA_CACHE.matches = [
-      ...matchAmis.docs.map((d) => ({
-        ...d.data(),
-        id: d.id,
-        _col: "amistoso",
-      })),
+      ...matchAmis.docs.map((d) => ({ ...d.data(), id: d.id, _col: "amistoso" })),
       ...matchReto.docs.map((d) => ({ ...d.data(), id: d.id, _col: "reto" })),
+      ...eventMatchSnap.docs.map((d) => ({ ...d.data(), id: d.id, _col: "evento" })),
     ].sort((a, b) => {
-      const dA = a.fecha?.toDate?.() || new Date(a.fecha || 0);
-      const dB = b.fecha?.toDate?.() || new Date(b.fecha || 0);
-      return dB - dA;
+      const getT = (x) => {
+        try {
+          const d = x.fecha?.toDate?.() || new Date(x.fecha || 0);
+          return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+        } catch { return 0; }
+      };
+      return getT(b) - getT(a);
     });
     DATA_CACHE.globalUsers = usersSnap.docs.map((d) => {
       const data = d.data() || {};
@@ -180,6 +192,7 @@ async function _syncData() {
       refreshedAt: new Date().toISOString(),
     };
 
+    DATA_CACHE.currentEvents = eventsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
     DATA_CACHE.lastUpdate = now;
     userData = uData;
 
@@ -698,9 +711,9 @@ function _generateResponse(intent, query) {
 
   if (intent === "CMD_APP_CONTEXT") {
     if (currentPersonality === 'vecina') {
-      return R("¡Ay, cari! Padeluminatis es *la* app. Aquí se cuece todo: rankings, retos, cotilleos... ¡Somos {TOTAL_USERS} locos del pádel! Tú estás en nivel {LEVEL}, que no está mal, pero siempre se puede mejorar, ¿eh?");
+      return R("Ay, cari. JafsPadel es la app donde se mueve todo: rankings, retos, resultados y nivel. Somos {TOTAL_USERS} personas jugando y tu vas por nivel {LEVEL}.");
     }
-    return R("Padeluminatis Pro v7. Sistema de gestión deportiva de alto rendimiento. Actualmente monitorizamos a {TOTAL_USERS} jugadores. Tu perfil indica nivel {LEVEL} con ELO {ELO}. La plataforma gestiona Rankings, Retos y Análisis Predictivo.");
+    return R("JafsPadel. Plataforma social para organizar partidos, competir y seguir tu progreso. Ahora mismo hay {TOTAL_USERS} jugadores registrados. Tu perfil indica nivel {LEVEL} con ELO {ELO}.");
   }
 
   if (intent === "CMD_GLOBAL_STATS") {
@@ -784,6 +797,15 @@ function _generateResponse(intent, query) {
           return `A ver, **${p1.name}** vs **${p2.name}**. Tú tienes ${p1.lastPoints} ELO y él/ella ${p2.elo}. ${diffElo > 0 ? '¡Le llevas ventaja, no me seas flojo!' : '¡Uff, te saca ventaja! Vas a tener que sudar la gota gorda.'} En nivel estáis parecidos: ${p1.level} vs ${p2.level}.`;
       }
       return `Comparativa Técnica: [${p1.name} ELO:${p1.lastPoints} LVL:${p1.level}] VS [${p2.name} ELO:${p2.elo} LVL:${p2.level}]. Diferencial de ELO: ${Math.abs(diffElo)} a favor de ${eloAdv}. Probabilidades tácticas equilibradas.`;
+  }
+
+  if (intent === "CMD_EVENTS") {
+      const active = DATA_CACHE.currentEvents || [];
+      if (!active.length) return currentPersonality === 'vecina' ? "¡Chupaos esa! No hay saraos montados ahora mismo. ¡Toca esperar!" : "El circuito no presenta eventos activos en la fase actual.";
+      const names = active.map(e => (e.nombre || "Evento").toUpperCase()).join(", ");
+      return currentPersonality === 'vecina' 
+        ? `¡Tenemos fiesta! Participas en: **${names}**. Mira bien los horarios no vayas a llegar tarde como siempre.`
+        : `Análisis de Torneos: Detectada participación activa en **${names}**. Revisa el cuadrante en la sección Eventos para optimizar tu agenda táctica.`;
   }
 
   if (intent === "CMD_HISTORY") {
@@ -1051,7 +1073,7 @@ function _generateResponse(intent, query) {
   if (intent === "CMD_ELO_FORMULA") {
       return currentPersonality === 'vecina'
         ? "Mira, es un lío de matemáticas. Básicamente: si ganas a uno bueno, subes mucho. Si pierdes con uno malo, bajas al sótano. ¡Tú gana y punto!"
-        : "El ELO Padeluminatis utiliza un K-Factor dinámico que evalúa: 1. Diferencia de nivel, 2. Racha actual, 3. Contundencia del resultado (Sets/Juegos).";
+        : "El ELO de JafsPadel utiliza un factor dinamico que evalua diferencia de nivel, racha actual y contundencia del resultado.";
   }
   
   if (intent === "CMD_TUTORIAL") {
@@ -1060,18 +1082,23 @@ function _generateResponse(intent, query) {
         : "Guía Operativa: Usa el Menú para navegar. 'Home' es tu centro de mando, 'Calendario' para logística de pistas, 'Ranking' para objetivos competitivos y 'Diario' para análisis de mejora post-partido.";
   }
 
+  if (intent === "CMD_RESERVE_MATCH") {
+      let msg = "¡Qué buena idea! Montemos un partido. Haz clic en el siguiente botón para iniciar el proceso de creación.<br><br>";
+      msg += `<button class="btn pt-2 pb-2 text-xs font-black bg-primary text-black rounded-lg w-full mt-2" onclick="window.location.href='pantalla-inicial.html#proposal-inline-section'; setTimeout(()=>window.openProposeMatchChat(), 500); window.toggleAiChat();"><i class="fas fa-calendar-plus mr-2"></i> INICIAR PROPUESTA / RESERVA</button>`;
+      return msg;
+  }
+
   if (intent === "CMD_RANKING_TOP") {
     const list = DATA_CACHE.globalUsers.slice()
         .sort((a,b) => (b.puntosRanking || 1000) - (a.puntosRanking || 1000))
         .slice(0, 5);
     
-    let text = currentPersonality === 'vecina' ? "Aquí tienes a los jefazos del club ahora mismo:\n" : "Clasificación General (Top 5):\n";
+    let text = "Clasificación General (Top 5):\n";
     list.forEach((u, i) => {
         const name = (u.nombreUsuario || u.nombre || "Jugador").toUpperCase();
         text += `${i+1}. ${name} (${Math.round(u.puntosRanking || 1000)} pts)\n`;
     });
     
-    if (currentPersonality === 'vecina') text += "\n¡A ver si les bajas de ahí pronto, que se lo tienen muy creído!";
     return text;
   }
 
@@ -1125,6 +1152,7 @@ function _detectIntent(query) {
   if (q.includes("diario") || q.includes("aprender") || q.includes("analiza mis") || q.includes("objetivo")) return "CMD_DIARY_ANALYSIS";
   if (q.includes("elo") || q.includes("puntos") || q.includes("calculo")) return "CMD_ELO_FORMULA";
   if (q.includes("ayuda") || q.includes("como funciona") || q.includes("guia")) return "CMD_TUTORIAL";
+  if (q.includes("reservar partido") || q.includes("reservame partido") || q.includes("crear partido") || q.includes("nuevo partido") || q.includes("abre un partido") || q.includes("montar partido") || q.includes("quiero jugar el dia") || q.includes("reserva")) return "CMD_RESERVE_MATCH";
   return "GENERAL";
 }
 
@@ -1199,10 +1227,12 @@ export function toggleChat(forceOpen = null) {
       document.documentElement.classList.add("ai-chat-open");
       _syncData();
       document.getElementById("ai-input-field").focus();
+      if(window.maximizeAiFab) window.maximizeAiFab();
   } else {
       panel.classList.remove("open");
       document.body.classList.remove("ai-chat-open");
       document.documentElement.classList.remove("ai-chat-open");
+      if(window.minimizeAiFab) window.minimizeAiFab();
       setTimeout(() => {
         if (!chatOpen) panel.style.setProperty("display", "none", "important");
       }, 260);
@@ -1210,22 +1240,7 @@ export function toggleChat(forceOpen = null) {
 }
 
 function switchAiPersonality() {
-    currentPersonality = currentPersonality === 'coach' ? 'vecina' : 'coach';
-    const p = PERSONALITIES[currentPersonality];
-    
-    // Update UI
-    const avatar = document.getElementById('p-avatar-bot');
-    avatar.className = `ai-avatar-box ${currentPersonality}`;
-    
-    const nameEl = document.getElementById('ai-bot-name');
-    nameEl.textContent = p.name.toUpperCase();
-    
-    const msgs = document.getElementById("ai-messages");
-    const botDiv = document.createElement("div");
-    botDiv.className = "ai-msg bot";
-    botDiv.innerHTML = `<p><i>Sistema reiniciado. Personalidad cargada: <b>${p.name}</b>.</i></p>`;
-    msgs.appendChild(botDiv);
-    msgs.scrollTop = msgs.scrollHeight;
+    // Deprecated for simplified interface
 }
 
 window.aiQuickCmd = (cmd, label) => {
@@ -1243,20 +1258,38 @@ export function initVecinaChat() {
   fab.id = "vecina-chat-fab";
   fab.className = "ai-fab";
   fab.innerHTML = `<i class="fas fa-robot"></i>`;
-  fab.onclick = toggleChat;
+  fab.onclick = () => {
+    if (fab.classList.contains('minimized')) {
+        fab.classList.remove('minimized');
+        fab.classList.add('im-here');
+        // If it was minimized, clicking only restores it
+        return;
+    }
+    toggleChat();
+  };
   document.body.appendChild(fab);
+
+  // Behavior: Minimize when chat closes OR after inactivity
+  window.minimizeAiFab = () => {
+      fab.classList.add('minimized');
+      fab.classList.remove('im-here');
+      setTimeout(() => { if(fab.classList.contains('minimized')) fab.classList.add('im-here'); }, 2000);
+  };
+
+  window.maximizeAiFab = () => {
+      fab.classList.remove('minimized');
+      fab.classList.add('im-here');
+  };
 
   // PANEL
   const chatHTML = `
         <div id="vecina-chat-panel" class="ai-chat-panel v14">
             <div class="ai-chat-header border-b border-white-05 px-6">
-                <div class="personality-toggle" onclick="window.switchAiPersonality()">
-                    <div id="p-avatar-bot" class="ai-avatar-box coach">
-                        <i class="fas fa-robot"></i>
-                    </div>
+                <div class="ai-avatar-box vecina">
+                    <i class="fas fa-robot"></i>
                 </div>
-                <div class="ai-header-info flex-1" onclick="window.switchAiPersonality()">
-                    <span id="ai-bot-name" class="ai-title italic font-black uppercase">COACH IA</span>
+                <div class="ai-header-info flex-1">
+                    <span id="ai-bot-name" class="ai-title italic font-black uppercase">ASISTENTE IA</span>
                     <div class="flex-row items-center gap-2">
                         <div class="pulse-dot-green"></div>
                         <span id="ai-bot-tag" class="ai-subtitle tracking-[2px]">VECINA 3.0</span>
@@ -1269,7 +1302,7 @@ export function initVecinaChat() {
             
             <div id="ai-messages" class="ai-chat-body custom-scroll p-6">
                 <div class="ai-msg bot">
-                    <p>Sistema online. Soy tu asistente personal V3.0. Pregúntame sobre tus datos, rivales o el club.</p>
+                    <p>Sistema online. Soy tu asistente personal V3.0. Pregúntame sobre tus datos, rivales, apúntate a partidos automáticamente, o pregúntame por el club.</p>
                 </div>
             </div>
 
@@ -1301,6 +1334,7 @@ export function initVecinaChat() {
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_APOING_NEXT','Apoing')"><i class="fas fa-link"></i><span>Apoing</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_WEATHER_TODAY','Clima Hoy')"><i class="fas fa-cloud-sun"></i><span>Hoy</span></button>
                         <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_WEATHER_TOMORROW','Clima Mañana')"><i class="fas fa-cloud-rain"></i><span>Mañana</span></button>
+                        <button class="ai-quick-btn-v7 mini" onclick="window.aiQuickCmd('CMD_EVENTS','Torneos')"><i class="fas fa-trophy"></i><span>Eventos</span></button>
                     </div>
                 </div>
                 <details class="ai-cmd-details mb-3">
@@ -1328,6 +1362,7 @@ export function initVecinaChat() {
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_WEATHER_TODAY','Clima hoy')">Clima hoy</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_WEATHER_TOMORROW','Clima mañana')">Clima mañana</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_APOING_NEXT','Apoing')">Apoing</button>
+                        <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_EVENTS','Mis Eventos')">Mis Eventos</button>
                         <button class="ai-cmd-chip" onclick="window.aiQuickCmd('CMD_APP_HELP','Ayuda App')">Ayuda app</button>
                     </div>
                 </details>
@@ -1356,6 +1391,30 @@ export function initVecinaChat() {
                 z-index: 13050 !important;
             }
             #vecina-chat-fab.ai-fab:active { transform: scale(0.9); }
+
+            #vecina-chat-fab.ai-fab.minimized {
+                transform: translateX(35px) scale(0.7) !important;
+                background: rgba(198, 255, 0, 0.1) !important;
+                border: 1px solid rgba(198, 255, 0, 0.1) !important;
+                opacity: 0.4;
+                filter: grayscale(1);
+                transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            }
+            #vecina-chat-fab.ai-fab.minimized:hover {
+                transform: translateX(10px) scale(0.9) !important;
+                background: rgba(198, 255, 0, 0.3) !important;
+                opacity: 1;
+                filter: none;
+            }
+
+            @keyframes slow-pulse {
+                0% { box-shadow: 0 0 0 0 rgba(198, 255, 0, 0.2); }
+                70% { box-shadow: 0 0 0 15px rgba(198, 255, 0, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(198, 255, 0, 0); }
+            }
+            #vecina-chat-fab.ai-fab.im-here {
+                animation: slow-pulse 4s infinite;
+            }
 
             .ai-chat-panel.v14 { 
                 border-radius: 32px 32px 0 0; 
@@ -1596,7 +1655,36 @@ export function initVecinaChat() {
     if (e.key === "Enter") sendMessage();
   };
 
+  const toggleChat = () => {
+    const p = document.getElementById("vecina-chat-panel");
+    const f = document.getElementById("vecina-chat-fab");
+    if (!p || !f) return;
+    const open = p.style.display === "none";
+    if (open) {
+      p.style.setProperty("display", "flex", "important");
+      p.classList.add("open");
+      f.classList.add("hidden");
+      f.classList.remove("minimized", "im-here");
+    } else {
+      p.style.display = "none";
+      p.classList.remove("open");
+      f.classList.remove("hidden");
+      setTimeout(() => {
+          f.classList.add("minimized", "im-here");
+      }, 1200);
+    }
+  };
+
   window.toggleAiChat = toggleChat;
+  if(fab) {
+      fab.onclick = toggleChat;
+      // Auto-minimize on load after 2 seconds
+      setTimeout(() => {
+          if (!panel || panel.style.display === "none") {
+              fab.classList.add("minimized", "im-here");
+          }
+      }, 1200);
+  }
   window.switchAiPersonality = switchAiPersonality;
   window.aiQuickCmd = window.aiQuickCmd;
 

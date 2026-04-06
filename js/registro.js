@@ -1,4 +1,4 @@
-﻿// registro.js - Definitive Identity Generation
+// registro.js - Definitive Identity Generation
 import { auth, db } from './firebase-service.js';
 import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js";
 import { doc, setDoc, getDocs, collection, query, where, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = document.getElementById('r-name').value.trim();
             const email = document.getElementById('r-email').value.trim();
             const phone = document.getElementById('r-phone').value.trim();
+            const apoingUrl = document.getElementById('r-ics').value.trim();
             const block = document.getElementById('r-block').value.trim() || '';
             const floor = document.getElementById('r-floor').value.trim() || '';
             const door = document.getElementById('r-door').value.trim() || '';
@@ -27,6 +28,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Validation
             if (pass !== pass2) return showToast("Error clave", "Las claves no coinciden.", "warning");
             if (user.length < 3) return showToast("Error ID", "El ID de pista es demasiado corto.", "warning");
+            if (!apoingUrl) return showToast("Apoing", "Necesitamos tu enlace .ics de Apoing para completar el registro.", "warning");
+            if (!/^https:\/\/www\.apoing\.com\/calendars\/.+\.ics$/i.test(apoingUrl)) {
+                return showToast("Apoing", "El enlace debe ser un calendario .ics valido de Apoing.", "warning");
+            }
 
             setLoading(true);
 
@@ -54,13 +59,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     nombreUsuario: user,
                     email: email,
                     telefono: phone,
+                    apoingCalendarUrl: apoingUrl,
                     vivienda: {
                         bloque: block,
                         piso: floor,
                         puerta: door
                     },
                     nivel: lvl,
+                    nivelBaseInicial: lvl,
                     puntosRanking: basePoints,
+                    puntosBaseInicial: basePoints,
                     partidosJugados: 0,
                     victorias: 0,
                     rachaActual: 0,
@@ -70,6 +78,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     fotoURL: '',
                     createdAt: serverTimestamp()
                 });
+
+                await setDoc(doc(db, "apoingCalendars", uid), {
+                    uid,
+                    name,
+                    nickname: user,
+                    icsUrl: apoingUrl,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
 
 
                 // 5. Notify admins about new pending user

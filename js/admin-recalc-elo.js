@@ -1,43 +1,66 @@
 import { db } from "./firebase-service.js";
-import { collection, getDocs, doc, writeBatch } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
+import { collection, getDocs, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { processMatchResults } from "./ranking-service.js";
-import { ELO_CONFIG, ELO_SYSTEM_VERSION } from "./config/elo-system.js";
+import { ELO_CONFIG, ratingFromLevel, levelFromRating } from "./config/elo-system.js";
+import { getResultSetsString } from "./utils/match-utils.js";
+import { getCompetitiveSystemVersion, normalizeScoringSystem } from "./services/competitive-engine.js";
 
-/**
- * WIPE_AND_RECALC_ALL_MATCHES — Reset Total de ELO V3
- *
- * 1. Resetea todos los usuarios al BASE_RATING (1000)
- * 2. Borra ranking logs y match details
- * 3. Resetea rankingProcessed flags en partidos
- * 4. Re-procesa todos los partidos jugados cronológicamente
- *
- * Esto aplica el nuevo sistema ELO V3 con:
- *  - 300pts por nivel (más estable)
- *  - K-factors reducidos
- *  - Caps más ajustados
- *  - Demotion shield
- */
-window.WIPE_AND_RECALC_ALL_MATCHES = async function () {
+function parseDecimalLevel(value, fallback = NaN) {
+    if (typeof value === "string") {
+        const parsed = Number(value.replace(",", ".").trim());
+        return Number.isFinite(parsed) ? parsed : fallback;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function resolveInitialSeed(entry = {}) {
+    const baseLevel = Number.isFinite(parseDecimalLevel(entry?.nivelBaseInicial))
+        ? parseDecimalLevel(entry.nivelBaseInicial)
+        : Number.isFinite(parseDecimalLevel(entry?.nivel))
+            ? parseDecimalLevel(entry.nivel)
+            : 2.5;
+
+    const storedBaseRating = Number(entry?.puntosBaseInicial);
+    const inferredLevel = Number.isFinite(storedBaseRating) ? Number(levelFromRating(storedBaseRating)) : NaN;
+    const mismatch = Number.isFinite(inferredLevel) ? Math.abs(inferredLevel - baseLevel) : 0;
+    const repairedSeed = !Number.isFinite(storedBaseRating) || mismatch > 0.19;
+    const startRating = repairedSeed
+        ? Number(ratingFromLevel(baseLevel) || ELO_CONFIG.BASE_RATING || 1000)
+        : storedBaseRating;
+
+    return {
+        baseLevel,
+        startRating,
+        startLevel: Number(baseLevel || 2.5),
+        repairedSeed,
+    };
+}
+
+async function runFullRecalculation(scoringSystem = "default") {
     const t0 = performance.now();
-    console.log(`⚡ [${ELO_SYSTEM_VERSION}] STARTING FULL RECALCULATION...`);
-    console.log(`📋 Config: BASE=${ELO_CONFIG.BASE_RATING}, RATING_PER_LEVEL=${ELO_CONFIG.RATING_PER_LEVEL}, K.STABLE=${ELO_CONFIG.K.STABLE}`);
+    const activeSystem = normalizeScoringSystem(scoringSystem);
+    const activeVersion = getCompetitiveSystemVersion(activeSystem);
+    console.log(`⚡ [${activeVersion}] STARTING FULL RECALCULATION...`);
 
     // 1. Reset all users
     const usersSnap = await getDocs(collection(db, "usuarios"));
-    const { levelFromRating } = await import("./config/elo-system.js");
+    const guestsSnap = await getDocs(collection(db, "invitados"));
     let batch = writeBatch(db);
     let count = 0;
-    console.log(`🔄 Inicializando ${usersSnap.docs.length} usuarios con puntuación base...`);
+    let repairedSeedCount = 0;
 
     for (const d of usersSnap.docs) {
         const u = d.data();
-        const startRating = Number(ELO_CONFIG.BASE_RATING || 1000);
-        const startLevel = Number(levelFromRating(startRating) || 2.5);
+        const { baseLevel, startRating, startLevel, repairedSeed } = resolveInitialSeed(u);
+        if (repairedSeed) repairedSeedCount += 1;
 
         batch.update(d.ref, {
             puntosRanking: startRating,
             rating: startRating,
             nivel: startLevel,
+            nivelBaseInicial: baseLevel,
+            puntosBaseInicial: startRating,
             partidosJugados: 0,
             victorias: 0,
             rachaActual: 0,
@@ -45,125 +68,119 @@ window.WIPE_AND_RECALC_ALL_MATCHES = async function () {
             nivelProgresoPct: 50,
             nivelRango: "Bronce",
             lastMatchAnalysis: null,
-            eloSystemVersion: ELO_SYSTEM_VERSION,
+            eloSystemVersion: activeVersion,
         });
         count++;
         if (count % 400 === 0) {
             await batch.commit();
             batch = writeBatch(db);
-            console.log(`   ...${count} usuarios inicializados`);
         }
     }
     await batch.commit();
-    console.log(`✅ ${count} usuarios reseteados.`);
 
-    // 2. Delete old ranking logs
-    console.log("🗑️ Eliminando ranking logs antiguos...");
+    batch = writeBatch(db);
+    count = 0;
+    for (const d of guestsSnap.docs) {
+        const g = d.data();
+        const { baseLevel, startRating, startLevel, repairedSeed } = resolveInitialSeed(g);
+        if (repairedSeed) repairedSeedCount += 1;
+
+        batch.set(d.ref, {
+            puntosRanking: startRating,
+            rating: startRating,
+            nivel: startLevel,
+            nivelBaseInicial: baseLevel,
+            puntosBaseInicial: startRating,
+            partidosJugados: 0,
+            victorias: 0,
+            rachaActual: 0,
+            lastMatchAnalysis: null,
+            eloSystemVersion: activeVersion,
+            updatedAt: serverTimestamp(),
+        }, { merge: true });
+        count++;
+        if (count % 400 === 0) {
+            await batch.commit();
+            batch = writeBatch(db);
+        }
+    }
+    await batch.commit();
+
+    // 2. Clear logs and details
     const logsSnap = await getDocs(collection(db, "rankingLogs"));
     batch = writeBatch(db);
-    count = 0;
-    for (const d of logsSnap.docs) {
-        batch.delete(d.ref);
-        count++;
-        if (count % 400 === 0) {
-            await batch.commit();
-            batch = writeBatch(db);
-        }
-    }
+    for (const d of logsSnap.docs) batch.delete(d.ref);
     await batch.commit();
-    console.log(`   ${count} logs eliminados.`);
 
-    // 3. Delete old match point details
-    console.log("🗑️ Eliminando match point details...");
     const matchDetailSnap = await getDocs(collection(db, "matchPointDetails"));
     batch = writeBatch(db);
-    count = 0;
-    for (const d of matchDetailSnap.docs) {
-        batch.delete(d.ref);
-        count++;
-        if (count % 400 === 0) {
-            await batch.commit();
-            batch = writeBatch(db);
-        }
-    }
+    for (const d of matchDetailSnap.docs) batch.delete(d.ref);
     await batch.commit();
-    console.log(`   ${count} details eliminados.`);
 
-    // 4. Fetch all played matches
-    console.log("📥 Buscando partidos jugados...");
+    // 3. Collect matches
     const retos = await getDocs(collection(db, "partidosReto"));
     const amistosos = await getDocs(collection(db, "partidosAmistosos"));
+    const eventos = await getDocs(collection(db, "eventoPartidos"));
     const allMatches = [];
 
-    retos.docs.forEach((d) => {
-        if (d.data().estado === "jugado") {
-            allMatches.push({ id: d.id, col: "partidosReto", data: d.data() });
-        }
-    });
-    amistosos.docs.forEach((d) => {
-        if (d.data().estado === "jugado") {
-            allMatches.push({ id: d.id, col: "partidosAmistosos", data: d.data() });
-        }
-    });
+    retos.docs.forEach(d => { if(d.data().estado === 'jugado') allMatches.push({ id:d.id, col:'partidosReto', data:d.data() }); });
+    amistosos.docs.forEach(d => { if(d.data().estado === 'jugado') allMatches.push({ id:d.id, col:'partidosAmistosos', data:d.data() }); });
+    eventos.docs.forEach(d => { if(d.data().estado === 'jugado' || d.data().estado === 'finalizado') allMatches.push({ id:d.id, col:'eventoPartidos', data:d.data() }); });
 
-    // Sort chronological
-    allMatches.sort((a, b) => {
-        const ta = a.data.fecha?.seconds || 0;
-        const tb = b.data.fecha?.seconds || 0;
-        return ta - tb;
-    });
+    allMatches.sort((a, b) => (a.data.fecha?.seconds || 0) - (b.data.fecha?.seconds || 0));
 
-    console.log(`📊 Encontrados ${allMatches.length} partidos jugados. Reseteando flags...`);
-
-    // 5. Reset processed state
+    // 4. Reset flags
     batch = writeBatch(db);
     count = 0;
-    for (const match of allMatches) {
-        const bRef = doc(db, match.col, match.id);
-        batch.update(bRef, {
-            rankingProcessedAt: "",
-            rankingProcessedResult: "",
-            eloSummary: {},
-        });
+    for (const m of allMatches) {
+        batch.update(doc(db, m.col, m.id), { rankingProcessedAt: null, rankingProcessedResult: null, eloSummary: null });
         count++;
-        if (count % 400 === 0) {
-            await batch.commit();
-            batch = writeBatch(db);
-        }
+        if (count % 400 === 0) { await batch.commit(); batch = writeBatch(db); }
     }
     await batch.commit();
 
-    // 6. Recalculate chronologically
-    console.log("🔢 Recalculando partidos cronológicamente con ELO V3...");
+    // 5. Recalc
     let successCount = 0;
     let errorCount = 0;
+    const errorList = [];
 
     for (let i = 0; i < allMatches.length; i++) {
         const match = allMatches[i];
-        const resStr = match.data.resultado?.sets;
+        const resStr = getResultSetsString(match.data);
         if (!resStr) continue;
 
         const pct = Math.round(((i + 1) / allMatches.length) * 100);
-        console.log(`   [${i + 1}/${allMatches.length}] (${pct}%) ${match.id}`);
+        window.dispatchEvent(new CustomEvent('adminRecalcProgress', {
+            detail: { current: i + 1, total: allMatches.length, pct, matchId: match.id }
+        }));
 
         try {
             await processMatchResults(match.id, match.col, resStr, {
                 mvpId: match.data.mvp,
                 surface: match.data.superficie || match.data.surface,
+                scoringSystem: activeSystem,
             });
             successCount++;
         } catch (e) {
             errorCount++;
-            console.error(`   ❌ Error: ${match.id}`, e?.message || e);
+            if (errorList.length < 10) errorList.push({ id: match.id, error: String(e) });
         }
     }
 
     const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-    console.log(`\n✅ RECALCULACIÓN COMPLETA [${ELO_SYSTEM_VERSION}]`);
-    console.log(`   ✓ ${successCount} partidos procesados correctamente`);
-    console.log(`   ✗ ${errorCount} errores`);
-    console.log(`   ⏱️ ${elapsed}s`);
-    console.log(`\n📋 Nuevo sistema: ${ELO_CONFIG.RATING_PER_LEVEL}pts/nivel, K.STABLE=${ELO_CONFIG.K.STABLE}, CAP=${ELO_CONFIG.CAPS.COMPETITIVE_ABS}`);
+    return {
+        success: true,
+        processed: successCount,
+        errors: errorCount,
+        elapsed,
+        errorList,
+        systemVersion: activeVersion,
+        scoringSystem: activeSystem,
+        repairedSeedCount,
+    };
+}
 
-    return { success: true, processed: successCount, errors: errorCount, elapsed };
-};
+window.WIPE_AND_RECALC_ALL_MATCHES = () => runFullRecalculation("default");
+window.WIPE_AND_RECALC_ALL_MATCHES_ATP = () => runFullRecalculation("atp_test");
+window.RESTORE_AND_RECALC_FROM_BASE = window.WIPE_AND_RECALC_ALL_MATCHES;
+window.RESTORE_AND_RECALC_FROM_BASE_ATP = window.WIPE_AND_RECALC_ALL_MATCHES_ATP;

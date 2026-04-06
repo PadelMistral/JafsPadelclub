@@ -6,40 +6,42 @@
 //  - Demotion Shield: 3 partidos de protección al subir de división
 //  - Bandas más amplias = usuarios permanecen más tiempo en su nivel real
 
-export const ELO_SYSTEM_VERSION = "elo2v2_v3";
+export const ELO_SYSTEM_VERSION = "elo2v7_padel_curve";
 
 export const ELO_CONFIG = {
   BASE_RATING: 1000,
   MIN_RATING: 300,
-  MAX_RATING: 4000,
+  MAX_RATING: 5000,
   LEVEL_MIN: 1.0,
   LEVEL_MAX: 7.0,
-  LEVEL_STEP: 0.01, // Cambios de nivel mucho más lentos (0.01 por tramo)
-  BONUS_CAP_RATIO: 0.20, 
-  // Puntos por nivel: 1000 -> Estabilidad máxima. 
-  // Con K=10 y 1000pts/nivel, ganar +10pts sube exactamente 0.01 de nivel.
-  RATING_PER_LEVEL: 1000,
+  LEVEL_STEP: 0.01, 
+  BONUS_CAP_RATIO: 0.18, 
+  RATING_PER_LEVEL: 1200, // Subido de 1000 a 1200 para cambios más lentos
 
   K: {
-    PROVISIONAL: 15, 
-    DEVELOPING: 10, 
-    STABLE: 8, 
-    ELITE: 5, 
-    LEGEND: 4, 
+    PROVISIONAL: 60,  // "mas facil al inicio" (mucho más rápido salir del rookie)
+    DEVELOPING: 40,   // rápido crecimiento inicial
+    STABLE: 15,       // estancado nivel medio-alto
+    ELITE: 8,         // "muy dificil llegar a top"
+    LEGEND: 4,        // legendario es casi inamovible (estancado)
   },
 
   CAPS: {
-    COMPETITIVE_ABS: 15, // Máx pts por partido competitivo
-    FRIENDLY_ABS: 8,     // Máx pts por partido amistoso
+    COMPETITIVE_ABS: 55, // bajado más
+    FRIENDLY_ABS: 35,    
   },
 
-  // Protección de descenso de división: mínimo de partidos al ascender
-  // antes de poder bajar de división. No acumulable entre saltos.
   DEMOTION_SHIELD_MATCHES: 3,
+  DEMOTION_BUFFER_PTS: 8,
 
-  // Margen de puntos extra dentro del tramo que actúa como colchón
-  // antes del verdadero threshold para descender de nivel decimal.
-  DEMOTION_BUFFER_PTS: 15,
+  // Sistema de Multiplicadores aún más conservadores
+  DYNAMIC: {
+    STREAK_M: 0.05,     
+    UPSET_M: 1.10,      
+    DOMINANCE_M: 1.05,  
+    CLUTCH_M: 0.01,     
+    ACTIVITY_M: 1.02,   
+  }
 };
 
 export function clampNumber(value, min, max) {
@@ -50,32 +52,71 @@ export function round2(value) {
   return Number(Number(value || 0).toFixed(2));
 }
 
+const LEVEL_RATING_ANCHORS = [
+  { level: 1.0, rating: 300 },
+  { level: 1.5, rating: 620 },
+  { level: 2.0, rating: 880 },
+  { level: 2.5, rating: 1100 },
+  { level: 3.0, rating: 1450 },
+  { level: 3.25, rating: 1675 },
+  { level: 3.5, rating: 1940 },
+  { level: 3.75, rating: 2250 },
+  { level: 4.0, rating: 2600 },
+  { level: 4.25, rating: 2980 },
+  { level: 4.5, rating: 3360 },
+  { level: 5.0, rating: 3920 },
+  { level: 5.5, rating: 4380 },
+  { level: 6.0, rating: 4750 },
+  { level: 7.0, rating: 5000 },
+];
+
+function interpolateByLevel(level) {
+  const safeLevel = clampNumber(
+    Number(level || 2.5),
+    ELO_CONFIG.LEVEL_MIN,
+    ELO_CONFIG.LEVEL_MAX,
+  );
+  for (let i = 0; i < LEVEL_RATING_ANCHORS.length - 1; i += 1) {
+    const left = LEVEL_RATING_ANCHORS[i];
+    const right = LEVEL_RATING_ANCHORS[i + 1];
+    if (safeLevel < left.level || safeLevel > right.level) continue;
+    const span = right.level - left.level || 1;
+    const ratio = (safeLevel - left.level) / span;
+    return Math.round(left.rating + (right.rating - left.rating) * ratio);
+  }
+  return LEVEL_RATING_ANCHORS[LEVEL_RATING_ANCHORS.length - 1].rating;
+}
+
+function interpolateByRating(rating) {
+  const safeRating = clampNumber(
+    Number(rating || ELO_CONFIG.BASE_RATING),
+    ELO_CONFIG.MIN_RATING,
+    ELO_CONFIG.MAX_RATING,
+  );
+  for (let i = 0; i < LEVEL_RATING_ANCHORS.length - 1; i += 1) {
+    const left = LEVEL_RATING_ANCHORS[i];
+    const right = LEVEL_RATING_ANCHORS[i + 1];
+    if (safeRating < left.rating || safeRating > right.rating) continue;
+    const span = right.rating - left.rating || 1;
+    const ratio = (safeRating - left.rating) / span;
+    return round2(left.level + (right.level - left.level) * ratio);
+  }
+  return LEVEL_RATING_ANCHORS[LEVEL_RATING_ANCHORS.length - 1].level;
+}
+
 /**
  * Convierte nivel 1-7 → rating base.
  * Fórmula: 1000 + (nivel - 2.5) × RATING_PER_LEVEL
  */
 export function ratingFromLevel(level) {
-  const l = clampNumber(
-    Number(level || 2.5),
-    ELO_CONFIG.LEVEL_MIN,
-    ELO_CONFIG.LEVEL_MAX,
-  );
-  return Math.round(
-    ELO_CONFIG.BASE_RATING + (l - 2.5) * ELO_CONFIG.RATING_PER_LEVEL,
-  );
+  return interpolateByLevel(level);
 }
 
 /**
  * Convierte rating → nivel (con 2 decimales).
  */
 export function levelFromRating(rating) {
-  const r = clampNumber(
-    Number(rating || ELO_CONFIG.BASE_RATING),
-    ELO_CONFIG.MIN_RATING,
-    ELO_CONFIG.MAX_RATING,
-  );
-  const raw = 2.5 + (r - ELO_CONFIG.BASE_RATING) / ELO_CONFIG.RATING_PER_LEVEL;
-  return round2(clampNumber(raw, ELO_CONFIG.LEVEL_MIN, ELO_CONFIG.LEVEL_MAX));
+  return interpolateByRating(rating);
 }
 
 export function getBaseEloByLevel(level) {

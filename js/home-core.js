@@ -1,4 +1,4 @@
-﻿/* Home V2 - Clean and Real Player Names */
+/* Home V2 - Clean and Real Player Names */
 import { db, subscribeCol, getDocument } from "./firebase-service.js";
 import {
   collection,
@@ -88,34 +88,6 @@ let activeProposalId = null;
 let activeProposalMeta = null;
 let proposalInlineMode = false;
 let clubFeedItems = [];
-
-function userCanOpenCompetitiveHome(userDoc = null) {
-  if (!userDoc || typeof userDoc !== "object") return false;
-  return userDoc.rol === "Admin" || userDoc.status === "approved" || userDoc.aprobado === true;
-}
-
-function renderPendingApprovalState() {
-  const nextMatchCard = document.getElementById("next-match-card");
-  const matchesGrid = document.getElementById("matches-list");
-  const heroTitle = document.getElementById("welcome-title");
-  const heroSubtitle = document.getElementById("welcome-subtitle");
-
-  if (heroTitle) heroTitle.textContent = "Cuenta pendiente de aprobación";
-  if (heroSubtitle) heroSubtitle.textContent = "Tu perfil existe, pero todavía no tiene acceso completo al club.";
-
-  if (nextMatchCard) {
-    nextMatchCard.innerHTML = `
-      <div class="hv2-empty-state">
-        <i class="fas fa-user-clock"></i>
-        <h3>Esperando validación</h3>
-        <p>Cuando un admin apruebe tu cuenta podrás ver partidos, eventos y el resto del contenido.</p>
-      </div>
-    `;
-  }
-
-  if (matchesGrid) matchesGrid.innerHTML = "";
-  completeHomeEntryOverlay();
-}
 
 // Limpieza de overlays heredados "event-day-alert"
 function purgeEventDayAlerts() {
@@ -368,12 +340,6 @@ document.addEventListener("DOMContentLoaded", () => {
       cleanup();
       currentUser = user;
       currentUserData = userDoc || {};
-      if (!userCanOpenCompetitiveHome(currentUserData)) {
-        await injectHeader(currentUserData);
-        injectNavbar("home");
-        renderPendingApprovalState();
-        return;
-      }
       currentUserData.computedStreak = await syncComputedStreakForUser(user.uid, currentUserData, { maxLogs: 60 });
       seedIdentityCache([{ uid: user.uid, ...currentUserData }]);
       if (showHomeWelcome) {
@@ -1958,7 +1924,7 @@ window.setHomeEventStandingsGroup = (eventId, groupKey = "") => {
 export function fixHomeCopyEncoding() {
   document.querySelectorAll(".hv2-collapsible-summary span").forEach((el) => {
     const text = String(el.textContent || "");
-    if (/Ultimos Resultados|Últimos Resultados/i.test(text)) {
+    if (/Ultimos Resultados|Ãšltimos Resultados/i.test(text)) {
       el.innerHTML = `<i class="fas fa-flag-checkered"></i> Últimos Resultados`;
     }
     if (/Mas opciones|Mas del Club/i.test(text)) {

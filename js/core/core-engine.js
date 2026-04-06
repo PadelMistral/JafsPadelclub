@@ -64,6 +64,7 @@ export function observeCoreSession({ onReady, onSignedOut } = {}) {
         initializedAt: Date.now(),
       });
       if (typeof onSignedOut === "function") onSignedOut();
+      cleanupAutoNotifications();
       return;
     }
     const userDoc = await getDocument("usuarios", user.uid);
@@ -74,6 +75,7 @@ export function observeCoreSession({ onReady, onSignedOut } = {}) {
       initializedAt: coreState.initializedAt || Date.now(),
     });
     if (typeof onReady === "function") onReady({ user, userDoc });
+    initAutoNotifications(user.uid).catch(() => {});
   });
 }
 

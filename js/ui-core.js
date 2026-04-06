@@ -1,28 +1,46 @@
-// ui-core.js - Unified Application Guard & Portal Management (v2.0)
-import { auth, observerAuth as firebaseObserverAuth, getDocument, subscribeCol, db, getDocsSafe } from './firebase-service.js';
-import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js';
 import { logError, logInfo, logWarn } from './core/app-logger.js';
+import { AudioManager } from './modules/audio-manager.js';
 
-const PUBLIC_PAGES = ['index.html', 'registro.html'];
+const PUBLIC_PAGES = ['index.html', 'registro.html', 'terms.html', 'privacy.html', 'offline.html'];
 let onlineNexusCurrentUid = null;
 let onlineNexusViewerIsAdmin = false;
 let onlineNexusRoleResolvedFor = null;
-const observeAuth = firebaseObserverAuth || ((callback) => onAuthStateChanged(auth, callback));
-function observerAuth(callback) {
-    return observeAuth(callback);
-}
-if (typeof window !== 'undefined') {
-    window.observeAuth = observeAuth;
-    window.observerAuth = observerAuth;
-}
-if (typeof globalThis !== 'undefined') {
-    globalThis.observeAuth = observeAuth;
-    globalThis.observerAuth = observerAuth;
-}
 
-function hasApprovedAccess(userData = null) {
-    if (!userData || typeof userData !== 'object') return false;
-    return userData.rol === 'Admin' || userData.status === 'approved' || userData.aprobado === true;
+function ensureRuntimePolishStyles() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('runtime-polish-style')) return;
+    const style = document.createElement('style');
+    style.id = 'runtime-polish-style';
+    style.textContent = `
+      .page-content, .profile-page, .admin-page-shell { width: min(100%, 1460px); margin-inline: auto; }
+      .card, .card-premium-v7, .settings-card, .history-card-premium, .ai-insight-card, .stat-card-v9, .nexus-item-v9, .kpi-card, .online-nexus-item {
+        border-radius: 24px !important;
+        border: 1px solid rgba(255,255,255,0.10) !important;
+        background:
+          radial-gradient(circle at top left, rgba(0,212,255,0.12), transparent 32%),
+          linear-gradient(180deg, rgba(10,16,30,0.96), rgba(6,11,22,0.98)) !important;
+        box-shadow: 0 18px 42px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+      }
+      .modal-card {
+        border-radius: 28px !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        background:
+          radial-gradient(circle at top left, rgba(0,212,255,0.14), transparent 30%),
+          linear-gradient(180deg, rgba(10,15,28,0.98), rgba(5,9,18,0.99)) !important;
+        box-shadow: 0 32px 80px rgba(0,0,0,0.56), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+      }
+      .modal-header { padding: 16px 18px 12px !important; }
+      .modal-body { padding: 16px 18px 18px !important; }
+      .toast, .soft-prompt-card {
+        border-radius: 22px !important;
+        box-shadow: 0 22px 52px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+      }
+      @media (max-width: 768px) {
+        .page-content, .profile-page, .admin-page-shell { width: 100%; }
+        .card, .card-premium-v7, .settings-card, .history-card-premium, .ai-insight-card, .stat-card-v9, .nexus-item-v9, .kpi-card { border-radius: 20px !important; }
+      }
+    `;
+    document.head.appendChild(style);
 }
 
 function ensureGlobalBootStyles() {
@@ -117,13 +135,13 @@ function ensureBootLoader() {
         loader = document.createElement('div');
         loader.id = 'app-boot-loader';
         loader.className = 'app-boot-loader';
-        const msgs = ['Sincronizando datos', 'Cargando campo', 'Preparando sesión', 'Conectando...'];
+        const msgs = ['Sincronizando Datos', 'Cargando Campo', 'Preparando Sesión', 'Conectando...'];
         const msg = msgs[Math.floor(Math.random() * msgs.length)];
         loader.innerHTML = `
           <div class="app-boot-core">
             <div style="position:relative; display:flex; align-items:center; justify-content:center;">
               <div class="app-boot-ring"></div>
-              <img class="app-boot-logo" src="./imagenes/Logojafs.png" alt="Padeluminatis">
+              <img class="app-boot-logo" src="./imagenes/Logojafs.png" alt="JafsPadel">
             </div>
             <div class="app-boot-status">${msg}</div>
           </div>
@@ -139,12 +157,21 @@ function hideBootLoader(delay = 120) {
     if (typeof document === 'undefined') return;
     const loader = document.getElementById('app-boot-loader');
     if (!loader) return;
+    
+    // Use a smooth CSS transition
     setTimeout(() => {
-        loader.classList.add('hidden');
+        loader.style.transition = 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+        loader.style.opacity = '0';
+        loader.style.transform = 'scale(1.05)';
         document.body.classList.remove('app-boot-pending');
+        
         setTimeout(() => {
             if (loader?.parentNode) loader.remove();
-        }, 420);
+            // Start subtle entrance animations for cards if they exist
+            document.querySelectorAll('.animate-up').forEach((el, i) => {
+                el.style.animationDelay = `${i * 0.05}s`;
+            });
+        }, 600);
     }, delay);
 }
 
@@ -186,33 +213,38 @@ function initGlobalFeedbackHooks() {
     window.__globalFeedbackHooksBound = true;
 
     let errorHits = 0;
-    const showFriendlyError = () => {
+    const showFriendlyError = (err) => {
         errorHits += 1;
-        showToast('Ups, algo salio mal', 'Intentalo de nuevo en unos segundos.', 'error');
-        if (errorHits >= 3) showErrorBoundary();
+        const msg = typeof err === 'string' ? err : (err?.message || 'Error desconocido');
+        console.error("[CRITICAL UI ERROR]", err);
+        showToast('Ups, algo salio mal', `Detalle: ${msg.slice(0, 50)}...`, 'error');
+        if (errorHits >= 5) showErrorBoundary();
     };
 
     window.addEventListener('unhandledrejection', (event) => {
-        logError('ui_unhandled_rejection', {
-            reason: event?.reason?.message || String(event?.reason || 'unknown'),
-        });
-        showFriendlyError();
+        const reason = event?.reason?.message || String(event?.reason || 'unknown');
+        logError('ui_unhandled_rejection', { reason });
+        showFriendlyError(reason);
     });
 
     window.addEventListener('error', (event) => {
+        const msg = event?.message || 'unknown';
         logError('ui_runtime_error', {
-            message: event?.message || 'unknown',
+            message: msg,
             source: event?.filename || 'n/a',
             line: event?.lineno || 0,
         });
-        showFriendlyError();
+        showFriendlyError(msg);
     });
 
+
     window.addEventListener('offline', () => {
+        AudioManager.play('ERROR', 0.25);
         showToast('Sin conexión', 'Verifica internet para sincronizar datos.', 'warning');
     });
 
     window.addEventListener('online', () => {
+        AudioManager.play('SUCCESS', 0.25);
         showToast('Conexión restablecida', 'Sincronización reanudada.', 'success');
     });
 }
@@ -254,8 +286,21 @@ function safeNavigate(url) {
     const current = (window.location.pathname.split('/').pop() || '').toLowerCase();
     const target = String(url || '').split('?')[0].toLowerCase();
     if (!target || current === target) return;
+    
     window.__appRedirectLock = true;
-    window.location.replace(url);
+    AudioManager.play('TRANSITION', 0.2);
+    
+    // Simple transition overlay to avoid white flash
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#020617;opacity:0;transition:opacity 0.3s ease;pointer-events:none;';
+    document.body.appendChild(overlay);
+    
+    requestAnimationFrame(() => {
+        overlay.style.opacity = '1';
+        setTimeout(() => {
+            window.location.replace(url);
+        }, 300);
+    });
 }
 
 function toLastSeenDate(value) {
@@ -503,21 +548,28 @@ export function initAppUI(activePageName) {
         window.__appUIInitPath = currentPath;
     }
 
-    const homeOverlayBootActive = Boolean(document.getElementById('home-entry-overlay'));
-
     initGlobalFeedbackHooks();
+    ensureRuntimePolishStyles();
     ensureGlobalBackgroundLayer();
     ensureErrorBoundaryLayer();
-    if (!homeOverlayBootActive) {
-        ensureBootLoader();
+    ensureBootLoader();
+    const nativePlatform = typeof window !== 'undefined' && window.Capacitor?.getPlatform?.();
+    const isNativeApp = typeof window !== 'undefined' && Boolean(window.Capacitor?.isNativePlatform?.() || nativePlatform === 'android' || nativePlatform === 'ios');
+    if (typeof document !== 'undefined') {
+        document.body.classList.toggle('native-app-shell', isNativeApp);
+        document.documentElement.classList.toggle('native-app-shell', isNativeApp);
+        if (isNativeApp) {
+            document.documentElement.style.setProperty('--native-app-top-pad', 'max(env(safe-area-inset-top, 0px), 8px)');
+            document.documentElement.style.setProperty('--native-app-bottom-pad', 'max(env(safe-area-inset-bottom, 0px), 10px)');
+        }
     }
     if (typeof window !== 'undefined' && !window.__globalGalaxyBooted) {
         window.__globalGalaxyBooted = true;
-        import('./modules/galaxy-bg.js?v=6.5')
+        import('./modules/galaxy-bg.js')
             .then((m) => m?.initGalaxyBackground?.())
             .catch(() => {});
     }
-    if (!homeOverlayBootActive && typeof window !== 'undefined' && !window.__bootFallbackTimerSet) {
+    if (typeof window !== 'undefined' && !window.__bootFallbackTimerSet) {
         window.__bootFallbackTimerSet = true;
         setTimeout(() => hideBootLoader(0), 5000);
     }
@@ -544,10 +596,8 @@ export function initAppUI(activePageName) {
     ensureStylesheetAsLast('./css/ux-enhance.css', 'ux-enhance.css');
     ensureStylesheetAsLast('./css/padel-fusion.css', 'padel-fusion.css');
 
-    const isNativePlatform = !!window.Capacitor?.isNativePlatform?.();
-
-    // Register Service Worker for PWA + automatic updates
-    if (!isNativePlatform && 'serviceWorker' in navigator && !window.__swRegisterBound) {
+    // Register Service Worker for PWA + automatic updates only on web.
+    if (!isNativeApp && 'serviceWorker' in navigator && !window.__swRegisterBound) {
         window.__swRegisterBound = true;
 
         const registerSW = () => {
@@ -555,7 +605,7 @@ export function initAppUI(activePageName) {
             const isLocal = host === 'localhost' || host === '127.0.0.1';
             const base = getAppBase();
             const candidates = [
-                { swPath: `${base}OneSignalSDKWorker.js`, swScope: base }
+                { swPath: `${base}sw.js`, swScope: base }
             ];
 
             let attempt = Promise.reject(new Error('sw-init'));
@@ -605,68 +655,57 @@ export function initAppUI(activePageName) {
     const isPublic = PUBLIC_PAGES.some(p => path.includes(p)) || path.endsWith('/') || path === '';
 
     // Only inject UI in PRIVATE pages if not already present
-    if (!isPublic && !homeOverlayBootActive) {
-        // Smooth reveal instead of harsh opacity swap (prevents flicker)
-        document.body.style.transition = 'opacity 0.35s ease';
-        document.body.style.opacity = '0';
-        document.body.style.pointerEvents = 'none';
+    // If we're not public, we hide the content until auth is ready via the boot-loader
+    if (!isPublic) {
+        // We use the existing boot loader to avoid the harsh "blank screen" flicker
+        document.body.style.opacity = '1'; 
     }
 
-    let authResolved = false;
-    // Safety net: if auth never resolves, at least render the shell
-    if (!isPublic && !homeOverlayBootActive) {
-        setTimeout(() => {
-            if (!authResolved) {
-                logWarn('auth_resolution_timeout', { path });
-                document.body.style.opacity = '1';
-                document.body.style.pointerEvents = 'auto';
-                hideBootLoader(0);
-            }
-        }, 2000);
-    }
-
-    observeAuth(async (user) => {
-        authResolved = true;
+    observerAuth(async (user) => {
+        if (!window.__authResolvedFlag) window.__authResolvedFlag = false;
+        window.__authResolvedFlag = true;
         logInfo('auth_state_changed', { hasUser: !!user, path });
 
         if (user) {
+            initOnlineNexusBindings(user.uid);
             try {
                 const { initPushNotifications } = await import('./modules/push-notifications.js');
                 initPushNotifications(user.uid).catch(() => {});
             } catch (_) {}
-            if (!homeOverlayBootActive) {
-                document.body.style.opacity = '1';
-                document.body.style.pointerEvents = 'auto';
-                hideBootLoader();
-            }
+            document.body.style.opacity = '1';
+            document.body.style.pointerEvents = 'auto';
+            hideBootLoader();
             // Logged in user on index/login -> Redirect to Home
             if (isPublic && !path.includes('registro.html') && !path.includes('recuperar.html') && !path.includes('terms.html')) {
                 logInfo('redirect_home_logged_in', { path });
+                try {
+                    if (path.includes('index.html') || path === '/' || path.endsWith('/')) {
+                        sessionStorage.setItem('show_home_welcome', '1');
+                    }
+                } catch (_) {}
                 safeNavigate('home.html');
                 return;
             }
             
             // Fill data
             try {
-                const { injectHeader, injectNavbar, updateHeader } = await import('./modules/ui-loader.js?v=6.5');
+                const { injectHeader, injectNavbar, updateHeader } = await import('./modules/ui-loader.js');
                 const userData = await getDocument("usuarios", user.uid);
                 
                 // Always inject for private pages
                 if (!isPublic) {
-                    injectHeader(userData);
-                    injectNavbar(activePageName || 'home');
+                    await injectHeader(userData);
+                    await injectNavbar(activePageName || 'home');
                 }
 
-                if (userData && hasApprovedAccess(userData)) {
-                    initOnlineNexusBindings(user.uid);
+
+                if (userData) {
                     updateHeader(userData);
                     listenToGlobalNotifs(user.uid);
                 }
             } catch (e) {
                 logError('load_user_data_failed', { reason: e?.message || 'unknown' });
-                if (!homeOverlayBootActive) {
-                    hideBootLoader();
-                }
+                hideBootLoader();
             }
         } else {
             onlineNexusCurrentUid = null;
@@ -677,14 +716,12 @@ export function initAppUI(activePageName) {
                 logInfo('redirect_login_guest', { path });
                 safeNavigate('index.html');
             } else {
-                if (!homeOverlayBootActive) {
-                    hideBootLoader();
-                }
+                hideBootLoader();
             }
         }
     });
 
-    if (!homeOverlayBootActive && isPublic && typeof window !== 'undefined') {
+    if (isPublic && typeof window !== 'undefined') {
         const done = () => hideBootLoader(60);
         if (document.readyState === 'complete') done();
         else window.addEventListener('load', done, { once: true });
@@ -734,12 +771,24 @@ function ensureToastContainerStyles(container) {
     const needsFallback = styles.position === 'static' || Number(styles.zIndex || 0) < 1000;
     if (!needsFallback) return;
 
-    container.style.position = 'fixed';
-    container.style.top = 'calc(72px + env(safe-area-inset-top, 0px))';
-    container.style.right = '12px';
-    container.style.left = window.innerWidth <= 640 ? '12px' : 'auto';
-    container.style.maxWidth = window.innerWidth <= 640 ? 'none' : '360px';
-    container.style.zIndex = '99999';
+    if (window.innerWidth <= 640) {
+        // Mobile positioning: floating top stack
+        container.style.position = 'fixed';
+        container.style.top = 'calc(72px + env(safe-area-inset-top, 0px))';
+        container.style.bottom = 'auto';
+        container.style.left = '16px';
+        container.style.right = '16px';
+        container.style.maxWidth = 'none';
+        container.style.zIndex = '999999';
+    } else {
+        // Desktop positioning: Top Right
+        container.style.position = 'fixed';
+        container.style.top = 'calc(72px + env(safe-area-inset-top, 0px))';
+        container.style.right = '12px';
+        container.style.left = 'auto';
+        container.style.maxWidth = '360px';
+        container.style.zIndex = '999999';
+    }
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
     container.style.gap = '10px';
@@ -804,6 +853,10 @@ export function showToast(title, body, type = 'info') {
     let normalizedTitle = typeof title === 'string' ? title.trim() : '';
     let normalizedBody = typeof body === 'string' ? body.trim() : '';
     let normalizedType = typeof type === 'string' ? type.trim().toLowerCase() : 'info';
+ 
+    if (normalizedType === 'error') AudioManager.play('ERROR', 0.4);
+    else if (normalizedType === 'success') AudioManager.play('SUCCESS', 0.4);
+    else AudioManager.play('NOTIF', 0.3);
 
     // Backward compatibility:
     // showToast("Mensaje", "success")
@@ -956,7 +1009,3 @@ export function showSidePreferenceModal() {
 if (typeof window !== 'undefined') {
     window.showSidePreferenceModal = showSidePreferenceModal;
 }
-
-
-
-
