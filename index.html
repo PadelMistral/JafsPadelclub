@@ -6,8 +6,8 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#020617">
-    <title>Acceso | JafsPadel</title>
-    <meta name="description" content="Accede a JafsPadel y gestiona tus partidos de forma simple">
+    <title>Acceso | Padeluminatis Pro</title>
+    <meta name="description" content="Accede al circuito Padeluminatis">
     <link rel="manifest" href="./manifest.json">
     <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -25,7 +25,7 @@
             <div class="loader-visual">
                 <div class="loader-ring"></div>
                 <div class="loader-ring inner"></div>
-                    <img src="./imagenes/Logojafs.png" class="loader-logo" alt="JafsPadel">
+                <img src="./imagenes/Logojafs.png" class="loader-logo" alt="Padeluminatis">
             </div>
             <div class="loader-text-group">
                 <div id="loader-status" class="loader-status">Iniciando Sincronización</div>
@@ -42,7 +42,7 @@
             <div class="auth-card-glow"></div>
             <div class="auth-header">
                 <div class="auth-logo-box">
-                <img src="./imagenes/Logojafs.png" class="auth-logo" alt="JafsPadel">
+                    <img src="./imagenes/Logojafs.png" class="auth-logo" alt="Padeluminatis">
                 </div>
                 <h1 class="auth-title">ACCESO</h1>
                 <p class="auth-subtitle">Sincroniza tu ficha</p>
@@ -69,42 +69,25 @@
                 </button>
             </form>
 
+            <div class="auth-divider">
+                <span>o</span>
+            </div>
+
+            <button type="button" id="googleLogin" class="btn btn-ghost w-full">
+                <i class="fab fa-google"></i> Continuar con Google
+            </button>
 
             <div class="auth-footer">
+                <button type="button" id="openInstallModal" class="auth-install-trigger">
+                    <i class="fas fa-mobile-screen-button"></i>
+                    Instalar app y avisos
+                </button>
                 <a href="recuperar.html" class="auth-link">¿Olvidaste tu contraseña?</a>
                 <div class="auth-sep"></div>
                 <a href="registro.html" class="auth-link">Crear nuevo usuario</a>
             </div>
-
         </div>
     </main>
-
-    <div id="app-download-modal" class="app-download-modal" aria-hidden="true">
-        <div class="app-download-card">
-            <div class="app-hero-bg">
-                <div class="app-hero-particles"></div>
-                <img src="./imagenes/Logojafs.png" alt="Logo" class="app-hero-icon">
-            </div>
-            <div class="app-content">
-                <span class="app-badge">Disponible para Android</span>
-                <h3 class="app-title" id="app-download-label">INSTALAR APP OFICIAL</h3>
-                <p class="app-desc" id="app-download-copy">Disfruta de la mejor experiencia Padeluminatis con notificaciones nativas, mayor velocidad y acceso total.</p>
-                
-                <div class="app-features">
-                    <div class="app-feature-item"><i class="fas fa-bolt"></i> Máxima fluidez</div>
-                    <div class="app-feature-item"><i class="fas fa-bell"></i> Push nativas</div>
-                    <div class="app-feature-item"><i class="fas fa-shield-halved"></i> Acceso seguro</div>
-                    <div class="app-feature-item"><i class="fas fa-satellite-dish"></i> Live Updates</div>
-                </div>
-
-                <a href="https://github.com/TU-USUARIO/JafsPadel/releases/latest/download/app-debug.apk" class="app-btn-download" id="app-download-link">
-                    <i class="fas fa-download mr-2"></i> Descargar APK
-                </a>
-
-                <button class="app-btn-later" id="app-download-later">Quizás más tarde</button>
-            </div>
-        </div>
-    </div>
 
     <style>
         .master-loader {
@@ -274,13 +257,11 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            margin: 15px auto;
-            color: rgba(255, 255, 255, 0.3);
-            font-size: 0.65rem;
+            margin: 20px 0;
+            color: rgba(255, 255, 255, 0.35);
+            font-size: 0.7rem;
             text-transform: uppercase;
             letter-spacing: 2px;
-            width: 100%;
-            max-width: 280px;
         }
 
         .auth-divider::before,
@@ -288,242 +269,53 @@
             content: "";
             flex: 1;
             height: 1px;
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.1);
         }
 
         .btn-ghost {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             color: #fff;
-            padding: 14px;
-            font-weight: 700;
-            width: 100%;
-            max-width: 300px;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
         }
 
         .auth-footer {
             display: flex;
             flex-direction: column;
             gap: 8px;
-            margin-top: 18px;
-            text-align: center;
-            width: 100%;
-        }
-
-        /* Premium App Modal v2.0 */
-        .app-download-modal {
-            position: fixed;
-            inset: 0;
-            z-index: 20000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            background: rgba(2, 6, 23, 0.88);
-            backdrop-filter: blur(12px);
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .app-download-modal.is-open {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .app-download-card {
-            position: relative;
-            width: 100%;
-            max-width: 440px;
-            background: 
-                radial-gradient(circle at top left, rgba(198, 255, 0, 0.08), transparent 40%),
-                linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(6, 10, 22, 0.99));
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 32px;
-            overflow: hidden;
-            box-shadow: 0 42px 100px rgba(0, 0, 0, 0.6);
-            transform: translateY(30px) scale(0.95);
-            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-
-        .app-download-modal.is-open .app-download-card {
-            transform: translateY(0) scale(1);
-        }
-
-        .app-hero-bg {
-            height: 140px;
-            background: linear-gradient(135deg, #0ea5e9, #c6ff00);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-        }
-
-        .app-hero-icon {
-            width: 84px;
-            height: 84px;
-            background: #fff;
-            border-radius: 22px;
-            padding: 12px;
-            box-shadow: 0 20px 48px rgba(0, 212, 255, 0.3);
-            z-index: 2;
-        }
-
-        .app-hero-particles {
-            position: absolute;
-            inset: 0;
-            overflow: hidden;
-            opacity: 0.3;
-        }
-
-        .app-content {
-            padding: 32px 28px;
+            margin-top: 20px;
             text-align: center;
         }
 
-        .app-badge {
-            display: inline-block;
-            background: rgba(198, 255, 0, 0.15);
-            color: #c6ff00;
-            padding: 6px 14px;
-            border-radius: 99px;
-            font-size: 10px;
-            font-weight: 900;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
-            border: 1px solid rgba(198, 255, 0, 0.25);
-            margin-bottom: 16px;
-        }
-
-        .app-title {
-            color: #fff;
-            font-size: 24px;
-            font-weight: 950;
-            margin: 0 0 12px;
-            letter-spacing: -0.5px;
-            line-height: 1.1;
-        }
-
-        .app-desc {
-            color: rgba(255, 255, 255, 0.65);
-            font-size: 14px;
-            font-weight: 600;
-            line-height: 1.5;
-            margin-bottom: 28px;
-        }
-
-        .app-features {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 32px;
-            text-align: left;
-        }
-
-        .app-feature-item {
-            display: flex;
+        .auth-install-trigger {
+            display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 10px;
-            color: rgba(255, 255, 255, 0.85);
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 0.2px;
-        }
-
-        .app-feature-item i {
-            color: #c6ff00;
-            font-size: 10px;
-            width: 18px;
-            height: 18px;
-            background: rgba(198, 255, 0, 0.1);
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .app-btn-download {
-            background: linear-gradient(90deg, #c6ff00, #3cf0ff);
-            color: #020617;
-            padding: 18px 24px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 950;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            text-decoration: none;
-            display: block;
             width: 100%;
-            box-shadow: 0 16px 32px rgba(198, 255, 0, 0.25);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-            margin-bottom: 16px;
-        }
-
-        .app-btn-download:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 24px 48px rgba(198, 255, 0, 0.35);
-        }
-
-        .app-btn-later {
-            color: rgba(255, 255, 255, 0.3);
-            background: transparent;
-            border: 0;
-            font-size: 11px;
+            min-height: 52px;
+            border-radius: 18px;
+            border: 1px solid rgba(198, 255, 0, 0.35);
+            background: linear-gradient(135deg, rgba(198, 255, 0, 0.16), rgba(0, 212, 255, 0.12));
+            color: #f8fafc;
+            font-size: 0.82rem;
             font-weight: 800;
+            letter-spacing: 1.4px;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            cursor: pointer;
-            transition: color 0.2s ease;
+            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.22);
+            transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease;
         }
 
-        .app-btn-later:hover {
-            color: rgba(255, 255, 255, 0.6);
-        }
-
-        @keyframes appDownloadFloat {
-            0%, 100% {
-                transform: translateY(0);
-            }
-
-            50% {
-                transform: translateY(-2px);
-            }
-        }
-
-        @keyframes appDownloadShine {
-            from {
-                transform: translateX(-120%);
-            }
-
-            to {
-                transform: translateX(130%);
-            }
-        }
-
-        @keyframes downloadModalIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px) scale(0.97);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
+        .auth-install-trigger:hover,
+        .auth-install-trigger:focus-visible {
+            transform: translateY(-1px);
+            border-color: rgba(198, 255, 0, 0.62);
+            background: linear-gradient(135deg, rgba(198, 255, 0, 0.22), rgba(0, 212, 255, 0.18));
+            outline: none;
         }
 
         .auth-sep {
             height: 1px;
-            width: 40px;
-            margin: 4px auto;
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.05);
         }
 
         .auth-transitioning .auth-screen {
@@ -603,74 +395,213 @@
                 opacity: 0;
             }
         }
+
+        .install-modal-card {
+            width: min(92vw, 420px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: linear-gradient(180deg, rgba(5, 10, 24, 0.96), rgba(10, 18, 38, 0.92));
+            box-shadow: 0 28px 70px rgba(0, 0, 0, 0.46);
+        }
+
+        .install-modal-header {
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .install-modal-kicker {
+            font-size: 0.65rem;
+            font-weight: 800;
+            letter-spacing: 2.6px;
+            text-transform: uppercase;
+            color: rgba(198, 255, 0, 0.78);
+            margin-bottom: 6px;
+        }
+
+        .install-modal-title {
+            line-height: 1.05;
+        }
+
+        .install-modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .install-modal-summary {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.82);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .install-status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .install-status-card {
+            padding: 14px;
+            border-radius: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .install-status-label {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 1.8px;
+            color: rgba(255, 255, 255, 0.48);
+        }
+
+        .install-status-card strong {
+            color: #fff;
+            font-size: 0.88rem;
+            line-height: 1.25;
+        }
+
+        .install-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .install-step {
+            display: grid;
+            grid-template-columns: 34px 1fr;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .install-step-num {
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, rgba(198, 255, 0, 0.22), rgba(0, 212, 255, 0.2));
+            border: 1px solid rgba(198, 255, 0, 0.24);
+            color: #f8fafc;
+            font-weight: 900;
+        }
+
+        .install-step strong {
+            display: block;
+            color: #fff;
+            font-size: 0.84rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+
+        .install-step p {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.68);
+            font-size: 0.8rem;
+            line-height: 1.45;
+        }
+
+        .install-action-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .install-apk-link,
+        .install-push-btn {
+            min-height: 50px;
+            justify-content: center;
+        }
+
+        .install-modal-hint {
+            min-height: 18px;
+            margin: 0;
+            color: rgba(255, 255, 255, 0.62);
+            font-size: 0.78rem;
+            line-height: 1.45;
+        }
+
+        @media (max-width: 420px) {
+            .install-status-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
+
+    <div id="pwa-install-modal" class="modal-overlay" aria-hidden="true" data-apk-url="https://raw.githubusercontent.com/PadelMistral/JafsPadelclub/main/JafsPadelclub-mobile-release.apk">
+        <div class="modal-card install-modal-card glass-strong animate-up" role="dialog" aria-modal="true" aria-labelledby="install-modal-title">
+            <div class="modal-header install-modal-header">
+                <div>
+                    <div class="install-modal-kicker">Padeluminatis mobile</div>
+                    <h3 id="install-modal-title" class="modal-title install-modal-title">Instalar y activar avisos</h3>
+                </div>
+                <button type="button" class="modal-close" id="closeInstallModal" aria-label="Cerrar">&times;</button>
+            </div>
+            <div class="modal-body install-modal-body">
+                <p id="installModalSummary" class="install-modal-summary">
+                    Instala la app en tu móvil, descarga la APK Android o revisa si los avisos en segundo plano están listos.
+                </p>
+                <div class="install-status-grid">
+                    <article class="install-status-card">
+                        <span class="install-status-label">Modo app</span>
+                        <strong id="installModeStatus">Comprobando...</strong>
+                    </article>
+                    <article class="install-status-card">
+                        <span class="install-status-label">Avisos</span>
+                        <strong id="installPushStatus">Comprobando...</strong>
+                    </article>
+                </div>
+                <div class="install-steps">
+                    <div class="install-step">
+                        <span class="install-step-num">1</span>
+                        <div>
+                            <strong>Instalar PWA</strong>
+                            <p>Usa la instalación rápida del navegador para que se comporte como app.</p>
+                        </div>
+                    </div>
+                    <div class="install-step">
+                        <span class="install-step-num">2</span>
+                        <div>
+                            <strong>Descargar APK Android</strong>
+                            <p>Si prefieres instalación nativa, baja la APK release preparada para Android.</p>
+                        </div>
+                    </div>
+                    <div class="install-step">
+                        <span class="install-step-num">3</span>
+                        <div>
+                            <strong>Activar notificaciones</strong>
+                            <p>Asegúrate de permitir avisos para recibir novedades aunque no tengas la app delante.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="install-action-stack">
+                    <button type="button" id="installPwaBtn" class="btn btn-primary btn-lg w-full">
+                        <i class="fas fa-download"></i>
+                        Instalar app web
+                    </button>
+                    <a id="downloadApkBtn" class="btn btn-ghost w-full install-apk-link" href="https://raw.githubusercontent.com/PadelMistral/JafsPadelclub/main/JafsPadelclub-mobile-release.apk" download="JafsPadelclub-mobile-release.apk">
+                        <i class="fab fa-android"></i>
+                        Descargar APK Android
+                    </a>
+                    <button type="button" id="enablePushBtn" class="btn btn-ghost w-full install-push-btn">
+                        <i class="fas fa-bell"></i>
+                        Revisar y activar avisos
+                    </button>
+                </div>
+                <p id="installModalHint" class="install-modal-hint"></p>
+            </div>
+        </div>
+    </div>
 
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         import { initThemeSystem } from './js/modules/theme-manager.js';
-        import { initPWAShell } from './js/modules/pwa-shell.js';
         initThemeSystem();
         initGalaxyBackground();
-        initPWAShell('acceso');
-
-        const ua = navigator.userAgent || '';
-        const isIOS = /iPad|iPhone|iPod/i.test(ua);
-        const isAndroid = /Android/i.test(ua);
-        const isNativeApp = Boolean(window.Capacitor?.isNativePlatform?.() || ['android', 'ios'].includes(window.Capacitor?.getPlatform?.() || ''));
-        const downloadModal = document.getElementById('app-download-modal');
-        const downloadLink = document.getElementById('app-download-link');
-        const downloadLabel = document.getElementById('app-download-label');
-        const downloadCopy = document.getElementById('app-download-copy');
-        const helpButton = document.getElementById('app-download-help');
-        const closeDownloadModal = document.getElementById('app-download-close');
-        const closeDownloadLater = document.getElementById('app-download-later');
-        const modalDismissKey = 'padeluminatis_download_modal_closed_session';
-
-        const openDownloadModal = () => {
-            if (!downloadModal) return;
-            downloadModal.classList.add('is-open');
-            downloadModal.setAttribute('aria-hidden', 'false');
-        };
-
-        const hideDownloadModal = () => {
-            if (!downloadModal) return;
-            downloadModal.classList.remove('is-open');
-            downloadModal.setAttribute('aria-hidden', 'true');
-            try { sessionStorage.setItem(modalDismissKey, '1'); } catch (_) {}
-        };
-
-        if (isNativeApp && downloadModal) {
-            downloadModal.remove();
-        }
-
-        const showInstallGuide = () => {
-            if (isIOS) {
-                alert('En iPhone no se puede instalar una APK. Usa Compartir > Añadir a pantalla de inicio para la versión web instalada.');
-                return;
-            }
-            alert('Pulsa Descargar APK para bajar la aplicación oficial.');
-        };
-
-        if (isIOS) {
-            if (downloadLabel) downloadLabel.textContent = 'USAR EN IPHONE';
-            if (downloadCopy) downloadCopy.textContent = 'En iPhone instalamos la versión PWA (Compartir > Añadir a pantalla de inicio).';
-            downloadLink?.removeAttribute('download');
-            downloadLink?.setAttribute('href', '#');
-            downloadLink?.addEventListener('click', (event) => {
-                event.preventDefault();
-                showInstallGuide();
-            });
-        }
-
-        closeDownloadLater?.addEventListener('click', hideDownloadModal);
-
-        if (!isNativeApp) {
-            let dismissed = false;
-            try { dismissed = sessionStorage.getItem(modalDismissKey) === '1'; } catch (_) {}
-            if (!dismissed) {
-                window.setTimeout(openDownloadModal, 1500);
-            }
-        }
     </script>
     <script type="module" src="./js/login.js"></script>
 </body>

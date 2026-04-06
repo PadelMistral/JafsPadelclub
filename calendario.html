@@ -6,7 +6,7 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#020617">
-    <title>Calendario | JafsPadel</title>
+    <title>Calendario | Padeluminatis Pro</title>
     <meta name="description" content="Reserva pistas y organiza tus partidos">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -78,43 +78,33 @@
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot abierta"></span>
-                    <span class="label">ABIERTA OTRO</span>
+                    <span class="label">ABIERTA</span>
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot cerrada"></span>
-                    <span class="label">CERRADA OTRO</span>
+                    <span class="label">CERRADA</span>
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot propia"></span>
-                    <span class="label">ABIERTA MIA</span>
+                    <span class="label">MIA</span>
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot apoing-other"></span>
-                    <span class="label">APOING OTRO</span>
+                    <span class="label">APOING OCUPADA</span>
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot apoing-mine"></span>
-                    <span class="label">APOING MIA</span>
+                    <span class="label">APOING TUYA</span>
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot jugado"></span>
-                    <span class="label">JUGADO / EVENTO</span>
+                    <span class="label">JUGADO</span>
                 </div>
             </div>
 
             <div class="cal-hint-v5 text-center mt-3 opacity-70">
                 <i class="fas fa-circle-info mr-1"></i> Toca una celda para reservar o ver detalles
             </div>
-
-            <section class="calendar-history-strip animate-fade-in" style="animation-delay:0.25s;">
-                <div class="calendar-history-head">
-                    <h3>Resultados recientes</h3>
-                    <span>Lo ultimo cerrado en tu app</span>
-                </div>
-                <div id="calendar-history-strip" class="calendar-history-cards">
-                    <div class="calendar-history-empty">Cargando resultados...</div>
-                </div>
-            </section>
 
         </div>
     </main>
@@ -125,9 +115,9 @@
             <div class="modal-header">
                 <div class="flex-col">
                     <h3 class="modal-title text-accent font-black italic uppercase tracking-widest" id="modal-titulo">
-                        Partido</h3>
+                        MISION TACTICA</h3>
                     <span class="text-[10px] text-muted font-black uppercase tracking-widest opacity-60">Sincronizacion
-                        de calendario</span>
+                        de Campo</span>
                 </div>
                 <button class="close-btn"
                     onclick="document.getElementById('modal-match').classList.remove('active')">&times;</button>
@@ -145,10 +135,6 @@
         import { initThemeSystem } from './js/modules/theme-manager.js';
         initThemeSystem();
         initGalaxyBackground();
-    </script>
-    <script type="module">
-        import { initVecinaChat } from './js/modules/vecina-chat.js';
-        try { initVecinaChat(); } catch (e) { console.warn('Vecina chat init failed', e); }
     </script>
 </body>
 

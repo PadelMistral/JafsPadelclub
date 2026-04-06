@@ -7,7 +7,7 @@ import {
   where,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI } from "./ui-core.js";
-import { injectHeader, injectNavbar, updateHeader } from "./modules/ui-loader.js";
+import { injectHeader, injectNavbar } from "./modules/ui-loader.js";
 import { levelFromRating } from "./config/elo-system.js";
 import { renderMatchDetail } from "./match-service.js";
 import { getCoreLevelProgressState } from "./core/core-engine.js";
@@ -71,66 +71,11 @@ async function getMatchById(matchId) {
   return match;
 }
 
-function getTierClass(rank) {
-  if (rank <= 3) return "";
-  if (rank <= 10) return "tier-10";
-  if (rank <= 20) return "tier-20";
-  if (rank <= 30) return "tier-30";
-  if (rank <= 50) return "tier-50";
-  return "tier-low";
-}
-
-function getTierStyle(rank, total) {
-  if (!Number.isFinite(rank) || rank <= 3) return "";
-  let tierSize = 10;
-  let tierIndex = rank - 1;
-  let hueBase = 120;
-  if (rank <= 10) {
-    tierSize = 10;
-    tierIndex = rank - 1;
-    hueBase = 120;
-  } else if (rank <= 20) {
-    tierSize = 10;
-    tierIndex = rank - 11;
-    hueBase = 200;
-  } else if (rank <= 30) {
-    tierSize = 10;
-    tierIndex = rank - 21;
-    hueBase = 270;
-  } else if (rank <= 50) {
-    tierSize = 20;
-    tierIndex = rank - 31;
-    hueBase = 35;
-  } else {
-    tierSize = Math.max(10, total - 50);
-    tierIndex = rank - 51;
-    hueBase = 210;
-  }
-  const t = Math.max(0, Math.min(1, tierIndex / Math.max(1, tierSize - 1)));
-  const sat = rank > 50 ? 40 : 70;
-  const light = rank > 50 ? 55 : 58 + Math.round(10 * (1 - t));
-  const tintOpacity = rank > 50 ? 0.06 : 0.12;
-  const hue = hueBase + Math.round(10 * (1 - t));
-  return `--rank-accent:hsl(${hue} ${sat}% ${light}%); --rank-tint:hsla(${hue} ${sat}% ${light}% / ${tintOpacity});`;
-}
-
 document.addEventListener("DOMContentLoaded", async () => {
   initAppUI("ranking-v3");
   currentUser = auth.currentUser;
-  if (currentUser?.uid) {
-    currentUserData = (await getDocument("usuarios", currentUser.uid)) || {};
-    await injectHeader(currentUserData || {});
-    updateHeader(currentUserData || {});
-  } else {
-    auth.onAuthStateChanged(async (user) => {
-      if (!user?.uid) return;
-      currentUser = user;
-      currentUserData = (await getDocument("usuarios", user.uid)) || {};
-      await injectHeader(currentUserData || {});
-      updateHeader(currentUserData || {});
-      renderTable();
-    });
-  }
+  if (currentUser?.uid) currentUserData = (await getDocument("usuarios", currentUser.uid)) || {};
+  await injectHeader(currentUserData || {});
   injectNavbar("ranking");
   await loadRanking();
 
@@ -205,11 +150,9 @@ function renderTable() {
       else if (rank === 2) rankClass = "rank-silver";
       else if (rank === 3) rankClass = "rank-bronze";
       else if (rank <= 10) rankClass = "rank-elite";
-      const tierClass = getTierClass(rank);
-      const tierStyle = getTierStyle(rank, users.length);
       return `
-        <div class="ranking-card ${rankClass} ${tierClass} ${isMe ? "me" : ""} animate-up"
-             style="animation-delay: ${i * 20}ms; ${tierStyle}"
+        <div class="ranking-card ${rankClass} ${isMe ? "me" : ""} animate-up"
+             style="animation-delay: ${i * 20}ms"
              onclick="window.openRankUserModal('${u.id}')">
           <span class="rank-number-v7 ${rank <= 3 ? "glow" : ""}">${rank}</span>
           ${renderAvatarMarkup(u, "lb-avatar")}
@@ -340,8 +283,6 @@ window.openRankMatchBreakdown = async (logId, matchId, col) => {
       ["Base", detail.base],
       ["Dificultad", detail.dificultad],
       ["Racha", detail.racha],
-      ["Sorpresa", detail.sorpresa],
-      ["Skill", detail.skill],
       ["Sets", detail.sets],
       ["Rendimiento", detail.rendimientoBonus],
       ["Diario", detail.diarioCoach],

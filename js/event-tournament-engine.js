@@ -1,5 +1,6 @@
-// event-tournament-engine.js - Refactored for better name resolution and robustness
-export function hashSeed(input = "") {
+﻿// event-tournament-engine.js
+
+function hashSeed(input = "") {
   let h = 2166136261;
   const str = String(input || "seed");
   for (let i = 0; i < str.length; i += 1) {
@@ -9,7 +10,7 @@ export function hashSeed(input = "") {
   return h >>> 0;
 }
 
-export function seededRandomFactory(seedNum) {
+function seededRandomFactory(seedNum) {
   let x = seedNum || 123456789;
   return () => {
     x = (1664525 * x + 1013904223) >>> 0;
@@ -17,7 +18,7 @@ export function seededRandomFactory(seedNum) {
   };
 }
 
-export function shuffleSeeded(arr = [], seed = "") {
+function shuffleSeeded(arr = [], seed = "") {
   const out = [...arr];
   const rnd = seededRandomFactory(hashSeed(seed));
   for (let i = out.length - 1; i > 0; i -= 1) {
@@ -38,14 +39,10 @@ function getUserDisplayName(p = {}) {
   return p.nombre || p.nombreUsuario || p.displayName || "Jugador";
 }
 
-export function teamNameFromPlayers(players = []) {
-  if (!players || !players.length) return "Equipo pendiente";
+function teamNameFromPlayers(players = []) {
+  if (!players.length) return "TBD";
   if (players.length === 1) return getUserDisplayName(players[0]);
-  const n1 = getUserDisplayName(players[0]);
-  const n2 = getUserDisplayName(players[1]);
-  // Shorten names if they are too long for the card
-  const short = (n) => n.split(" ")[0];
-  return `${short(n1)} / ${short(n2)}`;
+  return `${getUserDisplayName(players[0])} / ${getUserDisplayName(players[1])}`;
 }
 
 function avgLevel(players = []) {
@@ -55,8 +52,8 @@ function avgLevel(players = []) {
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
-export function pairPlayers(entries = [], seed = "") {
-  const normalized = (entries || []).map((e, idx) => ({
+function pairPlayers(entries = [], seed = "") {
+  const normalized = entries.map((e, idx) => ({
     uid: e.uid,
     nombre: e.nombre || "Jugador",
     nivel: Number(e.nivel || 2.5),
@@ -64,82 +61,84 @@ export function pairPlayers(entries = [], seed = "") {
     pairCode: String(e.pairCode || ""),
     _idx: idx,
   }));
-  
   const shuffled = shuffleSeeded(normalized, `${seed}_pair`);
   const pairs = [];
-  const used = new Set();
+  const unmatched = [];
   const locked = new Map();
 
-  // 1. Locked pairs by pairCode
+  // First, build locked/manual pairs by pairCode when provided
   shuffled.forEach((p) => {
-    const key = String(p.pairCode || "").trim();
+    const key = String(p.pairCode || "").trim().toLowerCase();
     if (!key) return;
     const arr = locked.get(key) || [];
     arr.push(p);
     locked.set(key, arr);
   });
 
+  const used = new Set();
   locked.forEach((arr) => {
     while (arr.length >= 2) {
       const a = arr.shift();
       const b = arr.shift();
-      pairs.push([a, b]);
+      if (!a || !b) break;
       used.add(a.uid);
       used.add(b.uid);
+      pairs.push([a, b]);
     }
   });
+  const right = shuffled.filter((p) => p.side === "derecha" && !used.has(p.uid));
+  const left = shuffled.filter((p) => p.side === "reves" && !used.has(p.uid));
+  const flex = shuffled.filter((p) => p.side === "flex" && !used.has(p.uid));
 
-  // 2. Pair by sides
-  const right = shuffled.filter(p => p.side === 'derecha' && !used.has(p.uid));
-  const left = shuffled.filter(p => p.side === 'reves' && !used.has(p.uid));
-  const flex = shuffled.filter(p => p.side === 'flex' && !used.has(p.uid));
+  const pick = (arr) => (arr.length ? arr.shift() : null);
+  const addPair = (a, b) => {
+    if (!a || !b) return;
+    pairs.push([a, b]);
+  };
 
-  const pick = (arr) => arr.shift();
+  while (right.length && left.length) addPair(pick(right), pick(left));
+  while (right.length && flex.length) addPair(pick(right), pick(flex));
+  while (left.length && flex.length) addPair(pick(left), pick(flex));
+  while (flex.length >= 2) addPair(pick(flex), pick(flex));
+  while (right.length >= 2) addPair(pick(right), pick(right));
+  while (left.length >= 2) addPair(pick(left), pick(left));
 
-  while (right.length && left.length) pairs.push([pick(right), pick(left)]);
-  while (right.length && flex.length) pairs.push([pick(right), pick(flex)]);
-  while (left.length && flex.length) pairs.push([pick(left), pick(flex)]);
-  while (flex.length >= 2) pairs.push([pick(flex), pick(flex)]);
-  
-  // Clean up extras
-  const leftovers = [...right, ...left, ...flex];
-  while (leftovers.length >= 2) pairs.push([pick(leftovers), pick(leftovers)]);
-
-  const finalUnmatched = leftovers;
+  unmatched.push(...right, ...left, ...flex);
 
   const teams = pairs.map((p, i) => ({
     id: `T${i + 1}`,
     name: teamNameFromPlayers(p),
     players: p,
-    playerUids: p.map(x => x.uid),
-    avgLevel: Number(avgLevel(p).toFixed(2))
+    playerUids: p.map((x) => x.uid),
+    avgLevel: Number(avgLevel(p).toFixed(2)),
   }));
 
-  return { teams, unmatched: finalUnmatched };
+  return { teams, unmatched };
 }
 
 export function buildEventTeams({ modalidad = "parejas", inscritos = [], seed = "" }) {
-  const players = (inscritos || []).filter(x => x && x.uid);
-  if (modalidad === 'individual') {
-    return {
-      teams: players.map((p, i) => ({
-        id: `T${i+1}`,
-        name: getUserDisplayName(p),
-        players: [p],
-        playerUids: [p.uid],
-        avgLevel: Number(p.nivel || 2.5)
-      })),
-      unmatched: []
-    };
+  const players = (inscritos || []).filter((x) => x?.uid);
+  if (String(modalidad || "parejas") === "individual") {
+    return { teams: buildIndividualTeams(players), unmatched: [] };
   }
-  return pairPlayers(players, seed);
+  return pairPlayers(players, seed || "teams");
+}
+
+function buildIndividualTeams(entries = []) {
+  return entries.map((e, i) => ({
+    id: `T${i + 1}`,
+    name: e.nombre || "Jugador",
+    players: [{ uid: e.uid, nombre: e.nombre || "Jugador", nivel: Number(e.nivel || 2.5), side: normSide(e.sidePreference) }],
+    playerUids: [e.uid],
+    avgLevel: Number(Number(e.nivel || 2.5).toFixed(2)),
+  }));
 }
 
 export function allocateGroups(teams = [], groupCount = 2, seed = "") {
-  const count = Math.max(1, groupCount);
-  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").slice(0, count);
+  const safeCount = Math.max(1, Number(groupCount || 1));
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").slice(0, safeCount);
   const groups = {};
-  letters.forEach(l => groups[l] = []);
+  letters.forEach((l) => { groups[l] = []; });
 
   const shuffled = shuffleSeeded(teams, `${seed}_groups`);
   const steps = [];
@@ -147,109 +146,189 @@ export function allocateGroups(teams = [], groupCount = 2, seed = "") {
   shuffled.forEach((team, idx) => {
     const g = letters[idx % letters.length];
     groups[g].push(team.id);
-    steps.push({ type: 'draw', teamId: team.id, teamName: team.name, group: g, order: idx + 1 });
+    steps.push({ type: "draw", teamId: team.id, teamName: team.name, group: g, order: idx + 1 });
   });
 
   return { groups, steps };
 }
 
-export function generateRoundRobin(teamIds = []) {
-  const matches = [];
-  for (let i = 0; i < teamIds.length; i++) {
-    for (let j = i + 1; j < teamIds.length; j++) {
-      matches.push({ teamAId: teamIds[i], teamBId: teamIds[j] });
-    }
-  }
-  return matches;
-}
-
-export function generateKnockoutTree(teams = [], seed = "", opts = {}) {
-  const doShuffle = opts?.shuffle !== false;
-  const shuffled = doShuffle ? shuffleSeeded(teams, `${seed}_ko`) : [...teams];
-  const size = Math.pow(2, Math.ceil(Math.log2(Math.max(2, shuffled.length))));
-  const padded = [...shuffled];
-  while (padded.length < size) padded.push(null);
-
+export function generateRoundRobin(groupTeamIds = []) {
+  const ids = [...groupTeamIds];
+  if (ids.length < 2) return [];
   const rounds = [];
-  let mCount = size / 2;
-  let rIndex = 1;
-
-  while (mCount >= 1) {
-    const roundMatches = [];
-    for (let i = 0; i < mCount; i++) {
-        roundMatches.push({
-            matchCode: `K_R${rIndex}_M${i+1}`,
-            round: rIndex,
-            phase: 'knockout',
-            slot: i + 1,
-            teamAId: rIndex === 1 ? (padded[i*2]?.id || null) : null,
-            teamBId: rIndex === 1 ? (padded[i*2+1]?.id || null) : null,
-            teamAName: rIndex === 1 ? (padded[i*2]?.name || null) : null,
-            teamBName: rIndex === 1 ? (padded[i*2+1]?.name || null) : null,
-            sourceA: rIndex > 1 ? `K_R${rIndex-1}_M${i*2+1}` : null,
-            sourceB: rIndex > 1 ? `K_R${rIndex-1}_M${i*2+2}` : null
-        });
+  for (let i = 0; i < ids.length; i += 1) {
+    for (let j = i + 1; j < ids.length; j += 1) {
+      rounds.push({ teamAId: ids[i], teamBId: ids[j] });
     }
-    rounds.push(roundMatches);
-    mCount /= 2;
-    rIndex++;
   }
   return rounds;
 }
 
-export function computeGroupTable(matches = [], teams = [], cfg = {}) {
-  const win = cfg.win ?? 3;
-  const draw = cfg.draw ?? 1;
-  const loss = cfg.loss ?? 0;
+function nextPow2(n) {
+  let p = 1;
+  while (p < n) p *= 2;
+  return p;
+}
 
-  const table = new Map(teams.map(t => [t.id, { teamId: t.id, teamName: t.name, pj:0, g:0, e:0, p:0, pts:0, pf:0, pc:0, dif:0 }]));
+export function generateKnockoutTree(teams = [], seed = "") {
+  const shuffled = shuffleSeeded(teams, `${seed}_ko`);
+  const bracketSize = nextPow2(Math.max(2, shuffled.length));
+  const padded = [...shuffled];
+  while (padded.length < bracketSize) padded.push(null);
 
-  matches.filter(m => {
-    const s = String(m.estado || "").toLowerCase();
-    return s === 'jugado' || s === 'finalizado' || s === 'jugada';
-  }).forEach(m => {
-    const a = table.get(m.teamAId);
-    const b = table.get(m.teamBId);
-    if (!a || !b) return;
-
-    a.pj++; b.pj++;
-
-    const rawResult = typeof m.resultado === 'string' ? m.resultado : (m.resultado?.sets || '');
-    // Support formats like "6-4 7-5" or "6/4 7/6" or "6-4, 7-5"
-    const pairs = String(rawResult || '').match(/\d+[\s/-]\d+/g) || [];
-    let gamesA = 0;
-    let gamesB = 0;
-    let setsA = 0;
-    let setsB = 0;
-    pairs.forEach((s) => {
-      const parts = s.split(/[\s/-]/).map(Number);
-      if (parts.length !== 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return;
-      gamesA += parts[0];
-      gamesB += parts[1];
-      if (parts[0] > parts[1]) setsA += 1;
-      else if (parts[1] > parts[0]) setsB += 1;
-    });
-    
-    let winnerTeamId = m.ganadorTeamId || m.winnerTeamId || (m.resultado?.ganador === 1 ? m.teamAId : m.resultado?.ganador === 2 ? m.teamBId : null);
-    if (!winnerTeamId && setsA !== setsB) {
-      winnerTeamId = setsA > setsB ? m.teamAId : m.teamBId;
+  const rounds = [];
+  let matchCount = bracketSize / 2;
+  let r = 1;
+  while (matchCount >= 1) {
+    const row = [];
+    for (let i = 0; i < matchCount; i += 1) {
+      const code = `K_R${r}_M${i + 1}`;
+      row.push({
+        matchCode: code,
+        round: r,
+        phase: "knockout",
+        slot: i + 1,
+        sourceA: r === 1 ? null : `K_R${r - 1}_M${i * 2 + 1}`,
+        sourceB: r === 1 ? null : `K_R${r - 1}_M${i * 2 + 2}`,
+        teamAId: null,
+        teamBId: null,
+      });
     }
+    rounds.push(row);
+    matchCount = matchCount / 2;
+    r += 1;
+  }
 
-
-    if (winnerTeamId === m.teamAId) {
-        a.g++; b.p++; a.pts += win; b.pts += loss;
-    } else if (winnerTeamId === m.teamBId) {
-        b.g++; a.p++; b.pts += win; a.pts += loss;
-    } else {
-        a.e++; b.e++; a.pts += draw; b.pts += draw;
-    }
-    a.pf += gamesA;
-    a.pc += gamesB;
-    b.pf += gamesB;
-    b.pc += gamesA;
-    a.dif = a.pf - a.pc;
-    b.dif = b.pf - b.pc;
+  // Seed first round
+  const first = rounds[0] || [];
+  first.forEach((m, i) => {
+    const a = padded[i * 2] || null;
+    const b = padded[i * 2 + 1] || null;
+    m.teamAId = a?.id || null;
+    m.teamBId = b?.id || null;
   });
 
-  return [...table.values()].sort((x, y) => (y.pts - x.pts) || (y.dif - x.dif) || (y.g - x.g) || (x.p - y.p));
+  return rounds;
+}
+
+function createBracketSkeleton(groups = {}) {
+  const A = groups.A || [];
+  const B = groups.B || [];
+  return {
+    rounds: [
+      [
+        { id: "SF1", phase: "semi", teamARef: { group: "A", pos: 1 }, teamBRef: { group: "B", pos: 2 }, winnerTo: "F1" },
+        { id: "SF2", phase: "semi", teamARef: { group: "B", pos: 1 }, teamBRef: { group: "A", pos: 2 }, winnerTo: "F1" },
+      ],
+      [
+        { id: "F1", phase: "final", teamARef: { from: "SF1" }, teamBRef: { from: "SF2" }, winnerTo: null },
+      ],
+    ],
+    qualifiersPerGroup: 2,
+    groupsUsed: Object.keys(groups),
+    hints: {
+      A1: A[0] || null,
+      A2: A[1] || null,
+      B1: B[0] || null,
+      B2: B[1] || null,
+    },
+  };
+}
+
+function ensureMinimumTeams(teams = []) {
+  if (teams.length < 4) {
+    throw new Error("Se necesitan al menos 4 equipos para generar grupos y eliminatorias.");
+  }
+}
+
+export function runTournamentDraw({ eventId, modalidad, inscritos = [], groupCount = 2, seed = "" }) {
+  const safeSeed = `${eventId || "evento"}_${seed || Date.now()}`;
+  const built = buildEventTeams({ modalidad, inscritos, seed: safeSeed });
+  const teams = built.teams;
+  const unmatched = built.unmatched;
+
+  ensureMinimumTeams(teams);
+  const { groups, steps } = allocateGroups(teams, groupCount, safeSeed);
+  const bracket = createBracketSkeleton(groups);
+
+  const groupMatches = [];
+  Object.entries(groups).forEach(([group, teamIds]) => {
+    const rr = generateRoundRobin(teamIds);
+    rr.forEach((m, idx) => {
+      groupMatches.push({
+        id: `${group}_${idx + 1}`,
+        phase: "group",
+        group,
+        round: idx + 1,
+        teamAId: m.teamAId,
+        teamBId: m.teamBId,
+      });
+    });
+  });
+
+  return {
+    seed: safeSeed,
+    teams,
+    unmatched,
+    groups,
+    drawSteps: steps,
+    bracket,
+    groupMatches,
+  };
+}
+
+export function resolveTeamById(teams = [], id) {
+  return teams.find((t) => t.id === id) || null;
+}
+
+export function computeGroupTable(matches = [], teams = [], pointsCfg = {}) {
+  const pointsWin = Number(pointsCfg.win ?? 3);
+  const pointsDraw = Number(pointsCfg.draw ?? 1);
+  const pointsLoss = Number(pointsCfg.loss ?? 0);
+
+  const teamMap = new Map(teams.map((t) => [t.id, t]));
+  const table = new Map();
+  teams.forEach((t) => {
+    table.set(t.id, {
+      teamId: t.id,
+      teamName: t.name,
+      pj: 0,
+      g: 0,
+      e: 0,
+      p: 0,
+      pts: 0,
+    });
+  });
+
+  matches
+    .filter((m) => (m.phase === "group" || m.phase === "league") && m.estado === "jugado")
+    .forEach((m) => {
+      const a = table.get(m.teamAId);
+      const b = table.get(m.teamBId);
+      if (!a || !b) return;
+
+      a.pj += 1;
+      b.pj += 1;
+
+      if (m.ganadorTeamId === m.teamAId) {
+        a.g += 1;
+        b.p += 1;
+        a.pts += pointsWin;
+        b.pts += pointsLoss;
+      } else if (m.ganadorTeamId === m.teamBId) {
+        b.g += 1;
+        a.p += 1;
+        b.pts += pointsWin;
+        a.pts += pointsLoss;
+      } else {
+        a.e += 1;
+        b.e += 1;
+        a.pts += pointsDraw;
+        b.pts += pointsDraw;
+      }
+    });
+
+  return [...table.values()]
+    .filter((r) => teamMap.has(r.teamId))
+    .sort((x, y) => (y.pts - x.pts) || (y.g - x.g) || (x.p - y.p) || x.teamName.localeCompare(y.teamName));
 }

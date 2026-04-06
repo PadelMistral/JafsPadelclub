@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "40241508403",
+    "firebase_url": "https://padeluminatis-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "padeluminatis",
+    "storage_bucket": "padeluminatis.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:40241508403:android:451281db5fca75cc173346",
+        "android_client_info": {
+          "package_name": "com.jafspadelclub.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC7S0B3McsqgzjGN23B1vrbP2onvDff1ko"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,4 +1,4 @@
-rules_version = '2';
+﻿rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
@@ -24,9 +24,7 @@ service cloud.firestore {
     }
 
     function playersListIsValid(data) {
-      return (data.jugadores is list && data.jugadores.size() == maxPlayers()) ||
-             (data.playerUids is list && data.playerUids.size() == maxPlayers()) ||
-             (data.equipoA is list && data.equipoB is list && data.equipoA.size() == 2 && data.equipoB.size() == 2);
+      return data.jugadores is list && data.jugadores.size() == maxPlayers();
     }
 
     function hasMax4Players(data) {
@@ -34,24 +32,11 @@ service cloud.firestore {
     }
 
     function fullRoster(data) {
-      return (
-        (data.jugadores is list &&
-          data.jugadores.size() == maxPlayers() &&
-          data.jugadores[0] != null &&
-          data.jugadores[1] != null &&
-          data.jugadores[2] != null &&
-          data.jugadores[3] != null) ||
-        (data.playerUids is list &&
-          data.playerUids.size() == maxPlayers() &&
-          data.playerUids[0] != null &&
-          data.playerUids[1] != null &&
-          data.playerUids[2] != null &&
-          data.playerUids[3] != null) ||
-        (data.equipoA is list && data.equipoB is list &&
-          data.equipoA.size() == 2 && data.equipoB.size() == 2 &&
-          data.equipoA[0] != null && data.equipoA[1] != null &&
-          data.equipoB[0] != null && data.equipoB[1] != null)
-      );
+      return playersListIsValid(data) &&
+             data.jugadores[0] != null &&
+             data.jugadores[1] != null &&
+             data.jugadores[2] != null &&
+             data.jugadores[3] != null;
     }
 
     function canReportResultNow(data) {
@@ -71,37 +56,24 @@ service cloud.firestore {
              canReportResultNow(data);
     }
 
-    function isParticipant(data) {
-      return (data.jugadores is list && data.jugadores.hasAny([currentUid()])) ||
-             (data.playerUids is list && data.playerUids.hasAny([currentUid()])) ||
-             (data.equipoA is list && data.equipoA.hasAny([currentUid()])) ||
-             (data.equipoB is list && data.equipoB.hasAny([currentUid()]));
-    }
-
     function participantInBeforeAndAfter() {
-      return isParticipant(resource.data) && isParticipant(request.resource.data);
+      return resource.data.jugadores is list &&
+             request.resource.data.jugadores is list &&
+             resource.data.jugadores.hasAny([currentUid()]) &&
+             request.resource.data.jugadores.hasAny([currentUid()]);
     }
 
     function isParticipantResultUpdate() {
-      return isParticipant(resource.data) &&
+      return participantInBeforeAndAfter() &&
              canWriteResultNow(resource.data) &&
              request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                'resultado',
-               'ganadorTeamId',
-               'ganador',
                'estado',
-               'updatedAt',
+               'diaryImpactBy',
+               'eloSummary',
                'rankingProcessedAt',
                'rankingProcessedResult',
-               'rankingProcessedBy',
-               'eloSummary',
-               'standingsProcessedAt',
-               'standingsProcessedResult',
-               'mvp',
-               'mvpId',
-               'surface',
-               'superficie',
-               'diaryImpactBy'
+               'rankingProcessedBy'
              ]);
     }
 
@@ -151,10 +123,7 @@ service cloud.firestore {
              ]);
     }
 
-    // ═══════════════════════════════════════════════════════
-    // ADMIN — TOTAL CONTROL (Email directo o Rol en DB)
-    // El admin puede leer, crear, actualizar y eliminar TODO
-    // ═══════════════════════════════════════════════════════
+    // EXCEPCIÓN MAESTRA PARA ADMIN (Email directo o Rol en DB)
     function isAdmin() {
       return signedIn() && (
         request.auth.token.email == 'Juanan221091@gmail.com' ||
@@ -201,89 +170,37 @@ service cloud.firestore {
     }
 
     function isEventoPartidoParticipantUpdate() {
-      return isParticipant(resource.data) &&
-        canWriteResultNow(resource.data) &&
+      return resource.data.playerUids is list &&
+        resource.data.playerUids.hasAny([currentUid()]) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'resultado',
           'ganadorTeamId',
-          'ganador',
           'estado',
           'updatedAt',
           'linkedMatchId',
           'linkedMatchCollection',
-          'fecha',
-          'rankingProcessedAt',
-          'rankingProcessedResult',
-          'rankingProcessedBy',
-          'eloSummary',
-          'standingsProcessedAt',
-          'standingsProcessedResult',
-          'mvp',
-          'mvpId',
-          'surface',
-          'superficie',
-          'diaryImpactBy'
+          'fecha'
         ]) &&
         request.resource.data.eventoId == resource.data.eventoId;
     }
 
-    function isProposalParticipant(data) {
-      return signedIn() &&
-        data.participantUids is list &&
-        data.participantUids.hasAny([currentUid()]);
-    }
+    // --- REGLAS POR COLECCIÓN ---
 
-    function isProposalParticipantById(proposalId) {
-      return exists(/databases/$(database)/documents/propuestasPartido/$(proposalId)) &&
-        isProposalParticipant(get(/databases/$(database)/documents/propuestasPartido/$(proposalId)).data);
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // REGLAS POR COLECCIÓN
-    // ═══════════════════════════════════════════════════════
-
-    // --- USUARIOS ---
-    // Cada usuario puede leer/modificar su propio perfil.
-    // Admin puede modificar cualquier usuario (cambiar nivel, ELO, rol, nombre, etc.)
     match /usuarios/{uid} {
       allow get: if signedIn();
       allow list: if isApproved();
       allow create: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow update: if isAdmin() || (signedIn() && (
         request.auth.uid == uid ||
-        // Usuarios aprobados pueden actualizar campos ELO (transacciones de partidos)
-        (isApproved() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'puntosRanking', 'rating', 'nivel', 'glickoRD', 'glickoVol',
-          'nivelProgresoPct', 'nivelRango', 'victorias', 'partidosJugados',
-          'rachaActual', 'lastMatchAnalysis', 'lastMatchDate',
-          'nivelBaseInicial', 'puntosBaseInicial', 'lastDiaryImpact',
-          'elo', 'derrotas', 'diario'
-        ]))
+        (isApproved() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['puntosRanking', 'lastDiaryImpact']))
       ));
       allow delete: if isAdmin();
 
-      // Dispositivos push del usuario
       match /devices/{deviceId} {
         allow read, write: if isAdmin() || (signedIn() && request.auth.uid == uid);
       }
-
-      // Historial del jugador
-      match /history/{historyId} {
-        allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
-        allow create: if isAdmin() || (signedIn() && request.auth.uid == uid) || isApproved();
-        allow update, delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
-      }
-
-      // Galeria segura del usuario: el usuario sube fotos y el admin puede revisarlas.
-      match /gallery/{itemId} {
-        allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
-        allow create: if signedIn() && request.auth.uid == uid;
-        allow update: if isAdmin() || (signedIn() && request.auth.uid == uid);
-        allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
-      }
     }
 
-    // --- PARTIDOS AMISTOSOS ---
     match /partidosAmistosos/{matchId} {
       allow read, list: if isApproved();
       allow create: if isApproved() && hasMax4Players(request.resource.data);
@@ -300,7 +217,6 @@ service cloud.firestore {
       }
     }
 
-    // --- PARTIDOS RETO ---
     match /partidosReto/{matchId} {
       allow read, list: if isApproved();
       allow create: if isApproved() && hasMax4Players(request.resource.data);
@@ -317,30 +233,24 @@ service cloud.firestore {
       }
     }
 
-    // --- RANKING LOGS ---
     match /rankingLogs/{logId} {
       allow read, list: if isApproved();
       allow create: if isAdmin() || isApproved();
       allow update, delete: if isAdmin();
     }
 
-    // --- DETALLES DE PUNTOS POR PARTIDO ---
     match /matchPointDetails/{id} {
       allow read, list: if isApproved();
       allow create: if isAdmin() || isApproved();
       allow update, delete: if isAdmin();
     }
 
-    // --- NOTIFICACIONES ---
-    // El usuario puede leer/actualizar/borrar solo las suyas
     match /notificaciones/{id} {
-      allow read, delete: if isAdmin() || (signedIn() && (resource.data.destinatario == currentUid() || resource.data.uid == currentUid()));
+      allow read, delete: if signedIn() && (resource.data.destinatario == currentUid() || resource.data.uid == currentUid());
       allow create: if isApproved();
-      allow update: if isAdmin() || (signedIn() && (resource.data.destinatario == currentUid() || resource.data.uid == currentUid()));
-      allow list: if isAdmin() || (signedIn());
+      allow update: if signedIn() && (resource.data.destinatario == currentUid() || resource.data.uid == currentUid());
     }
 
-    // --- LOG DE NOTIFICACIONES ENVIADAS ---
     match /notif_sent_log/{id} {
       allow read, list: if isAdmin();
       allow create: if isApproved() &&
@@ -351,7 +261,6 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // --- ANALYTICS ---
     match /analytics/{id} {
       allow read, list: if isAdmin();
       allow create, update: if isApproved() &&
@@ -364,7 +273,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // --- SUGERENCIAS IA ---
     match /sugerenciasIA/{id} {
       allow create: if isApproved();
       allow get: if isAdmin() || (signedIn() && resource.data.uid == currentUid());
@@ -372,35 +280,29 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // --- CATÁLOGO DE PALAS ---
     match /palasCatalogo/{id} {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
 
-    // --- DIARIO TÉCNICO ---
     match /diarioTecnico/{id} {
       allow read: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
       allow create: if signedIn() && (isAdmin() || request.resource.data.uid == currentUid());
       allow update, delete: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
     }
 
-    // --- DIARIO (Legacy) ---
     match /diario/{id} {
       allow read: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
       allow create: if signedIn() && (isAdmin() || request.resource.data.uid == currentUid());
       allow update, delete: if signedIn() && (isAdmin() || resource.data.uid == currentUid());
     }
 
-    // --- PALAS DE USUARIOS ---
     match /palas/{id} {
       allow read: if signedIn();
       allow create: if signedIn() && (isAdmin() || request.resource.data.createdBy == currentUid());
       allow update, delete: if signedIn() && (isAdmin() || resource.data.createdBy == currentUid());
     }
 
-    // --- EVENTOS / TORNEOS ---
-    // Los organizadores y admin pueden gestionar eventos
     match /eventos/{eventId} {
       allow read, list: if signedIn();
       allow create: if signedIn() && isOrganizerUser();
@@ -410,7 +312,6 @@ service cloud.firestore {
       allow delete: if isAdmin() || (signedIn() && isEventOrganizer());
     }
 
-    // --- PARTIDOS DE EVENTO ---
     match /eventoPartidos/{matchId} {
       allow read, list: if signedIn();
       allow create: if isAdmin() || (
@@ -433,10 +334,9 @@ service cloud.firestore {
       );
     }
 
-    // --- CLASIFICACIÓN DE EVENTOS ---
     match /eventoClasificacion/{id} {
       allow read, list: if signedIn();
-      allow create, update: if isAdmin() || isApproved() || (
+      allow create, update: if isAdmin() || (
         signedIn() &&
         request.resource.data.eventoId is string &&
         isEventOrganizerById(request.resource.data.eventoId)
@@ -448,72 +348,13 @@ service cloud.firestore {
       );
     }
 
-    // --- WATCHERS DE PARTIDOS ---
-    match /matchWatchers/{id} {
-      allow read, list: if signedIn();
-      allow create: if signedIn() &&
-        request.resource.data.keys().hasOnly(['matchId', 'matchCollection', 'uid', 'createdAt']) &&
-        request.resource.data.matchId is string &&
-        request.resource.data.uid == currentUid();
-      allow delete: if isAdmin() || (signedIn() && resource.data.uid == currentUid());
-      allow update: if isAdmin();
-    }
-
-    // --- MEDIA DE PARTIDOS ---
-    match /matchMedia/{id} {
-      allow read, list: if signedIn();
-      allow create: if signedIn() &&
-        request.resource.data.keys().hasOnly(['matchId', 'matchCollection', 'url', 'type', 'createdBy', 'createdAt', 'size', 'name']) &&
-        request.resource.data.matchId is string &&
-        request.resource.data.url is string &&
-        request.resource.data.type is string &&
-        request.resource.data.createdBy == currentUid();
-      allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == currentUid());
-      allow update: if isAdmin();
-    }
-
-    // --- CALENDARIOS APOING ---
     match /apoingCalendars/{uid} {
       allow read, list: if isApproved();
       allow create, update: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
-    // --- PROPUESTAS DE PARTIDO ---
-    match /propuestasPartido/{proposalId} {
-      allow read: if isAdmin() || isProposalParticipant(resource.data);
-      allow list: if isAdmin() || signedIn();
-      allow create: if signedIn() &&
-        request.resource.data.createdBy == currentUid() &&
-        request.resource.data.participantUids is list &&
-        request.resource.data.participantUids.hasAny([currentUid()]);
-      allow update, delete: if isAdmin() || isProposalParticipant(resource.data);
-
-      match /chat/{msgId} {
-        allow read: if isAdmin() || isProposalParticipantById(proposalId);
-        allow create: if signedIn() &&
-          request.resource.data.uid == currentUid() &&
-          isProposalParticipantById(proposalId);
-        allow update, delete: if isAdmin() || isProposalParticipantById(proposalId);
-      }
-    }
-
-    // --- CONFIGURACIÓN DEL SISTEMA ---
-    match /systemConfig/{id} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
-    }
-
-    // --- TEMPORADAS / SEASONS ---
-    match /seasons/{id} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // REGLA GLOBAL de EMERGENCIA — Admin total
-    // Cualquier colección/documento no cubierta = Admin only
-    // ═══════════════════════════════════════════════════════
+    // REGLA DE SEGURIDAD GLOBAL (BLOQUEO POR DEFECTO PERO PERMISO ADMIN)
     match /{document=**} {
       allow read, write: if isAdmin();
     }

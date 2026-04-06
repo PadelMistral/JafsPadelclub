@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+
+mobile-capacitor/node_modules/
+mobile-capacitor/ios/
+mobile-capacitor/www/
+mobile-capacitor/android/.gradle/
+mobile-capacitor/android/build/
+mobile-capacitor/android/app/build/
+mobile-capacitor/android/capacitor-cordova-android-plugins/build/
+mobile-capacitor/android/local.properties
+mobile-capacitor/android/keystore.properties
+mobile-capacitor/android/app/*.jks
+
+*.log
+*.idsig

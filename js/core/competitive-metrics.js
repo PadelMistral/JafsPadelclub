@@ -37,10 +37,7 @@ export function buildCompetitiveSnapshot(user = {}) {
   const rating = Math.round(toNumber(user?.puntosRanking, 1000));
   const played = Math.max(0, toNumber(user?.partidosJugados, 0));
   const wins = Math.max(0, toNumber(user?.victorias, 0));
-  const streak = toNumber(
-    Number.isFinite(Number(user?.computedStreak)) ? user?.computedStreak : user?.rachaActual,
-    0,
-  );
+  const streak = toNumber(user?.rachaActual, 0);
   const winrate = computeWinrate(wins, played);
   const eloPct = computeEloPercent(rating);
   const formPct = computeFormPercent(winrate, streak);

@@ -1,0 +1,32 @@
+{
+  "name": "jafs-padelclub-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Contenedor nativo Capacitor para la web de JafsPadelClub.",
+  "scripts": {
+    "sync:web": "powershell -ExecutionPolicy Bypass -File scripts/sync-web-assets.ps1",
+    "patch:onesignal-android": "powershell -ExecutionPolicy Bypass -File scripts/patch-onesignal-android.ps1",
+    "cap:sync": "npm run sync:web && npm run patch:onesignal-android && npx cap sync && npm run patch:onesignal-android",
+    "cap:copy": "npm run sync:web && npm run patch:onesignal-android && npx cap copy && npm run patch:onesignal-android",
+    "android:add": "npx cap add android",
+    "ios:add": "npx cap add ios",
+    "android:open": "npx cap open android",
+    "ios:open": "npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.1.1",
+    "@capacitor/app": "^7.0.1",
+    "@capacitor/core": "^7.1.1",
+    "@capacitor/filesystem": "^7.1.8",
+    "@capacitor/ios": "^7.1.1",
+    "@capacitor/local-notifications": "^7.0.1",
+    "@capacitor/push-notifications": "^7.0.1",
+    "@capacitor/share": "^7.0.4",
+    "@capacitor/splash-screen": "^7.0.1",
+    "@capacitor/status-bar": "^7.0.1",
+    "onesignal-cordova-plugin": "^5.3.6"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.1.1"
+  }
+}

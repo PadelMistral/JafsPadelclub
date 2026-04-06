@@ -7,7 +7,6 @@ import { AutomationEngine } from './automation-engine.js';
 import { calculateCourtCondition } from './utils/weather-utils.js';
 import { sendCoreNotification } from './core/core-engine.js';
 import { logInfo } from './core/app-logger.js';
-import { rememberInsight, rememberPattern } from './ai/ai-memory.js';
 
 const ADJECTIVES = ['Titán', 'Gladiador', 'Mago', 'Estratega', 'Muro', 'Francotirador', 'Bestia', 'Samurái'];
 const WEAK_PHRASES = [
@@ -289,18 +288,6 @@ export const AIOrchestrator = {
                 'advancedStats.upsets': totalUpsets,
                 'advancedStats.style': deepAnalysis.style
             });
-
-            rememberInsight(uid, {
-                type: "state",
-                text: `${activeMode.label}: ${activeMode.intervention}`,
-            });
-            if (deepAnalysis?.weaknesses?.[0]) {
-                rememberPattern(uid, {
-                    id: "weakness_focus",
-                    summary: `Área a vigilar: ${deepAnalysis.weaknesses[0]}`,
-                    confidence: 0.7,
-                });
-            }
 
             return newState;
 

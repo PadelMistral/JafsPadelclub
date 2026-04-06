@@ -6,33 +6,41 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#020617">
-    <title>Historial | JafsPadel</title>
-    <meta name="description" content="Tu historial de partidos de padel">
+    <title>Historial | Padeluminatis Pro</title>
+    <meta name="description" content="Tu historial de partidos de pádel">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
+    <!-- Core Bundle: design-system + layout + components-premium + themes + dynamic-elements -->
     <link rel="stylesheet" href="./css/global.css">
     <link rel="stylesheet" href="./css/historial.css">
+    <!-- Premium V7 Styles (New Design - High Priority) -->
 </head>
 
 <body>
+    <!-- Galactic Background -->
     <div class="sport-bg"></div>
 
+    <!-- Header & Nav injected by JS -->
+
     <main class="page-content history-page">
+
+        <!-- Page Header -->
         <section class="page-header animate-fade-in">
             <div class="page-title-row">
                 <div>
-                    <h1 class="page-title-pro">Historial</h1>
-                    <span class="page-sub-pro">Resultados, rivales y evolucion reciente</span>
+                    <h1 class="page-title-pro">Historial <span class="text-primary">Luminatis</span></h1>
+                    <span class="page-sub-pro">Tu trayectoria en el circuito</span>
                 </div>
                 <div class="header-badge">
-                    <i class="fas fa-clock-rotate-left"></i>
+                    <i class="fas fa-chart-line"></i>
                 </div>
             </div>
         </section>
 
+        <!-- Stats Summary -->
         <section class="stats-grid animate-fade-in" style="animation-delay: 0.1s;">
             <div class="stat-card-mini primary">
                 <div class="stat-icon"><i class="fas fa-gamepad"></i></div>
@@ -51,14 +59,15 @@
             </div>
         </section>
 
+        <!-- Filters & Sort -->
         <section class="filter-section animate-fade-in" style="animation-delay: 0.15s;">
             <div class="filter-row mb-4">
-                <div class="filter-tabs custom-scroll" role="tablist" aria-label="Filtros de historial">
-                    <button class="filter-tab active" data-filter="mine" role="tab" aria-selected="true">Mis partidos</button>
-                    <button class="filter-tab" data-filter="all" role="tab" aria-selected="false">Global</button>
-                    <button class="filter-tab" data-filter="won" role="tab" aria-selected="false">Victorias</button>
-                    <button class="filter-tab" data-filter="lost" role="tab" aria-selected="false">Derrotas</button>
-                    <button class="filter-tab" data-filter="canceled" role="tab" aria-selected="false">Anuladas</button>
+                <div class="filter-tabs custom-scroll">
+                    <button class="filter-tab active" data-filter="mine">Mis Partidos</button>
+                    <button class="filter-tab" data-filter="all">Global</button>
+                    <button class="filter-tab" data-filter="won">Victorias</button>
+                    <button class="filter-tab" data-filter="lost">Derrotas</button>
+                    <button class="filter-tab" data-filter="canceled">Anuladas</button>
                 </div>
             </div>
 
@@ -66,20 +75,22 @@
                 <div class="search-box-v7 flex-1">
                     <i class="fas fa-search"></i>
                     <input type="text" id="user-search" placeholder="Filtrar por jugador..."
-                        class="bg-transparent border-none text-white text-sm outline-none w-full font-bold" aria-label="Buscar jugador en historial">
+                        class="bg-transparent border-none text-white text-sm outline-none w-full font-bold">
                 </div>
                 <div class="sort-dropdown">
-                    <select id="sort-matches" class="premium-select-v7" aria-label="Ordenar historial">
-                        <option value="date-desc">Mas recientes</option>
-                        <option value="date-asc">Mas antiguos</option>
+                    <select id="sort-matches" class="premium-select-v7">
+                        <option value="date-desc">Recientes</option>
+                        <option value="date-asc">Antiguos</option>
                         <option value="name-asc">Rival (A-Z)</option>
                     </select>
                 </div>
             </div>
         </section>
 
+        <!-- History List -->
         <section class="history-section animate-fade-in" style="animation-delay: 0.2s;">
             <div id="history-container" class="history-list">
+                <!-- Loading state -->
                 <div class="history-item skeleton-item">
                     <div class="skeleton w-12 h-12 rounded-lg"></div>
                     <div class="flex-col gap-2 flex-1">
@@ -96,12 +107,17 @@
                 </div>
             </div>
         </section>
+
     </main>
 
-    <div id="modal-match-detail" class="modal-overlay bottom-sheet" role="dialog" aria-modal="true" aria-label="Detalle del partido">
-        <div class="modal-sheet" id="match-detail-content"></div>
+    <!-- Match Detail Modal -->
+    <div id="modal-match-detail" class="modal-overlay bottom-sheet">
+        <div class="modal-sheet" id="match-detail-content">
+            <!-- Dynamic content -->
+        </div>
     </div>
 
+    <!-- Scripts -->
     <script type="module" src="./js/historial.js"></script>
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';

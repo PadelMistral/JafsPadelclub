@@ -1,6 +1,5 @@
-const admin = require("firebase-admin");
+﻿const admin = require("firebase-admin");
 const { logger } = require("firebase-functions");
-const { onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 
@@ -31,26 +30,17 @@ function buildAbsoluteUrl(pathOrUrl) {
   return `${cleanBase}/${cleanPath}`;
 }
 
-async function sendOneSignalPush({ appId, apiKey, subscriptionIds = [], externalIds = [], broadcastAll = false, title, body, data, url }) {
-  const cleanSubscriptionIds = Array.isArray(subscriptionIds) ? subscriptionIds.filter(Boolean) : [];
-  const cleanExternalIds = Array.isArray(externalIds) ? externalIds.filter(Boolean) : [];
-  if (!cleanSubscriptionIds.length && !cleanExternalIds.length && !broadcastAll) return { ok: true, skipped: true };
+async function sendOneSignalPush({ appId, apiKey, subscriptionIds, title, body, data, url }) {
+  if (!subscriptionIds.length) return { ok: true, skipped: true };
 
   const payload = {
     app_id: appId,
+    include_subscription_ids: subscriptionIds,
     target_channel: "push",
     headings: { en: title },
     contents: { en: body },
     data: toStringMap(data),
   };
-
-  if (cleanSubscriptionIds.length) {
-    payload.include_subscription_ids = cleanSubscriptionIds;
-  } else if (cleanExternalIds.length) {
-    payload.include_aliases = { external_id: cleanExternalIds };
-  } else {
-    payload.included_segments = ["All"];
-  }
 
   if (url) payload.url = url;
 
@@ -69,62 +59,6 @@ async function sendOneSignalPush({ appId, apiKey, subscriptionIds = [], external
   }
 
   return { ok: true, result: json };
-}
-
-async function getFcmTokensForUsers(userIds = []) {
-  const db = admin.firestore();
-  const tokens = [];
-
-  for (const uid of userIds) {
-    const cleanUid = String(uid || "").trim();
-    if (!cleanUid) continue;
-
-    const snap = await db
-      .collection("usuarios")
-      .doc(cleanUid)
-      .collection("devices")
-      .where("enabled", "==", true)
-      .where("provider", "==", "fcm")
-      .get();
-
-    snap.forEach((docSnap) => {
-      const data = docSnap.data() || {};
-      const token = String(data.token || "").trim();
-      if (token) tokens.push(token);
-    });
-  }
-
-  return Array.from(new Set(tokens));
-}
-
-async function sendFcmPush({ tokens = [], title, body, data = {}, url = "" }) {
-  if (!tokens.length) return { ok: true, skipped: true };
-
-  const message = {
-    tokens,
-    notification: {
-      title: String(title || ""),
-      body: String(body || ""),
-    },
-    data: toStringMap({
-      ...data,
-      url: buildAbsoluteUrl(url || "home.html"),
-    }),
-    android: {
-      priority: "high",
-      notification: {
-        channelId: "default",
-        clickAction: "FCM_PLUGIN_ACTIVITY",
-      },
-    },
-  };
-
-  const response = await admin.messaging().sendEachForMulticast(message);
-  return {
-    ok: true,
-    successCount: response.successCount || 0,
-    failureCount: response.failureCount || 0,
-  };
 }
 
 function hasValidResult(match = {}) {
@@ -264,7 +198,7 @@ exports.sendFirestoreNotificationPush = onDocumentCreated(
       return;
     }
 
-    const title = String(n.titulo || n.title || "JafsPadel");
+    const title = String(n.titulo || n.title || "Padeluminatis");
     const body = String(n.mensaje || n.message || "Nueva notificación");
     const url = buildAbsoluteUrl(n.enlace || n.data?.url || "home.html");
     const type = String(n.tipo || n.type || "info");
@@ -356,114 +290,3 @@ exports.sendFirestoreNotificationPush = onDocumentCreated(
     }
   },
 );
-
-exports.getApoingICS = onRequest(
-  {
-    region: "europe-west1",
-    cors: true,
-  },
-  async (req, res) => {
-    try {
-      const url = req.query.url;
-      if (!url) return res.status(400).send("Missing URL");
-
-      logger.info("Fetching Apoing ICS", { url });
-      const response = await fetch(url);
-      const data = await response.text();
-
-      res.set("Access-Control-Allow-Origin", "*");
-      res.set("Content-Type", "text/plain");
-      res.status(200).send(data);
-    } catch (error) {
-      logger.error("Error fetching ICS", { error: error.message, url: req.query.url });
-      res.status(500).send("Error fetching ICS");
-    }
-  },
-);
-
-exports.sendPush = onRequest(
-  {
-    region: "europe-west1",
-    cors: true,
-  },
-  async (req, res) => {
-    if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
-    try {
-      const { titulo, mensaje, externalIds = [], url = "home.html", data = {} } = req.body || {};
-      if (!titulo || !mensaje) return res.status(400).send("Missing field");
-
-      const cleanExternalIds = Array.isArray(externalIds)
-        ? externalIds.map((x) => String(x || "").trim()).filter(Boolean)
-        : [];
-
-      const appId = String(process.env.ONESIGNAL_APP_ID || "").trim();
-      const apiKey = String(process.env.ONESIGNAL_REST_API_KEY || "").trim();
-      const oneSignalReady = Boolean(appId && apiKey);
-
-      const tasks = [];
-
-      if (oneSignalReady) {
-        tasks.push(
-          sendOneSignalPush({
-            appId,
-            apiKey,
-            externalIds: cleanExternalIds,
-            broadcastAll: cleanExternalIds.length === 0,
-            title: String(titulo),
-            body: String(mensaje),
-            data: { ...data },
-            url,
-          }).then((out) => ({
-            provider: "onesignal",
-            ...out,
-          })).catch((error) => ({
-            ok: false,
-            provider: "onesignal",
-            error: error?.message || String(error),
-          })),
-        );
-      }
-
-      if (cleanExternalIds.length) {
-        tasks.push(
-          (async () => {
-            const tokens = await getFcmTokensForUsers(cleanExternalIds);
-            const out = await sendFcmPush({
-              tokens,
-              title: String(titulo),
-              body: String(mensaje),
-              data: { ...data },
-              url,
-            });
-            return {
-              provider: "fcm",
-              tokens: tokens.length,
-              ...out,
-            };
-          })().catch((error) => ({
-            ok: false,
-            provider: "fcm",
-            error: error?.message || String(error),
-          })),
-        );
-      }
-
-      if (!tasks.length) {
-        return res.status(500).json({
-          error: "No push providers configured",
-          detail: "Configura OneSignal y/o tokens FCM nativos",
-        });
-      }
-
-      const results = await Promise.all(tasks);
-      return res.status(200).json({
-        ok: results.some((item) => item?.ok),
-        results,
-      });
-    } catch (err) {
-      logger.error("sendPush failed", { error: err.message });
-      res.status(500).send("Internal server error");
-    }
-  },
-);
-;

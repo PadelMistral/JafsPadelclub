@@ -1,24 +1,15 @@
-/* mi-elo.js - ELO detail page */
-import { db, getDocument } from "./firebase-service.js";
+/* mi-elo.js — New ELO Page Logic */
+import { db, getDocument, subscribeCol } from "./firebase-service.js";
 import { collection, getDocs, query, orderBy, limit, where } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI } from "./ui-core.js";
 import { injectHeader, injectNavbar } from "./modules/ui-loader.js";
-import { getResultSetsString, getMatchTeamPlayerIds, toDateSafe, parseGuestMeta } from "./utils/match-utils.js";
-import { getFriendlyTeamName } from "./utils/team-utils.js";
+import { toDateSafe } from "./utils/match-utils.js";
 import { observeCoreSession } from "./core/core-engine.js";
-import {
-  ELO_CONFIG,
-  buildLevelProgressState,
-  getLevelBandByRating,
-  ratingFromLevel,
-} from "./config/elo-system.js";
-import { resolveIdentity, seedIdentityCache } from "./services/identity-service.js";
-import { syncComputedStreakForUser } from "./services/streak-service.js";
+import { ELO_CONFIG, buildLevelProgressState, getLevelBandByRating } from "./config/elo-system.js";
 
 let currentUser = null;
 let currentUserData = null;
 const playerNameCache = new Map();
-const matchCache = new Map();
 
 document.addEventListener("DOMContentLoaded", () => {
   initAppUI("mi-elo");
@@ -27,10 +18,8 @@ document.addEventListener("DOMContentLoaded", () => {
     onReady: async ({ user, userDoc }) => {
       currentUser = user;
       currentUserData = userDoc || {};
-      currentUserData.computedStreak = await syncComputedStreakForUser(user.uid, currentUserData, { maxLogs: 60 });
-      seedIdentityCache([{ uid: user.uid, ...currentUserData }]);
       await injectHeader(currentUserData);
-      injectNavbar("ranking");
+      injectNavbar("home");
       renderSummary();
       await loadBreakdown();
     },
@@ -39,64 +28,53 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function resolvePlayerName(uid) {
   if (!uid) return "Jugador";
+  if (String(uid).startsWith("GUEST_")) return String(uid).split("_")[1] || "Inv";
   if (playerNameCache.has(uid)) return playerNameCache.get(uid);
-  const identity = await resolveIdentity(uid, {
-    currentUserId: currentUser?.uid,
-    currentUserData,
-  });
-  const name = identity?.name || "Jugador";
-  playerNameCache.set(uid, name);
-  return name;
+  try {
+    const doc = await getDocument("usuarios", uid);
+    const name = doc?.nombreUsuario || doc?.nombre || "Jugador";
+    playerNameCache.set(uid, name);
+    return name;
+  } catch { return "Jugador"; }
 }
 
 function renderSummary() {
-  const pts = Number(currentUserData?.puntosRanking || currentUserData?.rating || ELO_CONFIG.BASE_RATING);
-  const nivel = Number(currentUserData?.nivel || 2.5);
-  const played = Number(currentUserData?.partidosJugados || 0);
-  const wins = Number(currentUserData?.victorias || 0);
+  const d = currentUserData;
+  const pts = Number(d?.puntosRanking || d?.rating || ELO_CONFIG.BASE_RATING);
+  const nivel = Number(d?.nivel || 2.5).toFixed(2);
+  const played = Number(d?.partidosJugados || 0);
+  const wins = Number(d?.victorias || 0);
   const winrate = played > 0 ? Math.round((wins / played) * 100) : 0;
 
-  const progress = buildLevelProgressState({
-    rating: pts,
-    levelOverride: nivel,
-  });
+  const el = id => document.getElementById(id);
+  if (el("elo-current")) el("elo-current").textContent = String(pts);
+  if (el("elo-nivel")) el("elo-nivel").textContent = nivel;
+  if (el("elo-played")) el("elo-played").textContent = String(played);
+  if (el("elo-winrate")) el("elo-winrate").textContent = `${winrate}%`;
+
+  // Level progress
+  const progress = buildLevelProgressState(pts);
   const band = getLevelBandByRating(pts);
-  const bandMin = ratingFromLevel(progress.prevLevel);
-  const bandMax = ratingFromLevel(progress.nextLevel);
+  if (el("elo-div-name")) el("elo-div-name").textContent = band?.name || "BRONCE";
+  if (el("elo-lp-pts")) el("elo-lp-pts").textContent = `${progress.toNext} pts para subir`;
+  if (el("elo-lp-fill")) el("elo-lp-fill").style.width = `${progress.pct}%`;
+  if (el("elo-lp-min")) el("elo-lp-min").textContent = String(progress.bandMin);
+  if (el("elo-lp-max")) el("elo-lp-max").textContent = String(progress.bandMax);
 
-  setText("elo-current", String(Math.round(pts)));
-  setText("elo-nivel", nivel.toFixed(2));
-  setText("elo-played", String(played));
-  setText("elo-winrate", `${winrate}%`);
-  setText("elo-div-name", band?.name || band?.label || "Bronce");
-  setText("elo-lp-pts", `${progress.pointsToUp} pts para subir`);
-  setText("elo-lp-min", String(bandMin));
-  setText("elo-lp-max", String(bandMax));
-
-  const fill = document.getElementById("elo-lp-fill");
-  if (fill) fill.style.width = `${progress.progressPct}%`;
-
+  // Rank
   refreshRank();
-}
-
-function setText(id, value) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = value;
 }
 
 async function refreshRank() {
   const rankEl = document.getElementById("elo-rank");
   if (!rankEl || !currentUser?.uid) return;
   try {
-    const snap = await getDocs(query(collection(db, "usuarios"), orderBy("puntosRanking", "desc"), limit(500)));
+    const q = query(collection(db, "usuarios"), orderBy("puntosRanking", "desc"), limit(500));
+    const snap = await getDocs(q);
     let pos = 0;
-    snap.docs.forEach((d, i) => {
-      if (d.id === currentUser.uid) pos = i + 1;
-    });
+    snap.docs.forEach((d, i) => { if (d.id === currentUser.uid) pos = i + 1; });
     rankEl.textContent = pos ? `#${pos}` : "#--";
-  } catch {
-    rankEl.textContent = "#--";
-  }
+  } catch { rankEl.textContent = "#--"; }
 }
 
 async function loadBreakdown() {
@@ -104,154 +82,79 @@ async function loadBreakdown() {
   if (!listEl || !currentUser?.uid) return;
 
   try {
-    let logsSnap;
-    let diarySnap;
-    try {
-      [logsSnap, diarySnap] = await Promise.all([
-        getDocs(query(collection(db, "rankingLogs"), where("uid", "==", currentUser.uid), orderBy("timestamp", "desc"), limit(60))),
-        getDocs(query(collection(db, "diario"), where("uid", "==", currentUser.uid), orderBy("fecha", "desc"), limit(30))),
-      ]);
-    } catch {
-      [logsSnap, diarySnap] = await Promise.all([
-        getDocs(query(collection(db, "rankingLogs"), where("uid", "==", currentUser.uid), limit(60))),
-        getDocs(query(collection(db, "diario"), where("uid", "==", currentUser.uid), limit(30))),
-      ]);
-    }
+    // Load ranking logs for this user
+    const [logsSnap, diarySnap] = await Promise.all([
+      getDocs(query(collection(db, "rankingLogs"), where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"), limit(30))),
+      getDocs(query(collection(db, "diario"), where("uid", "==", currentUser.uid), orderBy("fecha", "desc"), limit(30)))
+    ]);
 
-    const items = [];
-    logsSnap.forEach((d) => items.push({ ...d.data(), id: d.id, type: "match_log" }));
-    diarySnap.forEach((d) => {
-      const data = d.data() || {};
-      if (Number(data.puntosGanados || 0) > 0) {
-        items.push({
-          ...data,
-          id: d.id,
-          type: "diary_log",
-          createdAt: data.fecha,
-          delta: data.puntosGanados,
-          matchType: "Entrenamiento / diario",
-        });
-      }
+    const allItems = [];
+    logsSnap.forEach(d => allItems.push({ ...d.data(), id: d.id, type: "match_log" }));
+    diarySnap.forEach(d => {
+        const data = d.data();
+        if (data.puntosGanados > 0) {
+            allItems.push({ 
+                ...data, 
+                id: d.id, 
+                type: "diary_log", 
+                createdAt: data.fecha,
+                delta: data.puntosGanados,
+                matchType: "ENTRENAMIENTO / DIARIO"
+            });
+        }
     });
 
-    items.sort((a, b) => getItemTime(b) - getItemTime(a));
+    // Sort all by date
+    allItems.sort((a,b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
 
-    if (!items.length) {
+    if (allItems.length === 0) {
       listEl.innerHTML = `<div class="elo-empty">Sin actividad registrada aún.</div>`;
       return;
     }
 
     const rows = [];
-    for (const item of items.slice(0, 50)) {
+    for (const item of allItems.slice(0, 40)) {
       rows.push(await renderBreakdownRow(item));
     }
     listEl.innerHTML = rows.join("");
+
   } catch (e) {
     console.error("Error loading ELO breakdown:", e);
     listEl.innerHTML = `<div class="elo-empty">Error al cargar el desglose. Intenta recargar.</div>`;
   }
 }
 
-function getItemTime(item) {
-  const ts =
-    item?.timestamp?.toMillis?.() ||
-    item?.createdAt?.toMillis?.() ||
-    item?.date?.toMillis?.() ||
-    toDateSafe(item?.timestamp || item?.createdAt || item?.date)?.getTime?.() ||
-    0;
-  return Number(ts || 0);
-}
-
 async function renderBreakdownRow(data) {
-  const delta = Number(data.delta || data.pointsDelta || data.diff || 0);
-  const after = Number(data.after || data.newRating || data.afterRating || 0);
+  const delta = Number(data.delta || data.pointsDelta || 0);
+  const after = Number(data.after || data.newRating || 0);
   const isDiary = data.type === "diary_log";
   const isWin = delta > 0;
   const isDraw = delta === 0;
-
+  
   const resultCls = isDiary ? "diary" : (isWin ? "win" : isDraw ? "draw" : "loss");
   const resultIcon = isDiary ? "D" : (isWin ? "W" : isDraw ? "E" : "L");
   const deltaCls = isWin ? "positive" : isDraw ? "neutral" : "negative";
-  const deltaStr = `${delta > 0 ? "+" : ""}${Math.round(delta)}`;
+  const deltaStr = (delta > 0 ? "+" : "") + delta;
 
-  const date = toDateSafe(data?.timestamp || data?.createdAt || data?.date) || new Date();
+  const date = data.createdAt?.toDate?.() || data.date?.toDate?.() || new Date(data.createdAt || data.date);
   const dateStr = date.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit" });
 
-  let matchDesc = data.matchType || data.tipo || "Partido";
-  let score = data.resultado || data.score || "";
-
-  if (!isDiary && data.matchId) {
-    const match = await loadMatchContext(data.matchId, data.matchCollection);
-    if (match) {
-      matchDesc = await buildMatchupLabel(match);
-      score = getResultSetsString(match) || score;
-    }
-  }
+  // Try to get match info
+  const matchDesc = data.matchType || data.tipo || "Partido";
+  const score = data.resultado || data.score || "";
 
   return `
-    <div class="elo-match-row">
+    <div class="elo-match-row" style="animation-delay:${Math.random() * 150}ms">
       <div class="elo-mr-result ${resultCls}">${resultIcon}</div>
       <div class="elo-mr-info">
         <span class="elo-mr-date">${dateStr}</span>
-        <span class="elo-mr-matchup">${escapeHtml(matchDesc)}</span>
-        ${score ? `<span class="elo-mr-score">${escapeHtml(score)}</span>` : ""}
+        <span class="elo-mr-matchup">${matchDesc}</span>
+        ${score ? `<span class="elo-mr-score">${score}</span>` : ""}
       </div>
       <div>
         <span class="elo-mr-delta ${deltaCls}">${deltaStr}</span>
-        ${after > 0 ? `<span class="elo-mr-after">${Math.round(after)} ELO</span>` : ""}
+        ${after > 0 ? `<span class="elo-mr-after">${after} ELO</span>` : ""}
       </div>
     </div>
   `;
-}
-
-async function loadMatchContext(matchId, preferredCollection) {
-  if (!matchId) return null;
-  const cacheKey = `${preferredCollection || "auto"}:${matchId}`;
-  if (matchCache.has(cacheKey)) return matchCache.get(cacheKey);
-
-  const cols = preferredCollection
-    ? [preferredCollection, "partidosAmistosos", "partidosReto", "eventoPartidos"]
-    : ["partidosAmistosos", "partidosReto", "eventoPartidos"];
-
-  for (const col of [...new Set(cols)]) {
-    try {
-      const doc = await getDocument(col, matchId);
-      if (doc) {
-        const payload = { ...doc, id: matchId, col };
-        matchCache.set(cacheKey, payload);
-        return payload;
-      }
-    } catch (_) {}
-  }
-  return null;
-}
-
-async function buildMatchupLabel(match) {
-  const teamAIds = getMatchTeamPlayerIds(match, "A");
-  const teamBIds = getMatchTeamPlayerIds(match, "B");
-  const teamAPlayers = await Promise.all(teamAIds.map(resolvePlayerName));
-  const teamBPlayers = await Promise.all(teamBIds.map(resolvePlayerName));
-
-  const teamA = getFriendlyTeamName({
-    teamName: match.teamAName || match.equipoA,
-    playerNames: teamAPlayers,
-    side: "A",
-    fallback: "Pareja A",
-  });
-  const teamB = getFriendlyTeamName({
-    teamName: match.teamBName || match.equipoB,
-    playerNames: teamBPlayers,
-    side: "B",
-    fallback: "Pareja B",
-  });
-  return `${teamA} vs ${teamB}`;
-}
-
-function escapeHtml(value) {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
 }

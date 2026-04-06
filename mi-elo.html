@@ -6,8 +6,8 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#020617">
-    <title>Mi ELO | JafsPadel</title>
-    <meta name="description" content="Tu puntuacion ELO detallada">
+    <title>Mi ELO | Padeluminatis Pro</title>
+    <meta name="description" content="Tu puntuación ELO detallada">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link
@@ -20,6 +20,8 @@
 <body>
     <div class="sport-bg"></div>
     <main class="page-content elo-page">
+
+        <!-- Header -->
         <header class="elo-header animate-up">
             <div class="flex-col">
                 <h1 class="page-title-pro"><i class="fas fa-chart-line"></i> Mi ELO</h1>
@@ -27,6 +29,7 @@
             </div>
         </header>
 
+        <!-- ELO Summary Card -->
         <section class="elo-summary-card animate-up" style="animation-delay:0.05s;">
             <div class="elo-big-number">
                 <span id="elo-current" class="elo-big-val">1000</span>
@@ -51,6 +54,7 @@
                 </div>
             </div>
 
+            <!-- Level progress -->
             <div class="elo-level-progress">
                 <div class="elo-lp-head">
                     <span id="elo-div-name" class="elo-div-badge">BRONCE</span>
@@ -66,6 +70,7 @@
             </div>
         </section>
 
+        <!-- Match-by-match breakdown -->
         <section class="elo-breakdown-section animate-up" style="animation-delay:0.1s;">
             <div class="elo-section-head">
                 <span class="elo-section-title"><i class="fas fa-list-ol"></i> Desglose por Partido</span>
@@ -78,6 +83,7 @@
                 </div>
             </div>
         </section>
+
     </main>
 
     <script type="module" src="./js/mi-elo.js"></script>

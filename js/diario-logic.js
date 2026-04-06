@@ -1,5 +1,4 @@
-
-// diario-logic.js - Premium Diary V9.0 (Advanced Data & Wizard)
+﻿// diario-logic.js - Premium Diary V9.0 (Advanced Data & Wizard)
 import {
   auth,
   db,
@@ -7,16 +6,11 @@ import {
   updateDocument,
   getDocument,
 } from "./firebase-service.js";
-import { addPlayerHistoryEntry } from "./services/player-history-service.js";
 import {
   doc,
   getDoc,
   collection,
-  query,
-  where,
-  getDocs,
   addDoc,
-  runTransaction,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI, showToast } from "./ui-core.js";
@@ -27,7 +21,7 @@ initAppUI("profile");
 
 document.addEventListener("DOMContentLoaded", async () => {
   let currentStep = 1;
-  const totalSteps = 3;
+  const totalSteps = 5;
   let currentUser = null;
   let userData = null;
   let wizardData = {};
@@ -63,7 +57,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     currentStep = 1;
     entryMode = "match";
     updateWizardUI();
-    loadAvailableMatches();
+    loadAvailableMatches(); // Always try to load played matches
     syncEntryModeUI();
     if (matchId) loadLinkedMatch(matchId);
   };
@@ -124,11 +118,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                         </div>
                         <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
                             <h4 class="text-[9px] font-black text-sport-red uppercase tracking-widest mb-2">Daño Recibido</h4>
-                            <p class="text-xs text-white/80">${entry.tactica?.damageReceived || entry.tactica?.["dañoRecibido"] || "N/A"}</p>
+                            <p class="text-xs text-white/80">${entry.tactica?.dañoRecibido || "N/A"}</p>
                         </div>
                         <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
                             <h4 class="text-[9px] font-black text-sport-green uppercase tracking-widest mb-2">Daño Infligido</h4>
-                            <p class="text-xs text-white/80">${entry.tactica?.damageInflicted || entry.tactica?.["dañoInfligido"] || "N/A"}</p>
+                            <p class="text-xs text-white/80">${entry.tactica?.dañoInfligido || "N/A"}</p>
                         </div>
                     </div>
 
@@ -154,14 +148,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                         </div>
                     </div>
 
-                    <!-- Coach Note -->
-                    ${entry.coachNote ? `
-                        <div class="mt-6 p-4 bg-primary/5 rounded-2xl border border-primary/10">
-                            <h4 class="text-[9px] font-black text-primary uppercase tracking-widest mb-2">Nota del Coach</h4>
-                            <p class="text-xs text-white/80">${entry.coachNote}</p>
-                        </div>
-                    ` : ""}
-
                     <!-- Notes -->
                     ${
                       (entry.memoryNote || entry.tactica?.notas)
@@ -183,7 +169,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         `;
     document.body.appendChild(overlay);
   };
+
   window.wizardNext = async () => {
+    // Validation for step 1
     if (currentStep === 1) {
       if (entryMode !== "note") {
         const mId =
@@ -198,12 +186,12 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
         }
 
+        // Verify match is played
         try {
           const match =
             (await getDocument("partidosReto", mId)) ||
-            (await getDocument("partidosAmistosos", mId)) ||
-            (await getDocument("eventoPartidos", mId));
-          if (!match || (!match.resultado && match.estado !== "finalizado" && match.estado !== "jugado")) {
+            (await getDocument("partidosAmistosos", mId));
+          if (!match || !match.resultado) {
             showToast(
               "PARTIDO PENDIENTE",
               "El partido seleccionado aún no tiene resultado registrado. Juega primero, analiza después.",
@@ -238,18 +226,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
 
   function updateWizardUI() {
+    // Hide all steps
     document
       .querySelectorAll(".wizard-step")
       .forEach((el) => el.classList.remove("active"));
+    // Show current
     document.getElementById(`step-${currentStep}`).classList.add("active");
 
+    // Update Progress Bar
     for (let i = 1; i <= totalSteps; i++) {
       const bar = document.getElementById(`wb-${i}`);
-      if (!bar) continue;
       if (i <= currentStep) bar.classList.add("active");
       else bar.classList.remove("active");
     }
 
+    // Update Buttons
     const btnPrev = document.getElementById("btn-prev");
     const btnNext = document.getElementById("btn-next");
     const nextText = document.getElementById("btn-next-text");
@@ -261,8 +252,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       title.textContent = "CONTEXTO GLOBAL";
     } else {
       btnPrev.style.display = "block";
-      if (currentStep === 2) title.textContent = "BIOMETRÍA Y EVALUACIÓN";
-      if (currentStep === 3) title.textContent = "ANÁLISIS FINAL";
+      if (currentStep === 2) title.textContent = "ALINEACIÓN TÁCTICA";
+      if (currentStep === 3) title.textContent = "MÉTRICAS DE RENDIMIENTO";
+      if (currentStep === 4) title.textContent = "BIOMETRÍA Y EMOCIÓN";
+      if (currentStep === 5) title.textContent = "ANÁLISIS FINAL";
     }
 
     if (currentStep === totalSteps) {
@@ -276,6 +269,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  // --- FIELD HANDLERS ---
+
+  // Segmented Buttons
   document.querySelectorAll(".segmented-v9 button").forEach((btn) => {
     btn.onclick = function () {
       this.parentElement
@@ -294,6 +290,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
     });
 
+  // Mood Matrix
   document.querySelectorAll(".mood-face").forEach((btn) => {
     btn.onclick = function () {
       document
@@ -303,6 +300,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
   });
 
+  // Range Sliders display update
   document.querySelectorAll("input[type=range]").forEach((rng) => {
     rng.addEventListener("input", function () {
       const valId = this.id.replace("inp-", "val-").replace("rng-", "val-");
@@ -310,6 +308,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (disp) disp.innerText = this.value;
     });
   });
+
+  // --- DATA LOADING & AUTH ---
 
   auth.onAuthStateChanged((user) => {
     if (user) {
@@ -324,6 +324,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // Check URL params for match linking
   const urlParams = new URLSearchParams(window.location.search);
   const mId = urlParams.get("matchId");
   const openMode = urlParams.get("open");
@@ -343,24 +344,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!selector) return;
 
     try {
+      const { query, collection, where, getDocs } =
+        await import("https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js");
 
-      const qA = query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", currentUser.uid));
-      const qR = query(collection(db, "partidosReto"), where("jugadores", "array-contains", currentUser.uid));
-      const qE = query(collection(db, "eventoPartidos"), where("jugadores", "array-contains", currentUser.uid));
+      // Avoid composite-index dependency: fetch by player and filter/sort client-side
+      const qA = query(
+        collection(db, "partidosAmistosos"),
+        where("jugadores", "array-contains", currentUser.uid),
+      );
+      const qR = query(
+        collection(db, "partidosReto"),
+        where("jugadores", "array-contains", currentUser.uid),
+      );
 
-      const [snapA, snapR, snapE] = await Promise.all([getDocs(qA), getDocs(qR), getDocs(qE)]);
+      const [snapA, snapR] = await Promise.all([getDocs(qA), getDocs(qR)]);
 
       let all = [
         ...snapA.docs.map((d) => ({ id: d.id, ...d.data(), type: "Amistoso" })),
         ...snapR.docs.map((d) => ({ id: d.id, ...d.data(), type: "Reto" })),
-        ...snapE.docs.map((d) => ({ id: d.id, ...d.data(), type: "Torneo/Evento" })),
       ]
-        .filter((m) => m.resultado || m.estado === "jugado" || m.estado === "finalizado")
-        .sort((a, b) => (b.fecha?.toMillis?.() || 0) - (a.fecha?.toMillis?.() || 0));
+        .filter((m) => m.estado === "jugado")
+        .sort(
+          (a, b) => (b.fecha?.toMillis?.() || 0) - (a.fecha?.toMillis?.() || 0),
+        );
 
-      selector.innerHTML = '<option value="">-- Selecciona un partido --</option>';
+      selector.innerHTML =
+        '<option value="">-- Selecciona un partido --</option>';
       all.forEach((m) => {
-        const date = m.fecha?.toDate ? m.fecha.toDate().toLocaleDateString() : "---";
+        const date = m.fecha?.toDate
+          ? m.fecha.toDate().toLocaleDateString()
+          : "---";
         const res = m.resultado?.sets || "Sin resultado";
         const opt = document.createElement("option");
         opt.value = m.id;
@@ -380,13 +393,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function loadLinkedMatch(id) {
     const match =
       (await getDocument("partidosReto", id)) ||
-      (await getDocument("partidosAmistosos", id)) ||
-      (await getDocument("eventoPartidos", id));
+      (await getDocument("partidosAmistosos", id));
     if (match) {
       const infoBox = document.getElementById("linked-match-info");
       if (infoBox) {
         infoBox.classList.remove("hidden");
-        document.getElementById("txt-match-date").textContent = match.fecha?.toDate
+        document.getElementById("txt-match-date").textContent = match.fecha
+          ?.toDate
           ? match.fecha.toDate().toLocaleDateString()
           : "Partido Anterior";
         document.getElementById("txt-result").textContent = match.resultado
@@ -394,21 +407,30 @@ document.addEventListener("DOMContentLoaded", async () => {
           : "PENDIENTE";
         document.getElementById("inp-match-id").value = id;
 
+        // Pre-fill context if available
         if (match.surface) {
           document.querySelectorAll("#surface-selector button").forEach((b) => {
             if (b.dataset.val === match.surface) b.click();
           });
         }
 
+        // Pre-fill players & Render evaluation grid
         if (match.jugadores) {
-          renderPlayerEvaluations(match.jugadores, currentUser.uid);
           const myIdx = match.jugadores.indexOf(currentUser.uid);
           if (myIdx !== -1) {
-            const partnerIdx = myIdx < 2 ? (myIdx === 0 ? 1 : 0) : myIdx === 2 ? 3 : 2;
+            const partnerIdx =
+              myIdx < 2 ? (myIdx === 0 ? 1 : 0) : myIdx === 2 ? 3 : 2;
             const partId = match.jugadores[partnerIdx];
-            if (partId && !String(partId).startsWith("GUEST_")) {
+            const rivalsIds = myIdx < 2 ? match.jugadores.slice(2, 4) : match.jugadores.slice(0, 2);
+            
+            // Render Evaluator Steps
+            renderPlayerEvaluations(match.jugadores, currentUser.uid);
+
+            if (partId) {
               getDocument("usuarios", partId).then((u) => {
-                if (u) document.getElementById("inp-partner").value = u.nombreUsuario || u.nombre;
+                if (u)
+                  document.getElementById("inp-partner").value =
+                    u.nombreUsuario || u.nombre;
               });
             }
           }
@@ -418,22 +440,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function renderPlayerEvaluations(uids, myUid) {
-    const container = document.getElementById("player-eval-container");
-    if (!container) return;
-    container.innerHTML = '<div class="center py-10"><i class="fas fa-circle-notch fa-spin text-primary"></i></div>';
-    try {
-      const players = await Promise.all(
-        uids.map(async (uid) => {
-          if (!uid) return { id: null, name: "Invitado", isMe: false };
-          if (uid.startsWith("GUEST_")) return { id: uid, name: uid.split("_")[1], isMe: false };
-          if (uid === myUid) return { id: uid, name: "Yo (Mismo)", isMe: true };
-          const u = await getDocument("usuarios", uid);
-          return { id: uid, name: u?.nombreUsuario || "Jugador", isMe: false };
-        }),
-      );
-      container.innerHTML = players
-        .map(
-          (p, idx) => `
+      const container = document.getElementById("player-eval-container");
+      if (!container) return;
+
+      container.innerHTML = '<div class="center py-10"><i class="fas fa-circle-notch fa-spin text-primary"></i></div>';
+
+      try {
+          const players = await Promise.all(uids.map(async (uid) => {
+              if (!uid) return { id: null, name: "Invitado", isMe: false };
+              if (uid.startsWith('GUEST_')) return { id: uid, name: uid.split('_')[1], isMe: false };
+              if (uid === myUid) return { id: uid, name: "Yo (Mismo)", isMe: true };
+              const u = await getDocument('usuarios', uid);
+              return { id: uid, name: u?.nombreUsuario || "Jugador", isMe: false };
+          }));
+
+          container.innerHTML = players.map((p, idx) => `
               <div class="p-5 bg-white/5 rounded-3xl border border-white/10 player-eval-card" data-uid="${p.id}">
                   <div class="flex-row between items-center mb-4">
                       <div class="flex-row items-center gap-2">
@@ -445,6 +466,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                           <input type="radio" name="match-mvp" value="${p.id}" class="mvp-radio">
                       </label>
                   </div>
+                  
                   <div class="grid grid-cols-2 gap-4">
                       <div class="flex-col gap-1">
                           <div class="flex-row between text-[8px] font-black text-muted uppercase">
@@ -476,16 +498,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                       </div>
                   </div>
               </div>
-          `,
-        )
-        .join("");
-    } catch (e) {
-      container.innerHTML = '<div class="center py-10 text-xs text-red-500">Error al cargar jugadores</div>';
-    }
+          `).join('');
+
+      } catch (e) {
+          container.innerHTML = '<div class="center py-10 text-xs text-red-500">Error al cargar jugadores</div>';
+      }
   }
+
   function getTeamIndexByResult(resultSets) {
     const sets = String(resultSets || "").trim().split(/\s+/).filter(Boolean);
-    let t1 = 0, t2 = 0;
+    let t1 = 0;
+    let t2 = 0;
     sets.forEach((setScore) => {
       const parts = setScore.split("-").map(Number);
       if (parts.length !== 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return;
@@ -496,37 +519,56 @@ document.addEventListener("DOMContentLoaded", async () => {
     return t1 > t2 ? 1 : 2;
   }
 
-  function clampInt(v, min, max) { return Math.max(min, Math.min(max, Math.round(Number(v) || 0))); }
+  function clampInt(v, min, max) {
+    return Math.max(min, Math.min(max, Math.round(Number(v) || 0)));
+  }
 
   function computeDiaryPeerBonuses(entry, matchData, authorUid) {
     const bonuses = [];
-    const players = (matchData?.jugadores || matchData?.playerUids || []).filter(Boolean);
+    const players = matchData?.jugadores || [];
     if (!players.length || !Array.isArray(entry.evaluations)) return bonuses;
+
     const myIdx = players.indexOf(authorUid);
     if (myIdx === -1) return bonuses;
     const isAuthorTeam1 = myIdx < 2;
     const winnerTeam = getTeamIndexByResult(matchData?.resultado?.sets || "");
+
     entry.evaluations.forEach((ev) => {
       const uid = ev?.uid;
       if (!uid || uid === authorUid || String(uid).startsWith("GUEST_")) return;
+
       const pIdx = players.indexOf(uid);
       const sameTeam = pIdx !== -1 ? (pIdx < 2) === isAuthorTeam1 : false;
       const isMvp = ev.isMvp === true;
+
       let delta = 0;
       delta += (Number(ev.performance || 5) - 5) * 0.8;
       delta += (Number(ev.control || 5) - 5) * 0.45;
       delta -= Math.max(0, Number(ev.weakness || 0) - 6) * 0.3;
       delta -= Math.max(0, Number(ev.discomfort || 0) - 6) * 0.2;
+
       if (isMvp) delta += 4;
       if (!sameTeam && Number(ev.performance || 0) >= 7) delta += 1;
+
       if (winnerTeam && pIdx !== -1) {
         const playerTeam = pIdx < 2 ? 1 : 2;
         if (winnerTeam === playerTeam) delta += 0.6;
       }
+
       const finalDelta = clampInt(delta, -2, 6);
       if (finalDelta === 0) return;
-      bonuses.push({ uid, diff: finalDelta, reason: isMvp ? "MVP del partido (evaluacion de diario)" : sameTeam ? "Evaluacion positiva de companero" : "Evaluacion tactica de rival" });
+
+      bonuses.push({
+        uid,
+        diff: finalDelta,
+        reason: isMvp
+          ? "MVP del partido (evaluacion de diario)"
+          : sameTeam
+            ? "Evaluacion positiva de companero"
+            : "Evaluacion tactica de rival",
+      });
     });
+
     const dedup = new Map();
     bonuses.forEach((b) => dedup.set(b.uid, b));
     return Array.from(dedup.values());
@@ -534,154 +576,322 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function showDiaryRecapModal(entry) {
     const overlay = document.createElement("div");
-    overlay.className = "modal-overlay active"; overlay.style.zIndex = "12000";
+    overlay.className = "modal-overlay active";
+    overlay.style.zIndex = "12000";
+
     const shotKeys = ["serve", "volley", "bandeja", "vibora", "smash", "lob"];
     const avg = shotKeys.reduce((acc, k) => acc + Number(entry?.shots?.[k] || 0), 0) / shotKeys.length;
+    const memory = entry?.memoryNote || entry?.tactica?.notas || "Sin nota personal en esta entrada.";
+
     overlay.innerHTML = `
-      <div class="modal-card glass-strong animate-up p-5" style="max-width:420px">
-        <h3 class="text-lg font-black italic mb-4">RECUERDO DEL PARTIDO</h3>
-        <p class="text-xs text-white/80 mb-4">${entry.aiSummary || "Análisis procesado."}</p>
-        ${entry.coachNote ? `<p class="text-xs text-white/70 mb-4"><b>Nota del coach:</b> ${entry.coachNote}</p>` : ""}
-        <div class="p-4 bg-black/40 rounded-2xl flex-row between items-center">
-            <span class="text-[10px] font-black text-muted uppercase">SENSACIÓN MEDIA</span>
-            <span class="text-xl font-black text-primary">${avg.toFixed(1)}/10</span>
+      <div class="modal-card glass-strong animate-up p-0 overflow-hidden" style="max-width:420px">
+        <div class="modal-header">
+          <span class="modal-title font-black italic tracking-widest">RECORDATORIO DEL PARTIDO</span>
+          <button class="close-btn" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button>
         </div>
-        <button class="btn btn-primary w-full mt-6" onclick="this.closest('.modal-overlay').remove()">OK</button>
+        <div class="modal-body custom-scroll p-5 flex-col gap-4">
+          <div class="p-4 rounded-2xl border border-white/10 bg-white/5">
+            <span class="text-[9px] uppercase tracking-widest text-muted font-black">Resumen IA</span>
+            <p class="text-xs text-white mt-2">${entry.aiSummary || "Sin resumen"}</p>
+          </div>
+          <div class="p-4 rounded-2xl border border-white/10 bg-white/5">
+            <span class="text-[9px] uppercase tracking-widest text-muted font-black">Tu recuerdo personal</span>
+            <p class="text-xs text-white/90 mt-2">${memory}</p>
+          </div>
+          <div class="p-4 rounded-2xl border border-white/10 bg-black/30 flex-row between items-center">
+            <span class="text-[10px] font-black uppercase text-muted">Sensacion media en golpes</span>
+            <span class="text-lg font-black text-primary">${avg.toFixed(1)}/10</span>
+          </div>
+        </div>
       </div>
     `;
+
     document.body.appendChild(overlay);
   }
+  // --- SAVE LOGIC ---
 
   async function saveEntry() {
     if (!currentUser) return;
+
     const btn = document.getElementById("btn-next");
     const originalText = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESANDO...';
+    showToast("Guardando...", "Sincronizando entrada del diario.", "info");
+
     try {
-      const val = (id) => document.getElementById(id)?.value || "";
-      const valInt = (id) => parseInt(document.getElementById(id)?.value || 0);
+      // 1. Gather Data
+      const selectedMatchId =
+        entryMode === "match"
+          ? document.getElementById("inp-match-id").value || null
+          : null;
 
       const entry = {
         id: Date.now().toString(),
         fecha: new Date().toISOString(),
-        matchId: entryMode === "match" ? val("inp-match-id") : null,
+        matchId: selectedMatchId,
         sessionMode: entryMode,
-        tipo: entryMode === "note" ? "Nota Libre" : val("inp-tipo") || "Sesión",
-        hora: val("inp-hora") || "N/A",
-        surface: document.querySelector("#surface-selector .active")?.dataset?.val || "indoor",
-        posicion: document.querySelector("#pos-selector .active")?.dataset?.val || "reves",
-        evaluations: Array.from(document.querySelectorAll(".player-eval-card")).map((card) => ({
-          uid: card.dataset.uid,
-          performance: parseInt(card.querySelector(".performance")?.value || 5),
-          control: parseInt(card.querySelector(".control")?.value || 5),
-          weakness: parseInt(card.querySelector(".weakness")?.value || 3),
-          discomfort: parseInt(card.querySelector(".discomfort")?.value || 2),
-          isMvp: !!card.querySelector(".mvp-radio")?.checked,
+
+        // Context
+        tipo:
+          entryMode === "note"
+            ? "Nota Libre"
+            : document.getElementById("inp-tipo")?.value || "Sesión",
+        hora: document.getElementById("inp-hora")?.value || "N/A",
+        surface:
+          document.querySelector("#surface-selector .active")?.dataset?.val ||
+          "indoor",
+        pista: document.getElementById("inp-court-type")?.value || "cristal",
+
+        // Alignment
+        posicion:
+          document.querySelector("#pos-selector .active")?.dataset?.val ||
+          "reves",
+        rivalStyle: Array.from(
+          document.querySelectorAll("#rival-tags .active"),
+        ).map((el) => el.innerText),
+        partner: document.getElementById("inp-partner")?.value || "",
+        rivals: [
+          document.getElementById("inp-rival1")?.value || "",
+          document.getElementById("inp-rival2")?.value || "",
+        ],
+
+        // Player Evaluations (Private)
+        evaluations: Array.from(document.querySelectorAll('.player-eval-card')).map(card => ({
+            uid: card.dataset.uid,
+            performance: parseInt(card.querySelector('.performance').value),
+            control: parseInt(card.querySelector('.control').value),
+            weakness: parseInt(card.querySelector('.weakness').value),
+            discomfort: parseInt(card.querySelector('.discomfort').value),
+            isMvp: card.querySelector('.mvp-radio').checked
         })),
+        mvpId: document.querySelector('input[name="match-mvp"]:checked')?.value || null,
+
+        // Technical Sensations by shot (1-10)
         shots: {
-          serve: valInt("inp-shot-serve") || 5,
-          volley: valInt("inp-shot-volley") || 5,
-          bandeja: valInt("inp-shot-bandeja") || 5,
-          vibora: valInt("inp-shot-vibora") || 5,
-          smash: valInt("inp-shot-smash") || 5,
-          lob: valInt("inp-shot-lob") || 5,
+          serve: parseInt(document.getElementById("inp-shot-serve")?.value || 5),
+          volley: parseInt(document.getElementById("inp-shot-volley")?.value || 5),
+          bandeja: parseInt(document.getElementById("inp-shot-bandeja")?.value || 5),
+          vibora: parseInt(document.getElementById("inp-shot-vibora")?.value || 5),
+          smash: parseInt(document.getElementById("inp-shot-smash")?.value || 5),
+          lob: parseInt(document.getElementById("inp-shot-lob")?.value || 5),
         },
+
+        // Legacy/Basic Stats (Derived)
+        stats: {
+          netPoints: parseInt(document.getElementById("rng-net")?.value || 50),
+          backPoints: parseInt(document.getElementById("rng-back")?.value || 50),
+        },
+
+        // Biometrics & Mood
         biometria: {
-          fisico: valInt("inp-fisico") || 5,
-          mental: valInt("inp-mental") || 5,
-          confianza: valInt("inp-confianza") || 5,
-          mood: document.querySelector("#mood-box .active")?.dataset.mood || "Normal",
+          fisico: parseInt(document.getElementById("inp-fisico").value),
+          mental: parseInt(document.getElementById("inp-mental").value),
+          confianza: parseInt(document.getElementById("inp-confianza").value),
+          fatiga: parseInt(document.getElementById("inp-fatiga")?.value || 3),
+          estres: parseInt(document.getElementById("inp-estres")?.value || 2),
+          mood:
+            document.querySelector("#mood-box .active")?.dataset.mood ||
+            "Normal",
         },
+
+        // Analysis
         tactica: {
-          clave: val("inp-key-moment"),
-          notas: val("entry-notes"),
-          damageReceived: val("inp-damage-received"),
-          damageInflicted: val("inp-damage-inflicted"),
+          clave: document.getElementById("inp-key-moment").value,
+          dañoRecibido: document.getElementById("inp-damage-received").value,
+          dañoInfligido: document.getElementById("inp-damage-inflicted").value,
+          leccion: document.getElementById("entry-lesson")?.value || "",
+          nextGoal: document.getElementById("inp-next-goal")?.value || "",
+          notas: document.getElementById("entry-notes").value,
         },
-        memoryNote: val("entry-memory"),
-        lesson: val("entry-lesson"),
-        nextGoal: val("inp-next-goal"),
+
+        memoryNote: document.getElementById("entry-memory")?.value || "",
       };
 
-      entry.aiSummary = generateSmartSummary(entry);
-      entry.coachNote = generateCoachNote(entry);
+      // 2. Weather Snapshot
+      try {
+        const w = await getDetailedWeather();
+        if (w && w.current) {
+          entry.weather = {
+            temp: w.current.temperature_2m,
+            rain: w.current.rain,
+            wind: w.current.wind_speed_10m,
+          };
+        }
+      } catch (e) {}
 
+      // 3. AI Summary (Simulated for now)
+      entry.aiSummary = generateSmartSummary(entry);
+
+      // --- PHASE 3.5: PREDICTION VALIDATION & BRAIN SYNC ---
+      if (entry.matchId) {
+        try {
+          const colName = entry.matchId.startsWith('reto') ? 'partidosReto' : 'partidosAmistosos'; 
+          // Note: Since collection name is not always obvious from ID, we try both
+          let mRef = doc(db, "partidosAmistosos", entry.matchId);
+          let mSnap = await getDoc(mRef);
+          let finalCol = "partidosAmistosos";
+          
+          if (!mSnap.exists()) {
+            mRef = doc(db, "partidosReto", entry.matchId);
+            mSnap = await getDoc(mRef);
+            finalCol = "partidosReto";
+          }
+
+          if (mSnap.exists()) {
+            const mData = mSnap.data();
+            entry.resultSnapshot = mData.resultado || null;
+            if (mData.preMatchPrediction) entry.predictionSnapshot = mData.preMatchPrediction;
+            if (Array.isArray(mData.jugadores)) {
+              const players = mData.jugadores.filter((id) => id && !String(id).startsWith("GUEST_"));
+              const myIdx = players.indexOf(currentUser.uid);
+              if (myIdx >= 0) {
+                const mine = myIdx < 2 ? players.slice(0, 2) : players.slice(2, 4);
+                const rivals = myIdx < 2 ? players.slice(2, 4) : players.slice(0, 2);
+                entry.matchContext = {
+                  allPlayerIds: players,
+                  teammateIds: mine.filter((id) => id !== currentUser.uid),
+                  rivalIds: rivals,
+                };
+              }
+            }
+
+            // CRITICAL: If the match has a result but ranking was NOT processed, trigger it now!
+            if (mData.resultado?.sets && !mData.rankingProcessedAt) {
+               logInfo("diary_safety_ranking_trigger");
+               const { processMatchResults } = await import("./ranking-service.js");
+               await processMatchResults(entry.matchId, finalCol, mData.resultado.sets);
+            }
+          }
+        } catch (err) {
+          console.warn("Prediction/Ranking sync error", err);
+        }
+      }
+
+      // --- PHASE 4: Save to Firebase (Atomically via Transaction) ---
+      // Notify the Brain about this subjective data
+      try {
+        const { AIOrchestrator } = await import("./ai-orchestrator.js");
+        // Dispatch event (Async, don't block save)
+        AIOrchestrator.dispatch("DIARY_SAVED", {
+          uid: currentUser.uid,
+          diaryEntry: entry,
+        }).catch((e) => console.warn("Orchestrator sync warning:", e));
+      } catch (e) {
+        console.warn("Orchestrator module not found:", e);
+      }
+
+      // 4. Save to Firebase (Legacy + New System)
+
+      // 4. Save to Firebase (Atomically via Transaction)
+      const { runTransaction } = await import("https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js");
+      
       await runTransaction(db, async (transaction) => {
+        // --- STEP 1: READS (Must be first) ---
         const userRef = doc(db, "usuarios", currentUser.uid);
         const userSnap = await transaction.get(userRef);
         if (!userSnap.exists()) throw "User not found";
+
+        let matchRef = null;
+        let matchData = null;
+        let peerSnaps = [];
+        let peersToRead = [];
+
         const uData = userSnap.data();
         const currentJournal = uData.diario || [];
-        
-        if (entry.matchId) {
-          const matchRefA = doc(db, "partidosAmistosos", entry.matchId);
-          const matchRefR = doc(db, "partidosReto", entry.matchId);
-          const matchRefE = doc(db, "eventoPartidos", entry.matchId);
-          const [mSnapA, mSnapR, mSnapE] = await Promise.all([
-            transaction.get(matchRefA), 
-            transaction.get(matchRefR),
-            transaction.get(matchRefE)
-          ]);
-          
-          let mRef = mSnapA.exists() ? matchRefA : (mSnapR.exists() ? matchRefR : (mSnapE.exists() ? matchRefE : null));
-          let mData = mSnapA.exists() ? mSnapA.data() : (mSnapR.exists() ? mSnapR.data() : (mSnapE.exists() ? mSnapE.data() : null));
+        const alreadyLoggedThisMatch = !!(entry.matchId && currentJournal.some((d) => d.matchId === entry.matchId));
 
-          if (mRef && mData) {
-            const diaryImpactBy = mData.diaryImpactBy || {};
-            if (!diaryImpactBy[currentUser.uid]) {
-              const peerBonuses = computeDiaryPeerBonuses(entry, mData, currentUser.uid);
-              
-              // NEW logic: All reads BEFORE any updates
-              const peerUpdates = [];
-              for (const peer of peerBonuses) {
-                const pRef = doc(db, "usuarios", peer.uid);
-                const pSnap = await transaction.get(pRef);
-                peerUpdates.push({ ref: pRef, snap: pSnap, diff: peer.diff });
-              }
+        if (entry.matchId && !alreadyLoggedThisMatch) {
+            const matchRefA = doc(db, "partidosAmistosos", entry.matchId);
+            const matchRefR = doc(db, "partidosReto", entry.matchId);
+            const matchSnapA = await transaction.get(matchRefA);
+            const matchSnapR = await transaction.get(matchRefR);
 
-              // Now execute the updates
-              for (const pu of peerUpdates) {
-                if (pu.snap.exists()) {
-                  transaction.update(pu.ref, { 
-                    puntosRanking: (pu.snap.data().puntosRanking || 1000) + pu.diff 
-                  });
-                }
-              }
-
-              diaryImpactBy[currentUser.uid] = serverTimestamp();
-              transaction.update(mRef, { diaryImpactBy });
+            if (matchSnapA.exists()) {
+                matchRef = matchRefA;
+                matchData = matchSnapA.data();
+            } else if (matchSnapR.exists()) {
+                matchRef = matchRefR;
+                matchData = matchSnapR.data();
             }
-          }
+
+            if (matchData) {
+                const diaryImpactBy = matchData.diaryImpactBy || {};
+                if (!diaryImpactBy[currentUser.uid]) {
+                     const peerBonuses = computeDiaryPeerBonuses(entry, matchData, currentUser.uid);
+                     peersToRead = peerBonuses;
+                     for (const peer of peerBonuses) {
+                         const pRef = doc(db, "usuarios", peer.uid);
+                         const pSnap = await transaction.get(pRef);
+                         peerSnaps.push({ uid: peer.uid, snap: pSnap, bonus: peer });
+                     }
+
+                     for (const item of peerSnaps) {
+                         if (!item.snap.exists()) continue;
+                         
+                         const pData = item.snap.data();
+                         const pRef = item.snap.ref;
+                         const peerCurrent = Number(pData.puntosRanking || 1000);
+                         const peerNew = Math.max(0, peerCurrent + Number(item.bonus.diff || 0));
+
+                         transaction.update(pRef, {
+                            puntosRanking: peerNew,
+                            lastDiaryImpact: {
+                                fromUid: currentUser.uid,
+                                matchId: entry.matchId,
+                                diff: Number(item.bonus.diff || 0),
+                                reason: item.bonus.reason,
+                                at: serverTimestamp(),
+                            }
+                         });
+
+                         const peerLogRef = doc(collection(db, "rankingLogs"));
+                         transaction.set(peerLogRef, {
+                            uid: item.uid,
+                            timestamp: serverTimestamp(),
+                            diff: Number(item.bonus.diff || 0),
+                            newTotal: peerNew,
+                            type: "DIARY_PEER_BONUS",
+                            reason: item.bonus.reason,
+                            matchId: entry.matchId,
+                            fromUid: currentUser.uid,
+                            details: {
+                                mvpId: entry.mvpId || null,
+                                evaluations: entry.evaluations || [],
+                            },
+                         });
+                     }
+
+                     diaryImpactBy[currentUser.uid] = serverTimestamp();
+                     transaction.update(matchRef, { diaryImpactBy });
+                }
+            }
+
+            // Save user diary entry
+            currentJournal.push(entry);
+            transaction.update(userRef, { diario: currentJournal });
+        } else {
+            // Save user diary entry (no match linked)
+            currentJournal.push(entry);
+            transaction.update(userRef, { diario: currentJournal });
         }
-        currentJournal.push(entry);
-        transaction.update(userRef, { diario: currentJournal });
       });
 
-      showToast("GUARDADO", "Análisis sincronizado.", "success");
-      await addPlayerHistoryEntry({
-        uid: currentUser.uid,
-        kind: "diary_entry",
-        title: "Entrada de diario registrada",
-        text: entry.coachNote || entry.memoryNote || entry.lesson || "Nueva reflexion tactica guardada.",
-        tag: "Diario",
-        tone: "diary",
-        matchId: entry.matchId || null,
-        entityId: entry.id || null,
-        meta: {
-          rival: entry.rival || "",
-          nextGoal: entry.nextGoal || ""
-        }
-      }).catch(() => {});
+      // Feedback handled by submitTechnicalEntry mostly, but global toast here too
+      showToast(
+        "ANOTACIÓN GUARDADA",
+        "Tu diario táctico se ha sincronizado correctamente.",
+        "success",
+      );
       window.closeWizard();
       showDiaryRecapModal(entry);
       resetWizard();
     } catch (e) {
       console.error(e);
-      showToast("ERROR", "Fallo al guardar", "error");
+      showToast("ERROR", "Fallo en la sincronización", "error");
     } finally {
-      btn.disabled = false; btn.innerHTML = originalText;
+      btn.disabled = false;
+      btn.innerHTML = originalText;
     }
   }
 
@@ -690,16 +900,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     entryMode = "match";
     syncEntryModeUI();
     document.getElementById("inp-key-moment").value = "";
+    document.getElementById("inp-damage-received").value = "";
+    document.getElementById("inp-damage-inflicted").value = "";
     document.getElementById("entry-notes").value = "";
+    document.getElementById("entry-lesson").value = "";
+    document.getElementById("inp-next-goal").value = "";
+    const memoryEl = document.getElementById("entry-memory");
+    if (memoryEl) memoryEl.value = "";
     document.getElementById("inp-match-id").value = "";
     document.getElementById("inp-match-selector").value = "";
-    ["shot-serve", "shot-volley", "shot-bandeja", "shot-vibora", "shot-smash", "shot-lob", "fisico", "mental", "confianza"].forEach(k => {
-        const inp = document.getElementById("inp-" + k);
-        if (inp) inp.value = 5;
-        const val = document.getElementById("val-" + k);
-        if (val) val.innerText = 5;
+
+    ["serve", "volley", "bandeja", "vibora", "smash", "lob", "fisico", "mental", "confianza", "fatiga", "estres"].forEach((k) => {
+      const input = document.getElementById(`inp-${k.includes('-') ? k : (['serve','volley','bandeja','vibora','smash','lob'].includes(k) ? 'shot-'+k : k)}`);
+      // Wait, let's just be explicit to avoid bugs
     });
+
+    const resetF = (id, val) => {
+        const inp = document.getElementById(id);
+        const lbl = document.getElementById(id.replace('inp-', 'val-'));
+        if(inp) inp.value = val;
+        if(lbl) lbl.innerText = val;
+    };
+
+    ["shot-serve", "shot-volley", "shot-bandeja", "shot-vibora", "shot-smash", "shot-lob", "fisico", "mental", "confianza", "fatiga", "estres"].forEach(k => resetF('inp-'+k, 5));
+    resetF('inp-fatiga', 3);
+    resetF('inp-estres', 2);
   }
+
   // --- RENDER JOURNAL LIST ---
   function renderJournalList(entries) {
     const list = document.getElementById("journal-list");
@@ -727,7 +954,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           <details class="journal-acc-item animate-fade-in" data-entry-id="${e.id}">
             <summary class="journal-acc-head">
               <div class="flex-col">
-                <span class="text-[9px] font-black uppercase tracking-widest text-primary">${e.tipo || "SESION"}</span>
+                <span class="text-[9px] font-black uppercase tracking-widest text-primary">${e.tipo || "SESIÓN"}</span>
                 <span class="text-xs font-black text-white">${date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })} · ${String(e.hora || "--:--").toUpperCase()}</span>
               </div>
               <div class="mood-badge ${isNote ? "text-cyan-300" : moodColor} border border-white/10 px-3 py-1 rounded-full bg-black/40">
@@ -745,27 +972,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                 `
                   : ""
               }
-              ${
-                e.coachNote
-                  ? `
-                  <div class="ai-insight-box mb-3 p-3 bg-primary/5 rounded-xl border border-primary/10">
-                    <i class="fas fa-clipboard-check text-primary text-[10px] mr-2"></i>
-                    <span class="text-[10px] italic text-white/80">${e.coachNote}</span>
-                  </div>
-                `
-                  : ""
-              }
               <div class="stat-mini-grid">
                 <div class="sm-item flex-col">
                   <span class="text-[8px] font-black text-muted uppercase tracking-widest">Media golpes</span>
                   <b class="text-sport-green text-sm">${((((e.shots?.serve || 5) + (e.shots?.volley || 5) + (e.shots?.bandeja || 5) + (e.shots?.vibora || 5) + (e.shots?.smash || 5) + (e.shots?.lob || 5)) / 6).toFixed(1))}</b>
                 </div>
                 <div class="sm-item flex-col">
-                  <span class="text-[8px] font-black text-muted uppercase tracking-widest">MVP</span>
-                  <b class="text-sport-gold text-sm">${e.evaluations?.some(ev => ev.isMvp) ? "SI" : "NO"}</b>
+                  <span class="text-[8px] font-black text-muted uppercase tracking-widest">MVP elegido</span>
+                  <b class="text-sport-gold text-sm">${e.mvpId ? "SI" : "NO"}</b>
                 </div>
                 <div class="sm-item flex-col">
-                  <span class="text-[8px] font-black text-muted uppercase tracking-widest">Posicion</span>
+                  <span class="text-[8px] font-black text-muted uppercase tracking-widest">Posición</span>
                   <b class="text-white text-sm">${(e.posicion || "-").toUpperCase()}</b>
                 </div>
               </div>
@@ -780,42 +997,42 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function updateStats(entries) {
-    const elEntries = document.getElementById("stat-entries");
-    const elStreak = document.getElementById("stat-streak");
-    if (elEntries) elEntries.innerText = entries.length;
-    if (elStreak && userData) elStreak.innerText = userData.puntosRanking || 1000;
+    document.getElementById("stat-entries").innerText = entries.length;
+    if (userData) {
+        document.getElementById("stat-streak").innerText = userData.puntosRanking || 1000;
+    }
   }
 
   function generateSmartSummary(e) {
+    // Advanced contextual AI summary
     const feels = e.biometria?.mood || "Normal";
+    const fatiga = e.biometria?.fatiga || 0;
+    const estres = e.biometria?.estres || 0;
     const shots = e.shots || {};
     const avgShot = Object.values(shots).reduce((a,b)=>a+b, 0) / (Object.values(shots).length || 1);
+
     let txt = "";
-    if (avgShot >= 8) txt += "Rendimiento tecnico sobresaliente. ";
-    else if (avgShot <= 4) txt += "Dia de imprecision tecnica. ";
-    if (feels === "Fluido") txt += "Sintonia perfecta con el juego. ";
-    return txt || "Sesion registrada. Sigue analizando para mejorar.";
+    
+    if (avgShot >= 8) txt += "Rendimiento técnico sobresaliente. ";
+    else if (avgShot <= 4) txt += "Día de imprecisión técnica. ";
+
+    if (fatiga >= 7) txt += "Alta fatiga física detectada. ";
+    if (estres >= 7) txt += "Nivel de estrés elevado afectó la toma de decisiones. ";
+
+    if (feels === "Frustrado") txt += "Bloqueo emocional durante el juego. ";
+    if (feels === "Fluido") txt += "Sintonía perfecta con la Matrix. ";
+
+    if (e.tactica?.leccion) txt += `Has aprendido: ${e.tactica.leccion.slice(0, 50)}... `;
+    if (e.tactica?.nextGoal) txt += `Objetivo: ${e.tactica.nextGoal}.`;
+
+    return txt || "Sesión registrada. La IA está procesando tus datos tácticos.";
   }
 
-  function generateCoachNote(entry) {
-    const shots = entry?.shots || {};
-    const shotKeys = ["serve", "volley", "bandeja", "vibora", "smash", "lob"];
-    const avgShot = shotKeys.reduce((acc, k) => acc + Number(shots[k] || 0), 0) / shotKeys.length;
-    const fisico = Number(entry?.biometria?.fisico || 5);
-    const mental = Number(entry?.biometria?.mental || 5);
-    const confianza = Number(entry?.biometria?.confianza || 5);
-
-    if (avgShot < 5) return "Hoy te costo cerrar los puntos. Trabaja definicion en la red y bola de salida.";
-    if (fisico < 5) return "El fisico estuvo bajo. Prioriza movilidad, piernas y recuperacion.";
-    if (mental < 5 || confianza < 5) return "Controla la ansiedad. Respiracion y rutina pre-saque te ayudaran.";
-    if (avgShot >= 7.5) return "Buen nivel tecnico. Manten ritmo y sube agresividad controlada.";
-    return "Buen trabajo. Refuerza la consistencia y el primer golpe.";
-  }
-
+  // Export global functions
   window.showAIAnalysis = async () => {
-    const { initVecinaChat, toggleChat } = await import("./modules/vecina-chat.js");
+    const { initVecinaChat, toggleChat } =
+      await import("./modules/vecina-chat.js?v=6.5");
     initVecinaChat();
     toggleChat();
   };
 });
-

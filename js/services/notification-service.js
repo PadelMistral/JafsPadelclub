@@ -1,4 +1,4 @@
-/* =====================================================
+﻿/* =====================================================
    PADELUMINATIS NOTIFICATION SERVICE V2.0 (Unified)
    Centralized notification handling, listeners, and automation.
    ===================================================== */
@@ -143,7 +143,7 @@ export async function createNotification(
   }
   const targets = Array.isArray(targetUids) ? targetUids : [targetUids];
   const notifType = normalizeType(type);
-  const safeTitle = String(title || "JafsPadel").trim()
+  const safeTitle = String(title || "Padeluminatis").trim()
     .normalize('NFC')
     .slice(0, 120);
   const safeMessage = String(message || "").trim()
@@ -402,7 +402,7 @@ export async function initAutoNotifications(uid) {
       )[0];
     if (newest && !notifiedDuringSession.has(newest.id)) {
       sendPushNotification(
-        newest.titulo || "JafsPadel",
+        newest.titulo || "Padeluminatis",
         newest.mensaje,
         `https://ui-avatars.com/api/?name=${encodeURIComponent(newest.titulo || 'P')}&background=00d4ff&color=fff`,
         { tag: `notif_${newest.id}`, url: newest.enlace || "./home.html" },
@@ -457,7 +457,7 @@ function watchRankingChanges(uid) {
               "Ranking actualizado",
               `Has subido ${gain} ${gain === 1 ? "posición" : "posiciones"} en el ranking.`,
               NOTIF_TYPES.RANKING_UP,
-              "ranking.html",
+              "ranking-v3.html",
               { type: NOTIF_TYPES.RANKING_UP, rankDelta: gain, rank: posNow },
             );
           } else if (posNow && posPrev && posNow > posPrev) {
@@ -467,7 +467,7 @@ function watchRankingChanges(uid) {
               "Ranking actualizado",
               `Has bajado ${loss} ${loss === 1 ? "puesto" : "puestos"} en el ranking.`,
               NOTIF_TYPES.RANKING_DOWN,
-              "ranking.html",
+              "ranking-v3.html",
               { type: NOTIF_TYPES.RANKING_DOWN, rankDelta: -loss, rank: posNow },
             );
           }
@@ -663,15 +663,12 @@ function watchMatchParticipationEvents(uid) {
   const collections = ["partidosReto", "partidosAmistosos"];
 
   collections.forEach((colName) => {
-    // 1. Matches I'm playing in
-    const qPlaying = query(collection(db, colName), where("jugadores", "array-contains", uid));
-    // 2. Matches I created (may not be playing yet)
-    const qCreated = query(collection(db, colName), where("creador", "==", uid));
-
+    const q = query(collection(db, colName), where("jugadores", "array-contains", uid));
     const stateById = new Map();
 
-    const handleSnapshot = async (snapshot) => {
+    safeOnSnapshot(q, async (snapshot) => {
       const currentIds = new Set();
+
       for (const d of snapshot.docs) {
         const matchId = d.id;
         const curr = d.data() || {};
@@ -681,9 +678,8 @@ function watchMatchParticipationEvents(uid) {
         stateById.set(matchId, curr);
         if (!prev) continue;
 
-        const prevPlayers = (prev.jugadores || prev.playerUids || []).filter((p) => p && !String(p).startsWith("GUEST_"));
-        const currPlayers = (curr.jugadores || curr.playerUids || []).filter((p) => p && !String(p).startsWith("GUEST_"));
-        
+        const prevPlayers = (prev.jugadores || []).filter((p) => p && !String(p).startsWith("GUEST_"));
+        const currPlayers = (curr.jugadores || []).filter((p) => p && !String(p).startsWith("GUEST_"));
         const joined = currPlayers.find((p) => !prevPlayers.includes(p));
         const left = prevPlayers.find((p) => !currPlayers.includes(p));
 
@@ -720,7 +716,7 @@ function watchMatchParticipationEvents(uid) {
             "Resultado registrado",
             `Se ha subido resultado en tu partido: ${sets}.`,
             NOTIF_TYPES.RESULT_UPLOADED,
-            "ranking.html",
+            "ranking-v3.html",
             { type: NOTIF_TYPES.RESULT_UPLOADED, matchId, dedupId: `result_evt_${matchId}` },
           );
         }
@@ -740,10 +736,7 @@ function watchMatchParticipationEvents(uid) {
       for (const oldId of [...stateById.keys()]) {
         if (!currentIds.has(oldId)) stateById.delete(oldId);
       }
-    };
-
-    safeOnSnapshot(qPlaying, handleSnapshot);
-    safeOnSnapshot(qCreated, handleSnapshot);
+    });
   });
 }
 
@@ -755,13 +748,14 @@ async function scheduleMatchReminders(uid) {
   const minReminderMs = 55 * 60 * 1000;
   const maxReminderMs = 65 * 60 * 1000;
 
-  const collections = ["partidosReto", "partidosAmistosos", "eventoPartidos"];
+  const collections = ["partidosReto", "partidosAmistosos"];
 
   for (const colName of collections) {
     try {
       const q = query(
         collection(db, colName),
         where("jugadores", "array-contains", uid),
+        where("estado", "==", "abierto"),
       );
 
       const snapshot = await window.getDocsSafe(q);
@@ -809,7 +803,7 @@ async function scheduleMatchReminders(uid) {
  */
 async function schedulePendingResultAlerts(uid) {
   const now = Date.now();
-  const collections = ["partidosReto", "partidosAmistosos", "eventoPartidos"];
+  const collections = ["partidosReto", "partidosAmistosos"];
 
   for (const colName of collections) {
     try {
@@ -825,11 +819,6 @@ async function schedulePendingResultAlerts(uid) {
         const matchId = d.id;
         const date = m.fecha?.toDate?.() || new Date(m.fecha);
         if (!date || Number.isNaN(date.getTime())) return;
-
-        const state = String(m.estado || "").toLowerCase();
-        if (["cancelado", "anulado"].includes(state)) return;
-        const hasResult = Boolean(m.resultado?.sets || m.resultado?.score);
-        if (hasResult) return;
 
         const filled = (m.jugadores || []).filter(Boolean).length;
         if (filled < 4) return;
@@ -916,7 +905,7 @@ async function checkMorningMatchSummary(uid) {
   if (localStorage.getItem(lastKey)) return;
 
   try {
-    const collections = ["partidosReto", "partidosAmistosos", "eventoPartidos"];
+    const collections = ["partidosReto", "partidosAmistosos"];
     let matchesToday = 0;
 
     for (const col of collections) {
@@ -942,7 +931,7 @@ async function checkMorningMatchSummary(uid) {
 
       await createNotification(
         uid,
-        `🎾 ¡Hoy juegas, ${name}!`,
+        `?? ¡Hoy juegas, ${name}!`,
         `Tienes ${matchesToday} partido(s) programado(s) para hoy en la Matrix. ¡A por todas!`,
         "info",
         null,
@@ -977,12 +966,12 @@ async function checkDailySummary(uid) {
       streak: userData.rachaActual || 0,
     };
 
-    let message = `🎾 Resumen: ${stats.points} ELO | ${stats.wins} victorias`;
-    if (stats.streak >= 3) message += ` | 🔥 Racha de ${stats.streak}!`;
+    let message = `?? Resumen: ${stats.points} ELO | ${stats.wins} victorias`;
+    if (stats.streak >= 3) message += ` | ?? Racha de ${stats.streak}!`;
 
     await createNotification(
       uid,
-      `🌅 Buenos días, ${userData.nombreUsuario?.split(" ")[0] || "Campeón"}`,
+      `?? Buenos días, ${userData.nombreUsuario?.split(" ")[0] || "Campeón"}`,
       message,
       "info",
       null,
@@ -1065,62 +1054,13 @@ export async function calculatePointsPreview(matchId, colName, uid) {
  * Auto-suggest diary entry after match result
  */
 export async function suggestDiaryEntry(uid, matchId, won) {
-  let setsStr = "";
-  let note = "";
-  try {
-    const mA = await getDocument("partidosAmistosos", matchId);
-    const mR = mA ? null : await getDocument("partidosReto", matchId);
-    const mE = mA || mR ? null : await getDocument("eventoPartidos", matchId);
-    const match = mA || mR || mE || null;
-    setsStr = getResultSetsString(match) || "";
-
-    const parseSets = (raw) => {
-      const out = [];
-      String(raw || "")
-        .trim()
-        .split(/\s+/)
-        .forEach((s) => {
-          const [a, b] = s.split("-").map((n) => Number(n));
-          if (Number.isFinite(a) && Number.isFinite(b)) out.push([a, b]);
-        });
-      return out;
-    };
-
-    const sets = parseSets(setsStr);
-    const setWins = sets.reduce(
-      (acc, [a, b]) => {
-        if (a > b) acc.w += 1;
-        if (b > a) acc.l += 1;
-        acc.diff += Math.abs(a - b);
-        return acc;
-      },
-      { w: 0, l: 0, diff: 0 },
-    );
-    const closeMatch = sets.length >= 2 && setWins.diff <= 4;
-
-    if (won) {
-      if (setWins.l === 0) note = "Victoria sólida. Mantén la presión y cierra en red.";
-      else if (closeMatch) note = "Buen cierre en puntos clave. Refuerza la consistencia al final de set.";
-      else note = "Buen partido. Ajusta el inicio de set para dominar antes.";
-    } else {
-      if (closeMatch) note = "Partido ajustado. Trabaja los primeros juegos para no ir a remolque.";
-      else note = "Hoy costó cerrar. Prioriza saque y primera volea en el próximo.";
-    }
-  } catch (_) {
-    note = won
-      ? "Victoria trabajada. Mantén la rutina y la concentración."
-      : "Buen partido. Analiza qué mejorar y vuelve a intentarlo.";
-  }
-
-  const base = won
-    ? "🎾 ¡Gran victoria!"
-    : "🎾 Buen partido.";
-  const score = setsStr ? ` Marcador: ${setsStr}.` : "";
-  const message = `${base}${score} ${note} ¿Quieres registrarlo en tu diario táctico?`;
+  const message = won
+    ? "🎾 ¡Gran victoria! ¿Quieres registrar los detalles en tu diario táctico?"
+    : "🎾 Buen partido. ¿Registramos qué funcionó y qué mejorar?";
 
   await createNotification(
     uid,
-    "📝 Nota del Coach",
+    "📝 Registrar en Diario",
     message,
     "info",
     null,
@@ -1137,3 +1077,5 @@ export default {
   suggestDiaryEntry,
   cleanupAutoNotifications,
 };
+
+

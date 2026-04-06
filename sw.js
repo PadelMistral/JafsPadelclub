@@ -1,177 +1,138 @@
-/* ===============================================================
-   JafsPadel Service Worker v4 — PWA + Background Push Ready
-   =============================================================== */
+const CACHE_NAME = "padeluminatis-v8.0";
+const CORE_ASSETS = [
+  "./",
+  "./index.html",
+  "./home.html",
+  "./css/global.css",
+  "./css/design-tokens.css",
+  "./css/themes.css",
+  "./css/layout.css",
+  "./css/home-core.css",
+  "./css/auth.css",
+  "./js/home-core.js",
+  "./js/ui-core.js",
+  "./js/firebase-service.js",
+  "./js/modules/theme-manager.js",
+  "./js/login.js",
+  "./imagenes/Logojafs.png",
+  "./manifest.json",
+  // Keep precache lean to avoid slow installs and frozen first load.
+  // Secondary pages and heavy AI/admin bundles load on demand.
+];
 
-importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
-
-const CACHE_NAME = "jafs-padel-runtime";
-const BASE_PATH = new URL(self.registration.scope || "/").pathname.replace(/\/$/, "");
-const withBase = (path) =>
-  path.startsWith("http")
-    ? path
-    : `${BASE_PATH}${path.startsWith("/") ? path : "/" + path}`;
-
-const OFFLINE_URLS = [
-  "/",
-  "/index.html",
-  "/home.html",
-  "/calendario.html",
-  "/historial.html",
-  "/palas.html",
-  "/offline.html",
-  "/imagenes/Logojafs.png",
-].map(withBase);
-
-// ─── INSTALL ────────────────────────────────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(OFFLINE_URLS))
-      .catch(() => null)
+      .then((cache) => cache.addAll(CORE_ASSETS))
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
-// ─── ACTIVATE ───────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
-      )
-    )
+    (async () => {
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+          return Promise.resolve();
+        })
+      );
+      await self.clients.claim();
+    })()
   );
-  self.clients.claim();
 });
 
-// ─── MESSAGES ───────────────────────────────────────────────────
 self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
-  if (event.data?.type === "PING") {
-    event.source?.postMessage({ type: "PONG", ts: Date.now() });
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
   }
 });
 
-// ─── FETCH (Cache-first, fallback to network) ───────────────────
+async function cachePut(request, response) {
+  if (!response || (!response.ok && response.type !== "opaque")) return response;
+  const cache = await caches.open(CACHE_NAME);
+  await cache.put(request, response.clone());
+  return response;
+}
+
+async function networkFirst(request, fallbackUrl = null) {
+  try {
+    const response = await fetch(request, { cache: "no-store" });
+    return await cachePut(request, response);
+  } catch (error) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    if (fallbackUrl) {
+      const fallback = await caches.match(fallbackUrl);
+      if (fallback) return fallback;
+    }
+    throw error;
+  }
+}
+
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  return cachePut(request, response);
+}
+
+async function staleWhileRevalidate(request) {
+  const cached = await caches.match(request);
+  const networkFetch = fetch(request)
+    .then((response) => cachePut(request, response))
+    .catch(() => null);
+  return cached || networkFetch || fetch(request);
+}
+
 self.addEventListener("fetch", (event) => {
-  const { request } = event;
-  if (request.method !== "GET") return;
-  if (new URL(request.url).origin !== self.location.origin) return;
+  if (event.request.method !== "GET") return;
 
-  const url = new URL(request.url);
-  const isHtml = request.mode === "navigate" || request.destination === "document";
-  const isAsset = ["script", "style", "worker"].includes(request.destination) || /\.(js|css)$/i.test(url.pathname);
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
 
-  if (isHtml || isAsset) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy).catch(() => null));
-          return response;
-        })
-        .catch(async () => {
-          const cached = await caches.match(request);
-          if (cached) return cached;
-          return caches.match(withBase("/offline.html")) || caches.match(withBase("/"));
-        })
-    );
+  if (event.request.mode === "navigate") {
+    event.respondWith(networkFirst(event.request, "./index.html"));
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy).catch(() => null));
-          return response;
-        })
-        .catch(() =>
-          caches.match(withBase("/offline.html")) ||
-          caches.match(withBase("/"))
-        );
+  if (url.pathname.match(/\.(js|css)$/)) {
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
+
+  if (url.pathname.match(/\.(png|jpg|jpeg|svg|webp|gif)$/)) {
+    event.respondWith(cacheFirst(event.request));
+    return;
+  }
+
+  event.respondWith(staleWhileRevalidate(event.request));
+});
+
+// Fallback click handler for local notifications.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification?.data?.url || "./home.html";
+
+  event.waitUntil(
+    clients.matchAll({ type: "window" }).then((windowClients) => {
+      for (let i = 0; i < windowClients.length; i += 1) {
+        const client = windowClients[i];
+        if (client.url === url && "focus" in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(url);
+      }
+      return null;
     })
   );
 });
 
-// ─── PUSH NOTIFICATIONS (Background, PWA cerrada) ───────────────
-self.addEventListener("push", (event) => {
-  let data = {};
-  try {
-    data = event.data?.json() || {};
-  } catch {
-    data = { title: "JafsPadel", body: event.data?.text() || "Nuevo aviso" };
-  }
 
-  const title = data.headings?.es || data.title || "JafsPadel";
-  const body = data.contents?.es || data.body || "Tienes un nuevo aviso";
-  const icon = data.icon || "/imagenes/Logojafs.png";
-  const badge = data.badge || "/imagenes/Logojafs.png";
-  const url = data.url || data.launchURL || "/notificaciones.html";
-  const tag = data.tag || "jafs-push";
-  const requireInteraction = data.requireInteraction ?? true;
 
-  const notifOptions = {
-    body,
-    icon,
-    badge,
-    tag,
-    requireInteraction,
-    vibrate: [200, 100, 200],
-    data: { url, openUrl: url },
-    actions: [
-      { action: "open", title: "Ver ahora" },
-      { action: "dismiss", title: "Cerrar" },
-    ],
-  };
-
-  event.waitUntil(
-    self.registration.showNotification(title, notifOptions)
-  );
-});
-
-// ─── NOTIFICATION CLICK ─────────────────────────────────────────
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-
-  if (event.action === "dismiss") return;
-
-  const targetUrl = event.notification.data?.url || "/notificaciones.html";
-  const fullUrl = new URL(targetUrl, self.location.origin).href;
-
-  event.waitUntil(
-    self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clientList) => {
-        // Busca una ventana abierta y la enfoca
-        for (const client of clientList) {
-          if (client.url.includes(self.location.origin) && "focus" in client) {
-            client.navigate(fullUrl);
-            return client.focus();
-          }
-        }
-        // Si no hay ventana abierta, abre una nueva
-        return self.clients.openWindow(fullUrl);
-      })
-  );
-});
-
-// ─── PUSH SUBSCRIPTION CHANGE ───────────────────────────────────
-self.addEventListener("pushsubscriptionchange", (event) => {
-  event.waitUntil(
-    self.registration.pushManager
-      .subscribe({ userVisibleOnly: true })
-      .then((sub) => {
-        // Notifica a los clientes activos para re-registrar en Firestore
-        return self.clients.matchAll().then((clients) => {
-          clients.forEach((c) =>
-            c.postMessage({ type: "PUSH_SUBSCRIPTION_CHANGED", subscription: sub.toJSON() })
-          );
-        });
-      })
-      .catch((e) => console.warn("[SW] pushsubscriptionchange failed:", e))
-  );
-});
