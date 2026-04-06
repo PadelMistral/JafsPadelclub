@@ -4,4 +4,4 @@ compatibility_date = "2026-04-05"
 workers_dev = true
 
 [vars]
-APP_ORIGIN = "https://tu-dominio-o-pwa.example"
+APP_ORIGIN = "https://padeluminatis.github.io"

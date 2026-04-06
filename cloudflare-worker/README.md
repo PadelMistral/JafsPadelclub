@@ -33,6 +33,8 @@ Necesitas:
    `wrangler secret put ONESIGNAL_REST_API_KEY`
    `wrangler secret put FIREBASE_WEB_API_KEY`
 5. Edita `wrangler.toml` y pon `APP_ORIGIN` con tu dominio real.
+   En tu caso con GitHub Pages:
+   `APP_ORIGIN = "https://padelmistral.github.io"`
 6. Publica:
    `wrangler deploy`
 
@@ -45,8 +47,14 @@ Edita [js/app-config.js](C:/Users/Juana.DESKTOP-29R11RA/Desktop/JafsPadelclub-ma
 
 ```js
 export const APP_PUSH_API_URL = "https://tu-worker.workers.dev/send-push";
-export const APP_ALLOWED_ORIGIN = "https://tu-dominio-real";
+export const APP_ALLOWED_ORIGIN = "https://padelmistral.github.io";
 ```
+
+Si tu web final se abre como:
+`https://padelmistral.github.io/JafsPadelclub/`
+
+el `origin` correcto sigue siendo:
+`https://padelmistral.github.io`
 
 ## Nota importante
 
