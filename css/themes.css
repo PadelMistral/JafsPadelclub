@@ -16,32 +16,32 @@
 /* ===== THEME: GALACTIC (Defecto) - Estelar & Neon ===== */
 /* ===== THEME: GALACTIC (Defecto) - Estelar & Neon ===== */
 [data-theme="galactic"] {
-  --bg-void: #020617;
-  --bg-surface: rgba(15, 23, 42, 0.85);
-  --primary: #c6ff00; /* Intense Lime */
-  --primary-glow: rgba(198, 255, 0, 0.6);
+  --bg-void: #0a1426;
+  --bg-surface: rgba(14, 22, 38, 0.9);
+  --primary: #cfff3a; /* Luminous Lime */
+  --primary-glow: rgba(198, 255, 58, 0.55);
   --secondary: #00e5ff; /* Cyan Neon */
   --accent: #ff00ff; /* Magenta Pulse */
   --sport-green: #a3e635; /* Lighter Lime */
   --text-primary: #ffffff;
   --header-bg: linear-gradient(
     180deg,
-    rgba(7, 12, 36, 0.98) 0%,
-    rgba(4, 8, 24, 0.9) 100%
+    rgba(12, 18, 36, 0.96) 0%,
+    rgba(10, 16, 32, 0.9) 100%
   );
   --nav-bg: linear-gradient(
     180deg,
-    rgba(6, 10, 30, 0.95) 0%,
-    rgba(2, 6, 18, 0.99) 100%
+    rgba(10, 16, 32, 0.98) 0%,
+    rgba(8, 12, 24, 0.98) 100%
   );
 }
 
 [data-theme="galactic"] .sport-bg {
   background: radial-gradient(
     circle at 20% 20%,
-    #1e0b3a 0%,
-    #0a0a1a 35%,
-    #02040a 100%
+    #1d2b5a 0%,
+    #0f1a36 35%,
+    #0a1226 100%
   ) !important;
 }
 

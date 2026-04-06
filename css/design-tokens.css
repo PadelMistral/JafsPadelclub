@@ -3,15 +3,15 @@
   color-scheme: dark;
 
   /* ── Core Palette ── */
-  --color-bg: #07111f;
-  --color-surface: rgba(16, 24, 40, 0.9);
-  --color-surface-2: rgba(24, 36, 60, 0.82);
-  --color-surface-3: rgba(33, 48, 76, 0.72);
-  --color-border: rgba(255, 255, 255, 0.14);
+  --color-bg: #020617;
+  --color-surface: rgba(10, 16, 28, 0.92);
+  --color-surface-2: rgba(15, 23, 42, 0.82);
+  --color-surface-3: rgba(20, 30, 55, 0.75);
+  --color-border: rgba(255, 255, 255, 0.1);
   --color-border-subtle: rgba(255, 255, 255, 0.05);
   --color-text: #f8fafc;
-  --color-text-muted: rgba(248, 250, 252, 0.72);
-  --color-text-dim: rgba(248, 250, 252, 0.48);
+  --color-text-muted: rgba(248, 250, 252, 0.6);
+  --color-text-dim: rgba(248, 250, 252, 0.35);
 
   /* ── Sport Accent Colors ── */
   --color-primary: #00d4ff;
@@ -155,5 +155,3 @@
     transform: none !important;
   }
 }
-
-

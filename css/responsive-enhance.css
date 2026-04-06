@@ -474,19 +474,24 @@ body {
    ───────────────────────────────────── */
 .soft-prompt-card {
   position: fixed;
-  bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(24px + env(safe-area-inset-bottom, 24px));
   left: 50%;
   transform: translateX(-50%);
-  width: calc(100% - 24px);
-  max-width: 420px;
-  z-index: 9990;
-  background: rgba(8, 12, 24, 0.95);
-  border: 1px solid rgba(251, 191, 36, 0.2);
-  border-radius: 20px;
-  padding: 16px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  width: min(92vw, 420px);
+  z-index: 99999;
+  background: var(--bg-strong, rgba(8, 12, 24, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 24px;
+  padding: 18px 20px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 
+    0 24px 60px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  pointer-events: auto;
 }
 
 /* ─────────────────────────────────────

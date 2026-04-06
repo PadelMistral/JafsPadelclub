@@ -1994,6 +1994,7 @@ h4 {
     left: 10px;
     right: 10px;
     top: calc(72px + env(safe-area-inset-top, 0px));
+    bottom: auto;
     max-width: none;
   }
 
