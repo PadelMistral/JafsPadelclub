@@ -117,7 +117,7 @@ function ensureBootLoader() {
         loader = document.createElement('div');
         loader.id = 'app-boot-loader';
         loader.className = 'app-boot-loader';
-        const msgs = ['Sincronizando Datos', 'Cargando Campo', 'Preparando SesiÃ³n', 'Conectando...'];
+        const msgs = ['Sincronizando datos', 'Cargando campo', 'Preparando sesión', 'Conectando...'];
         const msg = msgs[Math.floor(Math.random() * msgs.length)];
         loader.innerHTML = `
           <div class="app-boot-core">
@@ -209,11 +209,11 @@ function initGlobalFeedbackHooks() {
     });
 
     window.addEventListener('offline', () => {
-        showToast('Sin conexiÃ³n', 'Verifica internet para sincronizar datos.', 'warning');
+        showToast('Sin conexión', 'Verifica internet para sincronizar datos.', 'warning');
     });
 
     window.addEventListener('online', () => {
-        showToast('ConexiÃ³n restablecida', 'SincronizaciÃ³n reanudada.', 'success');
+        showToast('Conexión restablecida', 'Sincronización reanudada.', 'success');
     });
 }
 
@@ -278,7 +278,7 @@ function formatLastSeen(value) {
         hour: '2-digit',
         minute: '2-digit',
     });
-    return `${datePart} Â· ${timePart}`;
+    return `${datePart} · ${timePart}`;
 }
 
 async function resolveOnlineNexusViewerRole() {
@@ -408,14 +408,14 @@ async function openOnlineNexusModal() {
         onlineUsers = buckets.online;
         offlineUsers = buckets.offline;
       } catch (_) {
-        countEl.textContent = 'Sin conexiÃ³n';
+        countEl.textContent = 'Sin conexión';
         onlineListEl.innerHTML = '<div class="online-nexus-empty">No se pudo cargar online</div>';
         if (offlineListEl) offlineListEl.innerHTML = '<div class="online-nexus-empty">No se pudo cargar offline</div>';
         return;
       }
 
       countEl.textContent = canSeeOffline
-        ? `${onlineUsers.length} ONLINE Â· ${offlineUsers.length} OFFLINE RECIENTES`
+        ? `${onlineUsers.length} ONLINE · ${offlineUsers.length} OFFLINE RECIENTES`
         : `${onlineUsers.length} ONLINE AHORA`;
 
       onlineListEl.innerHTML = onlineUsers.length
@@ -429,7 +429,7 @@ async function openOnlineNexusModal() {
             <img src="${photo}" alt="${u.nombreUsuario || u.nombre || 'Jugador'}" class="online-nexus-avatar" loading="lazy">
             <div class="online-nexus-main">
               <span class="online-nexus-name">${(u.nombreUsuario || u.nombre || 'Jugador').toUpperCase()}</span>
-              <span class="online-nexus-sub">${(u.rol || 'Jugador').toUpperCase()} Â· ACTIVO AHORA</span>
+              <span class="online-nexus-sub">${(u.rol || 'Jugador').toUpperCase()} · ACTIVO AHORA</span>
             </div>
             <span class="online-nexus-pill">NV ${lvl}</span>
           </div>
@@ -450,7 +450,7 @@ async function openOnlineNexusModal() {
                 <img src="${photo}" alt="${u.nombreUsuario || u.nombre || 'Jugador'}" class="online-nexus-avatar" loading="lazy">
                 <div class="online-nexus-main">
                   <span class="online-nexus-name">${(u.nombreUsuario || u.nombre || 'Jugador').toUpperCase()}</span>
-                  <span class="online-nexus-sub">${(u.rol || 'Jugador').toUpperCase()} Â· ${seen}</span>
+                  <span class="online-nexus-sub">${(u.rol || 'Jugador').toUpperCase()} · ${seen}</span>
                 </div>
                 <span class="online-nexus-pill offline">NV ${lvl}</span>
               </div>
@@ -818,7 +818,7 @@ export function showToast(title, body, type = 'info') {
     }
 
     if (!TOAST_TYPES.has(normalizedType)) normalizedType = 'info';
-    if (!normalizedTitle) normalizedTitle = 'NotificaciÃ³n';
+    if (!normalizedTitle) normalizedTitle = 'Notificación';
 
     if (!window.__toastDedupMap) window.__toastDedupMap = new Map();
     const dedupKey = `${normalizedType}|${normalizedTitle}|${normalizedBody}`;
@@ -858,7 +858,7 @@ export function showToast(title, body, type = 'info') {
             <div class="toast-title">${esc(normalizedTitle)}</div>
             ${normalizedBody ? `<div class="toast-msg">${esc(normalizedBody)}</div>` : ''}
         </div>
-        <button class="toast-close-btn" aria-label="Cerrar notificaciÃ³n">&times;</button>
+        <button class="toast-close-btn" aria-label="Cerrar notificación">&times;</button>
     `;
     ensureToastItemStyles(toast, normalizedType);
 
@@ -901,7 +901,7 @@ export function countUp(el, target, duration = 2000) {
 }
 
 /**
- * Modal de preferencia de lado (inscripciÃ³n eventos).
+ * Modal de preferencia de lado (inscripción eventos).
  * @returns {Promise<'derecha'|'reves'|'flex'|null>}
  */
 export function showSidePreferenceModal() {
@@ -915,14 +915,14 @@ export function showSidePreferenceModal() {
         overlay.innerHTML = `
             <div class="modal-card modal-side-pref-card">
                 <div class="modal-header">
-                    <h3 id="side-pref-title" class="modal-title"><i class="fas fa-hand-point-up"></i> PosiciÃ³n preferida</h3>
+                    <h3 id="side-pref-title" class="modal-title"><i class="fas fa-hand-point-up"></i> Posición preferida</h3>
                     <button type="button" class="modal-close" aria-label="Cerrar">&times;</button>
                 </div>
                 <div class="modal-body">
                     <p class="side-pref-desc">Elige tu lado preferido para el emparejamiento:</p>
                     <div class="side-pref-btns">
                         <button type="button" class="btn-side-opt" data-value="derecha"><i class="fas fa-hand-point-right"></i> Derecha</button>
-                        <button type="button" class="btn-side-opt" data-value="reves"><i class="fas fa-hand-point-left"></i> RevÃ©s</button>
+                        <button type="button" class="btn-side-opt" data-value="reves"><i class="fas fa-hand-point-left"></i> Revés</button>
                         <button type="button" class="btn-side-opt btn-side-opt-flex" data-value="flex"><i class="fas fa-arrows-left-right"></i> Me da igual</button>
                     </div>
                 </div>

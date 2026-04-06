@@ -1,4 +1,4 @@
-/* js/modules/push-notifications.js - OneSignal Push Channel */
+﻿/* js/modules/push-notifications.js - OneSignal Push Channel */
 import { showToast } from "../ui-core.js";
 import { auth, db } from "../firebase-service.js";
 import { analyticsCount, analyticsSetFlag, analyticsTiming } from "../core/analytics.js";
@@ -580,7 +580,7 @@ async function processPushStateMachine(userId) {
             // Estado 4: Suscrito
             await persistDeviceSubscription(userId);
             
-            // Estado 5: Login Ejecutado (Solo si estÃ¡ suscrito y permitido)
+            // Estado 5: Login ejecutado (solo si está suscrito y permitido)
             if (userId && lastOneSignalLoginUid !== userId) {
                 await safeLoginToOneSignal(userId);
             }
@@ -658,12 +658,12 @@ async function showSoftPrompt() {
                 <i class="fas fa-bell"></i>
             </div>
             <div class="soft-prompt-text">
-                <h3>Mantente al dÃ­a</h3>
+                <h3>Mantente al día</h3>
                 <p>Activa las notificaciones para avisos de retos y partidos.</p>
             </div>
         </div>
         <div class="soft-prompt-actions">
-            <button class="btn-soft later" id="btn-notif-later">MÃ¡s tarde</button>
+            <button class="btn-soft later" id="btn-notif-later">Más tarde</button>
             <button class="btn-soft active" id="btn-notif-activate">Activar</button>
         </div>
     `;
@@ -704,8 +704,8 @@ async function showDeniedGuide() {
                     <div class="flex-row items-start gap-4 p-4 bg-sport-green/20 border border-sport-green/30 rounded-2xl">
                         <div class="w-10 h-10 rounded-xl bg-sport-green text-black flex center shrink-0 font-black">2</div>
                         <div class="flex-col">
-                            <span class="text-[12px] font-black uppercase text-black">Pulsa el botÃ³n de abajo</span>
-                            <p class="text-[10px] text-black/70 font-bold leading-relaxed mt-1">Recargar aplicarÃ¡ el cambio inmediatamente.</p>
+                            <span class="text-[12px] font-black uppercase text-black">Pulsa el botón de abajo</span>
+                            <p class="text-[10px] text-black/70 font-bold leading-relaxed mt-1">Recargar aplicará el cambio inmediatamente.</p>
                         </div>
                     </div>
                 </div>
@@ -866,7 +866,7 @@ export function scheduleMatchReminder(matchDate, matchInfo) {
     setTimeout(() => {
       sendPushNotification(
         "Partido en 30 minutos",
-        `Tu partido${matchInfo ? ` - ${matchInfo}` : ""} empieza pronto. PrepÃ¡rate.`,
+        `Tu partido${matchInfo ? ` - ${matchInfo}` : ""} empieza pronto. Prepárate.`,
       );
     }, delay);
   }
@@ -876,12 +876,12 @@ export function notifyRankingChange(oldRank, newRank, pointsDiff) {
   if (newRank < oldRank) {
     sendPushNotification(
       "Has subido en el ranking",
-      `Nueva posiciÃ³n: #${newRank} (+${pointsDiff} pts)`,
+      `Nueva posición: #${newRank} (+${pointsDiff} pts)`,
     );
   } else if (newRank > oldRank) {
     sendPushNotification(
       "Has bajado en el ranking",
-      `Nueva posiciÃ³n: #${newRank} (${pointsDiff} pts)`,
+      `Nueva posición: #${newRank} (${pointsDiff} pts)`,
     );
   }
 }
@@ -913,8 +913,8 @@ export async function checkDailyReminders(userId, matches) {
 
   if (todayMatches.length > 0 && isAfterMorningTime && !alreadySentToday) {
     sendPushNotification(
-      "Â¡Hoy juegas!",
-      `Tienes ${todayMatches.length} partido(s) programado(s) para hoy. Â¡A por todas!`,
+      "¡Hoy juegas!",
+      `Tienes ${todayMatches.length} partido(s) programado(s) para hoy. ¡A por todas!`,
     );
     localStorage.setItem(morningCheckKey, "true");
   }
@@ -939,7 +939,7 @@ export function setOneSignalAppId(appId) {
 }
 
 export async function checkNotificationStatus() {
-  console.log(`ðŸ“¡ [Push Health] Iniciando chequeo...`);
+  console.log(`Ã°Å¸â€œÂ¡ [Push Health] Iniciando chequeo...`);
   const native = isNativeMobileApp();
   const ua = navigator.userAgent || "";
   const isIOS = /iPad|iPhone|iPod/.test(ua);
@@ -951,9 +951,9 @@ export async function checkNotificationStatus() {
     : (browserSupported ? Notification.permission : "unsupported");
   const swSupported = !native && "serviceWorker" in navigator;
 
-  console.log(`ðŸ“± [Push Health] Plataforma: iOS=${isIOS}, Safari=${isSafari}`);
-  console.log(`ðŸŒ [Push Health] Navegador Soporta Push: ${browserSupported}, Permiso: ${permission}`);
-  console.log(`âš™ï¸ [Push Health] Service Worker Soportado: ${swSupported}`);
+  console.log(`Ã°Å¸â€œÂ± [Push Health] Plataforma: iOS=${isIOS}, Safari=${isSafari}`);
+  console.log(`Ã°Å¸Å’Â [Push Health] Navegador Soporta Push: ${browserSupported}, Permiso: ${permission}`);
+  console.log(`Ã¢Å¡â„¢Ã¯Â¸Â [Push Health] Service Worker Soportado: ${swSupported}`);
 
   let swActive = false;
   let swScope = null;
@@ -979,11 +979,11 @@ export async function checkNotificationStatus() {
       appShellScope = swDiag?.appShell?.scope || null;
       oneSignalScope = swDiag?.oneSignal?.scope || null;
       
-      console.log(`ðŸ› ï¸ [Push Health] SW Registros Activos: ${swCount}`);
-      if (oneSignalScope) console.log(`ðŸ›°ï¸ [Push Health] OneSignal Scope: ${oneSignalScope} | URL: ${oneSignalScriptURL}`);
-      if (swConflict) console.warn(`âš ï¸ [Push Health] Conflicto de SW detectado!`);
+      console.log(`Ã°Å¸â€ºÂ Ã¯Â¸Â [Push Health] SW Registros Activos: ${swCount}`);
+      if (oneSignalScope) console.log(`Ã°Å¸â€ºÂ°Ã¯Â¸Â [Push Health] OneSignal Scope: ${oneSignalScope} | URL: ${oneSignalScriptURL}`);
+      if (swConflict) console.warn(`Ã¢Å¡Â Ã¯Â¸Â [Push Health] Conflicto de SW detectado!`);
     } catch (e) {
-      console.error(`âŒ [Push Health] Error leyendo Service Workers:`, e);
+      console.error(`Ã¢ÂÅ’ [Push Health] Error leyendo Service Workers:`, e);
     }
   }
 
@@ -995,7 +995,7 @@ export async function checkNotificationStatus() {
   let oneSignalSubscriptionId = null;
   let oneSignalError = null;
 
-  console.log(`ðŸ”” [Push Health] OneSignal Disponible: ${oneSignalAvailable}, Inicializado: ${oneSignalInitialized}`);
+  console.log(`Ã°Å¸â€â€ [Push Health] OneSignal Disponible: ${oneSignalAvailable}, Inicializado: ${oneSignalInitialized}`);
 
   try {
     if (!oneSignalInitialized && oneSignalAvailable) {
@@ -1007,11 +1007,11 @@ export async function checkNotificationStatus() {
         : await oneSignalExec(async (OneSignal) => safeGetSubscription(OneSignal));
       oneSignalSubscriptionId = sub?.id || null;
       oneSignalRegistered = Boolean(sub?.id && sub?.optedIn);
-      console.log(`âœ… [Push Health] OneSignal SuscripciÃ³n: ${oneSignalSubscriptionId}, OptedIn: ${sub?.optedIn}`);
+      console.log(`[Push Health] OneSignal suscripci?n: ${oneSignalSubscriptionId}, OptedIn: ${sub?.optedIn}`);
     }
   } catch (e) {
     oneSignalError = e?.message || "onesignal-status-error";
-    console.error(`âŒ [Push Health] Error consultando OneSignal:`, e);
+    console.error(`[Push Health] Error consultando OneSignal:`, e);
   }
 
   const blocked = permission === "denied";
@@ -1021,7 +1021,7 @@ export async function checkNotificationStatus() {
     (native || (swSupported && swActive)) &&
     oneSignalRegistered;
 
-  console.log(`ðŸ“Š [Push Health] Listo en 2o Plano: ${backgroundReady}, Bloqueado por Usuario: ${blocked}`);
+  console.log(`[Push Health] Listo en segundo plano: ${backgroundReady}, Bloqueado por usuario: ${blocked}`);
 
   const issues = [];
   if (!browserSupported) issues.push("browser_unsupported");
@@ -1043,10 +1043,10 @@ export async function checkNotificationStatus() {
   else if (!oneSignalRegistered) recommendedAction = "reconnect_onesignal";
 
   if (issues.length > 0) {
-    console.warn(`ðŸ” [Push Health] Problemas encontrados:`, issues);
-    console.warn(`ðŸ’¡ [Push Health] AcciÃ³n recomendada: ${recommendedAction}`);
+    console.warn(`[Push Health] Problemas encontrados:`, issues);
+    console.warn(`[Push Health] Acci?n recomendada: ${recommendedAction}`);
   } else {
-    console.log(`ðŸŒŸ [Push Health] Todo perfecto!`);
+    console.log(`[Push Health] Todo correcto`);
   }
 
   const status = {
@@ -1090,14 +1090,14 @@ export async function checkNotificationStatus() {
 }
 
 const HUMAN_MESSAGES = {
-  ok: { title: "Todo listo", message: "RecibirÃ¡s avisos de partidos y retos en tu mÃ³vil aunque no tengas la app abierta.", steps: [] },
-  permission_default: { title: "Activa los avisos", message: "Para no perderte ningÃºn partido, permite que la app te envÃ­e notificaciones.", steps: ["Pulsa el botÃ³n Â«ActivarÂ» debajo.", "En la ventana del navegador, elige Â«PermitirÂ»."] },
-  permission_denied: { title: "Avisos desactivados", message: "Has bloqueado los avisos. Para volver a recibirlos:", steps: ["Abre la configuraciÃ³n de tu navegador (icono de candado o informaciÃ³n en la barra de la direcciÃ³n).", "Busca Â«NotificacionesÂ» para esta pÃ¡gina y cÃ¡mbialo a Â«PermitirÂ».", "Vuelve aquÃ­ y recarga la app si hace falta."] },
-  sw_inactive: { title: "Actualiza la app", message: "Para recibir avisos en segundo plano, instala o actualiza la app desde tu navegador.", steps: ["En el menÃº del navegador (tres puntos), elige Â«Instalar aplicaciÃ³nÂ» o Â«AÃ±adir a pantalla de inicioÂ».", "Abre la app desde el icono instalado y activa de nuevo los avisos."] },
-  sw_scope_conflict: { title: "Conflicto de versiÃ³n", message: "Hay dos versiones de la app en uso. Usa solo la instalada (icono en el mÃ³vil).", steps: ["Cierra pestaÃ±as abiertas de la app en el navegador.", "Abre solo la app instalada (icono en la pantalla de inicio)."] },
-  onesignal_sdk_missing: { title: "Cargando sistema de avisos", message: "El sistema de notificaciones no ha cargado aÃºn. Vuelve a intentar en unos segundos.", steps: [] },
-  onesignal_not_initialized: { title: "Avisos en preparaciÃ³n", message: "El servicio de avisos no se ha iniciado. Comprueba tu conexiÃ³n y recarga la pÃ¡gina.", steps: [] },
-  onesignal_not_subscribed: { title: "Un paso mÃ¡s", message: "Acepta recibir notificaciones cuando el navegador lo pregunte.", steps: ["Pulsa Â«ActivarÂ» y luego Â«PermitirÂ» en la ventana del navegador."] },
+  ok: { title: "Todo listo", message: "Recibirás avisos de partidos y retos en tu móvil aunque no tengas la app abierta.", steps: [] },
+  permission_default: { title: "Activa los avisos", message: "Para no perderte ningún partido, permite que la app te envíe notificaciones.", steps: ["Pulsa el botón «Activar» debajo.", "En la ventana del navegador, elige «Permitir»."] },
+  permission_denied: { title: "Avisos desactivados", message: "Has bloqueado los avisos. Para volver a recibirlos:", steps: ["Abre la configuración de tu navegador (icono de candado o información en la barra de dirección).", "Busca «Notificaciones» para esta página y cámbialo a «Permitir».", "Vuelve aquí y recarga la app si hace falta."] },
+  sw_inactive: { title: "Actualiza la app", message: "Para recibir avisos en segundo plano, instala o actualiza la app desde tu navegador.", steps: ["En el menú del navegador (tres puntos), elige «Instalar aplicación» o «Añadir a pantalla de inicio».", "Abre la app desde el icono instalado y activa de nuevo los avisos."] },
+  sw_scope_conflict: { title: "Conflicto de versión", message: "Hay dos versiones de la app en uso. Usa solo la instalada (icono en el móvil).", steps: ["Cierra pestañas abiertas de la app en el navegador.", "Abre solo la app instalada (icono en la pantalla de inicio)."] },
+  onesignal_sdk_missing: { title: "Cargando sistema de avisos", message: "El sistema de notificaciones no ha cargado aún. Vuelve a intentar en unos segundos.", steps: [] },
+  onesignal_not_initialized: { title: "Avisos en preparación", message: "El servicio de avisos no se ha iniciado. Comprueba tu conexión y recarga la página.", steps: [] },
+  onesignal_not_subscribed: { title: "Un paso más", message: "Acepta recibir notificaciones cuando el navegador lo pregunte.", steps: ["Pulsa «Activar» y luego «Permitir» en la ventana del navegador."] },
   onesignal_error: { title: "Algo ha fallado", message: "No hemos podido conectar el sistema de avisos. Prueba a recargar la app o a abrirla de nuevo desde el icono instalado.", steps: [] },
   default: { title: "Estado de los avisos", message: "Comprueba que tienes la app instalada y que has permitido las notificaciones.", steps: [] },
 };
@@ -1253,7 +1253,7 @@ export async function runPushDiagnostics() {
     const base = getAppBase();
     const status = await checkNotificationStatus();
     
-    console.group("ðŸš€ [OneSignal Diagnostics]");
+    console.group("Ã°Å¸Å¡â‚¬ [OneSignal Diagnostics]");
     console.log("App Base Path (Detected):", base);
     console.log("Full Origin:", window.location.origin);
     console.log("-----------------------------------");
@@ -1266,9 +1266,9 @@ export async function runPushDiagnostics() {
     
     if (status.oneSignalScope) {
         if (scopeOk) {
-            console.log("âœ… Scope Validation: MATCH (Correct)");
+            console.log("Ã¢Å“â€¦ Scope Validation: MATCH (Correct)");
         } else {
-            console.error(`âŒ Scope Validation: MISMATCH! \nExpected: ${expectedScope}\nActual:   ${status.oneSignalScope}`);
+            console.error(`Ã¢ÂÅ’ Scope Validation: MISMATCH! \nExpected: ${expectedScope}\nActual:   ${status.oneSignalScope}`);
         }
     }
     
@@ -1283,4 +1283,6 @@ export async function runPushDiagnostics() {
     console.groupEnd();
     return status;
 }
+
+
 

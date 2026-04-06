@@ -1,7 +1,8 @@
 ﻿/* js/modules/ui-loader.js - Dynamic Layout Injection v5.5 */
-import { getDocument, auth, db, subscribeCol, getDocsSafe, observerAuth as guardAuth } from '../firebase-service.js';
+import { getDocument, updateDocument, auth, db, subscribeCol, getDocsSafe, observerAuth as guardAuth, logout } from '../firebase-service.js';
 import { initThemeSystem } from './theme-manager.js';
 import { logInfo } from '../core/app-logger.js';
+import { AudioManager } from './audio-manager.js';
 
 // Initialize theme system immediately  
 initThemeSystem();
@@ -24,6 +25,9 @@ if (typeof window !== 'undefined') {
 const PUBLIC_PAGES = ['index.html', 'registro.html'];
 
 function emitToast(title, body = '', type = 'info') {
+    if (type === 'error') AudioManager.play('ERROR', 0.4);
+    else if (type === 'success') AudioManager.play('SUCCESS', 0.4);
+    else AudioManager.play('NOTIF', 0.3);
     if (typeof window !== 'undefined' && typeof window.__appToast === 'function') {
         window.__appToast(title, body, type);
         return;
@@ -58,10 +62,124 @@ function getUserInitials(name = "") {
     return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
 }
 
+function escapeUiLoaderHtml(raw = "") {
+    const div = document.createElement("div");
+    div.textContent = String(raw || "");
+    return div.innerHTML;
+}
+
+function confirmUiLoaderAction({
+    title = "Confirmar",
+    message = "¿Quieres continuar?",
+    confirmLabel = "Continuar",
+    danger = false,
+} = {}) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.className = "modal-overlay active modal-stack-front";
+        overlay.innerHTML = `
+            <div class="modal-card glass-strong" style="max-width:380px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">${escapeUiLoaderHtml(title)}</h3>
+                    <button class="close-btn" type="button">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-[11px] text-white/75 leading-relaxed">${escapeUiLoaderHtml(message)}</p>
+                    <div class="flex-row gap-2 mt-4">
+                        <button type="button" class="btn btn-ghost w-full" data-ui-loader-cancel>Cancelar</button>
+                        <button type="button" class="btn w-full ${danger ? "btn-danger" : "btn-primary"}" data-ui-loader-ok>${escapeUiLoaderHtml(confirmLabel)}</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        const close = (accepted = false) => {
+            overlay.remove();
+            resolve(Boolean(accepted));
+        };
+        overlay.querySelector(".close-btn")?.addEventListener("click", () => close(false));
+        overlay.querySelector("[data-ui-loader-cancel]")?.addEventListener("click", () => close(false));
+        overlay.querySelector("[data-ui-loader-ok]")?.addEventListener("click", () => close(true));
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) close(false);
+        });
+        document.body.appendChild(overlay);
+    });
+}
+
 function buildHeaderAvatarMarkup(userData = null) {
     const displayName = userData?.nombreUsuario || userData?.nombre || "Jugador";
     const photo = (userData?.fotoPerfil || userData?.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0f172a&color=fff&size=96`).trim();
     return `<img src="${photo}" alt="Perfil" id="header-avatar-img">`;
+}
+
+function ensureHeaderProfileMenuStyles() {
+    if (document.getElementById("header-profile-menu-styles")) return;
+    const style = document.createElement("style");
+    style.id = "header-profile-menu-styles";
+    style.textContent = `
+        .header-profile-wrap{position:relative}
+        .header-avatar-btn{background:transparent;border:0;padding:0;cursor:pointer}
+        .header-profile-menu{position:absolute;top:calc(100% + 12px);right:0;min-width:240px;padding:10px;border-radius:18px;border:1px solid rgba(255,255,255,.1);background:linear-gradient(180deg,rgba(5,10,22,.98),rgba(2,6,23,.98));box-shadow:0 20px 48px rgba(2,6,23,.42);display:none;z-index:450;backdrop-filter:blur(18px)}
+        .header-profile-wrap.open .header-profile-menu{display:block}
+        .header-menu-user{padding:10px 12px 12px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:8px}
+        .header-menu-name{display:block;color:#fff;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+        .header-menu-sub{display:block;color:rgba(255,255,255,.5);font-size:10px;text-transform:uppercase;letter-spacing:.12em;margin-top:4px}
+        .header-menu-action{width:100%;display:flex;align-items:center;gap:10px;padding:12px 12px;border-radius:14px;border:0;background:transparent;color:#e2e8f0;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;cursor:pointer}
+        .header-menu-action:hover{background:rgba(255,255,255,.06)}
+        .header-menu-action.danger{color:#fca5a5}
+        .header-menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
+    `;
+    document.head.appendChild(style);
+}
+
+function bindHeaderProfileMenu(userData = null) {
+    ensureHeaderProfileMenuStyles();
+    const wrap = document.getElementById("header-profile-wrap");
+    const toggle = document.getElementById("header-avatar-container");
+    const profileBtn = document.getElementById("header-go-profile");
+    const historyBtn = document.getElementById("header-go-history");
+    const racketsBtn = document.getElementById("header-go-palas");
+    const logoutBtn = document.getElementById("header-logout");
+    if (!wrap || !toggle) return;
+
+    const closeMenu = () => wrap.classList.remove("open");
+    toggle.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        wrap.classList.toggle("open");
+    };
+    profileBtn?.addEventListener("click", () => {
+        closeMenu();
+        window.location.href = "perfil.html";
+    });
+    historyBtn?.addEventListener("click", () => {
+        closeMenu();
+        window.location.href = "historial.html";
+    });
+    racketsBtn?.addEventListener("click", () => {
+        closeMenu();
+        window.location.href = "palas.html";
+    });
+    logoutBtn?.addEventListener("click", async () => {
+        closeMenu();
+        const ok = await confirmUiLoaderAction({
+            title: "Cerrar sesión",
+            message: "Vas a salir de tu cuenta en este dispositivo.",
+            confirmLabel: "Salir",
+            danger: true,
+        });
+        if (!ok) return;
+        await logout().catch(() => {});
+        window.location.href = "index.html";
+    });
+    document.addEventListener("click", (event) => {
+        if (!wrap.contains(event.target)) closeMenu();
+    }, { passive: true });
+}
+
+function isAdminUser(userData) {
+    const role = String(userData?.rol || userData?.role || "").toLowerCase();
+    return role.includes("admin") || auth.currentUser?.email === "Juanan221091@gmail.com";
 }
 
 function getCurrentPageMeta() {
@@ -81,7 +199,7 @@ function getCurrentPageMeta() {
         'notificaciones.html': { id: 'notifications', subtitle: 'NOTIFICACIONES' },
         'admin.html': { id: 'admin', subtitle: 'ADMIN' },
     };
-    return pageMap[currentPage] || { id: '', subtitle: 'SECCIÃ“N' };
+    return pageMap[currentPage] || { id: '', subtitle: 'SECCIÓN' };
 }
 
 /**
@@ -96,7 +214,7 @@ export async function injectHeader(userData = null) {
     const pageMeta = getCurrentPageMeta();
     
     // Check Admin rights locally
-    const isAdmin = userData?.rol === 'Admin' || (auth.currentUser?.email === 'Juanan221091@gmail.com');
+    const isAdmin = isAdminUser(userData);
     
     header.innerHTML = `
         <div class="header-brand" onclick="window.location.href='home.html'">
@@ -120,13 +238,28 @@ export async function injectHeader(userData = null) {
                 <i class="fas fa-bell"></i>
                 <span class="notification-badge" id="notif-badge" style="display:none">0</span>
             </div>
-            <div class="header-avatar avatar-premium" onclick="window.location.href='perfil.html'" id="header-avatar-container" title="Mi Perfil">
-                ${buildHeaderAvatarMarkup(userData)}
+            <div class="header-profile-wrap" id="header-profile-wrap">
+                <button class="header-avatar avatar-premium header-avatar-btn" id="header-avatar-container" title="Perfil y sesión">
+                    ${buildHeaderAvatarMarkup(userData)}
+                </button>
+                <div class="header-profile-menu" id="header-profile-menu">
+                    <div class="header-menu-user">
+                        <span class="header-menu-name">${escapeUiLoaderHtml(userData?.nombreUsuario || userData?.nombre || "Jugador")}</span>
+                        <span class="header-menu-sub">${escapeUiLoaderHtml(pageMeta.subtitle)}</span>
+                    </div>
+                    <div class="header-menu-grid">
+                        <button class="header-menu-action" id="header-go-history"><i class="fas fa-clock-rotate-left"></i> Historial</button>
+                        <button class="header-menu-action" id="header-go-palas"><i class="fas fa-table-tennis-paddle-ball"></i> Palas</button>
+                    </div>
+                    <button class="header-menu-action" id="header-go-profile"><i class="fas fa-user"></i> Ir a perfil</button>
+                    <button class="header-menu-action danger" id="header-logout"><i class="fas fa-right-from-bracket"></i> Cerrar sesión</button>
+                </div>
             </div>
         </div>
     `;
     
     document.body.prepend(header);
+    bindHeaderProfileMenu(userData);
     
     if (auth.currentUser && !window.__notifBadgeManagedByUICore) {
         Promise.resolve(
@@ -158,9 +291,8 @@ export function updateHeader(userData) {
     if (container && userData) {
         container.innerHTML = buildHeaderAvatarMarkup(userData);
         
-        // Show/Hide admin link based on current data
         if (roleLink) {
-            const isAdmin = userData.rol === 'Admin' || (auth.currentUser?.email === 'Juanan221091@gmail.com');
+            const isAdmin = isAdminUser(userData);
             roleLink.style.display = isAdmin ? 'flex' : 'none';
         }
     }
@@ -357,13 +489,18 @@ export function hideLoading() {
 
 window.clearGlobalNotifications = async () => {
     if (!auth.currentUser) return;
-    if (!confirm('Â¿Vaciar toda la bandeja de entrada?')) return;
+    if (!(await confirmUiLoaderAction({
+        title: "Vaciar bandeja",
+        message: "Se eliminarán todos los avisos de tu bandeja de entrada.",
+        confirmLabel: "Vaciar",
+        danger: true,
+    }))) return;
     
     const { writeBatch, collection, query, where, getDocs, doc } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
     const q = query(collection(db, 'notificaciones'), where('destinatario', '==', auth.currentUser.uid));
     const snap = await getDocs(q);
     
-    if (snap.empty) return emitToast('Info', 'Ya estÃ¡ todo limpio', 'info');
+    if (snap.empty) return emitToast('Info', 'Ya está todo limpio', 'info');
     
     const batch = writeBatch(db);
     snap.docs.forEach(d => batch.delete(doc(db, 'notificaciones', d.id)));
