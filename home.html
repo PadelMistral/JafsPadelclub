@@ -6,8 +6,9 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#020617">
-    <title>Home | Padeluminatis Pro</title>
-    <meta name="description" content="Panel principal de Padeluminatis">
+    <title>Inicio | JafsPadel</title>
+    <meta name="description" content="Aplicacion social para crear, competir y administrar partidas de padel">
+    <link rel="manifest" href="./manifest.json">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link
@@ -17,9 +18,9 @@
     <link rel="stylesheet" href="./css/home-v2.css">
 </head>
 
-<body class="home-booting">
+<body>
     <div class="sport-bg"></div>
-    <div id="home-entry-overlay" class="home-entry-overlay">
+    <div id="home-entry-overlay" class="home-entry-overlay hidden">
         <div class="home-entry-nebula"></div>
         <div class="home-entry-box">
             <div class="home-entry-title" id="home-entry-title">BIENVENIDO</div>
@@ -39,8 +40,6 @@
             <!-- Top row: live clock + weather ambient -->
             <div class="hv2-hud-bar">
                 <div class="hv2-hud-brand">
-                    <img id="hv2-brand-image-id" src="./imagenes/default-avatar.png" alt="Perfil" class="hv2-brand-mini">
-                    <span id="hv2-brand-fallback" class="hv2-brand-mini hv2-brand-initial" style="display:none;">J</span>
                     <span class="hv2-brand-text">Padel<span class="text-primary italic">Luminatis</span></span>
                 </div>
                 <div class="hv2-hud-clock">
@@ -95,12 +94,24 @@
                     <span class="hv2-xp-val" id="stat-streak">0</span>
                     <span class="hv2-xp-lbl">RACHA</span>
                 </div>
-                <div class="hv2-xp-stat matches">
+                <div class="hv2-xp-stat matches" onclick="window.location.href='historial.html'">
                     <span class="hv2-xp-icon"><i class="fas fa-gamepad"></i></span>
                     <span class="hv2-xp-val" id="welcome-pending">0</span>
                     <span class="hv2-xp-lbl">JUGADOS</span>
                 </div>
+                <div class="hv2-xp-stat nemesis" onclick="window.location.href='perfil.html#stats-nemesis'">
+                    <span class="hv2-xp-icon"><i class="fas fa-skull"></i></span>
+                    <span class="hv2-xp-val" id="stat-nemesis">---</span>
+                    <span class="hv2-xp-lbl">NÉMESIS</span>
+                </div>
+                <div class="hv2-xp-stat partner" onclick="window.location.href='perfil.html#stats-partner'">
+                    <span class="hv2-xp-icon"><i class="fas fa-handshake"></i></span>
+                    <span class="hv2-xp-val" id="stat-partner">---</span>
+                    <span class="hv2-xp-lbl">SOCIO TOP</span>
+                </div>
             </div>
+
+
 
             <!-- Integrated Tactical Report (No Box style) -->
             <div id="home-recommendations" class="hv2-tactical-report-integrated">
@@ -109,21 +120,23 @@
                     <span class="hv2-tr-title">REPORTE TÁCTICO DIARIO</span>
                 </div>
                 <div id="recom-content" class="hv2-tr-content">
-                    Sincronizando con la red neuronal...
+                    Preparando tu resumen...
                 </div>
             </div>
         </section>
 
+        <div id="home-notice-placeholder" class="hidden animate-up" style="animation-delay:0.075s;"></div>
+
         <!-- ═══════════════ NEXUS — Pulsa para ver conectados / desconectados ═══════════════ -->
-        <section id="nexus-container" class="animate-up nexus-tap-area" style="animation-delay:0.04s;" title="Ver usuarios conectados y última actividad">
+        <section id="nexus-container" class="hidden" class="animate-up nexus-tap-area" style="animation-delay:0.04s;"
+            title="Ver usuarios conectados y última actividad">
             <div class="nexus-glass">
                 <div class="nexus-head">
                     <div class="flex-row items-center gap-2">
                         <div class="nexus-pulse"></div>
-                        <span class="nexus-title">NEXUS</span>
+                        <span class="nexus-title">USUARIOS CONECTADOS</span>
                     </div>
                     <span id="nexus-count" class="nexus-count">0</span>
-                    <span class="nexus-count-label">usuarios · Pulsa para ver</span>
                 </div>
                 <div id="nexus-list" class="nexus-list nexus-list-hidden scroll-snap-x" aria-hidden="true">
                     <!-- Lista solo en modal -->
@@ -141,41 +154,138 @@
             </div>
         </section>
 
+        <section class="animate-up hidden" style="animation-delay:0.085s;">
+            <div id="home-compact-brief" class="hv2-brief-grid">
+                <article class="hv2-brief-card is-loading"></article>
+                <article class="hv2-brief-card is-loading"></article>
+                <article class="hv2-brief-card is-loading"></article>
+            </div>
+        </section>
+
+        <section class="animate-up hidden" style="animation-delay:0.09s;">
+            <details class="hv2-collapsible">
+                <summary class="hv2-collapsible-summary">
+                    <span><i class="fas fa-wave-square"></i> Pulso Competitivo</span>
+                    <i class="fas fa-chevron-down"></i>
+                </summary>
+                <div class="hv2-pulse-shell hv2-collapsible-body">
+                    <div id="home-competitive-pulse" class="hv2-pulse-grid">
+                        <article class="hv2-pulse-card is-loading"></article>
+                        <article class="hv2-pulse-card is-loading"></article>
+                        <article class="hv2-pulse-card is-loading"></article>
+                    </div>
+                </div>
+            </details>
+        </section>
+
         <section id="event-spotlight" class="animate-up hidden" style="animation-delay:0.1s;">
             <div class="hv2-event-spotlight">
                 <div class="hv2-event-head">
                     <span class="hv2-section-title"><i class="fas fa-trophy"></i> Mi Evento</span>
-                    <a class="hv2-event-link" id="event-spotlight-link" href="eventos.html">Ver todo</a>
+                    <a class="hv2-event-link" id="event-spotlight-link" href="eventos.html"><i
+                            class="fas fa-trophy mr-1"></i> Entrar</a>
                 </div>
                 <div id="event-spotlight-body" class="hv2-event-body"></div>
             </div>
         </section>
 
-        <!-- ═══════════════ PARTIDOS — TABS ═══════════════ -->
-        <section class="hv2-matches-section animate-up" style="animation-delay:0.12s;">
-            <div class="hv2-section-head">
-                <span class="hv2-section-title"><i class="fas fa-table-tennis-paddle-ball"></i> Partidos</span>
-            </div>
-            <div class="hv2-tabs">
-                <button type="button" class="hv2-tab active" data-filter="open" style="grid-column: span 2;">
-                    <i class="fas fa-door-open"></i> Pistas Abiertas
-                </button>
-                <button type="button" class="hv2-tab" data-filter="mine" style="grid-column: span 2;">
-                    <i class="fas fa-user"></i> Mis Partidas
-                </button>
-                <button type="button" class="hv2-tab" data-filter="closed" style="grid-column: span 4;">
-                    <i class="fas fa-lock"></i> Cerradas (futuras)
-                </button>
-            </div>
-            <div id="matches-list" class="hv2-matches-grid">
-                <div class="hv2-skeleton-row"></div>
-                <div class="hv2-skeleton-row"></div>
-                <div class="hv2-skeleton-row"></div>
+        <section id="home-ics-section" class="hv2-matches-section animate-up hidden" style="animation-delay:0.105s;">
+            <div class="hv2-setup-card">
+                <div class="hv2-setup-copy">
+                    <span class="hv2-section-title"><i class="fas fa-calendar-plus"></i> Conecta tu ICS de Apoing</span>
+                    <p class="hv2-setup-text">Copia tu calendario .ics de Apoing para detectar reservas, cruzar disponibilidad y proponer mejores partidos.</p>
+                    <div class="hv2-setup-steps">
+                        <span>Entra en Apoing</span>
+                        <span>Abre tu perfil</span>
+                        <span>Copia el enlace ICS</span>
+                    </div>
+                </div>
+                <a class="hv2-inline-link" href="perfil.html?focus=apoing#profile-apoing-settings">
+                    Ir a perfil
+                    <i class="fas fa-chevron-right"></i>
+                </a>
             </div>
         </section>
 
+
+        <!-- ═══════════════ QUICK ACCESS — PREMIUM CARDS ═══════════════ -->
+        <section class="hv2-quick-access animate-up" style="animation-delay:0.11s;">
+            <div class="hv2-promo-grid">
+                <div class="hv2-promo-card-mini" onclick="window.location.href='historial.html'">
+                    <div class="hv2-promo-icon-bg"><i class="fas fa-clock-rotate-left"></i></div>
+                    <div class="hv2-promo-info">
+                        <span class="hv2-promo-t">Historial</span>
+                        <span class="hv2-promo-s">Mis partidos</span>
+                    </div>
+                </div>
+                <div class="hv2-promo-card-mini" onclick="window.location.href='palas.html'">
+                    <div class="hv2-promo-icon-bg"><i class="fas fa-table-tennis-paddle-ball"></i></div>
+                    <div class="hv2-promo-info">
+                        <span class="hv2-promo-t">Palas</span>
+                        <span class="hv2-promo-s">Comparador</span>
+                    </div>
+                </div>
+                <div class="hv2-promo-card-mini" onclick="window.openProposeMatchChat()">
+                    <div class="hv2-promo-icon-bg"><i class="fas fa-comments-alt"></i></div>
+                    <div class="hv2-promo-info">
+                        <span class="hv2-promo-t">Proponer</span>
+                        <span class="hv2-promo-s">Nuevo Chat</span>
+                    </div>
+                </div>
+                <div class="hv2-promo-card-mini" onclick="window.location.href='mi-elo.html'">
+                    <div class="hv2-promo-icon-bg"><i class="fas fa-chart-line"></i></div>
+                    <div class="hv2-promo-info">
+                        <span class="hv2-promo-t">Mi ELO</span>
+                        <span class="hv2-promo-s">Progreso</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="proposal-inline-section" class="hv2-proposal-inline hidden"></section>
+
+        <!-- ═══════════════ PARTIDOS — TABS ═══════════════ -->
+        <section class="hv2-matches-section animate-up" style="animation-delay:0.12s;">
+            <details class="hv2-collapsible" open>
+                <summary class="hv2-collapsible-summary">
+                    <span><i class="fas fa-table-tennis-paddle-ball"></i> Partidos</span>
+                    <i class="fas fa-chevron-down"></i>
+                </summary>
+                <div class="hv2-collapsible-body">
+                    <div class="hv2-tabs">
+                        <button type="button" class="hv2-tab active" data-filter="open" style="grid-column: span 2;">
+                            <i class="fas fa-door-open"></i> Pistas Abiertas
+                        </button>
+                        <button type="button" class="hv2-tab" data-filter="mine" style="grid-column: span 2;">
+                            <i class="fas fa-user"></i> Mis Partidas
+                        </button>
+                        <button type="button" class="hv2-tab" data-filter="closed" style="grid-column: span 4;">
+                            <i class="fas fa-lock"></i> Cerradas (futuras)
+                        </button>
+                    </div>
+                    <div id="matches-list" class="hv2-matches-grid hv2-matches-scroll">
+                        <div class="hv2-skeleton-row"></div>
+                        <div class="hv2-skeleton-row"></div>
+                        <div class="hv2-skeleton-row"></div>
+                    </div>
+                </div>
+            </details>
+        </section>
+
         <!-- ═══════════════ EVENTOS — PROMOCIÓN ═══════════════ -->
-        <section class="hv2-events-promo animate-up" style="animation-delay:0.14s;">
+        <section id="home-recent-results-section" class="hv2-matches-section animate-up hidden" style="animation-delay:0.13s;">
+            <div class="hv2-section-head hv2-section-head-inline">
+                <span class="hv2-section-title"><i class="fas fa-clock-rotate-left"></i> Ultimos partidos</span>
+                <a class="hv2-inline-link" href="historial.html">Ver mas <i class="fas fa-chevron-right"></i></a>
+            </div>
+            <div id="home-recent-results-list" class="hv2-club-feed">
+                <div class="hv2-club-card is-loading"></div>
+                <div class="hv2-club-card is-loading"></div>
+                <div class="hv2-club-card is-loading"></div>
+            </div>
+        </section>
+
+        <section class="hv2-events-promo hidden" style="animation-delay:0.14s;">
             <div class="hv2-promo-card" onclick="window.location.href='eventos.html'">
                 <div class="hv2-promo-icon"><i class="fas fa-trophy"></i></div>
                 <div class="hv2-promo-text">
@@ -185,6 +295,8 @@
                 <i class="fas fa-chevron-right hv2-promo-arrow"></i>
             </div>
         </section>
+
+        <!-- Se elimina la sección de “Últimos cierres” para no duplicar con Últimos Partidos -->
 
     </main>
 
@@ -204,24 +316,28 @@
         <div class="modal-card glass-strong nexus-modal-card">
             <div class="modal-header">
                 <h3 class="modal-title" id="nexus-modal-title">USUARIOS CONECTADOS</h3>
-                <button class="close-btn" onclick="document.getElementById('modal-nexus').classList.remove('active')">&times;</button>
+                <button class="close-btn"
+                    onclick="document.getElementById('modal-nexus').classList.remove('active')">&times;</button>
             </div>
             <div class="modal-body scroll-y" id="nexus-modal-list" style="max-height: 70vh;"></div>
         </div>
     </div>
 
-    <!-- ELIMINADO: AI CHAT FLOATING BUTTON Y MODAL (Manejado globalmente por vecina-chat.js) -->
+    <!-- AI CHAT FLOATING BUTTON (fallback init for home) -->
 
-    <script type="module" src="./js/home-core.js?v=8.0"></script>
+    <script type="module" src="./js/home-core.js"></script>
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initPWAShell } from './js/modules/pwa-shell.js';
         initThemeSystem();
         initGalaxyBackground();
+        initPWAShell('home');
+    </script>
+    <script type="module">
+        import { initVecinaChat } from './js/modules/vecina-chat.js';
+        try { initVecinaChat(); } catch (e) { console.warn('Vecina chat init failed', e); }
     </script>
 </body>
 
 </html>
-
-
-<!-- ics: https://www.apoing.com/calendars/apoingcal_8C7sVinQuZRBGZdWTfcAfiLU8AKSQ59xrM3yQ83b59574.ics -->

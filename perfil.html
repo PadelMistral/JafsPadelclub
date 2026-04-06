@@ -6,8 +6,9 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#020617">
-    <title>Perfil | Padeluminatis Pro</title>
-    <meta name="description" content="Tu perfil de jugador en Padeluminatis">
+    <title>Perfil | JafsPadel</title>
+    <meta name="description" content="Tu perfil de jugador, progreso, historial y ajustes">
+    <link rel="manifest" href="./manifest.json">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -77,6 +78,29 @@
             </div>
         </section>
 
+        <section id="profile-gallery-section" class="profile-section animate-fade-in" style="animation-delay: 0.09s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-images text-primary mr-2"></i>Galeria compartida</h2>
+            </div>
+            <div class="card card-premium-v7 shadow-cyan/10">
+                <div class="flex-row between items-center gap-3 flex-wrap mb-4">
+                    <div class="flex-col">
+                        <span class="text-[10px] font-black uppercase tracking-widest text-primary">Fotos para tu perfil</span>
+                        <span class="text-[10px] text-white/65">Sube imagenes desde el movil. El admin solo podra ver las que tu subas aqui.</span>
+                    </div>
+                    <div class="flex-row gap-2">
+                        <button id="btn-open-gallery-upload" class="btn btn-primary">
+                            <i class="fas fa-image"></i> Subir fotos
+                        </button>
+                    </div>
+                </div>
+                <input type="file" id="upload-gallery-photo" hidden accept="image/*" multiple>
+                <div id="profile-gallery-grid" class="grid grid-cols-3 gap-3">
+                    <div class="text-center py-6 opacity-40 text-[10px] font-black uppercase col-span-3">Cargando galeria...</div>
+                </div>
+            </div>
+        </section>
+
         <!-- Level Progress Breakdown -->
         <section class="profile-section animate-fade-in" style="animation-delay: 0.1s;">
             <div class="card card-premium-v7 shadow-cyan/10">
@@ -105,10 +129,7 @@
             </div>
         </section>
 
-        <!-- ELO se visualiza ahora en mi-elo.html para mayor detalle -->
-
-
-        <!-- Stats Cards Grid -->
+        <!-- Metric Cards Grid -->
         <section class="profile-section animate-fade-in" style="animation-delay: 0.14s;">
             <div class="section-header">
                 <h2 class="section-title">Métricas de Rendimiento</h2>
@@ -137,7 +158,74 @@
             </div>
         </section>
 
-        <!-- Más datos: Chat IA -->
+        <!-- AI Intelligence Report -->
+        <section id="ai-tactical-report-section" class="profile-section animate-fade-in" style="animation-delay: 0.1s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-brain-circuit text-purple-400 mr-2"></i>Siri Táctica IA</h2>
+            </div>
+            <div id="ai-profile-insights" class="ai-insights-grid-v9">
+                <div class="ai-insight-card opacity-30 text-[9px] font-black uppercase italic p-6">Sincronizando
+                    consciencia táctica...</div>
+            </div>
+
+            <div id="ai-automations" class="ai-automations-v9 mt-3">
+                <!-- AI Ticker will follow -->
+            </div>
+        </section>
+
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.12s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-memory text-primary mr-2"></i>Memoria y Evolución</h2>
+            </div>
+            <div id="profile-memory-bank" class="memory-bank-grid">
+                <div class="memory-card-empty">Sincronizando memoria táctica...</div>
+            </div>
+            <div id="profile-timeline" class="profile-timeline">
+                <div class="memory-card-empty">Construyendo línea temporal del jugador...</div>
+            </div>
+        </section>
+
+        <!-- Achievements -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.15s;">
+            <div class="section-header">
+                <h2 class="section-title"><i class="fas fa-medal text-sport-gold mr-2"></i>Logros</h2>
+            </div>
+            <div class="achievements-header">
+                <span id="achv-count-label" class="achv-count">0 / 0 DESBLOQUEADOS</span>
+            </div>
+            <div id="achievements-grid" class="achievements-grid-v9"></div>
+        </section>
+
+        <!-- Rivalry Intelligence -->
+        <section class="profile-section animate-fade-in" style="animation-delay: 0.16s;">
+            <div class="section-header" id="stats-rivalry">
+                <h2 class="section-title"><i class="fas fa-crosshairs text-primary mr-2"></i>Rivalidad y Alianzas</h2>
+            </div>
+            <div class="nexus-grid-v9">
+                <div class="nexus-item-v9 cyan" id="stats-partner">
+                    <div class="n-icon"><i class="fas fa-handshake"></i></div>
+                    <div class="n-info">
+                        <span class="n-lbl">Mejor aliado</span>
+                        <span id="profile-partner" class="n-val">---</span>
+                    </div>
+                </div>
+                <div class="nexus-item-v9 magenta" id="stats-nemesis">
+                    <div class="n-icon"><i class="fas fa-skull"></i></div>
+                    <div class="n-info">
+                        <span class="n-lbl">Nemesis</span>
+                        <span id="profile-nemesis" class="n-val">---</span>
+                    </div>
+                </div>
+                <div class="nexus-item-v9 gold">
+                    <div class="n-icon"><i class="fas fa-crown"></i></div>
+                    <div class="n-info">
+                        <span class="n-lbl">Victima favorita</span>
+                        <span id="profile-victim" class="n-val">---</span>
+                    </div>
+                </div>
+            </div>
+            <div id="rival-intel-dashboard" class="rival-intel-panel"></div>
+        </section><!-- AI Chat CTA -->
         <section class="profile-section animate-fade-in" style="animation-delay: 0.16s;">
             <div id="profile-chat-ia-cta"
                 class="card card-premium-v7 p-4 border-glow-cyan cursor-pointer hover:bg-cyan/10 transition-colors"
@@ -164,7 +252,7 @@
             </div>
             <div class="settings-card">
                 <!-- Alias -->
-                <div class="setting-item">
+                <div id="profile-apoing-settings" class="setting-item">
                     <div class="setting-left">
                         <i class="fas fa-id-badge"></i>
                         <span>Alias de Combate</span>
@@ -231,10 +319,10 @@
                     </div>
                     <i class="fas fa-chevron-right setting-arrow"></i>
                 </a>
-                <a href="historial.html" class="setting-item link">
+                <a href="eventos.html" class="setting-item link">
                     <div class="setting-left">
-                        <i class="fas fa-history"></i>
-                        <span>Historial Partidos</span>
+                        <i class="fas fa-trophy"></i>
+                        <span>Mis Eventos / Torneos</span>
                     </div>
                     <i class="fas fa-chevron-right setting-arrow"></i>
                 </a>
@@ -242,7 +330,7 @@
         </section>
 
         <!-- Apoing Calendar Preview -->
-        <section class="profile-section animate-fade-in" style="animation-delay: 0.28s;">
+        <section id="profile-apoing-section" class="profile-section animate-fade-in" style="animation-delay: 0.28s;">
             <div class="section-header">
                 <h2 class="section-title"><i class="fas fa-calendar-check text-primary mr-2"></i>Mis Reservas Apoing
                 </h2>
@@ -256,7 +344,7 @@
             </div>
         </section>
 
-        <!-- Address Section (Accordion - hidden by default) -->
+        <!-- Address Section -->
         <section class="profile-section animate-fade-in" style="animation-delay: 0.3s;">
             <details class="profile-accordion">
                 <summary class="profile-accordion-trigger">
@@ -408,9 +496,11 @@
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         import { initThemeSystem, renderThemeSelector } from './js/modules/theme-manager.js';
+        import { initPWAShell } from './js/modules/pwa-shell.js';
 
         initThemeSystem();
         initGalaxyBackground();
+        initPWAShell('perfil');
 
         // Render theme selector once DOM is ready
         document.addEventListener('DOMContentLoaded', () => {

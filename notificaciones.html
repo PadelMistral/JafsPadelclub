@@ -6,8 +6,8 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#020617">
-    <title>Notificaciones | Padeluminatis Pro</title>
-    <meta name="description" content="Tus alertas y notificaciones de Padeluminatis">
+    <title>Notificaciones | PADELUMINATIS</title>
+    <meta name="description" content="Tus alertas, avisos y estado de notificaciones">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap"
@@ -21,16 +21,13 @@
 
     <main class="page-content notif-page">
         <div class="container px-3">
-
-            <!-- PAGE HEADER -->
             <header class="notif-header-v8 animate-fade-in no-flicker">
                 <div class="flex-col">
-                    <h1 class="page-title-pro"><i class="fas fa-bell"></i>Notificaciónes<span
-                            class="text-primary"></span></h1>
-                    <p class="page-sub-pro">Partidos · Retos · Eventos · Sistema</p>
+                    <h1 class="page-title-pro"><i class="fas fa-bell"></i>Centro de alertas<span class="text-primary"></span></h1>
+                    <p class="page-sub-pro">Avisos reales, estado del canal nativo y tu bandeja</p>
                 </div>
                 <div class="header-actions-v8">
-                    <button id="btn-read-all" class="action-btn-v8 shadow-glow-primary" title="Marcar todo como leído">
+                    <button id="btn-read-all" class="action-btn-v8 shadow-glow-primary" title="Marcar todo como leido">
                         <i class="fas fa-check-double"></i>
                     </button>
                     <button id="btn-clear-all" class="action-btn-v8 danger shadow-glow-red" title="Vaciar bandeja">
@@ -39,175 +36,154 @@
                 </div>
             </header>
 
-            <!-- STATUS BANNER -->
-            <div id="push-status-banner" class="status-banner-v10 animate-fade-in">
-                <div class="status-chip-v10">
-                    <div class="chip-dot"></div>
-                    <span id="global-push-status">ESPERANDO ESTADO...</span>
+            <section id="push-status-banner" class="notif-status-hero animate-fade-in">
+                <div class="notif-status-top">
+                    <div class="notif-status-chip">
+                        <span class="notif-status-dot"></span>
+                        <span id="global-push-status">COMPROBANDO AVISOS...</span>
+                    </div>
+                    <button id="btn-refresh-push" class="notif-mini-btn">
+                        <i class="fas fa-rotate"></i>
+                    </button>
                 </div>
-                <p class="status-explanation">Detectamos tu compatibilidad para avisos en tiempo real y segundo plano.
-                </p>
-            </div>
-
-            <!-- PERMISSION CARD (DYNAMICALLY HIDDEN IF OK) -->
-            <div id="permission-area" class="notif-perm-card animate-up no-flicker">
-                <div class="perm-icon-shell">
-                    <i class="fas fa-bell"></i>
-                    <div class="perm-ring"></div>
+                <div class="notif-status-body">
+                    <strong id="perm-title" class="notif-status-title">Preparando tus avisos</strong>
+                    <p id="push-status-explanation" class="notif-status-copy">Estamos revisando si tu movil o navegador puede recibir avisos de la app.</p>
                 </div>
-                <div class="perm-info">
-                    <h3 class="perm-title">Sincronizar Notificaciones</h3>
-                    <p id="perm-status-text" class="perm-text">Recibe avisos de partidos y retos en tiempo real.</p>
-
-                    <!-- ════ GUÍA POR PLATAFORMA ════ -->
-                    <div id="perm-platform-guide" class="perm-guide-v10"></div>
+                <div class="notif-status-actions">
+                    <button id="btn-request-push" class="btn-perm-action">Activar</button>
+                    <button id="btn-test-push" class="notif-secondary-btn">Probar aviso</button>
                 </div>
-                <button id="btn-request-push" class="btn-perm-action">INTENTAR REACTIVAR</button>
-            </div>
+                <p class="notif-test-hint">La prueba lanza un aviso local y después otro real para segundo plano. Minimiza la app justo después de pulsar `Probar`.</p>
+            </section>
 
-            <!-- ════ PLATFORM GUIDE MODAL (solo visible si denied) ════ -->
+            <section id="permission-area" class="notif-simple-card animate-up no-flicker">
+                <div class="notif-simple-main">
+                    <div class="notif-simple-icon">
+                        <i class="fas fa-mobile-screen-button"></i>
+                    </div>
+                    <div class="notif-simple-copy">
+                        <span class="notif-simple-label">Estado de tus avisos</span>
+                        <strong id="perm-status-text">Comprobando estado...</strong>
+                        <p id="perm-platform-guide">Te diremos aqui que hacer, con frases simples y sin pasos tecnicos raros.</p>
+                    </div>
+                </div>
+                <div id="notif-status-tags" class="notif-status-tags">
+                    <span id="push-permission-pill" class="notif-tag">Permiso: ---</span>
+                    <span id="push-background-pill" class="notif-tag">Segundo plano: ---</span>
+                    <span id="push-channel-pill" class="notif-tag">Canal: ---</span>
+                    <span id="push-sdk-pill" class="notif-tag">SDK: ---</span>
+                    <span id="push-action-pill" class="notif-tag emphasis">Siguiente paso: ---</span>
+                </div>
+            </section>
+
+            <details class="notif-support-box animate-up">
+                <summary class="notif-support-summary">
+                    <span><i class="fas fa-circle-info"></i> Si no te llegan</span>
+                    <i class="fas fa-chevron-down"></i>
+                </summary>
+                <div class="notif-support-body">
+                    <div class="notif-support-actions">
+                        <button id="btn-reconnect-push" class="notif-support-btn">Reconectar</button>
+                        <button id="btn-reregister-sw" class="notif-support-btn">Reparar</button>
+                        <button id="btn-clean-sw" class="notif-support-btn">Limpiar</button>
+                        <button id="btn-reload-app" class="notif-support-btn">Recargar</button>
+                    </div>
+                    <div class="notif-support-note">
+                        <strong id="push-support-title">Si algo falla</strong>
+                        <p id="push-support-copy">Te indicaremos aqui el motivo mas probable y que boton merece la pena probar.</p>
+                    </div>
+                    <button id="btn-open-guide" class="btn-micro-guide">VER GUIA SENCILLA</button>
+                </div>
+            </details>
+
             <div id="notif-denied-guide" class="modal-overlay hidden">
-                <div class="modal-card glass-strong"
-                    style="max-width:340px; max-height:72vh; overflow-y:auto; position:relative;">
+                <div class="modal-card glass-strong" style="max-width:340px; max-height:72vh; overflow-y:auto; position:relative;">
                     <button class="close-btn"
                         style="position:absolute; top:12px; right:12px; background:transparent; border:none; color:#fff;"
-                        onclick="this.closest('.modal-overlay').classList.add('hidden')"><i
-                            class="fas fa-times"></i></button>
+                        onclick="this.closest('.modal-overlay').classList.add('hidden')"><i class="fas fa-times"></i></button>
                     <div class="denied-guide-header mt-2">
                         <i class="fas fa-shield-exclamation text-sport-red"></i>
-                        <span>Notificaciones Bloqueadas</span>
+                        <span>Como volver a activarlas</span>
                     </div>
 
-                    <!-- Android / Chrome -->
                     <div class="guide-section" id="guide-android">
                         <div class="guide-step">
                             <span class="guide-step-num">1</span>
                             <div>
-                                <span class="guide-step-title"><i class="fab fa-chrome text-primary mr-1"></i>Abre
-                                    Chrome</span>
-                                <p class="guide-step-desc">Toca el icono <i class="fas fa-lock text-primary"></i> en la
-                                    barra de dirección (arriba)</p>
+                                <span class="guide-step-title">Abre el candado</span>
+                                <p class="guide-step-desc">En Chrome toca el candado o el icono de informacion de arriba.</p>
                             </div>
                         </div>
                         <div class="guide-step">
                             <span class="guide-step-num">2</span>
                             <div>
-                                <span class="guide-step-title">Permisos del sitio</span>
-                                <p class="guide-step-desc">Busca <b>Notificaciones</b> y cámbialo a <b
-                                        class="text-sport-green">Permitir</b></p>
-                            </div>
-                        </div>
-                        <div class="guide-step">
-                            <span class="guide-step-num">3</span>
-                            <div>
-                                <span class="guide-step-title">Recarga</span>
-                                <p class="guide-step-desc">Pulsa el botón de abajo para aplicar el cambio</p>
+                                <span class="guide-step-title">Permite notificaciones</span>
+                                <p class="guide-step-desc">Busca Notificaciones y cambialo a Permitir.</p>
                             </div>
                         </div>
                     </div>
 
-                    <!-- iOS / Safari -->
                     <div class="guide-section" id="guide-ios">
                         <div class="guide-step">
                             <span class="guide-step-num">1</span>
                             <div>
-                                <span class="guide-step-title"><i class="fab fa-safari text-cyan mr-1"></i>Añadir a
-                                    inicio</span>
-                                <p class="guide-step-desc">En Safari, pulsa <i class="fas fa-arrow-up-from-bracket"></i>
-                                    →
-                                    "Añadir a pantalla de inicio"</p>
+                                <span class="guide-step-title">Anade la app al inicio</span>
+                                <p class="guide-step-desc">Desde Safari usa Compartir y Anadir a pantalla de inicio.</p>
                             </div>
                         </div>
                         <div class="guide-step">
                             <span class="guide-step-num">2</span>
                             <div>
-                                <span class="guide-step-title">Abre desde la app</span>
-                                <p class="guide-step-desc">Abre Padeluminatis desde el icono de tu pantalla de inicio
-                                </p>
-                            </div>
-                        </div>
-                        <div class="guide-step">
-                            <span class="guide-step-num">3</span>
-                            <div>
-                                <span class="guide-step-title">Configuración iOS</span>
-                                <p class="guide-step-desc">Ve a <b>Ajustes → Notificaciones → Padeluminatis</b> y
-                                    actívalas
-                                </p>
+                                <span class="guide-step-title">Abre la app instalada</span>
+                                <p class="guide-step-desc">Luego entra desde el icono y activa las notificaciones alli.</p>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Desktop / Firefox -->
                     <div class="guide-section" id="guide-desktop">
                         <div class="guide-step">
                             <span class="guide-step-num">1</span>
                             <div>
-                                <span class="guide-step-title"><i class="fas fa-lock text-primary mr-1"></i>Candado en
-                                    URL</span>
-                                <p class="guide-step-desc">Haz clic en el icono del candado en la barra de direcciones
-                                </p>
+                                <span class="guide-step-title">Haz clic en el candado</span>
+                                <p class="guide-step-desc">Esta junto a la direccion de la web.</p>
                             </div>
                         </div>
                         <div class="guide-step">
                             <span class="guide-step-num">2</span>
                             <div>
-                                <span class="guide-step-title">Restablecer permiso</span>
-                                <p class="guide-step-desc">Busca <b>Notificaciones</b> → cambia a <b
-                                        class="text-sport-green">Permitir</b> o <b>Preguntar</b></p>
+                                <span class="guide-step-title">Vuelve a permitirlas</span>
+                                <p class="guide-step-desc">Busca Notificaciones y cambialo a Permitir o Preguntar.</p>
                             </div>
                         </div>
                     </div>
 
                     <button class="btn btn-primary w-full mt-2" style="height:30px; font-size:9px;" onclick="window.location.reload()">
-                        <i class="fas fa-sync-alt mr-1"></i> RECARGAR Y ACTIVAR
+                        <i class="fas fa-sync-alt mr-1"></i> RECARGAR APP
                     </button>
                 </div>
             </div>
 
-            <!-- FILTER TABS -->
             <div class="notif-tabs-v8 animate-up no-flicker" style="animation-delay: 0.1s;">
                 <button class="filter-tab-v8 active" data-filter="all">TODAS</button>
-                <button class="filter-tab-v8" data-filter="unread">NO LEÍDAS</button>
-                <button class="filter-tab-v8" data-filter="read">LEÍDAS</button>
+                <button class="filter-tab-v8" data-filter="unread">NUEVAS</button>
+                <button class="filter-tab-v8" data-filter="read">LEIDAS</button>
             </div>
 
-            <!-- NOTIFICATIONS LIST -->
             <div id="notif-list" class="notif-list-container animate-up no-flicker" style="animation-delay: 0.15s;">
                 <div class="notif-loading-v8">
                     <div class="spinner-galactic"></div>
                     <span>Sincronizando con el servidor...</span>
                 </div>
             </div>
-
-            <!-- HELP SECTION -->
-            <div class="notif-help-v10 animate-up" style="animation-delay: 0.2s;">
-                <h4 class="help-title"><i class="fas fa-info-circle mr-2"></i>¿Problemas con los avisos?</h4>
-                <div class="help-grid">
-                    <div class="help-card">
-                        <h5>Estado "Pendiente"</h5>
-                        <p>Si pulsas el botón y sigue diciendo "Pendiente de registro", intenta recargar la página tras
-                            5 segundos.</p>
-                    </div>
-                    <div class="help-card">
-                        <h5>Avisos en iPhone</h5>
-                        <p>Debes añadir la App a tu "Pantalla de inicio" (Compartir > Añadir a pantalla de inicio) para
-                            recibir notificaciones.</p>
-                    </div>
-                </div>
-                <button class="btn-micro-guide" onclick="window.showPushHelpGuide?.()">VER GUÍA COMPLETA</button>
-            </div>
-
         </div>
     </main>
 
-
-    <!-- Scripts -->
     <script type="module" src="./js/notificaciones.js"></script>
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         initGalaxyBackground();
 
-        // Auto-detect platform and show correct guide
         document.addEventListener('DOMContentLoaded', () => {
             const ua = navigator.userAgent || '';
             const isIOS = /iPad|iPhone|iPod/.test(ua);
@@ -218,14 +194,9 @@
             const guideIOS = document.getElementById('guide-ios');
             const guideDesktop = document.getElementById('guide-desktop');
 
-            if (guideAndroid) guideAndroid.style.display = (isAndroid || (!isIOS && !isSafari)) ? 'block' : 'none';
+            if (guideAndroid) guideAndroid.style.display = isAndroid ? 'block' : 'none';
             if (guideIOS) guideIOS.style.display = isIOS ? 'block' : 'none';
             if (guideDesktop) guideDesktop.style.display = (!isIOS && !isAndroid) ? 'block' : 'none';
-
-            // Show denied guide if needed
-            if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
-                document.getElementById('notif-denied-guide')?.classList.remove('hidden');
-            }
         });
     </script>
 </body>
