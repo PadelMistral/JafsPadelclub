@@ -109,7 +109,7 @@ export function scoreMatchForUser(match, user, playerMetaResolver = null, contex
   })();
   total += freshnessScore;
   if (freshnessScore >= 12) reasons.push("caras nuevas para variar");
-  else if (freshnessScore >= 6) reasons.push("rotacion saludable");
+  else if (freshnessScore >= 6) reasons.push("rotación saludable");
   else if (freshnessScore < 0) reasons.push("grupo muy repetido");
 
   const availabilityScore = hoursUntil <= 36 ? 20 : hoursUntil <= 72 ? 12 : 4;
@@ -120,7 +120,7 @@ export function scoreMatchForUser(match, user, playerMetaResolver = null, contex
   const slotScore = freeSlots === 1 ? 18 : freeSlots === 2 ? 12 : freeSlots === 3 ? 6 : 0;
   total += slotScore;
   if (freeSlots === 1) reasons.push("solo falta 1 jugador");
-  else if (slotScore >= 12) reasons.push("facil de cerrar");
+  else if (slotScore >= 12) reasons.push("fácil de cerrar");
 
   const publicBonus = !match.visibility || match.visibility === "public" || match.visibilidad === "public" ? 8 : 0;
   total += publicBonus;
@@ -135,7 +135,7 @@ export function scoreMatchForUser(match, user, playerMetaResolver = null, contex
 
   total = clamp(Math.round(total), 0, 99);
   if (total >= 80) {
-    headline = "muy buena opcion";
+    headline = "muy buena opción";
     tone = "strong";
   } else if (total >= 64) {
     headline = "buen encaje";

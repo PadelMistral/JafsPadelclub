@@ -1,136 +1,32 @@
-// eventos.js — Versión mejorada con aprobación de inscritos y campo repesca
-import { db, auth, observerAuth, getDocument, addDocument, updateDocument, getDocsSafe } from './firebase-service.js';
+// eventos.js — Events System V5.0 — Liga · Eliminatorias · Admin
+// ──────────────────────────────────────────────────────────────
+import { db, auth, observerAuth, getDocument, addDocument, updateDocument } from './firebase-service.js';
 import { initAppUI, showToast, showSidePreferenceModal } from './ui-core.js';
-import { openResultForm } from './match-service.js';
-import { buildMatchPersistencePatch } from './utils/match-utils.js';
 import {
-    collection, getDocs, doc, getDoc, updateDoc, deleteDoc, addDoc,
-    query, where, orderBy, serverTimestamp, onSnapshot, writeBatch,
-    arrayUnion, arrayRemove, increment
+    collection, getDocs, doc, updateDoc, deleteDoc, addDoc,
+    query, where, orderBy, serverTimestamp, onSnapshot, writeBatch
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
-import { ensureGuestProfile } from './services/guest-player-service.js';
-import { installScreenErrorMonitoring, captureScreenError } from './services/error-monitor.js';
-import { seedIdentityCache, getCachedIdentity } from './services/identity-service.js';
 
 initAppUI('events');
-installScreenErrorMonitoring('eventos', () => ({
-    activeEventId,
-    currentFilter,
-    totalEvents: Array.isArray(allEvents) ? allEvents.length : 0,
-}));
 
-/* ==================== STATE ==================== */
+/* ────────────────────────────────────────────────────────
+   STATE
+   ──────────────────────────────────────────────────────── */
 let currentUser = null;
 let currentUserData = null;
 let allEvents = [];
 let currentFilter = 'all';
-let activeEventId = null;
+let activeEventId = null;   // for admin modal
 let adminTabState = 'players';
-let unsubscribeEvents = null;
-let usersById = new Map();
 
-function escapeEventsHtml(raw = "") {
-    const div = document.createElement("div");
-    div.textContent = String(raw || "");
-    return div.innerHTML;
-}
-
-function confirmEventsAction({
-    title = "Confirmar",
-    message = "¿Quieres continuar?",
-    confirmLabel = "Continuar",
-    danger = false,
-} = {}) {
-    return new Promise((resolve) => {
-        const overlay = document.createElement("div");
-        overlay.className = "modal-overlay active modal-stack-front";
-        overlay.innerHTML = `
-            <div class="modal-card glass-strong" style="max-width:380px;">
-                <div class="modal-header">
-                    <h3 class="modal-title">${escapeEventsHtml(title)}</h3>
-                    <button class="close-btn" type="button">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-[11px] text-white/75 leading-relaxed">${escapeEventsHtml(message)}</p>
-                    <div class="flex-row gap-2 mt-4">
-                        <button type="button" class="btn btn-ghost w-full" data-events-cancel>Cancelar</button>
-                        <button type="button" class="btn w-full ${danger ? "btn-danger" : "btn-primary"}" data-events-ok>${escapeEventsHtml(confirmLabel)}</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        const close = (accepted = false) => {
-            overlay.remove();
-            resolve(Boolean(accepted));
-        };
-        overlay.querySelector(".close-btn")?.addEventListener("click", () => close(false));
-        overlay.querySelector("[data-events-cancel]")?.addEventListener("click", () => close(false));
-        overlay.querySelector("[data-events-ok]")?.addEventListener("click", () => close(true));
-        overlay.addEventListener("click", (event) => {
-            if (event.target === overlay) close(false);
-        });
-        document.body.appendChild(overlay);
-    });
-}
-
-function askEventsTextInput({
-    title = "Editar valor",
-    label = "Valor",
-    value = "",
-    placeholder = "",
-    confirmLabel = "Guardar",
-} = {}) {
-    return new Promise((resolve) => {
-        const overlay = document.createElement("div");
-        overlay.className = "modal-overlay active modal-stack-front";
-        overlay.innerHTML = `
-            <div class="modal-card glass-strong" style="max-width:380px;">
-                <div class="modal-header">
-                    <h3 class="modal-title">${escapeEventsHtml(title)}</h3>
-                    <button class="close-btn" type="button">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <label class="text-[10px] font-black text-muted uppercase tracking-widest">${escapeEventsHtml(label)}</label>
-                    <input id="events-inline-input" class="input w-full mt-2" value="${escapeEventsHtml(String(value || ""))}" placeholder="${escapeEventsHtml(placeholder)}">
-                    <div class="flex-row gap-2 mt-4">
-                        <button type="button" class="btn btn-ghost w-full" data-events-input-cancel>Cancelar</button>
-                        <button type="button" class="btn btn-primary w-full" data-events-input-ok>${escapeEventsHtml(confirmLabel)}</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        const close = (result = null) => {
-            overlay.remove();
-            resolve(result);
-        };
-        overlay.querySelector(".close-btn")?.addEventListener("click", () => close(null));
-        overlay.querySelector("[data-events-input-cancel]")?.addEventListener("click", () => close(null));
-        overlay.querySelector("[data-events-input-ok]")?.addEventListener("click", () => {
-            close(overlay.querySelector("#events-inline-input")?.value?.trim() || "");
-        });
-        overlay.addEventListener("click", (event) => {
-            if (event.target === overlay) close(null);
-        });
-        document.body.appendChild(overlay);
-        overlay.querySelector("#events-inline-input")?.focus();
-    });
-}
-
-/* ==================== BOOT ==================== */
+/* ────────────────────────────────────────────────────────
+   BOOT
+   ──────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
     observerAuth(async (user) => {
         if (!user) return;
         currentUser = user;
-        try {
-            currentUserData = await getDocument('usuarios', user.uid);
-        } catch (error) {
-            captureScreenError('eventos', error, {
-                source: 'observerAuth:getDocument',
-                meta: { uid: user.uid },
-                tags: ['bootstrap', 'eventos'],
-            });
-            throw error;
-        }
+        currentUserData = await getDocument('usuarios', user.uid);
         const isAdmin = currentUserData?.rol === 'Admin';
         const isOrganizer = isAdmin || currentUserData?.esOrganizador === true;
 
@@ -138,99 +34,15 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('btn-create-event')?.classList.remove('hidden');
         }
 
-        await preloadUsersForEvents();
         setupFilters();
         setupCreateModal();
         subscribeEvents();
-        setupDashboard();
     });
 });
 
-async function setupDashboard() {
-    const btnDownload = document.getElementById('btn-download-ev-poster');
-    if (btnDownload) {
-        btnDownload.onclick = async () => {
-            const played = document.getElementById('count-played').textContent;
-            const scheduled = document.getElementById('count-scheduled').textContent;
-            const pending = document.getElementById('count-pending').textContent;
-            
-            try {
-                const { shareMatchPoster } = await import('./utils/share-utils.js');
-                await shareMatchPoster({
-                    title: 'ESTADO COMPETICIONES',
-                    teamA: ['EN CURSO', `JUGADOS: ${played}`],
-                    teamB: ['TOTAL ACTIVOS', `PENDIENTES: ${pending}`],
-                    levelsA: [scheduled],
-                    levelsB: ['EVENTOS'],
-                    when: new Date().toLocaleDateString(),
-                    club: 'JAFS PADEL CLUB'
-                });
-            } catch (e) {
-                console.error("Poster creation failed", e);
-                showToast("Error", "No se pudo generar el cartel del dashboard.", "error");
-            }
-        };
-    }
-}
-
-async function updateDashboardStats(events) {
-    let played = 0, scheduled = 0, pending = 0, open = 0;
-    
-    events.forEach(ev => {
-        if (ev.estado === 'inscripcion') open++;
-    });
-    
-    document.getElementById('count-open').textContent = open;
-    
-    // We can't easily count matches of ALL events without many queries
-    // Let's at least count matches from the most recent active events
-    const activeEvents = events.filter(e => e.estado === 'activo').slice(0, 5);
-    
-    for (const ev of activeEvents) {
-        try {
-            const matchesSnap = await getDocsSafe(query(collection(db, 'eventoPartidos'), where('eventoId', '==', ev.id)));
-            matchesSnap.docs.forEach(d => {
-                const m = d.data();
-                if (m.estado === 'jugado') played++;
-                else if (m.estado === 'programado') scheduled++;
-                else pending++;
-            });
-        } catch (e) {
-            console.warn("Failed to fetch matches for dashboard event", ev.id, e);
-        }
-    }
-    
-    document.getElementById('count-played').textContent = played;
-    document.getElementById('count-scheduled').textContent = scheduled;
-    document.getElementById('count-pending').textContent = pending;
-}
-
-
-async function preloadUsersForEvents() {
-    try {
-        const snap = await getDocsSafe(collection(db, 'usuarios'));
-        const rows = (snap?.docs || []).map(d => ({ uid: d.id, ...d.data() }));
-        usersById = new Map(rows.map(u => [u.uid, u]));
-        seedIdentityCache(rows);
-    } catch (e) {
-        console.error('Error cargando usuarios eventos:', e);
-    }
-}
-
-function resolveInscritoLabel(ins) {
-    if (!ins) return 'Jugador';
-    const uid = ins.uid || '';
-    const isGuest = ins.invitado === true || String(uid).startsWith('invitado_') || String(uid).startsWith('manual_') || ins.manual === true;
-    const cached = getCachedIdentity(uid);
-    if (cached?.name) return cached.name;
-    if (!isGuest && usersById.has(uid)) {
-        const u = usersById.get(uid);
-        return u.nombreUsuario || u.nombre || u.email || 'Jugador';
-    }
-    return ins.nombre || ins.nombreUsuario || 'Invitado';
-}
-
-/* ==================== FILTERS ==================== */
+/* ────────────────────────────────────────────────────────
+   FILTERS
+   ──────────────────────────────────────────────────────── */
 function setupFilters() {
     document.querySelectorAll('.evf-tab').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -242,21 +54,27 @@ function setupFilters() {
     });
 }
 
-/* ==================== REALTIME ==================== */
+/* ────────────────────────────────────────────────────────
+   REALTIME SUBSCRIPTION
+   ──────────────────────────────────────────────────────── */
 function subscribeEvents() {
-    if (unsubscribeEvents) unsubscribeEvents();
     const q = query(collection(db, 'eventos'), orderBy('createdAt', 'desc'));
-    unsubscribeEvents = onSnapshot(q, snap => {
+    onSnapshot(q, snap => {
         allEvents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderEvents();
-        updateDashboardStats(allEvents);
     }, err => {
         console.error('Events error:', err);
-        renderFallback('Error de conexión. Intenta de nuevo.');
+        if (String(err?.code || '').includes('permission-denied')) {
+            renderFallback('No tienes permisos de lectura para eventos. Revisa y publica firestore.rules.');
+            return;
+        }
+        renderFallback();
     });
 }
 
-/* ==================== RENDER ==================== */
+/* ────────────────────────────────────────────────────────
+   RENDER LIST
+   ──────────────────────────────────────────────────────── */
 function renderEvents() {
     const container = document.getElementById('events-container');
     if (!container) return;
@@ -269,249 +87,158 @@ function renderEvents() {
     }
 
     if (!events.length) {
-        container.innerHTML = `<div class="events-empty"><i class="fas fa-calendar-xmark"></i><h3>Sin eventos</h3><p>No hay eventos en esta categoría. ¡Sé el primero en generar uno!</p></div>`;
+        container.innerHTML = `
+          <div class="events-empty">
+            <i class="fas fa-calendar-xmark"></i>
+            <h3>Sin eventos</h3>
+            <p>No hay eventos en esta categoría. ¡Sé el primero en generar uno!</p>
+          </div>`;
         return;
     }
 
-    container.innerHTML = events.map((ev, i) => {
-        try {
-            return buildEventCard(ev, i);
-        } catch (err) {
-            console.error('Error renderizando evento', ev?.id, err);
-            return `
-            <article class="event-card-v3 animate-up ev-card-champions" style="animation-delay:${i * 0.06}s">
-                <div class="ev-card-body">
-                    <div class="events-empty" style="min-height:180px;">
-                        <i class="fas fa-triangle-exclamation"></i>
-                        <h3>Evento con datos dañados</h3>
-                        <p>${escapeEventsHtml(ev?.nombre || ev?.id || 'Evento')}</p>
-                    </div>
-                </div>
-            </article>`;
-        }
-    }).join('');
-
-    // Añadir listener para clic en tarjeta (excepto botones)
-    setTimeout(() => {
-        container.querySelectorAll('.event-card-v3').forEach(card => {
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('button')) return;
-                const eventId = card.dataset.id;
-                const ev = allEvents.find(e => e.id === eventId);
-                if (!ev) return;
-                const isInscribed = Array.isArray(ev.inscritos) && ev.inscritos.some(i => i.uid === currentUser?.uid && i.aprobado === true);
-                if (isInscribed || currentUserData?.rol === 'Admin' || ev.organizadorId === currentUser?.uid) {
-                    window.location.href = `evento-detalle.html?id=${eventId}`;
-                } else {
-                    window.openEventDetail(eventId);
-                }
-            });
-        });
-    }, 100);
+    container.innerHTML = events.map((ev, i) => buildEventCard(ev, i)).join('');
 }
 
-function renderFallback(msg) {
+function renderFallback(message = 'Comprueba tu conexión e inténtalo de nuevo.') {
     const container = document.getElementById('events-container');
-    if (container) container.innerHTML = `<div class="events-empty"><i class="fas fa-wifi-slash"></i><h3>Sin conexión</h3><p>${msg}</p></div>`;
+    if (!container) return;
+    container.innerHTML = `
+      <div class="events-empty">
+        <i class="fas fa-wifi-slash"></i>
+        <h3>Sin conexión</h3>
+        <p>${message}</p>
+      </div>`;
 }
 
-
-/* ==================== BUILD CARD ==================== */
+/* ────────────────────────────────────────────────────────
+   BUILD EVENT CARD
+   ──────────────────────────────────────────────────────── */
 function buildEventCard(ev, idx) {
     const formatMap = {
-        league: { label: 'LIGA', icon: 'fa-table-list', color: 'cyan' },
-        knockout: { label: 'ELIMINATORIA', icon: 'fa-sitemap', color: 'magenta' },
-        league_knockout: { label: 'LIGA + ELIM.', icon: 'fa-star', color: 'gold' },
+        league:          { label: 'LIGA',         icon: 'fa-table-list',  color: 'cyan'   },
+        knockout:        { label: 'ELIMINATORIA', icon: 'fa-sitemap',     color: 'magenta' },
+        league_knockout: { label: 'LIGA + ELIM.', icon: 'fa-star',        color: 'gold'   },
     };
     const fmt = formatMap[ev.formato] || { label: 'EVENTO', icon: 'fa-trophy', color: 'cyan' };
 
     const stateMap = {
-        draft: { label: 'BORRADOR', cls: 'state-draft' },
-        inscripcion: { label: 'INSCRIPCIONES', cls: 'state-open' },
-        activo: { label: 'EN CURSO', cls: 'state-active' },
-        finalizado: { label: 'FINALIZADO', cls: 'state-done' },
-        cancelado: { label: 'CANCELADO', cls: 'state-cancelled' },
+        draft:       { label: 'BORRADOR',     cls: 'state-draft'    },
+        inscripcion: { label: 'INSCRIPCIONES',cls: 'state-open'     },
+        activo:      { label: 'EN CURSO',     cls: 'state-active'   },
+        finalizado:  { label: 'FINALIZADO',   cls: 'state-done'     },
+        cancelado:   { label: 'CANCELADO',    cls: 'state-cancelled'},
     };
     const st = stateMap[ev.estado] || { label: ev.estado || 'BORRADOR', cls: 'state-draft' };
-    const logoUrl = ev.imagen || ev.imageUrl || ev.logoUrl || './imagenes/Logojafs.png';
 
-    const deadline = ev.fechaInscripcion?._seconds ? new Date(ev.fechaInscripcion._seconds * 1000) : ev.fechaInscripcion ? new Date(ev.fechaInscripcion) : null;
-    const startDate = ev.fechaInicio?._seconds ? new Date(ev.fechaInicio._seconds * 1000) : ev.fechaInicio ? new Date(ev.fechaInicio) : null;
+    const deadline = ev.fechaInscripcion?._seconds
+        ? new Date(ev.fechaInscripcion._seconds * 1000)
+        : ev.fechaInscripcion ? new Date(ev.fechaInscripcion) : null;
+    const startDate = ev.fechaInicio?._seconds
+        ? new Date(ev.fechaInicio._seconds * 1000)
+        : ev.fechaInicio ? new Date(ev.fechaInicio) : null;
 
     const slots = Number(ev.plazasMax || 16);
-    // Solo contamos inscritos aprobados para las plazas ocupadas
-    const inscritosAprobados = (ev.inscritos || []).filter(i => i.aprobado === true);
-    const filled = inscritosAprobados.length;
+    const filled = Array.isArray(ev.inscritos) ? ev.inscritos.length : 0;
     const pct = Math.min(100, Math.round((filled / slots) * 100));
     const isAdmin = currentUserData?.rol === 'Admin';
     const isOrganizer = isAdmin || ev.organizadorId === currentUser?.uid;
-    const isInscribed = inscritosAprobados.some(i => i.uid === currentUser?.uid);
+    const isInscribed = Array.isArray(ev.inscritos) && ev.inscritos.some(i => i.uid === currentUser?.uid);
 
     const countdown = startDate ? getCountdown(startDate) : null;
-    let newsStrip = '';
-    if (ev.estado === 'activo' || ev.estado === 'inscripcion') {
-        let phaseStr = ev.estado === 'inscripcion' ? 'Inscripciones Abiertas' : 'Fase en curso';
-        if (ev.estado === 'activo') {
-            const hasStartedBrackets = ev.bracket && ev.bracket.length > 0;
-            if (ev.formato === 'league' || (ev.formato === 'league_knockout' && !hasStartedBrackets)) {
-                phaseStr = 'Fase de Grupos / Liga';
-            } else if (ev.formato === 'knockout' || hasStartedBrackets) {
-                phaseStr = 'Fase Eliminatoria';
-            }
-        }
-        newsStrip = `
-        <div class="ev-news-strip" style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1);">
-            <span style="font-size: 10px; font-weight: 800; color: var(--primary);"><i class="fas fa-bullhorn" style="margin-right:4px;"></i> UPDATE</span>
-            <span style="font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.8);">${phaseStr}</span>
-        </div>`;
-    }
+    const inscritosList = Array.isArray(ev.inscritos) ? ev.inscritos : [];
+    const teamALabel = inscritosList[0] ? (inscritosList[0].nombre || 'T1') + (inscritosList[0].companero ? ' + ' + inscritosList[0].companero : '') : '';
+    const teamBLabel = inscritosList[1] ? (inscritosList[1].nombre || 'T2') + (inscritosList[1].companero ? ' + ' + inscritosList[1].companero : '') : '';
+    const hasMatchStrip = (ev.formato === 'league_knockout' || ev.formato === 'knockout' || ev.formato === 'league') && teamALabel && teamBLabel;
 
     return `
     <article class="event-card-v3 animate-up ev-card-champions" style="animation-delay:${idx * 0.06}s" data-id="${ev.id}">
         <div class="ev-card-header ${fmt.color}">
-            <div class="ev-format-badge"><i class="fas ${fmt.icon}"></i> ${fmt.label}</div>
+            <div class="ev-format-badge">
+                <i class="fas ${fmt.icon}"></i> ${fmt.label}
+            </div>
             <span class="ev-state-badge ${st.cls}">${st.label}</span>
         </div>
+
         <div class="ev-card-body">
-            ${countdown && !countdown.past ? `<div class="ev-countdown ${countdown.urgent ? 'ev-countdown-urgent' : ''}"><i class="fas fa-clock"></i><span>${countdown.text}</span></div>` : ''}
-            ${newsStrip}
-                        <div class="ev-card-brand">
-                <div class="ev-card-logo" style="background-image:url('${logoUrl}')"></div>
-                <div class="ev-card-brand-text">
-                    <h3 class="ev-title">${ev.nombre || 'Sin nombre'}</h3>
-                    <div class="ev-brand-sub">Organiza: ${ev.organizadorNombre || 'Club'}</div>
-                </div>
-            </div>
+            ${countdown && !countdown.past ? `
+            <div class="ev-countdown ${countdown.urgent ? 'ev-countdown-urgent' : ''}" title="Inicio del evento">
+                <i class="fas fa-clock"></i>
+                <span class="ev-countdown-text">${countdown.text}</span>
+            </div>` : ''}
+
+            ${hasMatchStrip ? `
+            <div class="ev-match-strip">
+                <span class="ev-match-team">${escapeHtml(teamALabel.substring(0, 18))}${teamALabel.length > 18 ? '…' : ''}</span>
+                <span class="ev-match-vs">VS</span>
+                <span class="ev-match-team">${escapeHtml(teamBLabel.substring(0, 18))}${teamBLabel.length > 18 ? '…' : ''}</span>
+            </div>` : ''}
+
+            <h3 class="ev-title">${ev.nombre || 'Sin nombre'}</h3>
             <p class="ev-desc">${ev.descripcion || ''}</p>
+
             <div class="ev-stats-grid">
-                <div class="ev-stat"><i class="fas fa-users"></i><span><b>${filled}/${slots}</b> equipos</span></div>
-                <div class="ev-stat"><i class="fas fa-user-clock"></i><span><b>${(ev.inscritos || []).filter(i => i.aprobado === false).length}</b> pendientes</span></div>
+                <div class="ev-stat">
+                    <i class="fas fa-users"></i>
+                    <span><b>${filled}/${slots}</b> parejas</span>
+                </div>
                 ${ev.premio ? `<div class="ev-stat"><i class="fas fa-trophy text-sport-gold"></i><span><b>${ev.premio}</b></span></div>` : ''}
                 ${deadline ? `<div class="ev-stat"><i class="fas fa-hourglass-half text-sport-red"></i><span>Inscr. hasta: <b>${fmtDate(deadline)}</b></span></div>` : ''}
                 ${startDate ? `<div class="ev-stat"><i class="fas fa-flag-checkered text-primary"></i><span>Inicio: <b>${fmtDate(startDate)}</b></span></div>` : ''}
                 ${ev.nivelMin || ev.nivelMax ? `<div class="ev-stat"><i class="fas fa-sliders text-cyan"></i><span>Nivel: <b>${ev.nivelMin || '—'}–${ev.nivelMax || '—'}</b></span></div>` : ''}
             </div>
+
             <div class="ev-progress-wrap">
-                <div class="ev-progress-bar"><div class="ev-progress-fill ${pct >= 100 ? 'full' : ''}" style="width:${pct}%"></div></div>
+                <div class="ev-progress-bar">
+                    <div class="ev-progress-fill ${pct >= 100 ? 'full' : ''}" style="width:${pct}%"></div>
+                </div>
                 <span class="ev-progress-label">${pct}% ocupado</span>
             </div>
+
             <div class="ev-card-footer">
-                <button class="btn-ev-detail" onclick="window.openEventDetail('${ev.id}')"><i class="fas fa-eye"></i> Ver</button>
-                ${!isInscribed && ev.estado === 'inscripcion' ? `<button class="btn-ev-join" onclick="window.inscribirseEvento('${ev.id}')"><i class="fas fa-bolt"></i> Inscribirse</button>` : ''}
+                <button class="btn-ev-detail" onclick="window.location.href='evento-detalle.html?id=${ev.id}'">
+                    <i class="fas fa-eye"></i> Ver
+                </button>
+                ${!isInscribed && ev.estado === 'inscripcion' ? `
+                    <button class="btn-ev-join" onclick="window.inscribirseEvento('${ev.id}')">
+                        <i class="fas fa-bolt"></i> Inscribirse
+                    </button>` : ''}
                 ${isInscribed ? `<span class="ev-enrolled-badge"><i class="fas fa-check-circle"></i> Inscrito</span>` : ''}
-                ${isOrganizer ? `<button class="btn-ev-admin" onclick="window.openEventAdmin('${ev.id}')"><i class="fas fa-shield-halved"></i></button>` : ''}
+                ${isOrganizer ? `
+                    <button class="btn-ev-admin" onclick="window.location.href='evento-detalle.html?id=${ev.id}&admin=1'">
+                        <i class="fas fa-shield-halved"></i>
+                    </button>` : ''}
             </div>
         </div>
     </article>`;
 }
 
-/* ==================== FUNCIONES DE INSCRIPCIÓN ==================== */
-window.inscribirseEvento = async (eventId) => {
-    if (!currentUser) { showToast('Acceso requerido', 'Inicia sesión', 'warning'); return; }
-    const ev = allEvents.find(e => e.id === eventId);
-    if (!ev) return;
-
-    if (ev.inscritos?.some(i => i.uid === currentUser.uid)) {
-        showToast('Ya solicitado', 'Ya has solicitado inscripción', 'info');
-        return;
-    }
-    const aprobados = (ev.inscritos || []).filter(i => i.aprobado === true).length;
-    if (aprobados >= (ev.plazasMax || 16)) {
-        showToast('Completo', 'No quedan plazas', 'warning');
-        return;
-    }
-    if (ev.estado !== 'inscripcion') {
-        showToast('Inscripción cerrada', 'Este evento ya no acepta inscripciones.', 'warning');
-        return;
-    }
-
-    const myLevel = Number(currentUserData?.nivel || 2.5);
-    if (ev.nivelMin && myLevel < Number(ev.nivelMin)) {
-        showToast('Nivel insuficiente', `Necesitas nivel ${ev.nivelMin} o superior`, 'warning');
-        return;
-    }
-    if (ev.nivelMax && myLevel > Number(ev.nivelMax)) {
-        showToast('Nivel superior', `Este evento es para nivel hasta ${ev.nivelMax}`, 'warning');
-        return;
-    }
-
-    try {
-        const pref = await showSidePreferenceModal();
-        if (pref == null) return;
-
-        let pairCode = '';
-        if (ev.modalidad === 'parejas' && ev.companeroObligatorio) {
-            const code = await askEventsTextInput({
-                title: 'Codigo de pareja',
-                label: 'Codigo compartido',
-                value: 'pareja-1',
-                placeholder: 'pareja-1',
-                confirmLabel: 'Usar codigo'
-            });
-            if (code === null) return;
-            pairCode = code.trim().toLowerCase();
-            if (!pairCode) { showToast('Pareja', 'Debes indicar un codigo de pareja.', 'warning'); return; }
-        }
-
-        const newInscripto = {
-            uid: currentUser.uid,
-            nombre: currentUserData?.nombreUsuario || currentUserData?.nombre || 'Jugador',
-            nivel: myLevel,
-            sidePreference: pref,
-            pairCode,
-            inscritoEn: new Date().toISOString(),
-            aprobado: false, // Pendiente de aprobación
-        };
-
-        const evRef = doc(db, 'eventos', eventId);
-        await updateDoc(evRef, { inscritos: arrayUnion(newInscripto) });
-
-        showToast('¡Solicitud enviada!', 'Espera la aprobación del organizador', 'success');
-        document.getElementById('modal-event-detail')?.classList.remove('active');
-    } catch (e) {
-        console.error(e);
-        showToast('Error', 'No se pudo completar la inscripción', 'error');
-    }
-};
-
-window.cancelInscripcion = async (eventId) => {
-    if (!(await confirmEventsAction({
-        title: 'Cancelar inscripcion',
-        message: 'Se cancelara tu plaza o solicitud en este evento.',
-        confirmLabel: 'Cancelar',
-        danger: true
-    }))) return;
-    const ev = allEvents.find(e => e.id === eventId);
-    if (!ev) return;
-    const myEntry = ev.inscritos?.find(i => i.uid === currentUser?.uid);
-    if (!myEntry) return;
-    try {
-        await updateDoc(doc(db, 'eventos', eventId), { inscritos: arrayRemove(myEntry) });
-        showToast('Inscripción cancelada', '', 'info');
-        document.getElementById('modal-event-detail')?.classList.remove('active');
-    } catch (e) {
-        showToast('Error', e.message, 'error');
-    }
-};
-
-/* ==================== DETALLE MODAL (Vista rápida) ==================== */
+/* ────────────────────────────────────────────────────────
+   DETAIL MODAL
+   ──────────────────────────────────────────────────────── */
 window.openEventDetail = async (eventId) => {
     const ev = allEvents.find(e => e.id === eventId);
     if (!ev) return;
     document.getElementById('ev-detail-title').textContent = ev.nombre || 'Evento';
-    const formatLabels = { league: 'Liga', knockout: 'Eliminatoria directa', league_knockout: 'Liga + Eliminatoria' };
+    const formatLabels = {
+        league: 'Liga', knockout: 'Eliminatoria directa', league_knockout: 'Liga + Eliminatoria'
+    };
     document.getElementById('ev-detail-format-badge').textContent = formatLabels[ev.formato] || ev.formato;
 
     const body = document.getElementById('ev-detail-body');
-    const inscritos = Array.isArray(ev.inscritos) ? ev.inscritos : [];
-    const aprobados = inscritos.filter(i => i.aprobado === true);
-    const isInscribed = aprobados.some(i => i.uid === currentUser?.uid);
 
-    let standingHTML = '', bracketHTML = '';
+    // Load inscriptions
+    const inscritos = Array.isArray(ev.inscritos) ? ev.inscritos : [];
+    const isInscribed = inscritos.some(i => i.uid === currentUser?.uid);
+
+    // Build standings if league
+    let standingHTML = '';
     if (ev.formato === 'league' || ev.formato === 'league_knockout') {
         const standings = await loadStandings(eventId);
         standingHTML = renderStandingTable(standings);
     }
+
+    // Build bracket if knockout
+    let bracketHTML = '';
     if (ev.formato === 'knockout' || ev.formato === 'league_knockout') {
         const bracket = ev.bracket || [];
         bracketHTML = renderBracket(bracket);
@@ -524,15 +251,39 @@ window.openEventDetail = async (eventId) => {
             ${standingHTML ? `<button class="ev-dtab" data-dtab="standing" onclick="switchDetailTab('standing',this)">Clasificación</button>` : ''}
             ${bracketHTML ? `<button class="ev-dtab" data-dtab="bracket" onclick="switchDetailTab('bracket',this)">Bracket</button>` : ''}
         </div>
-        <div id="dtab-info" class="ev-dtab-panel active p-4 flex-col gap-3">${buildDetailInfo(ev)}</div>
-        <div id="dtab-players" class="ev-dtab-panel hidden p-4">${buildPlayersList(inscritos)}</div>
-        ${standingHTML ? `<div id="dtab-standing" class="ev-dtab-panel hidden p-4">${standingHTML}</div>` : ''}
-        ${bracketHTML ? `<div id="dtab-bracket" class="ev-dtab-panel hidden p-4 overflow-x-auto">${bracketHTML}</div>` : ''}
+
+        <div id="dtab-info" class="ev-dtab-panel active p-4 flex-col gap-3">
+            ${buildDetailInfo(ev)}
+        </div>
+
+        <div id="dtab-players" class="ev-dtab-panel hidden p-4">
+            ${buildPlayersList(inscritos)}
+        </div>
+
+        ${standingHTML ? `
+        <div id="dtab-standing" class="ev-dtab-panel hidden p-4">
+            ${standingHTML}
+        </div>` : ''}
+
+        ${bracketHTML ? `
+        <div id="dtab-bracket" class="ev-dtab-panel hidden p-4 overflow-x-auto">
+            ${bracketHTML}
+        </div>` : ''}
+
         <div class="p-4 border-t border-white/5">
-            ${!isInscribed && ev.estado === 'inscripcion' ? `<button class="btn btn-primary w-full" onclick="window.inscribirseEvento('${ev.id}')"><i class="fas fa-bolt mr-1"></i> SOLICITAR INSCRIPCIÓN</button>` : ''}
-            ${isInscribed ? `<div class="flex-row items-center gap-2 p-3 rounded-xl bg-sport-green/10 border border-sport-green/20"><i class="fas fa-check-circle text-sport-green"></i><span class="text-[11px] font-bold text-sport-green">Ya estás inscrito</span><button class="ml-auto text-[9px] text-sport-red/80 hover:text-sport-red font-bold uppercase" onclick="window.cancelInscripcion('${ev.id}')">Cancelar</button></div>` : ''}
+            ${!isInscribed && ev.estado === 'inscripcion' ? `
+                <button class="btn btn-primary w-full" onclick="window.inscribirseEvento('${ev.id}')">
+                    <i class="fas fa-bolt mr-1"></i> INSCRIBIRSE AHORA
+                </button>` : ''}
+            ${isInscribed ? `
+                <div class="flex-row items-center gap-2 p-3 rounded-xl bg-sport-green/10 border border-sport-green/20">
+                    <i class="fas fa-check-circle text-sport-green"></i>
+                    <span class="text-[11px] font-bold text-sport-green">Ya estás inscrito en este evento</span>
+                    <button class="ml-auto text-[9px] text-sport-red/80 hover:text-sport-red font-bold uppercase" onclick="window.cancelInscripcion('${ev.id}')">Cancelar</button>
+                </div>` : ''}
         </div>
     `;
+
     document.getElementById('modal-event-detail').classList.add('active');
 };
 
@@ -540,21 +291,20 @@ function buildDetailInfo(ev) {
     const deadline = ev.fechaInscripcion?._seconds ? new Date(ev.fechaInscripcion._seconds*1000) : ev.fechaInscripcion ? new Date(ev.fechaInscripcion) : null;
     const startDate = ev.fechaInicio?._seconds ? new Date(ev.fechaInicio._seconds*1000) : ev.fechaInicio ? new Date(ev.fechaInicio) : null;
     const slots = Number(ev.plazasMax || 16);
-    const aprobados = (ev.inscritos || []).filter(i => i.aprobado === true);
-    const filled = aprobados.length;
+    const filled = Array.isArray(ev.inscritos) ? ev.inscritos.length : 0;
 
     return `
         <p class="text-[12px] text-white/70 leading-relaxed">${ev.descripcion || 'Sin descripción.'}</p>
         <div class="ev-info-grid">
             <div class="ev-info-item"><i class="fas fa-users text-primary"></i><div><span class="label">Plazas</span><span class="val">${filled}/${slots}</span></div></div>
-            <div class="ev-info-item"><i class="fas fa-user-clock text-warning"></i><div><span class="label">Pendientes</span><span class="val">${(ev.inscritos || []).filter(i => i.aprobado === false).length}</span></div></div>
             ${ev.premio ? `<div class="ev-info-item"><i class="fas fa-trophy text-sport-gold"></i><div><span class="label">Premio</span><span class="val">${ev.premio}</span></div></div>` : ''}
             ${deadline ? `<div class="ev-info-item"><i class="fas fa-hourglass-half text-sport-red"></i><div><span class="label">Fin inscripción</span><span class="val">${fmtDate(deadline)}</span></div></div>` : ''}
             ${startDate ? `<div class="ev-info-item"><i class="fas fa-flag-checkered text-primary"></i><div><span class="label">Inicio</span><span class="val">${fmtDate(startDate)}</span></div></div>` : ''}
             ${ev.nivelMin || ev.nivelMax ? `<div class="ev-info-item"><i class="fas fa-sliders text-cyan"></i><div><span class="label">Nivel req.</span><span class="val">${ev.nivelMin||'1.0'}–${ev.nivelMax||'7.0'}</span></div></div>` : ''}
+            ${ev.modalidad === 'parejas' ? `<div class="ev-info-item"><i class="fas fa-handshake text-cyan"></i><div><span class="label">Modalidad</span><span class="val">Parejas${ev.companeroObligatorio ? ' (pareja obligatoria)' : ''}</span></div></div>` : ''}
         </div>
         <div class="ev-points-info">
-            <span class="text-[9px] font-bold text-muted uppercase">Sistema de puntos</span>
+            <span class="text-[9px] font-bold text-muted uppercase tracking-widest">Sistema de puntos</span>
             <div class="flex-row gap-3 mt-1">
                 <span class="ev-pts-badge win">✓ ${ev.puntosVictoria || 3} pts</span>
                 <span class="ev-pts-badge draw">= ${ev.puntosEmpate || 1} pts</span>
@@ -565,54 +315,64 @@ function buildDetailInfo(ev) {
 
 function buildPlayersList(inscritos) {
     if (!inscritos.length) return `<p class="text-center text-muted text-[12px] py-8">Sin inscripciones todavía.</p>`;
-    return `<div class="ev-players-list">${inscritos.map((ins, i) => `
-        <div class="ev-player-row">
-            <span class="ev-player-rank">#${i+1}</span>
-            <div class="flex-col flex-1">
-                <span class="font-bold text-[12px]">${resolveInscritoLabel(ins)}</span>
-                ${ins.aprobado ? '<span class="text-[10px] text-sport-green">✓ Aprobado</span>' : '<span class="text-[10px] text-warning">⏳ Pendiente</span>'}
-            </div>
-            <span class="text-[10px] text-muted">${fmtDate(ins.inscritoEn?._seconds ? new Date(ins.inscritoEn._seconds*1000) : new Date())}</span>
-        </div>`).join('')}</div>`;
+    return `
+        <div class="ev-players-list">
+            ${inscritos.map((ins, i) => `
+            <div class="ev-player-row">
+                <span class="ev-player-rank">#${i+1}</span>
+                <div class="flex-col flex-1">
+                    <span class="font-bold text-[12px]">${ins.nombre || ins.uid}</span>
+                    ${ins.companero ? `<span class="text-[10px] text-muted">+ ${ins.companero}</span>` : ''}
+                </div>
+                <span class="text-[10px] text-muted">${fmtDate(ins.inscritoEn?._seconds ? new Date(ins.inscritoEn._seconds*1000) : new Date())}</span>
+            </div>`).join('')}
+        </div>`;
 }
 
 async function loadStandings(eventId) {
     try {
-        const snap = await getDocsSafe(query(collection(db, 'eventoClasificacion'), where('eventoId', '==', eventId), orderBy('puntos', 'desc'), orderBy('diferencia', 'desc')));
+        const snap = await window.getDocsSafe(query(
+            collection(db, 'eventoClasificacion'),
+            where('eventoId', '==', eventId),
+            orderBy('puntos', 'desc'), orderBy('diferencia', 'desc')
+        ));
         return snap.docs.map(d => d.data());
     } catch { return []; }
 }
 
 function renderStandingTable(standings) {
-    if (!standings.length) return `<p class="text-center text-muted text-[12px] py-8">Clasificación no disponible.</p>`;
+    if (!standings.length) return `<p class="text-center text-muted text-[12px] py-8">La clasificación aún no está disponible.</p>`;
     return `
       <div class="ev-standing-table">
-        <div class="ev-standing-head"><span>#</span><span>Pareja</span><span>PJ</span><span>G</span><span>P</span><span>PF</span><span>PC</span><span>DIF</span><span>Pts</span></div>
+        <div class="ev-standing-head">
+          <span>#</span><span>Pareja</span><span>PJ</span><span>G</span><span>P</span><span>Pts</span>
+        </div>
         ${standings.map((s, i) => `
         <div class="ev-standing-row ${i < 2 ? 'top' : i < 4 ? 'playoff' : ''}">
           <span class="ev-rank-num">${i+1}</span>
           <span class="ev-team-name">${s.nombre || '-'}</span>
           <span>${s.pj||0}</span><span>${s.ganados||0}</span><span>${s.perdidos||0}</span>
-          <span>${s.puntosGanados||0}</span><span>${s.puntosPerdidos||0}</span>
-          <span>${s.diferencia||0}</span>
           <span class="font-black text-primary">${s.puntos||0}</span>
         </div>`).join('')}
       </div>`;
 }
 
 function renderBracket(rounds = []) {
-    if (!rounds.length) return `<p class="text-center text-muted text-[12px] py-8">Bracket no generado.</p>`;
-    return `<div class="bracket-wrap">${rounds.map((round, ri) => `
+    if (!rounds.length) return `<p class="text-center text-muted text-[12px] py-8">El bracket aún no está generado.</p>`;
+    return `
+      <div class="bracket-wrap">
+        ${rounds.map((round, ri) => `
         <div class="bracket-round">
           <div class="bracket-round-label">Ronda ${ri+1}</div>
-          ${round.map(m => `
-          <div class="bracket-match">
-            <div class="bracket-team ${m.winner === 'A' ? 'winner' : m.winner ? 'loser' : ''}">${m.teamA || '?'}</div>
+          ${round.map(match => `
+          <div class="bracket-match ${match.winner ? 'played' : ''}">
+            <div class="bracket-team ${match.winner === 'A' ? 'winner' : match.winner ? 'loser' : ''}">${match.teamA || '?'}</div>
             <div class="bracket-vs">VS</div>
-            <div class="bracket-team ${m.winner === 'B' ? 'winner' : m.winner ? 'loser' : ''}">${m.teamB || '?'}</div>
-            ${m.resultado ? `<div class="bracket-result">${m.resultado}</div>` : ''}
+            <div class="bracket-team ${match.winner === 'B' ? 'winner' : match.winner ? 'loser' : ''}">${match.teamB || '?'}</div>
+            ${match.resultado ? `<div class="bracket-result">${match.resultado}</div>` : ''}
           </div>`).join('')}
-        </div>`).join('')}</div>`;
+        </div>`).join('')}
+      </div>`;
 }
 
 window.switchDetailTab = (tab, btn) => {
@@ -622,12 +382,119 @@ window.switchDetailTab = (tab, btn) => {
     document.getElementById(`dtab-${tab}`)?.classList.remove('hidden');
 };
 
-/* ==================== CREAR EVENTO ==================== */
+async function notifyEventInbox(targetUid, title, message, data = {}) {
+    if (!targetUid || !currentUser?.uid) return;
+    try {
+        await addDoc(collection(db, 'notificaciones'), {
+            destinatario: targetUid,
+            receptorId: targetUid,
+            remitente: currentUser.uid,
+            tipo: 'evento',
+            type: 'evento',
+            titulo: title,
+            mensaje: message,
+            enlace: `eventos.html`,
+            data,
+            leido: false,
+            seen: false,
+            read: false,
+            uid: targetUid,
+            title,
+            message,
+            timestamp: serverTimestamp(),
+            createdAt: serverTimestamp(),
+        });
+    } catch (_) {}
+}
+
+/* ────────────────────────────────────────────────────────
+   INSCRIPCIÓN
+   ──────────────────────────────────────────────────────── */
+window.inscribirseEvento = async (eventId) => {
+    if (!currentUser) { showToast('Acceso requerido', 'Inicia sesión', 'warning'); return; }
+    const ev = allEvents.find(e => e.id === eventId);
+    if (!ev) return;
+
+    const isInscribed = Array.isArray(ev.inscritos) && ev.inscritos.some(i => i.uid === currentUser.uid);
+    if (isInscribed) { showToast('Ya inscrito', 'Ya estás en este evento', 'info'); return; }
+
+    const slots = Number(ev.plazasMax || 16);
+    const filled = Array.isArray(ev.inscritos) ? ev.inscritos.length : 0;
+    if (filled >= slots) { showToast('Completo', 'No quedan plazas disponibles', 'warning'); return; }
+    if (String(ev.estado || '') !== 'inscripcion') { showToast('Inscripción cerrada', 'Este evento ya no acepta inscripciones.', 'warning'); return; }
+
+    // Level check
+    const myLevel = Number(currentUserData?.nivel || 2.5);
+    if (ev.nivelMin && myLevel < Number(ev.nivelMin)) {
+        showToast('Nivel insuficiente', `Necesitas nivel ${ev.nivelMin} o superior`, 'warning'); return;
+    }
+    if (ev.nivelMax && myLevel > Number(ev.nivelMax)) {
+        showToast('Nivel superior', `Este evento es para nivel hasta ${ev.nivelMax}`, 'warning'); return;
+    }
+
+    try {
+        const pref = await showSidePreferenceModal();
+        if (pref == null) return;
+        let pairCode = '';
+        if (String(ev.modalidad || 'parejas') === 'parejas' && ev.companeroObligatorio === true) {
+            const code = prompt('Código de pareja (igual para ambos)', 'pareja-1');
+            if (code === null) return;
+            pairCode = String(code || '').trim().toLowerCase();
+            if (!pairCode) { showToast('Pareja', 'Debes indicar código de pareja.', 'warning'); return; }
+        }
+
+        const newInscripto = {
+            uid: currentUser.uid,
+            nombre: currentUserData?.nombreUsuario || currentUserData?.nombre || 'Jugador',
+            nivel: myLevel,
+            sidePreference: pref,
+            pairCode,
+            inscritoEn: new Date().toISOString(),
+        };
+
+        const evRef = doc(db, 'eventos', eventId);
+        const { arrayUnion } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
+        await updateDoc(evRef, { inscritos: arrayUnion(newInscripto) });
+
+        showToast('¡Inscrito!', `Te has unido a "${ev.nombre}"`, 'success');
+        await notifyEventInbox(
+            currentUser.uid,
+            'Inscripcion realizada',
+            `Te has unido a "${ev.nombre}".`,
+            { type: 'event_joined', eventId }
+        );
+        document.getElementById('modal-event-detail')?.classList.remove('active');
+    } catch (e) {
+        console.error(e);
+        showToast('Error', 'No se pudo completar la inscripción', 'error');
+    }
+};
+
+window.cancelInscripcion = async (eventId) => {
+    if (!confirm('¿Cancelar tu inscripción en este evento?')) return;
+    const ev = allEvents.find(e => e.id === eventId);
+    if (!ev) return;
+    const myEntry = ev.inscritos.find(i => i.uid === currentUser.uid);
+    if (!myEntry) return;
+    try {
+        const { arrayRemove } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
+        await updateDoc(doc(db, 'eventos', eventId), { inscritos: arrayRemove(myEntry) });
+        showToast('Inscripción cancelada', '', 'info');
+        document.getElementById('modal-event-detail')?.classList.remove('active');
+    } catch (e) {
+        showToast('Error', e.message, 'error');
+    }
+};
+
+/* ────────────────────────────────────────────────────────
+   CREATE EVENT MODAL
+   ──────────────────────────────────────────────────────── */
 function setupCreateModal() {
     document.getElementById('btn-create-event')?.addEventListener('click', () => {
         document.getElementById('modal-create-event').classList.add('active');
     });
 
+    // Format selector
     document.querySelectorAll('.ev-format-opt').forEach(opt => {
         opt.addEventListener('click', () => {
             document.querySelectorAll('.ev-format-opt .format-card').forEach(c => c.classList.remove('active'));
@@ -635,21 +502,24 @@ function setupCreateModal() {
             const fmt = opt.dataset.format;
             const leagueWrap = document.getElementById('ev-league-points-wrap');
             const groupWrap = document.getElementById('ev-group-count-wrap');
-            const teamsPerGroupWrap = document.getElementById('ev-teams-per-group-wrap');
-            const repescaWrap = document.getElementById('ev-repesca-wrap');
-            if (leagueWrap) leagueWrap.style.display = (fmt === 'knockout') ? 'none' : 'block';
-            if (groupWrap) groupWrap.style.display = (fmt === 'league_knockout') ? 'block' : 'none';
-            if (teamsPerGroupWrap) teamsPerGroupWrap.style.display = (fmt === 'league_knockout') ? 'block' : 'none';
-            if (repescaWrap) repescaWrap.style.display = (fmt === 'league_knockout' || fmt === 'knockout') ? 'block' : 'none';
+            if (leagueWrap) {
+                leagueWrap.style.display = (fmt === 'knockout') ? 'none' : 'block';
+            }
+            if (groupWrap) {
+                groupWrap.style.display = (fmt === 'league_knockout') ? 'block' : 'none';
+            }
         });
     });
 
+    // Mode tabs
     document.querySelectorAll('.ev-mode-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.ev-mode-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const partnerWrap = document.getElementById('ev-partner-required-wrap');
-            if (partnerWrap) partnerWrap.style.display = btn.dataset.mode === 'parejas' ? 'block' : 'none';
+            if (partnerWrap) {
+                partnerWrap.style.display = btn.dataset.mode === 'parejas' ? 'block' : 'none';
+            }
         });
     });
 
@@ -658,7 +528,7 @@ function setupCreateModal() {
 
 async function saveNewEvent() {
     const nombre = document.getElementById('ev-name')?.value.trim();
-    if (!nombre) { showToast('Campo requerido', 'El nombre es obligatorio', 'warning'); return; }
+    if (!nombre) { showToast('Campo requerido', 'El nombre del evento es obligatorio', 'warning'); return; }
 
     const formato = document.querySelector('input[name="ev-format"]:checked')?.value || 'league_knockout';
     const modalidad = document.querySelector('.ev-mode-btn.active')?.dataset.mode || 'parejas';
@@ -669,8 +539,6 @@ async function saveNewEvent() {
     const plazasMax = Number(document.getElementById('ev-max-slots')?.value || 16);
     const groupCountRaw = Number(document.getElementById('ev-group-count')?.value || 2);
     const groupCount = Math.min(4, Math.max(2, groupCountRaw));
-    const equiposPorGrupo = Number(document.getElementById('ev-teams-per-group')?.value || 2);
-    const repesca = document.getElementById('ev-repesca')?.checked === true;
     let premio = document.getElementById('ev-prize')?.value.trim() || '';
     const trofeoAuto = document.getElementById('ev-trofeo-auto')?.checked === true;
     if (trofeoAuto) premio = premio ? premio + ' + Trofeo' : 'Trofeo';
@@ -682,10 +550,9 @@ async function saveNewEvent() {
     const puntosEmpate = Number(document.getElementById('ev-pts-draw')?.value || 1);
     const puntosDerrota = Number(document.getElementById('ev-pts-loss')?.value || 0);
     const descripcion = document.getElementById('ev-description')?.value.trim() || '';
-    const imagen = document.getElementById('ev-image')?.value.trim() || '';
 
-    if (nivelMin && nivelMax && Number(nivelMin) > Number(nivelMax)) {
-        showToast('Niveles inválidos', 'El mínimo no puede ser mayor que el máximo.', 'warning');
+    if (Number.isFinite(Number(nivelMin)) && Number.isFinite(Number(nivelMax)) && Number(nivelMin) > Number(nivelMax)) {
+        showToast('Niveles inválidos', 'El nivel mínimo no puede ser mayor que el nivel máximo.', 'warning');
         return;
     }
 
@@ -695,18 +562,24 @@ async function saveNewEvent() {
 
     try {
         const payload = {
-            nombre, descripcion, imagen: imagen || null, formato, modalidad, companeroObligatorio, plazasMax, premio,
+            nombre,
+            descripcion,
+            formato,
+            modalidad,
+            companeroObligatorio,
+            plazasMax,
+            premio,
             nivelMin: nivelMin ? Number(nivelMin) : null,
             nivelMax: nivelMax ? Number(nivelMax) : null,
-            puntosVictoria, puntosEmpate, puntosDerrota,
-            repesca, // Nuevo campo
+            puntosVictoria,
+            puntosEmpate,
+            puntosDerrota,
             estado: 'inscripcion',
             inscritos: [],
             bracket: [],
             groups: { A: [], B: [], C: [], D: [] },
             teams: [],
             groupCount: formato === 'league_knockout' ? groupCount : 2,
-            equiposPorGrupo: formato === 'league_knockout' ? equiposPorGrupo : null,
             pairingPolicy,
             drawState: { status: 'pending', steps: [], version: 0 },
             organizadorId: currentUser.uid,
@@ -716,20 +589,12 @@ async function saveNewEvent() {
         };
 
         if (invitados.length) {
-            const guestProfiles = await Promise.all(
-                invitados.map((inv) => ensureGuestProfile({
-                    name: inv.nombre,
-                    level: inv.nivel,
-                    source: 'event_create',
-                }))
-            );
-            payload.inscritos = guestProfiles.map((guest) => ({
-                uid: guest.id,
-                nombre: guest.nombre,
-                nivel: guest.nivel,
+            payload.inscritos = invitados.map((inv, i) => ({
+                uid: `invitado_${Date.now()}_${i}`,
+                nombre: inv.nombre,
+                nivel: inv.nivel,
                 inscritoEn: new Date().toISOString(),
                 invitado: true,
-                aprobado: true,
             }));
         }
 
@@ -737,10 +602,15 @@ async function saveNewEvent() {
         if (startDateStr)   payload.fechaInicio      = new Date(startDateStr);
 
         const newEvRef = await addDocument('eventos', payload);
-        showToast('¡Evento creado!', `"${nombre}" publicado`, 'success');
+        const newEvId = newEvRef?.id;
+        showToast('¡Evento creado!', `"${nombre}" ya está publicado`, 'success');
         document.getElementById('modal-create-event').classList.remove('active');
-        if (newEvRef?.id) {
-            setTimeout(() => window.location.href = `evento-detalle.html?id=${newEvRef.id}`, 1200);
+        
+        // Redirección inmediata a la nueva página del evento
+        if (newEvId) {
+            setTimeout(() => {
+                window.location.href = `evento-detalle.html?id=${newEvId}`;
+            }, 1200);
         }
     } catch (e) {
         console.error(e);
@@ -751,7 +621,9 @@ async function saveNewEvent() {
     }
 }
 
-/* ==================== ADMIN MODAL ==================== */
+/* ────────────────────────────────────────────────────────
+   EVENT ADMIN MODAL
+   ──────────────────────────────────────────────────────── */
 window.openEventAdmin = async (eventId) => {
     activeEventId = eventId;
     const ev = allEvents.find(e => e.id === eventId);
@@ -760,6 +632,7 @@ window.openEventAdmin = async (eventId) => {
     document.getElementById('ev-admin-name').textContent = ev.nombre || 'Evento';
     document.getElementById('modal-event-admin').classList.add('active');
 
+    // Bind admin tabs
     document.querySelectorAll('.ev-admin-tab').forEach(btn => {
         btn.onclick = () => {
             document.querySelectorAll('.ev-admin-tab').forEach(b => b.classList.remove('active'));
@@ -799,54 +672,48 @@ async function renderAdminTab(ev, tab) {
 
 function renderAdminPlayers(ev) {
     const inscritos = Array.isArray(ev.inscritos) ? ev.inscritos : [];
-    const pendientes = inscritos.filter(i => i.aprobado !== true);
-    const aprobados = inscritos.filter(i => i.aprobado === true);
-
+    if (!inscritos.length) {
+        return `<p class="text-center text-muted text-[12px] py-8">Sin inscripciones todavía.</p>`;
+    }
     return `
-    <div class="flex-col gap-4">
-        <div class="flex-row between items-center">
-            <span class="text-[11px] font-bold text-muted">Pendientes (${pendientes.length})</span>
+    <div class="flex-col gap-2">
+        <div class="flex-row between items-center mb-2">
+            <span class="text-[11px] font-bold text-muted">${inscritos.length} inscrito(s)</span>
+            ${ev.estado === 'inscripcion' ? `
+            <button class="btn-mini" onclick="window.generarClasificacionInicial('${ev.id}')">
+                <i class="fas fa-play mr-1"></i> Iniciar Evento
+            </button>` : ''}
         </div>
-        ${pendientes.length ? pendientes.map((ins, i) => `
+        ${inscritos.map((ins, i) => `
         <div class="ev-admin-player-row">
             <span class="ev-player-rank">#${i+1}</span>
             <div class="flex-col flex-1">
-                <span class="font-bold text-[12px]">${resolveInscritoLabel(ins)}</span>
+                <span class="font-bold text-[12px]">${ins.nombre || ins.uid}</span>
+                ${ins.companero ? `<span class="text-[10px] text-muted">Pareja: ${ins.companero}</span>` : ''}
             </div>
-            <div class="flex-row gap-1">
-                <button class="btn-micro success" onclick="window.aprobarJugador('${ev.id}','${ins.uid}')"><i class="fas fa-check"></i></button>
-                <button class="btn-micro danger" onclick="window.expulsarJugador('${ev.id}','${ins.uid}')"><i class="fas fa-times"></i></button>
-            </div>
-        </div>`).join('') : '<p class="text-muted text-[12px]">No hay pendientes</p>'}
-
-        <div class="mt-4 pt-2 border-t border-white/5">
-            <div class="flex-row between items-center">
-                <span class="text-[11px] font-bold text-muted">Aprobados (${aprobados.length})</span>
-                ${ev.estado === 'inscripcion' ? `
-                <button class="btn-mini" onclick="window.addManualPlayer('${ev.id}')">
-                    <i class="fas fa-user-plus mr-1"></i> Añadir
-                </button>` : ''}
-            </div>
-            ${aprobados.length ? aprobados.map((ins, i) => `
-            <div class="ev-admin-player-row">
-                <span class="ev-player-rank">#${i+1}</span>
-                <div class="flex-col flex-1">
-                    <span class="font-bold text-[12px]">${resolveInscritoLabel(ins)}</span>
-                </div>
-                <button class="btn-micro danger" onclick="window.expulsarJugador('${ev.id}','${ins.uid}')"><i class="fas fa-user-minus"></i></button>
-            </div>`).join('') : '<p class="text-muted text-[12px]">No hay aprobados</p>'}
-        </div>
+            <button class="btn-micro danger" onclick="window.expulsarJugador('${ev.id}','${ins.uid}')">
+                <i class="fas fa-user-minus"></i>
+            </button>
+        </div>`).join('')}
+        <button class="btn-mini w-full mt-3" onclick="window.addManualPlayer('${ev.id}')">
+            <i class="fas fa-user-plus mr-1"></i> Añadir jugador manualmente
+        </button>
     </div>`;
 }
 
 async function renderAdminMatches(ev) {
     try {
-        const snap = await getDocsSafe(query(collection(db, 'eventoPartidos'), where('eventoId', '==', ev.id)));
-        const matches = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.round||1) - (b.round||1));
-        const uniqueMatches = Array.from(new Map(matches.map(m => {
-            const key = m.id || m.matchCode || `${m.teamAId || ''}_${m.teamBId || ''}_${m.group || ''}_${m.round || ''}`;
-            return [key, m];
-        })).values());
+        const snap = await window.getDocsSafe(query(
+            collection(db, 'eventoPartidos'),
+            where('eventoId', '==', ev.id)
+        ));
+        const matches = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => {
+                const pa = String(a.phase || '').localeCompare(String(b.phase || ''));
+                if (pa !== 0) return pa;
+                return Number(a.round || a.ronda || 1) - Number(b.round || b.ronda || 1);
+            });
 
         if (!matches.length) {
             return `
@@ -863,7 +730,7 @@ async function renderAdminMatches(ev) {
             <button class="btn-mini mb-2" onclick="window.addManualMatch('${ev.id}')">
                 <i class="fas fa-plus mr-1"></i> Añadir partido
             </button>
-            ${uniqueMatches.map(m => `
+            ${matches.map(m => `
             <div class="ev-admin-match-row">
                 <div class="flex-col flex-1">
                     <span class="font-bold text-[12px]">${m.teamAName || m.equipoA || '?'} vs ${m.teamBName || m.equipoB || '?'}</span>
@@ -874,14 +741,10 @@ async function renderAdminMatches(ev) {
                     <button class="btn-micro" onclick="window.editMatchResult('${ev.id}','${m.id}')">
                         <i class="fas fa-pen"></i>
                     </button>
-                    <button class="btn-micro danger" onclick="window.deleteEventMatch('${ev.id}','${m.id}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
                 </div>
             </div>`).join('')}
         </div>`;
-    } catch (e) {
-        console.error(e);
+    } catch {
         return `<p class="text-[12px] text-sport-red py-4">Error cargando partidos.</p>`;
     }
 }
@@ -910,7 +773,9 @@ function renderAdminSettings(ev) {
                 <input type="number" id="admin-ev-ptswin" class="input" value="${ev.puntosVictoria || 3}">
             </div>
         </div>
-        <button id="btn-admin-save-settings" class="btn btn-primary w-full"><i class="fas fa-save mr-1"></i> Guardar cambios</button>
+        <button id="btn-admin-save-settings" class="btn btn-primary w-full">
+            <i class="fas fa-save mr-1"></i> Guardar cambios
+        </button>
         <div class="mt-2 border-t border-white/5 pt-3">
             <button class="btn btn-ghost w-full text-sport-red/80 hover:text-sport-red" onclick="window.deleteEvent('${ev.id}')">
                 <i class="fas fa-trash mr-1"></i> Eliminar evento
@@ -934,49 +799,200 @@ function setupAdminSettingsListeners(ev) {
     });
 }
 
-/* ==================== ACCIONES ADMIN MEJORADAS ==================== */
-window.aprobarJugador = async (eventId, uid) => {
+/* ─── Admin Actions ─── */
+
+window.expulsarJugador = async (eventId, uid) => {
+    if (!confirm('¿Expulsar a este jugador del evento?')) return;
     const ev = allEvents.find(e => e.id === eventId);
     if (!ev) return;
-    const inscritos = ev.inscritos || [];
-    const index = inscritos.findIndex(i => i.uid === uid);
-    if (index === -1) return;
-    const updated = [...inscritos];
-    updated[index] = { ...updated[index], aprobado: true };
+    const entry = ev.inscritos.find(i => i.uid === uid);
+    if (!entry) return;
     try {
-        await updateDoc(doc(db, 'eventos', eventId), { inscritos: updated });
-        showToast('Jugador aprobado', '', 'success');
-        renderAdminTab(ev, 'players');
+        const { arrayRemove } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
+        await updateDoc(doc(db, 'eventos', eventId), { inscritos: arrayRemove(entry) });
+        showToast('Jugador expulsado', '', 'info');
+        renderAdminTab(allEvents.find(e => e.id === eventId), 'players');
+    } catch (e) { showToast('Error', e.message, 'error'); }
+};
+
+window.generarClasificacionInicial = async (eventId) => {
+    if (!confirm('¿Iniciar el evento y generar la clasificación?')) return;
+    try {
+        await updateDoc(doc(db, 'eventos', eventId), { estado: 'activo' });
+        showToast('Evento iniciado', 'Estado actualizado a ACTIVO', 'success');
+    } catch (e) { showToast('Error', e.message, 'error'); }
+};
+
+window.generarPartidos = async (eventId) => {
+    const ev = allEvents.find(e => e.id === eventId);
+    if (!ev || !Array.isArray(ev.inscritos) || ev.inscritos.length < 2) {
+        showToast('Insuficientes jugadores', 'Necesitas al menos 2 equipos inscritos', 'warning');
+        return;
+    }
+    try {
+        const teams = [...ev.inscritos];
+        const prevSnap = await window.getDocsSafe(query(
+            collection(db, 'eventoPartidos'),
+            where('eventoId', '==', eventId)
+        ));
+        await Promise.all(prevSnap.docs.map((d) => deleteDoc(doc(db, 'eventoPartidos', d.id))));
+
+        if (ev.formato === 'league' || ev.formato === 'league_knockout') {
+            await generateLeagueMatches(eventId, teams, ev);
+        } else {
+            await generateKnockoutBracket(eventId, teams, ev);
+        }
+        showToast('Partidos generados', '¡Calendario listo!', 'success');
+        renderAdminTab(ev, 'matches');
     } catch (e) {
+        console.error(e);
         showToast('Error', e.message, 'error');
     }
 };
 
-window.expulsarJugador = async (eventId, uid) => {
-    if (!(await confirmEventsAction({
-        title: 'Expulsar jugador',
-        message: 'Se eliminara a este jugador del evento.',
-        confirmLabel: 'Expulsar',
-        danger: true
-    }))) return;
-    const ev = allEvents.find(e => e.id === eventId);
-    if (!ev) return;
-    const entry = ev.inscritos?.find(i => i.uid === uid);
-    if (!entry) return;
+async function generateLeagueMatches(eventId, teams, ev) {
+    const batch = writeBatch(db);
+    let roundNum = 1;
+    for (let i = 0; i < teams.length; i++) {
+        for (let j = i + 1; j < teams.length; j++) {
+            const matchRef = doc(collection(db, 'eventoPartidos'));
+            const teamAId = teams[i].uid || `A_${i + 1}`;
+            const teamBId = teams[j].uid || `B_${j + 1}`;
+            batch.set(matchRef, {
+                eventoId: eventId,
+                tipo: 'evento',
+                phase: 'league',
+                round: roundNum,
+                teamAId,
+                teamBId,
+                teamAName: teams[i].nombre || teams[i].name || `Equipo ${i + 1}`,
+                teamBName: teams[j].nombre || teams[j].name || `Equipo ${j + 1}`,
+                playerUids: [teamAId, teamBId].filter(Boolean),
+                ganadorTeamId: null,
+                fecha: null,
+                // legacy compatibility fields
+                ronda: roundNum,
+                equipoA: teams[i].nombre || teams[i].name || `Equipo ${i + 1}`,
+                equipoAUid: teamAId,
+                equipoB: teams[j].nombre || teams[j].name || `Equipo ${j + 1}`,
+                equipoBUid: teamBId,
+                resultado: null,
+                ganador: null,
+                estado: 'pendiente',
+                createdAt: serverTimestamp(),
+            });
+            roundNum++;
+        }
+    }
+    await batch.commit();
+}
+
+async function generateKnockoutBracket(eventId, teams, ev) {
+    // Shuffle teams
+    const shuffled = [...teams].sort(() => Math.random() - 0.5);
+    const pairs = [];
+    for (let i = 0; i < shuffled.length; i += 2) {
+        pairs.push([shuffled[i], shuffled[i + 1] || null]);
+    }
+    const batch = writeBatch(db);
+    pairs.forEach((pair, idx) => {
+        const matchRef = doc(collection(db, 'eventoPartidos'));
+        const a = pair[0];
+        const b = pair[1];
+        const teamAId = a?.uid || `KO_A_${idx + 1}`;
+        const teamBId = b?.uid || null;
+        batch.set(matchRef, {
+            eventoId: eventId,
+            tipo: 'evento',
+            phase: 'knockout',
+            matchCode: `ADM_R1_M${idx + 1}`,
+            round: 1,
+            slot: idx + 1,
+            sourceA: null,
+            sourceB: null,
+            teamAId,
+            teamBId,
+            teamAName: a?.nombre || a?.name || `Equipo ${idx * 2 + 1}`,
+            teamBName: b?.nombre || b?.name || null,
+            playerUids: [teamAId, teamBId].filter(Boolean),
+            ganadorTeamId: null,
+            fecha: null,
+            // legacy compatibility fields
+            ronda: 1,
+            posicionBracket: idx,
+            equipoA: a?.nombre || a?.name || `Equipo ${idx * 2 + 1}`,
+            equipoAUid: teamAId,
+            equipoB: b?.nombre || b?.name || null,
+            equipoBUid: teamBId,
+            resultado: null,
+            ganador: null,
+            estado: 'pendiente',
+            createdAt: serverTimestamp(),
+        });
+    });
+    await batch.commit();
+}
+
+window.editMatchResult = async (eventId, matchId) => {
+    const resultado = prompt('Introduce el resultado (ej: 6-3 6-4):');
+    if (!resultado) return;
+    const ganador = prompt('¿Quién ganó? (A o B):')?.toUpperCase();
+    if (ganador !== 'A' && ganador !== 'B') { showToast('Ganador inválido', 'Escribe A o B', 'warning'); return; }
     try {
-        await updateDoc(doc(db, 'eventos', eventId), { inscritos: arrayRemove(entry) });
-        showToast('Jugador eliminado', '', 'info');
-        renderAdminTab(ev, 'players');
+        const match = await getDocument('eventoPartidos', matchId);
+        const winnerTeamId = ganador === 'A'
+            ? (match?.teamAId || match?.equipoAUid || null)
+            : (match?.teamBId || match?.equipoBUid || null);
+        await updateDoc(doc(db, 'eventoPartidos', matchId), {
+            resultado,
+            ganador,
+            ganadorTeamId: winnerTeamId,
+            estado: 'jugado',
+            updatedAt: serverTimestamp(),
+        });
+
+        // Update standings if league
+        const ev = allEvents.find(e => e.id === eventId);
+        if (ev && (ev.formato === 'league' || ev.formato === 'league_knockout')) {
+            if (match) {
+                const winnerUid = ganador === 'A'
+                    ? (match.teamAId || match.equipoAUid)
+                    : (match.teamBId || match.equipoBUid);
+                const loserUid  = ganador === 'A'
+                    ? (match.teamBId || match.equipoBUid)
+                    : (match.teamAId || match.equipoAUid);
+                if (!winnerUid || !loserUid) {
+                    showToast('Resultado guardado', 'Partido cerrado sin actualización de clasificación.', 'info');
+                } else {
+                    const winKey  = `${eventId}_${winnerUid}`;
+                    const loseKey = `${eventId}_${loserUid}`;
+                    const { increment } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
+                    const b = writeBatch(db);
+                    b.set(doc(db, 'eventoClasificacion', winKey),  {
+                        eventoId: eventId,
+                        uid: winnerUid,
+                        pj: increment(1),
+                        ganados: increment(1),
+                        puntos: increment(ev.puntosVictoria || 3)
+                    }, { merge: true });
+                    b.set(doc(db, 'eventoClasificacion', loseKey), {
+                        eventoId: eventId,
+                        uid: loserUid,
+                        pj: increment(1),
+                        perdidos: increment(1),
+                        puntos: increment(ev.puntosDerrota || 0)
+                    }, { merge: true });
+                    await b.commit();
+                }
+            }
+        }
+        showToast('Resultado guardado', '', 'success');
+        renderAdminTab(ev || {}, 'matches');
     } catch (e) { showToast('Error', e.message, 'error'); }
 };
 
 window.deleteEvent = async (eventId) => {
-    if (!(await confirmEventsAction({
-        title: 'Eliminar evento',
-        message: 'Esta accion elimina el evento de forma permanente.',
-        confirmLabel: 'Eliminar',
-        danger: true
-    }))) return;
+    if (!confirm('¿Eliminar este evento permanentemente? Esta acción no se puede deshacer.')) return;
     try {
         await deleteDoc(doc(db, 'eventos', eventId));
         showToast('Evento eliminado', '', 'info');
@@ -985,22 +1001,16 @@ window.deleteEvent = async (eventId) => {
 };
 
 window.addManualPlayer = async (eventId) => {
-    const nombre = await askEventsTextInput({
-        title: 'Añadir jugador manual',
-        label: 'Nombre del jugador',
-        value: '',
-        placeholder: 'Nombre o apodo',
-        confirmLabel: 'Añadir'
-    });
+    const nombre = prompt('Nombre del jugador a añadir:');
     if (!nombre) return;
     try {
+        const { arrayUnion } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
         await updateDoc(doc(db, 'eventos', eventId), {
             inscritos: arrayUnion({
                 uid: `manual_${Date.now()}`,
                 nombre,
                 inscritoEn: new Date().toISOString(),
-                manual: true,
-                aprobado: true, // Se añade directamente como aprobado
+                manual: true
             })
         });
         showToast('Jugador añadido', nombre, 'success');
@@ -1008,21 +1018,8 @@ window.addManualPlayer = async (eventId) => {
 };
 
 window.addManualMatch = async (eventId) => {
-    const equipoA = await askEventsTextInput({
-        title: 'Partido manual',
-        label: 'Pareja 1',
-        value: '',
-        placeholder: 'Nombre de la pareja 1',
-        confirmLabel: 'Continuar'
-    });
-    if (!equipoA) return;
-    const equipoB = await askEventsTextInput({
-        title: 'Partido manual',
-        label: 'Pareja 2',
-        value: '',
-        placeholder: 'Nombre de la pareja 2',
-        confirmLabel: 'Crear'
-    });
+    const equipoA = prompt('Equipo A (nombre):');
+    const equipoB = prompt('Equipo B (nombre):');
     if (!equipoA || !equipoB) return;
     try {
         await addDocument('eventoPartidos', {
@@ -1037,43 +1034,18 @@ window.addManualMatch = async (eventId) => {
             playerUids: [],
             ganadorTeamId: null,
             fecha: null,
-            ...buildMatchPersistencePatch({ state: 'abierto', resultStr: '' }),
-            createdAt: serverTimestamp()
+            // legacy fields
+            ronda: 1,
+            equipoA, equipoB,
+            resultado: null, ganador: null, estado: 'pendiente',
         });
         showToast('Partido añadido', `${equipoA} vs ${equipoB}`, 'success');
     } catch (e) { showToast('Error', e.message, 'error'); }
 };
 
-window.editMatchResult = async (_eventId, matchId) => {
-    if (!matchId) return;
-    openResultForm(matchId, 'eventoPartidos');
-};
-
-window.deleteEventMatch = async (_eventId, matchId) => {
-    if (!(await confirmEventsAction({
-        title: 'Eliminar partido',
-        message: 'Se eliminara este partido del evento y su vinculo si existe.',
-        confirmLabel: 'Eliminar',
-        danger: true
-    }))) return;
-    try {
-        const snap = await getDoc(doc(db, 'eventoPartidos', matchId));
-        const data = snap.exists() ? snap.data() : null;
-        if (data?.linkedMatchId && data?.linkedMatchCollection) {
-            await deleteDoc(doc(db, data.linkedMatchCollection, data.linkedMatchId));
-        }
-        await deleteDoc(doc(db, 'eventoPartidos', matchId));
-        showToast('Partido eliminado', '', 'success');
-    } catch (e) {
-        showToast('Error', e.message, 'error');
-    }
-};
-
-window.generarPartidos = async (eventId) => {
-    showToast('Función no disponible', 'Usa el panel de sorteo', 'warning');
-};
-
-/* ==================== HELPERS ==================== */
+/* ────────────────────────────────────────────────────────
+   HELPERS
+   ──────────────────────────────────────────────────────── */
 function fmtDate(d) {
     if (!d) return '-';
     try {
@@ -1086,9 +1058,9 @@ function getCountdown(startDate) {
     const start = startDate instanceof Date ? startDate : new Date(startDate);
     const diff = start - now;
     if (diff <= 0) return { text: 'Ya empezó', past: true, urgent: false };
-    const days = Math.floor(diff / (24*60*60*1000));
-    const hours = Math.floor((diff % (24*60*60*1000)) / (60*60*1000));
-    const mins = Math.floor((diff % (60*60*1000)) / (60*1000));
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+    const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+    const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
     if (days > 7) return { text: `Empieza en ${days} días`, past: false, urgent: false };
     if (days > 0) return { text: `${days}d ${hours}h`, past: false, urgent: true };
     if (hours > 0) return { text: `${hours}h ${mins}m`, past: false, urgent: true };
@@ -1103,18 +1075,13 @@ function escapeHtml(s) {
 
 function parseInvitados(raw) {
     if (!raw.trim()) return [];
-    return raw.split(/\n/).map(l => l.trim()).filter(Boolean).map(line => {
-        const parts = line.split(/[,;]/).map(p => p.trim());
+    const lines = raw.split(/\n/).map(l => l.trim()).filter(Boolean);
+    const out = [];
+    for (const line of lines) {
+        const parts = line.split(/[,;]/).map(p => p.trim()).filter(Boolean);
         const nombre = parts[0] || '';
         const nivel = parts[1] ? Number(parts[1].replace(',', '.')) : 2.5;
-        return nombre ? { nombre, nivel: Number.isFinite(nivel) ? nivel : 2.5 } : null;
-    }).filter(Boolean);
+        if (nombre) out.push({ nombre, nivel: Number.isFinite(nivel) ? nivel : 2.5 });
+    }
+    return out;
 }
-
-
-
-
-
-
-
-

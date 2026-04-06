@@ -83,7 +83,6 @@ export function getFriendlyTeamName(arg = {}, legacyPlayerNames = []) {
 
   const fromPlayers = buildTeamNameFromPlayers(resolvedNames);
   if (fromPlayers) return fromPlayers;
-
   if (String(fallback || "").trim()) return String(fallback).trim();
 
   const normalizedTeamId = String(teamId || "").trim();
@@ -93,32 +92,4 @@ export function getFriendlyTeamName(arg = {}, legacyPlayerNames = []) {
   }
 
   return `Pareja ${side}`;
-}
-
-export function getFriendlyMatchLabel({
-  teamAName = "",
-  teamBName = "",
-  teamAId = "",
-  teamBId = "",
-  teamAPlayers = [],
-  teamBPlayers = [],
-  resolvePlayerName = null,
-} = {}) {
-  const sideA = getFriendlyTeamName({
-    teamName: teamAName,
-    teamId: teamAId,
-    playerNames: teamAPlayers,
-    playerUids: teamAPlayers,
-    resolvePlayerName,
-    side: "A",
-  });
-  const sideB = getFriendlyTeamName({
-    teamName: teamBName,
-    teamId: teamBId,
-    playerNames: teamBPlayers,
-    playerUids: teamBPlayers,
-    resolvePlayerName,
-    side: "B",
-  });
-  return `${sideA} vs ${sideB}`;
 }

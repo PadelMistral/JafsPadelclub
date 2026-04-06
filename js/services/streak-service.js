@@ -1,6 +1,5 @@
 import { db, getDocsSafe, updateDocument } from "../firebase-service.js";
 import { collection, limit, orderBy, query, where } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
-import { computeCurrentStreakFromLogs } from "./streak-utils.js";
 
 function toTs(value) {
   if (!value) return 0;
@@ -8,6 +7,40 @@ function toTs(value) {
   if (typeof value?.toDate === "function") return value.toDate().getTime();
   const parsed = new Date(value).getTime();
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function signFromLog(log = {}) {
+  const streakAfter = Number(log?.details?.streakAfter);
+  if (Number.isFinite(streakAfter) && streakAfter !== 0) return streakAfter > 0 ? 1 : -1;
+
+  const delta = Number(log?.delta ?? log?.pointsDelta ?? log?.eloDelta);
+  if (Number.isFinite(delta) && delta !== 0) return delta > 0 ? 1 : -1;
+
+  const result = String(log?.result || log?.resultado || "").toLowerCase();
+  if (["win", "victoria", "ganado", "ganada"].includes(result)) return 1;
+  if (["loss", "derrota", "perdido", "perdida"].includes(result)) return -1;
+  return 0;
+}
+
+function computeCurrentStreakFromLogs(logs = []) {
+  const ordered = [...(logs || [])].sort((a, b) => toTs(b?.timestamp) - toTs(a?.timestamp));
+  let streak = 0;
+
+  for (const log of ordered) {
+    const sign = signFromLog(log);
+    if (!sign) continue;
+    if (!streak) {
+      streak = sign;
+      continue;
+    }
+    if ((streak > 0 && sign > 0) || (streak < 0 && sign < 0)) {
+      streak += sign;
+      continue;
+    }
+    break;
+  }
+
+  return streak;
 }
 
 export async function fetchRankingLogsForUser(uid, maxLogs = 60) {
@@ -55,16 +88,4 @@ export async function syncComputedStreakForUser(uid, userDoc = null, options = {
   }
 
   return streak;
-}
-
-export async function enrichUsersWithComputedStreak(users = [], maxUsers = 24) {
-  const subset = (users || []).slice(0, maxUsers);
-  await Promise.allSettled(
-    subset.map(async (user) => {
-      const streak = await fetchComputedStreak(user?.id, 40);
-      user.computedStreak = streak;
-      return streak;
-    }),
-  );
-  return users;
 }

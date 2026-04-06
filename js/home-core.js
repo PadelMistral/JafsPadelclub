@@ -1,4 +1,4 @@
-/* Home V2 - Clean and Real Player Names */
+﻿/* Home V2 - Clean and Real Player Names */
 import { db, subscribeCol, getDocument } from "./firebase-service.js";
 import {
   collection,
@@ -88,6 +88,34 @@ let activeProposalId = null;
 let activeProposalMeta = null;
 let proposalInlineMode = false;
 let clubFeedItems = [];
+
+function userCanOpenCompetitiveHome(userDoc = null) {
+  if (!userDoc || typeof userDoc !== "object") return false;
+  return userDoc.rol === "Admin" || userDoc.status === "approved" || userDoc.aprobado === true;
+}
+
+function renderPendingApprovalState() {
+  const nextMatchCard = document.getElementById("next-match-card");
+  const matchesGrid = document.getElementById("matches-list");
+  const heroTitle = document.getElementById("welcome-title");
+  const heroSubtitle = document.getElementById("welcome-subtitle");
+
+  if (heroTitle) heroTitle.textContent = "Cuenta pendiente de aprobación";
+  if (heroSubtitle) heroSubtitle.textContent = "Tu perfil existe, pero todavía no tiene acceso completo al club.";
+
+  if (nextMatchCard) {
+    nextMatchCard.innerHTML = `
+      <div class="hv2-empty-state">
+        <i class="fas fa-user-clock"></i>
+        <h3>Esperando validación</h3>
+        <p>Cuando un admin apruebe tu cuenta podrás ver partidos, eventos y el resto del contenido.</p>
+      </div>
+    `;
+  }
+
+  if (matchesGrid) matchesGrid.innerHTML = "";
+  completeHomeEntryOverlay();
+}
 
 // Limpieza de overlays heredados "event-day-alert"
 function purgeEventDayAlerts() {
@@ -340,6 +368,12 @@ document.addEventListener("DOMContentLoaded", () => {
       cleanup();
       currentUser = user;
       currentUserData = userDoc || {};
+      if (!userCanOpenCompetitiveHome(currentUserData)) {
+        await injectHeader(currentUserData);
+        injectNavbar("home");
+        renderPendingApprovalState();
+        return;
+      }
       currentUserData.computedStreak = await syncComputedStreakForUser(user.uid, currentUserData, { maxLogs: 60 });
       seedIdentityCache([{ uid: user.uid, ...currentUserData }]);
       if (showHomeWelcome) {
@@ -1924,7 +1958,7 @@ window.setHomeEventStandingsGroup = (eventId, groupKey = "") => {
 export function fixHomeCopyEncoding() {
   document.querySelectorAll(".hv2-collapsible-summary span").forEach((el) => {
     const text = String(el.textContent || "");
-    if (/Ultimos Resultados|Ãšltimos Resultados/i.test(text)) {
+    if (/Ultimos Resultados|Últimos Resultados/i.test(text)) {
       el.innerHTML = `<i class="fas fa-flag-checkered"></i> Últimos Resultados`;
     }
     if (/Mas opciones|Mas del Club/i.test(text)) {
@@ -3452,7 +3486,7 @@ async function createProposalChat() {
             await createNotification(
                 targets,
                 "Nueva propuesta de partido",
-                `${currentUserData?.nombreUsuario || currentUserData?.nombre || "Un jugador"} te ha invitado a ${title}.`,
+                `${currentUserData?.nombreUsuario || currentUserData?.nombre || "Un jugador"} ha abierto el chat "${title}" y te ha añadido a la propuesta.`,
                 "proposal_created",
                 "home.html",
                 { type: "proposal_created", proposalId: ref.id, dedupId: `proposal_created_${ref.id}` },
@@ -3509,7 +3543,7 @@ async function openProposalChat(proposalId) {
         <div id="proposal-vote-panel"></div>
         <div id="proposal-chat-list" class="proposal-chat-list whatsapp"></div>
         <div class="proposal-chat-input whatsapp">
-            <input id="proposal-chat-text" class="input" placeholder="Escribe un mensaje...">
+            <input id="proposal-chat-text" class="input" placeholder="Escribe un mensaje al grupo...">
             <button class="btn-confirm-v7" id="proposal-send-btn">Enviar</button>
         </div>
         <div class="proposal-actions">
@@ -3588,8 +3622,8 @@ async function sendProposalMessage(proposalId) {
         if (targets.length) {
             await createNotification(
                 targets,
-                "Mensaje de propuesta",
-                `Tienes un mensaje en: ${meta?.title || "Propuesta de partido"}`,
+                `${name} escribió en la propuesta`,
+                `"${text.slice(0, 90)}${text.length > 90 ? "..." : ""}"`,
                 "proposal_message",
                 "home.html",
                 { type: "proposal_message", proposalId, dedupId: `proposal_msg_${proposalId}_${Date.now()}` },

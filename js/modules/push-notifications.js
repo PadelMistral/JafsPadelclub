@@ -1,4 +1,4 @@
-/* js/modules/push-notifications.js - OneSignal Push Channel */
+﻿/* js/modules/push-notifications.js - OneSignal Push Channel */
 import { showToast } from "../ui-core.js";
 import { auth, db } from "../firebase-service.js";
 import { analyticsCount, analyticsSetFlag, analyticsTiming } from "../core/analytics.js";
@@ -9,13 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 
 import { getAppBase, getFullUrl } from "./path-utils.js";
-import {
-  getNativePushStatus,
-  initNativePushNotifications,
-  isNativePlatform,
-  requestNativePushPermission,
-  sendNativeLocalNotification,
-} from "./native-mobile.js";
+import { APP_PUSH_API_URL } from "../app-config.js";
 
 const DEFAULT_ICON = "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff";
 const ONESIGNAL_SDK_SRC =
@@ -25,32 +19,105 @@ const DEVICE_ID_STORAGE_KEY = "onesignal_device_id";
 const DEFAULT_ONESIGNAL_APP_ID = "0f270864-c893-4c44-95cc-393321937fb2";
 const PUSH_DIAG_LOG_KEY = "push_diag_log_v1";
 const PUSH_DIAG_STATE_KEY = "push_diag_state_v1";
-const NOTIF_SOFT_PROMPT_COMPLETED_KEY = "notif_soft_prompt_completed";
-const NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY = "notif_soft_prompt_snooze_until";
 const PUSH_DIAG_MAX = 120;
 const SW_RETRY_ATTEMPTS = 4;
 const SW_RETRY_BASE_MS = 350;
 
 let notifPermission =
   typeof Notification !== "undefined" ? Notification.permission : "default";
-
-// Proactive permission tracking
-if (typeof navigator !== "undefined" && navigator.permissions && navigator.permissions.query) {
-    navigator.permissions.query({ name: "notifications" }).then((perm) => {
-        perm.onchange = () => {
-            notifPermission = Notification.permission;
-            pushLog("info", "permission_changed_proactive", { permission: notifPermission });
-            persistNotifPermissionFlag(notifPermission);
-        };
-    }).catch(() => {});
-}
-
 let oneSignalReady = false;
 let oneSignalInitPromise = null;
 let lastOneSignalLoginUid = null;
-let oneSignalScriptURL = null; // prevent undefined reference
-let softPromptScheduled = false;
 const pushInitByUid = new Map();
+let nativeOneSignal = null;
+let nativeOneSignalReady = false;
+let nativeClickListenerBound = false;
+let nativeSubscriptionObserverBound = false;
+
+function isNativeMobileApp() {
+  try {
+    return !!(window.Capacitor?.isNativePlatform?.() || window.cordova);
+  } catch (_) {
+    return false;
+  }
+}
+
+async function waitForNativeOneSignal(timeoutMs = 6000) {
+  if (!isNativeMobileApp()) return null;
+  if (nativeOneSignal) return nativeOneSignal;
+
+  const readPlugin = () => window.plugins?.OneSignal || null;
+  const existing = readPlugin();
+  if (existing) {
+    nativeOneSignal = existing;
+    return nativeOneSignal;
+  }
+
+  nativeOneSignal = await new Promise((resolve) => {
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      resolve(value || null);
+    };
+    const timer = setTimeout(() => finish(readPlugin()), timeoutMs);
+    const onReady = () => {
+      clearTimeout(timer);
+      finish(readPlugin());
+    };
+    document.addEventListener("deviceready", onReady, { once: true });
+    setTimeout(() => {
+      const plugin = readPlugin();
+      if (plugin) {
+        clearTimeout(timer);
+        finish(plugin);
+      }
+    }, 150);
+  });
+
+  return nativeOneSignal;
+}
+
+async function getNativePushSnapshot() {
+  const plugin = await waitForNativeOneSignal();
+  if (!plugin) return { permission: "default", id: null, token: null, optedIn: false };
+
+  const permissionGranted = await plugin.Notifications.getPermissionAsync().catch(() => false);
+  const id = await plugin.User.pushSubscription.getIdAsync().catch(() => null);
+  const token = await plugin.User.pushSubscription.getTokenAsync().catch(() => null);
+  const optedIn = await plugin.User.pushSubscription.getOptedInAsync().catch(() => false);
+  return {
+    permission: permissionGranted ? "granted" : "default",
+    id,
+    token,
+    optedIn: Boolean(optedIn),
+  };
+}
+
+async function bindNativeOneSignalObservers(uid = null) {
+  const plugin = await waitForNativeOneSignal();
+  if (!plugin) return;
+
+  if (!nativeClickListenerBound) {
+    nativeClickListenerBound = true;
+    plugin.Notifications.addEventListener("click", (event) => {
+      try {
+        const targetUrl = event?.result?.url || event?.notification?.launchURL || event?.notification?.additionalData?.url || "home.html";
+        if (targetUrl) window.location.href = targetUrl;
+      } catch (_) {}
+    });
+  }
+
+  if (!nativeSubscriptionObserverBound) {
+    nativeSubscriptionObserverBound = true;
+    plugin.User.pushSubscription.addEventListener("change", async () => {
+      const activeUid = auth.currentUser?.uid || uid;
+      if (!activeUid) return;
+      await persistDeviceSubscription(activeUid).catch(() => {});
+      await safeLoginToOneSignal(activeUid).catch(() => {});
+    });
+  }
+}
 
 function pushLog(level, event, meta = {}) {
   const entry = {
@@ -82,61 +149,6 @@ function persistPushState(state = {}) {
 }
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function requestBrowserPermissionDirect() {
-  if (typeof Notification === "undefined" || typeof Notification.requestPermission !== "function") {
-    return "unsupported";
-  }
-  try {
-    return await Notification.requestPermission();
-  } catch (e) {
-    pushLog("warn", "browser_permission_direct_failed", {
-      error: e?.message || String(e),
-    });
-    return typeof Notification !== "undefined" ? Notification.permission : "unsupported";
-  }
-}
-
-async function requestPermissionThroughOneSignal() {
-  try {
-    await oneSignalExec(async (OneSignal) => {
-      if (!OneSignal?.Notifications?.requestPermission) {
-        throw new Error("onesignal_request_permission_missing");
-      }
-      await Promise.race([
-        OneSignal.Notifications.requestPermission(),
-        wait(5000).then(() => {
-          throw new Error("onesignal_request_permission_timeout");
-        }),
-      ]);
-    });
-  } catch (e) {
-    pushLog("warn", "onesignal_request_permission_failed", {
-      error: e?.message || String(e),
-    });
-  }
-}
-
-async function syncGrantedPermissionWithOneSignal(userId = null) {
-  try {
-    const ok = await ensureOneSignalInitialized();
-    if (!ok) return false;
-
-    await oneSignalExec(async (OneSignal) => {
-      if (OneSignal?.User?.PushSubscription?.optIn) {
-        await OneSignal.User.PushSubscription.optIn();
-      }
-    }).catch(() => {});
-
-    if (userId) await processPushStateMachine(userId);
-    return true;
-  } catch (e) {
-    pushLog("warn", "onesignal_sync_after_grant_failed", {
-      error: e?.message || String(e),
-    });
-    return false;
-  }
-}
 
 async function persistNotifPermissionFlag(state) {
   try {
@@ -187,39 +199,34 @@ function getWorkerCandidates() {
   const base = getAppBase();
   pushLog("info", "detecting_app_base", { base, pathname: window.location.pathname });
 
-  const candidates = [
+  // Preferred candidate: local Service Worker files in root of the app
+  return [
     {
-      base,
-      swPath: "./sw.js",
-      updaterPath: "./sw.js",
-      scope: "./",
-    },
-    {
-      base,
-      swPath: getFullUrl("sw.js"),
-      updaterPath: getFullUrl("sw.js"),
+      base: base,
+      swPath: `${base}OneSignalSDKWorker.js`,
+      updaterPath: `${base}OneSignalSDKUpdaterWorker.js`,
       scope: base,
-    },
-    {
-      base,
-      swPath: "sw.js",
-      updaterPath: "sw.js",
-      scope: "/",
-    },
+    }
   ];
-
-  return uniqueBy(candidates, (cfg) => `${cfg.swPath}|${cfg.scope}`);
 }
 
 async function filterReachableWorkerCandidates(candidates = []) {
-  const currentDir = `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, "")}`;
-  return candidates
-    .slice()
-    .sort((a, b) => {
-      const aScore = String(a?.swPath || "").startsWith(currentDir) || String(a?.swPath || "").startsWith("./") ? 1 : 0;
-      const bScore = String(b?.swPath || "").startsWith(currentDir) || String(b?.swPath || "").startsWith("./") ? 1 : 0;
-      return bScore - aScore;
-    });
+  const checks = await Promise.all(
+    candidates.map(async (cfg) => {
+      try {
+        const res = await fetch(cfg.swPath, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        return res.ok ? cfg : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const reachable = checks.filter(Boolean);
+  return reachable.length > 0 ? reachable : candidates;
 }
 
 async function getServiceWorkerDiagnostics() {
@@ -229,12 +236,12 @@ async function getServiceWorkerDiagnostics() {
   const regs = await navigator.serviceWorker.getRegistrations().catch(() => []);
   const appShell =
     regs.find((r) => String(r?.active?.scriptURL || r?.installing?.scriptURL || "").includes("/sw.js")) || null;
-  // Now they are unified
-  const oneSignal = appShell;
+  const oneSignal =
+    regs.find((r) => String(r?.active?.scriptURL || r?.installing?.scriptURL || "").includes("OneSignalSDKWorker.js")) || null;
 
   const appScope = appShell?.scope || null;
   const oneSignalScope = oneSignal?.scope || null;
-  const conflict = false; // Unified worker so no scope conflicts
+  const conflict = Boolean(appScope && oneSignalScope && appScope === oneSignalScope);
   return { regs, appShell, oneSignal, conflict };
 }
 
@@ -242,13 +249,6 @@ export async function registerBestServiceWorkerWithRetry(customCandidates = null
   if (!("serviceWorker" in navigator)) {
     return { ok: false, reason: "sw_unsupported" };
   }
-  
-  if (window.__swRegisteredByCore || window.__swRegisterBound) {
-    pushLog("info", "sw_register_skipped_already_bound");
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (reg) return { ok: true, reg };
-  }
-
   const candidates = customCandidates || getWorkerCandidates();
   const swDiag = await getServiceWorkerDiagnostics();
   const appScope = swDiag?.appShell?.scope || null;
@@ -296,9 +296,35 @@ function getConfiguredOneSignalAppId() {
   const fromStorage = localStorage.getItem(ONESIGNAL_APP_ID_STORAGE_KEY);
   return (fromWindow || fromStorage || DEFAULT_ONESIGNAL_APP_ID).trim();
 }
+function normalizePushApiUrl(value) {
+  if (!value || typeof value !== "string") return "";
+  return value.trim();
+}
+export function setPushApiUrl(url) {
+  const normalized = normalizePushApiUrl(url);
+  try {
+    if (normalized) {
+      localStorage.setItem(PUSH_API_URL_STORAGE_KEY, normalized);
+      if (typeof window !== "undefined") window.__PUSH_API_URL = normalized;
+    } else {
+      localStorage.removeItem(PUSH_API_URL_STORAGE_KEY);
+      if (typeof window !== "undefined") delete window.__PUSH_API_URL;
+    }
+  } catch (_) {}
+  return normalized;
+}
+export function getPushApiEndpoint() {
+  const fromConfig = normalizePushApiUrl(APP_PUSH_API_URL);
+  const fromWindow =
+    typeof window !== "undefined" ? normalizePushApiUrl(window.__PUSH_API_URL) : "";
+  const fromStorage = normalizePushApiUrl(localStorage.getItem(PUSH_API_URL_STORAGE_KEY));
+  if (fromWindow) return fromWindow;
+  if (fromStorage) return fromStorage;
+  if (fromConfig) return fromConfig;
+  return "";
+}
 
 async function ensureOneSignalScript() {
-  if (isNativePlatform()) return false;
   if (window.OneSignal && window.OneSignalDeferred) return true;
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(
@@ -343,18 +369,12 @@ function safeGetSubscription(OneSignal) {
     if (!user || typeof user !== "object") return { id: null, token: null, optedIn: false };
     const sub = user?.PushSubscription;
     if (!sub || typeof sub !== "object") return { id: null, token: null, optedIn: false };
-    
-    // Legacy support for some SDK versions where sub.id might be sub.playerId
-    const subId = sub.id || sub.playerId || null;
-    const isOptedIn = Boolean(sub.optedIn);
-    
     return {
-      id: subId,
+      id: sub.id ?? null,
       token: sub.token ?? null,
-      optedIn: isOptedIn,
+      optedIn: Boolean(sub.optedIn),
     };
-  } catch (err) {
-    console.warn("⚠️ Error accessing OneSignal subscription details:", err);
+  } catch (_) {
     return { id: null, token: null, optedIn: false };
   }
 }
@@ -377,14 +397,26 @@ async function ensureOneSignalInitialized() {
       return false;
     }
 
+    if (isNativeMobileApp()) {
+      const plugin = await waitForNativeOneSignal();
+      if (!plugin) {
+        throw new Error("native_onesignal_plugin_missing");
+      }
+      if (!nativeOneSignalReady) {
+        plugin.initialize(appId);
+        nativeOneSignalReady = true;
+        pushLog("info", "onesignal_native_init_ok", { platform: window.Capacitor?.getPlatform?.() || "native" });
+        persistPushState({ oneSignal: { initialized: true, native: true } });
+      }
+      oneSignalReady = true;
+      return true;
+    }
+
     await ensureOneSignalScript();
 
-    // 1. Cleanup stale workers first
     await cleanupStaleServiceWorkers();
 
     const candidates = await filterReachableWorkerCandidates(getWorkerCandidates());
-    const swDiag = await getServiceWorkerDiagnostics();
-    const appScope = swDiag?.appShell?.scope || null;
     let initOk = false;
     let lastError = null;
 
@@ -393,7 +425,7 @@ async function ensureOneSignalInitialized() {
         await retryWithBackoff(async () => {
           await oneSignalExec(async (OneSignal) => {
             await OneSignal.init({
-              appId: appId,
+              appId,
               safari_web_id: "web.onesignal.auto.10a9c80d-13fc-463d-9d41-3838ae45a6c3",
               notifyButton: { enable: false },
               serviceWorkerParam: { scope: cfg.scope },
@@ -401,20 +433,6 @@ async function ensureOneSignalInitialized() {
               serviceWorkerUpdaterPath: cfg.updaterPath,
               allowLocalhostAsSecureOrigin: true,
             });
-
-            // Listen for state changes
-            if (OneSignal.Notifications && OneSignal.Notifications.addEventListener) {
-              OneSignal.Notifications.addEventListener("permissionChange", (permission) => {
-                console.log("🔔 [Push Event] Permission Changed:", permission);
-                checkNotificationStatus().catch(() => {});
-              });
-            }
-            if (OneSignal.User && OneSignal.User.PushSubscription && OneSignal.User.PushSubscription.addEventListener) {
-              OneSignal.User.PushSubscription.addEventListener("change", (change) => {
-                console.log("🔔 [Push Event] Subscription Changed:", change);
-                checkNotificationStatus().catch(() => {});
-              });
-            }
           });
         }, { attempts: 3 });
 
@@ -463,9 +481,13 @@ async function ensureOneSignalInitialized() {
 async function persistDeviceSubscription(uid) {
   if (!uid) return;
 
-  const subscription = await oneSignalExec(async (OneSignal) => safeGetSubscription(OneSignal));
+  const subscription = isNativeMobileApp()
+    ? await getNativePushSnapshot()
+    : await oneSignalExec(async (OneSignal) => safeGetSubscription(OneSignal));
 
-  const deviceId = getDeviceId();
+  const deviceId = isNativeMobileApp()
+    ? `native_${window.Capacitor?.getPlatform?.() || "android"}_${getDeviceId()}`
+    : getDeviceId();
   const ref = doc(db, "usuarios", uid, "devices", deviceId);
   await setDoc(
     ref,
@@ -474,7 +496,7 @@ async function persistDeviceSubscription(uid) {
       oneSignalPlayerId: subscription.id,
       token: subscription.token || null,
       enabled: !!subscription.id && subscription.optedIn,
-      platform: "web",
+      platform: isNativeMobileApp() ? (window.Capacitor?.getPlatform?.() || "android") : "web",
       userAgent: navigator.userAgent || "unknown",
       updatedAt: serverTimestamp(),
       lastSeenAt: serverTimestamp(),
@@ -495,49 +517,50 @@ export async function relaunchOneSignal(uid = null) {
 async function safeLoginToOneSignal(userId) {
     if (!userId) return false;
     try {
-        await oneSignalExec(async (OneSignal) => {
-            if (!OneSignal || typeof OneSignal.login !== "function") {
-                pushLog("warn", "onesignal_login_method_missing", { uid: userId });
+        if (isNativeMobileApp()) {
+            const plugin = await waitForNativeOneSignal();
+            if (!plugin || typeof plugin.login !== "function") {
+                pushLog("warn", "onesignal_native_login_missing", { uid: userId });
                 return false;
             }
-            const subscription = safeGetSubscription(OneSignal);
-            if (!subscription?.id || !subscription?.optedIn) {
-                pushLog("info", "onesignal_login_skipped_until_subscribed", {
-                    uid: userId,
-                    sub_id: subscription?.id || null,
-                    optedIn: !!subscription?.optedIn,
-                });
-                return false;
-            }
-
-            await OneSignal.login(userId);
+            plugin.login(userId);
             lastOneSignalLoginUid = userId;
-            pushLog("info", "onesignal_login_ok_unconditional", { uid: userId });
+            pushLog("info", "onesignal_native_login_ok", { uid: userId });
+            return true;
+        }
+
+        await oneSignalExec(async (OneSignal) => {
+            if (!OneSignal || !OneSignal.User || !OneSignal.User.PushSubscription) {
+                pushLog("warn", "onesignal_user_module_missing_skip", { uid: userId });
+                return false;
+            }
             
-            const subId = OneSignal.User?.PushSubscription?.id || "unknown";
-            const optedIn = OneSignal.User?.PushSubscription?.optedIn || false;
-            pushLog("info", "onesignal_login_state_post", { sub_id: subId, optedIn });
+            const sub = OneSignal.User.PushSubscription;
+            if (sub.id && sub.optedIn && typeof OneSignal.login === "function") {
+                await OneSignal.login(userId);
+                lastOneSignalLoginUid = userId;
+                pushLog("info", "onesignal_login_ok", { uid: userId });
+            } else {
+                pushLog("info", "onesignal_login_skipped", { 
+                    reason: "not_opted_in_or_no_id", 
+                    sub_id: sub.id, 
+                    optedIn: sub.optedIn 
+                });
+            }
         });
         return true;
     } catch(e) {
-        const message = e?.message || String(e);
-        if (/409|conflict/i.test(message)) {
-            lastOneSignalLoginUid = userId;
-            pushLog("warn", "onesignal_safe_login_conflict", { uid: userId, error: message });
-            return true;
-        }
-        pushLog("error", "onesignal_safe_login_error", { error: message });
+        pushLog("error", "onesignal_safe_login_error", { error: e?.message || String(e) });
         return false;
     }
 }
 
 async function getPushSystemState() {
-    if (isNativePlatform()) {
-        const nativeStatus = await getNativePushStatus();
+    if (isNativeMobileApp()) {
+        const snapshot = await getNativePushSnapshot();
         return {
-            permission: nativeStatus.permission,
-            initializationReady: nativeStatus.available,
-            nativeStatus,
+            permission: snapshot.permission,
+            initializationReady: await ensureOneSignalInitialized(),
         };
     }
     return {
@@ -557,7 +580,7 @@ async function processPushStateMachine(userId) {
             // Estado 4: Suscrito
             await persistDeviceSubscription(userId);
             
-            // Estado 5: Login Ejecutado (Solo si está suscrito y permitido)
+            // Estado 5: Login ejecutado (solo si está suscrito y permitido)
             if (userId && lastOneSignalLoginUid !== userId) {
                 await safeLoginToOneSignal(userId);
             }
@@ -573,43 +596,30 @@ async function processPushStateMachine(userId) {
 }
 
 export async function initPushNotifications(uid = null) {
+  if (!("Notification" in window) && !isNativeMobileApp()) return false;
+
   const userId = uid || auth.currentUser?.uid;
   if (userId && pushInitByUid.has(userId)) return pushInitByUid.get(userId);
 
   const t0 = performance.now();
   const runInit = (async () => {
-      if (isNativePlatform()) {
-          try {
-              const okNative = await initNativePushNotifications(userId);
-              const nativeStatus = await getNativePushStatus();
-              notifPermission = nativeStatus.permission === "granted" ? "granted" : nativeStatus.permission;
-              persistPushState({
-                  permission: notifPermission,
-                  nativePushReady: okNative,
-                  nativePlatform: nativeStatus.platform,
-                  uid: userId,
-              });
-              analyticsTiming("notifications.init_ms", performance.now() - t0);
-              return okNative;
-          } catch (e) {
-              pushLog("error", "native_push_init_failed", { uid: userId, error: e?.message || String(e) });
-              return false;
-          }
-      }
-
-      if (!("Notification" in window)) return false;
-      // Estado 1: Asegurarnos de Initialized
       const ok = await ensureOneSignalInitialized();
       if (!ok) return false;
       
       try {
-          // Estado 2-5: Permisos, Suscripción y Login Seguro
+          if (isNativeMobileApp()) {
+              await bindNativeOneSignalObservers(userId);
+          }
           await processPushStateMachine(userId);
+          const permissionState = isNativeMobileApp()
+            ? (await getNativePushSnapshot()).permission
+            : notifPermission;
             
           persistPushState({
-              permission: notifPermission,
+              permission: permissionState,
               oneSignalReady: true,
               uid: userId,
+              native: isNativeMobileApp(),
           });
           
           analyticsTiming("notifications.init_ms", performance.now() - t0);
@@ -629,57 +639,19 @@ export async function initPushNotifications(uid = null) {
 }
 
 function scheduleSoftPrompt() {
-    if (softPromptScheduled) return;
-    const permissionNow = typeof Notification !== "undefined" ? Notification.permission : "unsupported";
-    if (permissionNow === "granted") {
-        localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, "true");
-        document.getElementById("notif-soft-prompt")?.remove();
-        return;
-    }
-    if (permissionNow === "denied" || permissionNow === "unsupported") return;
-    if (localStorage.getItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY) === "true") return;
-    const snoozeUntil = Number(localStorage.getItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY) || 0);
-    if (Number.isFinite(snoozeUntil) && snoozeUntil > Date.now()) return;
-
-    softPromptScheduled = true;
+    if (sessionStorage.getItem('notif_soft_prompt_dismissed')) return;
+    
     setTimeout(() => {
-        showSoftPrompt().catch(() => {});
+        showSoftPrompt();
     }, 6000); // 6 seconds delay
 }
 
 async function showSoftPrompt() {
-    notifPermission = typeof Notification !== "undefined" ? Notification.permission : "unsupported";
-    softPromptScheduled = false;
-    if (document.getElementById('notif-soft-prompt')) return;
-    if (localStorage.getItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY) === 'true') return;
-    const snoozeUntil = Number(localStorage.getItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY) || 0);
-    if (Number.isFinite(snoozeUntil) && snoozeUntil > Date.now()) return;
-    if (notifPermission === 'denied' || notifPermission === 'unsupported') return;
-    if (notifPermission === 'granted') {
-        try {
-            const status = await checkNotificationStatus();
-            if (status?.backgroundReady || status?.oneSignalRegistered) {
-                localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, 'true');
-                document.getElementById('notif-soft-prompt')?.remove();
-            }
-        } catch (_) {}
-        return;
-    }
-    if (notifPermission !== 'default') return;
+    if (notifPermission !== 'default' || document.getElementById('notif-soft-prompt')) return;
     
     const div = document.createElement('div');
     div.id = 'notif-soft-prompt';
     div.className = 'soft-prompt-card animate-up';
-    div.style.position = 'fixed';
-    div.style.left = '50%';
-    div.style.right = 'auto';
-    div.style.transform = 'translateX(-50%)';
-    div.style.bottom = window.innerWidth <= 640
-        ? 'calc(88px + env(safe-area-inset-bottom, 0px))'
-        : 'calc(112px + env(safe-area-inset-bottom, 0px))';
-    div.style.width = window.innerWidth <= 640 ? 'calc(100vw - 28px)' : 'min(92vw, 430px)';
-    div.style.maxWidth = '430px';
-    div.style.zIndex = '999999';
     div.innerHTML = `
         <div class="soft-prompt-content">
             <div class="soft-prompt-icon">
@@ -700,36 +672,13 @@ async function showSoftPrompt() {
     
     document.getElementById('btn-notif-later').onclick = () => {
         div.classList.add('fade-out-down');
-        localStorage.setItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY, String(Date.now() + (12 * 60 * 60 * 1000)));
+        sessionStorage.setItem('notif_soft_prompt_dismissed', 'true');
         setTimeout(() => div.remove(), 400);
     };
     
     document.getElementById('btn-notif-activate').onclick = async () => {
-        const btn = document.getElementById('btn-notif-activate');
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = 'Activando...';
-        }
-        const ok = await requestNotificationPermission(true);
-        if (ok) {
-            localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, 'true');
-            div.remove();
-            showToast('Avisos activados para este dispositivo.', 'success');
-            return;
-        }
-        const permissionNow = typeof Notification !== "undefined" ? Notification.permission : notifPermission;
-        if (permissionNow === 'granted') {
-            localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, 'true');
-            div.remove();
-            showToast('Permiso concedido. Terminando de enlazar avisos en segundo plano...', 'info');
-            return;
-        }
-        localStorage.setItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY, String(Date.now() + (60 * 60 * 1000)));
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Activar';
-        }
-        showToast('No se pudo activar el permiso de avisos en este momento.', 'warning');
+        div.remove();
+        await requestNotificationPermission(true);
     };
 }
 
@@ -774,40 +723,41 @@ async function showDeniedGuide() {
  * Requests notification permission
  */
 export async function requestNotificationPermission(autoInit = true) {
-  const userId = auth.currentUser?.uid || null;
+  if (isNativeMobileApp()) {
+    try {
+      const ok = await ensureOneSignalInitialized();
+      if (!ok) return false;
+      const plugin = await waitForNativeOneSignal();
+      if (!plugin) return false;
 
-  if (isNativePlatform()) {
-    const okNative = await requestNativePushPermission(userId);
-    const nativeStatus = await getNativePushStatus();
-    notifPermission = nativeStatus.permission === "granted" ? "granted" : nativeStatus.permission;
-    if (okNative) {
-      analyticsSetFlag("notifications.permission", true);
-      analyticsCount("notifications.enabled", 1);
-      persistNotifPermissionFlag("granted").catch(() => {});
-      showToast("Notificaciones activadas correctamente.", "success");
-      if (autoInit && userId) initPushNotifications(userId).catch(() => {});
-      return true;
+      const granted = await plugin.Notifications.requestPermission(false).catch(() => false);
+      notifPermission = granted ? "granted" : "default";
+
+      if (granted) {
+        analyticsSetFlag("notifications.permission", true);
+        analyticsCount("notifications.enabled", 1);
+        showToast("Conexion establecida", "Notificaciones Android activadas correctamente.", "success");
+        persistNotifPermissionFlag("granted").catch(() => {});
+        if (autoInit && auth.currentUser?.uid) {
+          initPushNotifications(auth.currentUser.uid).catch(() => {});
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      pushLog("error", "native_permission_request_error", { error: e?.message || String(e) });
+      return false;
     }
-    if (notifPermission === "denied") {
-      analyticsSetFlag("notifications.permission", false);
-      analyticsCount("notifications.denied", 1);
-      persistNotifPermissionFlag("denied").catch(() => {});
-    }
-    return false;
   }
 
   notifPermission = Notification.permission;
 
   if (notifPermission === "granted") {
-    localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, "true");
-    localStorage.removeItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY);
-    document.getElementById("notif-soft-prompt")?.remove();
     analyticsSetFlag("notifications.permission", true);
     analyticsCount("notifications.enabled", 1);
     persistNotifPermissionFlag("granted").catch(() => {});
-    syncGrantedPermissionWithOneSignal(userId).catch(() => {});
-    if (autoInit && userId)
-      initPushNotifications(userId).catch(() => {});
+    if (autoInit && auth.currentUser?.uid)
+      initPushNotifications(auth.currentUser.uid).catch(() => {});
     return true;
   }
 
@@ -823,35 +773,29 @@ export async function requestNotificationPermission(autoInit = true) {
     const ok = await ensureOneSignalInitialized();
     if (!ok) return false;
 
-    await requestPermissionThroughOneSignal();
+    await oneSignalExec(async (OneSignal) => {
+      await OneSignal.Notifications.requestPermission();
+    });
 
     notifPermission = Notification.permission;
-    if (notifPermission === "default") {
-      notifPermission = await requestBrowserPermissionDirect();
-    }
 
     if (notifPermission === "granted") {
-      localStorage.setItem(NOTIF_SOFT_PROMPT_COMPLETED_KEY, "true");
-      localStorage.removeItem(NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY);
-      document.getElementById("notif-soft-prompt")?.remove();
       analyticsSetFlag("notifications.permission", true);
       analyticsCount("notifications.enabled", 1);
       showToast(
-        "¡Conexión establecida!",
+        "Conexion establecida",
         "Notificaciones activadas correctamente.",
         "success",
       );
       persistNotifPermissionFlag("granted").catch(() => {});
-      await syncGrantedPermissionWithOneSignal(userId);
-      if (autoInit && userId)
-        initPushNotifications(userId).catch(() => {});
+      if (autoInit && auth.currentUser?.uid)
+        initPushNotifications(auth.currentUser.uid).catch(() => {});
       return true;
     }
   } catch (e) {
     pushLog("error", "permission_request_error", { error: e?.message || String(e) });
   }
 
-  notifPermission = typeof Notification !== "undefined" ? Notification.permission : notifPermission;
   if (notifPermission === "denied") {
     analyticsSetFlag("notifications.permission", false);
     analyticsCount("notifications.denied", 1);
@@ -869,9 +813,6 @@ export async function sendPushNotification(
   icon = DEFAULT_ICON,
   meta = {},
 ) {
-  if (isNativePlatform()) {
-    return sendNativeLocalNotification(title, body, meta);
-  }
   if (notifPermission !== "granted") return;
   const targetUrl = meta?.url || "./home.html";
   const targetTag =
@@ -997,88 +938,22 @@ export function setOneSignalAppId(appId) {
   window.__ONESIGNAL_APP_ID = clean;
 }
 
-function getPushApiEndpoint() {
-  const fromWindow = typeof window !== "undefined" ? String(window.__PUSH_API_URL || "").trim() : "";
-  const fromStorage = typeof localStorage !== "undefined"
-    ? String(localStorage.getItem("push_api_url") || "").trim()
-    : "";
-  if (fromWindow) return fromWindow;
-  if (fromStorage) return fromStorage;
-  return "";
-}
-
-export function setPushApiUrl(url) {
-  const clean = String(url || "").trim();
-  if (!clean) return;
-  window.__PUSH_API_URL = clean;
-  try {
-    localStorage.setItem("push_api_url", clean);
-  } catch (_) {}
-}
-
 export async function checkNotificationStatus() {
-  if (isNativePlatform()) {
-    const nativeStatus = await getNativePushStatus();
-    const permission = nativeStatus.permission || "prompt";
-    const blocked = permission === "denied";
-    const issues = [];
-    if (!nativeStatus.available) issues.push("browser_unsupported");
-    if (permission === "prompt") issues.push("permission_default");
-    if (blocked) issues.push("permission_denied");
-    if (permission === "granted" && !nativeStatus.registered) issues.push("onesignal_not_subscribed");
-    if (permission === "granted" && !nativeStatus.oneSignalRegistered) issues.push("native_onesignal_pending");
-    const recommendedAction =
-      blocked ? "open_browser_settings" :
-      permission === "prompt" ? "request_permission" :
-      !nativeStatus.registered || !nativeStatus.oneSignalRegistered ? "reconnect_onesignal" :
-      "none";
-    const backgroundReady = permission === "granted" && (nativeStatus.oneSignalRegistered || nativeStatus.registered);
-    persistPushState({
-      permission,
-      backgroundReady,
-      issues,
-      recommendedAction,
-      nativeRegistered: nativeStatus.registered,
-      nativeOneSignalRegistered: nativeStatus.oneSignalRegistered,
-    });
-    return {
-      browserSupported: true,
-      permission,
-      blocked,
-      swSupported: false,
-      swActive: false,
-      swScope: null,
-      swCount: 0,
-      swConflict: false,
-      appShellActive: false,
-      oneSignalWorkerActive: false,
-      oneSignalScriptURL: null,
-      appShellScope: null,
-      oneSignalScope: null,
-      oneSignalAvailable: !!nativeStatus.oneSignalAvailable,
-      oneSignalInitialized: !!nativeStatus.oneSignalInitialized,
-      oneSignalRegistered: !!nativeStatus.oneSignalRegistered,
-      oneSignalSubscriptionId: nativeStatus.oneSignalSubscriptionId || nativeStatus.token,
-      oneSignalError: null,
-      backgroundReady,
-      issues,
-      recommendedAction,
-      workerConfig: null,
-      platform: { isIOS: nativeStatus.platform === "ios", isSafari: false },
-      native: nativeStatus,
-    };
-  }
-  console.log(`📡 [Push Health] Iniciando chequeo...`);
+  console.log(`[Push Health] Iniciando chequeo...`);
+  const native = isNativeMobileApp();
   const ua = navigator.userAgent || "";
   const isIOS = /iPad|iPhone|iPod/.test(ua);
   const isSafari = /Safari\//.test(ua) && !/Chrome\//.test(ua) && !/CriOS\//.test(ua) && !/Edg\//.test(ua);
-  const browserSupported = typeof Notification !== "undefined";
-  const permission = browserSupported ? Notification.permission : "unsupported";
-  const swSupported = "serviceWorker" in navigator;
+  const browserSupported = native || typeof Notification !== "undefined";
+  const nativeSnapshot = native ? await getNativePushSnapshot().catch(() => null) : null;
+  const permission = native
+    ? (nativeSnapshot?.permission || "default")
+    : (browserSupported ? Notification.permission : "unsupported");
+  const swSupported = !native && "serviceWorker" in navigator;
 
-  console.log(`📱 [Push Health] Plataforma: iOS=${isIOS}, Safari=${isSafari}`);
-  console.log(`🌐 [Push Health] Navegador Soporta Push: ${browserSupported}, Permiso: ${permission}`);
-  console.log(`⚙️ [Push Health] Service Worker Soportado: ${swSupported}`);
+  console.log(`[Push Health] Plataforma: iOS=${isIOS}, Safari=${isSafari}`);
+  console.log(`[Push Health] Navegador soporta push: ${browserSupported}, permiso: ${permission}`);
+  console.log(`[Push Health] Service Worker soportado: ${swSupported}`);
 
   let swActive = false;
   let swScope = null;
@@ -1100,57 +975,60 @@ export async function checkNotificationStatus() {
       appShellActive = Boolean(swDiag?.appShell?.active || swDiag?.appShell?.installing || swDiag?.appShell?.waiting);
       oneSignalWorkerActive = Boolean(swDiag?.oneSignal?.active || swDiag?.oneSignal?.installing || swDiag?.oneSignal?.waiting);
       const oneSignalActiveWorker = swDiag?.oneSignal?.active || swDiag?.oneSignal?.installing || swDiag?.oneSignal?.waiting;
-      oneSignalScriptURL = oneSignalActiveWorker?.scriptURL || null;
+      const oneSignalScriptURL = oneSignalActiveWorker?.scriptURL || null;
       appShellScope = swDiag?.appShell?.scope || null;
       oneSignalScope = swDiag?.oneSignal?.scope || null;
       
-      console.log(`🛠️ [Push Health] SW Registros Activos: ${swCount}`);
-      if (oneSignalScope) console.log(`🛰️ [Push Health] OneSignal Scope: ${oneSignalScope} | URL: ${oneSignalScriptURL}`);
-      if (swConflict) console.warn(`⚠️ [Push Health] Conflicto de SW detectado!`);
+      console.log(`[Push Health] Registros SW activos: ${swCount}`);
+      if (oneSignalScope) console.log(`[Push Health] OneSignal scope: ${oneSignalScope} | URL: ${oneSignalScriptURL}`);
+      if (swConflict) console.warn(`[Push Health] Conflicto de SW detectado`);
     } catch (e) {
-      console.error(`❌ [Push Health] Error leyendo Service Workers:`, e);
+      console.error(`[Push Health] Error leyendo Service Workers:`, e);
     }
   }
 
-  let oneSignalAvailable = !!(window.OneSignal || window.OneSignalDeferred);
+  let oneSignalAvailable = native
+    ? !!(await waitForNativeOneSignal().catch(() => null))
+    : !!(window.OneSignal || window.OneSignalDeferred);
   let oneSignalInitialized = !!oneSignalReady;
   let oneSignalRegistered = false;
   let oneSignalSubscriptionId = null;
   let oneSignalError = null;
 
-  console.log(`🔔 [Push Health] OneSignal Disponible: ${oneSignalAvailable}, Inicializado: ${oneSignalInitialized}`);
+  console.log(`[Push Health] OneSignal disponible: ${oneSignalAvailable}, inicializado: ${oneSignalInitialized}`);
 
   try {
     if (!oneSignalInitialized && oneSignalAvailable) {
       oneSignalInitialized = await ensureOneSignalInitialized();
     }
     if (oneSignalInitialized) {
-      const sub = await oneSignalExec(async (OneSignal) => safeGetSubscription(OneSignal));
+      const sub = native
+        ? (nativeSnapshot || await getNativePushSnapshot().catch(() => null))
+        : await oneSignalExec(async (OneSignal) => safeGetSubscription(OneSignal));
       oneSignalSubscriptionId = sub?.id || null;
       oneSignalRegistered = Boolean(sub?.id && sub?.optedIn);
-      console.log(`✅ [Push Health] OneSignal Suscripción: ${oneSignalSubscriptionId}, OptedIn: ${sub?.optedIn}`);
+      console.log(`[Push Health] OneSignal suscripción: ${oneSignalSubscriptionId}, OptedIn: ${sub?.optedIn}`);
     }
   } catch (e) {
     oneSignalError = e?.message || "onesignal-status-error";
-    console.error(`❌ [Push Health] Error consultando OneSignal:`, e);
+    console.error(`[Push Health] Error consultando OneSignal:`, e);
   }
 
   const blocked = permission === "denied";
   const backgroundReady =
     browserSupported &&
     permission === "granted" &&
-    swSupported &&
-    swActive &&
+    (native || (swSupported && swActive)) &&
     oneSignalRegistered;
 
-  console.log(`📊 [Push Health] Listo en 2o Plano: ${backgroundReady}, Bloqueado por Usuario: ${blocked}`);
+  console.log(`[Push Health] Listo en segundo plano: ${backgroundReady}, Bloqueado por usuario: ${blocked}`);
 
   const issues = [];
   if (!browserSupported) issues.push("browser_unsupported");
   if (permission === "default") issues.push("permission_default");
   if (blocked) issues.push("permission_denied");
-  if (swSupported && !swActive) issues.push("sw_inactive");
-  if (swConflict) issues.push("sw_scope_conflict");
+  if (!native && swSupported && !swActive) issues.push("sw_inactive");
+  if (!native && swConflict) issues.push("sw_scope_conflict");
   if (!oneSignalAvailable) issues.push("onesignal_sdk_missing");
   if (oneSignalAvailable && !oneSignalInitialized) issues.push("onesignal_not_initialized");
   if (oneSignalAvailable && oneSignalInitialized && !oneSignalRegistered) issues.push("onesignal_not_subscribed");
@@ -1160,15 +1038,15 @@ export async function checkNotificationStatus() {
   let recommendedAction = "none";
   if (blocked) recommendedAction = "open_browser_settings";
   else if (permission === "default") recommendedAction = "request_permission";
-  else if (!swActive) recommendedAction = "reregister_service_worker";
-  else if (swConflict) recommendedAction = "resolve_sw_conflict";
+  else if (!native && !swActive) recommendedAction = "reregister_service_worker";
+  else if (!native && swConflict) recommendedAction = "resolve_sw_conflict";
   else if (!oneSignalRegistered) recommendedAction = "reconnect_onesignal";
 
   if (issues.length > 0) {
-    console.warn(`🔍 [Push Health] Problemas encontrados:`, issues);
-    console.warn(`💡 [Push Health] Acción recomendada: ${recommendedAction}`);
+    console.warn(`[Push Health] Problemas encontrados:`, issues);
+    console.warn(`[Push Health] Acción recomendada: ${recommendedAction}`);
   } else {
-    console.log(`🌟 [Push Health] Todo perfecto!`);
+    console.log(`[Push Health] Todo correcto`);
   }
 
   const status = {
@@ -1194,6 +1072,9 @@ export async function checkNotificationStatus() {
     issues,
     recommendedAction,
     workerConfig: window.__pushWorkerConfig || null,
+    native,
+    nativePlatform: native ? (window.Capacitor?.getPlatform?.() || "android") : null,
+    nativePushToken: nativeSnapshot?.token || null,
     platform: { isIOS, isSafari },
   };
   persistPushState({
@@ -1203,6 +1084,7 @@ export async function checkNotificationStatus() {
     recommendedAction,
     oneSignalRegistered,
     swActive,
+    native,
   });
   return status;
 }
@@ -1210,13 +1092,13 @@ export async function checkNotificationStatus() {
 const HUMAN_MESSAGES = {
   ok: { title: "Todo listo", message: "Recibirás avisos de partidos y retos en tu móvil aunque no tengas la app abierta.", steps: [] },
   permission_default: { title: "Activa los avisos", message: "Para no perderte ningún partido, permite que la app te envíe notificaciones.", steps: ["Pulsa el botón «Activar» debajo.", "En la ventana del navegador, elige «Permitir»."] },
-  permission_denied: { title: "Avisos desactivados", message: "Has bloqueado los avisos. Para volver a recibirlos:", steps: ["Abre la configuración de tu navegador (icono de candado o información en la barra de la dirección).", "Busca «Notificaciones» para esta página y cámbialo a «Permitir».", "Vuelve aquí y recarga la app si hace falta."] },
+  permission_denied: { title: "Avisos desactivados", message: "Has bloqueado los avisos. Para volver a recibirlos:", steps: ["Abre la configuración de tu navegador (icono de candado o información en la barra de dirección).", "Busca «Notificaciones» para esta página y cámbialo a «Permitir».", "Vuelve aquí y recarga la app si hace falta."] },
   sw_inactive: { title: "Actualiza la app", message: "Para recibir avisos en segundo plano, instala o actualiza la app desde tu navegador.", steps: ["En el menú del navegador (tres puntos), elige «Instalar aplicación» o «Añadir a pantalla de inicio».", "Abre la app desde el icono instalado y activa de nuevo los avisos."] },
   sw_scope_conflict: { title: "Conflicto de versión", message: "Hay dos versiones de la app en uso. Usa solo la instalada (icono en el móvil).", steps: ["Cierra pestañas abiertas de la app en el navegador.", "Abre solo la app instalada (icono en la pantalla de inicio)."] },
-  onesignal_sdk_missing: { title: "Cargando avisos...", message: "El sistema de notificaciones está arrancando. Si ves este mensaje mucho tiempo, recarga la app.", steps: [] },
-  onesignal_not_initialized: { title: "Sincronizando...", message: "Conectando con el servidor de avisos en segundo plano.", steps: [] },
-  onesignal_not_subscribed: { title: "Activa los avisos", message: "Parece que no tienes los avisos activados para este dispositivo.", steps: ["Pulsa el botón «Reconectar» o «Activar» debajo."] },
-  onesignal_error: { title: "Conexión en pausa", message: "Hubo un pequeño corte con nuestro servidor de avisos. Prueba a cerrar y abrir la app de nuevo.", steps: [] },
+  onesignal_sdk_missing: { title: "Cargando sistema de avisos", message: "El sistema de notificaciones no ha cargado aún. Vuelve a intentar en unos segundos.", steps: [] },
+  onesignal_not_initialized: { title: "Avisos en preparación", message: "El servicio de avisos no se ha iniciado. Comprueba tu conexión y recarga la página.", steps: [] },
+  onesignal_not_subscribed: { title: "Un paso más", message: "Acepta recibir notificaciones cuando el navegador lo pregunte.", steps: ["Pulsa «Activar» y luego «Permitir» en la ventana del navegador."] },
+  onesignal_error: { title: "Algo ha fallado", message: "No hemos podido conectar el sistema de avisos. Prueba a recargar la app o a abrirla de nuevo desde el icono instalado.", steps: [] },
   default: { title: "Estado de los avisos", message: "Comprueba que tienes la app instalada y que has permitido las notificaciones.", steps: [] },
 };
 
@@ -1297,39 +1179,37 @@ export function showNotificationHelpModal() {
 export async function sendExternalPush({ title, message, uids = [], url = "home.html", data = {} }) {
   try {
     const endpoint = getPushApiEndpoint();
-    if (window.location.protocol === "file:") return;
-    if (!endpoint) {
-      console.warn("[sendExternalPush] Sin endpoint remoto configurado. Se omite el envio push externo.");
-      return { ok: false, skipped: true, reason: "missing_push_endpoint" };
+    if (!endpoint || window.location.protocol === "file:") return false;
+
+    const externalIds = Array.isArray(uids) ? uids.filter(Boolean) : [];
+    if (!externalIds.length) return false;
+
+    const idToken = await auth.currentUser?.getIdToken?.().catch(() => "");
+    if (!idToken) {
+      console.warn("External push skipped: missing Firebase auth token");
+      return false;
     }
 
-    console.group("[sendExternalPush] Inicio");
-    console.log("[sendExternalPush] endpoint:", endpoint);
     const payload = {
       titulo: title,
       mensaje: message,
-      externalIds: Array.isArray(uids) ? uids.filter(Boolean) : [],
+      externalIds,
       url: url || "home.html",
       data: data || {},
     };
-    console.log("[sendExternalPush] payload:", payload);
 
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
       body: JSON.stringify(payload),
     });
-    console.log("[sendExternalPush] status:", res.status, res.statusText);
-    console.log("[sendExternalPush] ok:", res.ok);
-    if (!res.ok) {
-      const responseText = await res.text().catch(() => "");
-      console.warn("[sendExternalPush] response body:", responseText);
-    }
-    console.groupEnd();
+
     return res.ok;
   } catch (e) {
     console.warn("External push trigger failed:", e);
-    console.groupEnd();
     return false;
   }
 }
@@ -1346,8 +1226,7 @@ export async function cleanupStaleServiceWorkers() {
             'legacy-sw.js',
             '/JafsPadelclub/',
             '/JafPadel/',
-            'OneSignalSDKWorker.js', // Remove all legacy traces of this separated file
-            'OneSignalSDKUpdaterWorker.js'
+            'OneSignalSDKWorker.js' // We'll re-register correctly
         ];
 
         for (const reg of regs) {
@@ -1374,7 +1253,7 @@ export async function runPushDiagnostics() {
     const base = getAppBase();
     const status = await checkNotificationStatus();
     
-    console.group("🚀 [OneSignal Diagnostics]");
+    console.group("[OneSignal Diagnostics]");
     console.log("App Base Path (Detected):", base);
     console.log("Full Origin:", window.location.origin);
     console.log("-----------------------------------");
@@ -1387,9 +1266,9 @@ export async function runPushDiagnostics() {
     
     if (status.oneSignalScope) {
         if (scopeOk) {
-            console.log("✅ Scope Validation: MATCH (Correct)");
+            console.log("Scope Validation: MATCH (Correct)");
         } else {
-            console.error(`❌ Scope Validation: MISMATCH! \nExpected: ${expectedScope}\nActual:   ${status.oneSignalScope}`);
+            console.error(`Scope Validation: MISMATCH\nExpected: ${expectedScope}\nActual:   ${status.oneSignalScope}`);
         }
     }
     
@@ -1404,4 +1283,6 @@ export async function runPushDiagnostics() {
     console.groupEnd();
     return status;
 }
+
+
 

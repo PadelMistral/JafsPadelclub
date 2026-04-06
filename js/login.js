@@ -1,18 +1,266 @@
 import { login, loginWithGoogle, getDocument, observerAuth, auth } from './firebase-service.js';
 import { showToast } from './ui-core.js';
-import { AudioManager } from './modules/audio-manager.js';
-import { initPushNotifications } from './modules/push-notifications.js';
+import { initPushNotifications, requestNotificationPermission, showNotificationHelpModal, getPushStatusHuman } from './modules/push-notifications.js';
 import { getAppBase } from './modules/path-utils.js';
+import { APP_APK_URL } from './app-config.js';
 
 const LOGIN_BOOT_FLAG = '__padelLoginBooted';
 const LOGIN_SW_RELOAD_FLAG = '__padelLoginSwReloaded';
+const INSTALL_MODAL_AUTOSHOW_KEY = 'padel_install_modal_last_seen';
+let deferredInstallPrompt = null;
+let resolvedApkUrl = '';
+
+function isStandaloneDisplayMode() {
+    return window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone === true;
+}
+
+function isAndroidDevice() {
+    return /android/i.test(window.navigator.userAgent || '');
+}
+
+function isIosDevice() {
+    return /iphone|ipad|ipod/i.test(window.navigator.userAgent || '');
+}
+
+function shouldAutoOpenInstallModal() {
+    if (isStandaloneDisplayMode()) return false;
+    const lastSeen = Number(localStorage.getItem(INSTALL_MODAL_AUTOSHOW_KEY) || 0);
+    return Date.now() - lastSeen > 12 * 60 * 60 * 1000;
+}
+
+function setInstallHint(message = '') {
+    const hint = document.getElementById('installModalHint');
+    if (hint) hint.textContent = message;
+}
+
+function normalizeApkUrl(url) {
+    if (!url) return '';
+    try {
+        return new URL(url, window.location.href).toString();
+    } catch (_) {
+        return '';
+    }
+}
+
+async function canReachApk(url) {
+    if (!url) return false;
+    try {
+        const response = await fetch(url, {
+            method: 'HEAD',
+            cache: 'no-store',
+        });
+        return response.ok;
+    } catch (_) {
+        return false;
+    }
+}
+
+function getGithubPagesApkCandidates() {
+    const host = window.location.hostname || '';
+    if (!host.endsWith('.github.io')) return [];
+
+    const owner = host.split('.')[0];
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    const repo = parts[0] || '';
+    if (!owner || !repo) return [];
+
+    return [
+        `https://github.com/${owner}/${repo}/releases/latest/download/JafsPadelclub-mobile-release.apk`,
+        `https://raw.githubusercontent.com/${owner}/${repo}/main/JafsPadelclub-mobile-release.apk`,
+        `https://raw.githubusercontent.com/${owner}/${repo}/master/JafsPadelclub-mobile-release.apk`,
+        `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/JafsPadelclub-mobile-release.apk`,
+        `https://cdn.jsdelivr.net/gh/${owner}/${repo}@master/JafsPadelclub-mobile-release.apk`,
+    ];
+}
+
+async function resolveApkUrl() {
+    if (resolvedApkUrl) return resolvedApkUrl;
+
+    const modal = document.getElementById('pwa-install-modal');
+    const apkBtn = document.getElementById('downloadApkBtn');
+    const modalUrl = modal?.dataset?.apkUrl || '';
+    const buttonUrl = apkBtn?.getAttribute('href') || '';
+    const candidates = [
+        normalizeApkUrl(APP_APK_URL),
+        normalizeApkUrl(modalUrl),
+        normalizeApkUrl(buttonUrl),
+        normalizeApkUrl('./JafsPadelclub-mobile-release.apk'),
+        ...getGithubPagesApkCandidates(),
+    ].filter(Boolean);
+
+    for (const candidate of [...new Set(candidates)]) {
+        if (await canReachApk(candidate)) {
+            resolvedApkUrl = candidate;
+            return candidate;
+        }
+    }
+
+    resolvedApkUrl = normalizeApkUrl(modalUrl || buttonUrl || './JafsPadelclub-mobile-release.apk');
+    return resolvedApkUrl;
+}
+
+async function refreshInstallModalStatus() {
+    const modeStatus = document.getElementById('installModeStatus');
+    const pushStatus = document.getElementById('installPushStatus');
+    const installBtn = document.getElementById('installPwaBtn');
+    const apkBtn = document.getElementById('downloadApkBtn');
+    const summary = document.getElementById('installModalSummary');
+    if (!modeStatus || !pushStatus || !installBtn || !apkBtn) return;
+    const apkUrl = await resolveApkUrl();
+    if (apkUrl) {
+        apkBtn.href = apkUrl;
+    }
+
+    const standalone = isStandaloneDisplayMode();
+    const hasPrompt = Boolean(deferredInstallPrompt);
+    const android = isAndroidDevice();
+    const ios = isIosDevice();
+
+    if (standalone) {
+        modeStatus.textContent = 'Ya instalada';
+        installBtn.disabled = true;
+        installBtn.innerHTML = '<i class="fas fa-check"></i> App ya instalada';
+    } else if (hasPrompt) {
+        modeStatus.textContent = 'Instalable ahora';
+        installBtn.disabled = false;
+        installBtn.innerHTML = '<i class="fas fa-download"></i> Instalar app web';
+    } else if (ios) {
+        modeStatus.textContent = 'Añadir a inicio';
+        installBtn.disabled = false;
+        installBtn.innerHTML = '<i class="fas fa-share-square"></i> Ver pasos para iPhone';
+    } else {
+        modeStatus.textContent = 'Disponible desde navegador';
+        installBtn.disabled = false;
+        installBtn.innerHTML = '<i class="fas fa-plus-square"></i> Ver cómo instalar';
+    }
+
+    apkBtn.style.display = android ? 'inline-flex' : 'none';
+    if (summary) {
+        summary.textContent = android
+            ? 'Puedes instalar la PWA al instante o bajar la APK Android release si prefieres versión nativa.'
+            : 'Instala la PWA desde el navegador y revisa desde aquí si los avisos en segundo plano están listos.';
+    }
+
+    try {
+        const pushHuman = await getPushStatusHuman();
+        pushStatus.textContent = pushHuman.ok ? 'Listos en 2o plano' : pushHuman.title;
+        setInstallHint(pushHuman.ok ? 'Tus avisos deberían llegar aunque no tengas la portada abierta.' : pushHuman.message);
+    } catch (_) {
+        pushStatus.textContent = 'Revisar permisos';
+        setInstallHint('Comprueba permisos y vuelve a pulsar en avisos si no te llegan en segundo plano.');
+    }
+}
+
+function openInstallModal() {
+    const modal = document.getElementById('pwa-install-modal');
+    if (!modal) return;
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    localStorage.setItem(INSTALL_MODAL_AUTOSHOW_KEY, String(Date.now()));
+    refreshInstallModalStatus().catch(() => {});
+}
+
+function closeInstallModal() {
+    const modal = document.getElementById('pwa-install-modal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    modal.setAttribute('aria-hidden', 'true');
+}
+
+async function handleInstallAction() {
+    if (isStandaloneDisplayMode()) {
+        notifyUser('APP INSTALADA', 'Ya puedes abrirla desde el icono de tu móvil.', 'success');
+        closeInstallModal();
+        return;
+    }
+
+    if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice.catch(() => null);
+        deferredInstallPrompt = null;
+        await refreshInstallModalStatus();
+        if (choice?.outcome === 'accepted') {
+            notifyUser('INSTALACIÓN LISTA', 'La app se está añadiendo a tu dispositivo.', 'success');
+            closeInstallModal();
+        } else {
+            setInstallHint('Puedes instalarla más tarde desde este mismo botón o descargar la APK si estás en Android.');
+        }
+        return;
+    }
+
+    if (isIosDevice()) {
+        setInstallHint('En iPhone usa Compartir > Añadir a pantalla de inicio para instalar la app.');
+        notifyUser('INSTALACIÓN EN IPHONE', 'Abre compartir y elige “Añadir a pantalla de inicio”.', 'info');
+        return;
+    }
+
+    setInstallHint('Si el navegador no muestra instalación automática, usa el menú de los 3 puntos y elige “Instalar aplicación”.');
+    notifyUser('INSTALACIÓN MANUAL', 'Busca “Instalar aplicación” o “Añadir a pantalla de inicio” en tu navegador.', 'info');
+}
+
+function setupInstallModal() {
+    const trigger = document.getElementById('openInstallModal');
+    const modal = document.getElementById('pwa-install-modal');
+    const closeBtn = document.getElementById('closeInstallModal');
+    const installBtn = document.getElementById('installPwaBtn');
+    const pushBtn = document.getElementById('enablePushBtn');
+    const apkBtn = document.getElementById('downloadApkBtn');
+    if (!trigger || !modal || !closeBtn || !installBtn || !pushBtn || !apkBtn) return;
+
+    trigger.addEventListener('click', openInstallModal);
+    closeBtn.addEventListener('click', closeInstallModal);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) closeInstallModal();
+    });
+    installBtn.addEventListener('click', () => {
+        handleInstallAction().catch(() => {
+            setInstallHint('No se pudo abrir la instalación automática. Usa el menú del navegador o la APK Android.');
+        });
+    });
+    pushBtn.addEventListener('click', async () => {
+        try {
+            await requestNotificationPermission(true);
+            await refreshInstallModalStatus();
+            showNotificationHelpModal();
+        } catch (_) {
+            showNotificationHelpModal();
+        }
+    });
+    apkBtn.addEventListener('click', () => {
+        const apkUrl = apkBtn.getAttribute('href') || '';
+        if (!apkUrl) {
+            setInstallHint('No encontré la APK publicada todavía. Revisa la ruta de descarga.');
+            return;
+        }
+        setInstallHint('Android descargará la APK. Si te lo pide, permite instalar apps desde este navegador.');
+    });
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferredInstallPrompt = event;
+        refreshInstallModalStatus().catch(() => {});
+    });
+
+    window.addEventListener('appinstalled', () => {
+        deferredInstallPrompt = null;
+        notifyUser('APP INSTALADA', 'Padeluminatis ya aparece como app en tu dispositivo.', 'success');
+        refreshInstallModalStatus().catch(() => {});
+        closeInstallModal();
+    });
+
+    refreshInstallModalStatus().catch(() => {});
+    if ((isAndroidDevice() || isIosDevice()) && shouldAutoOpenInstallModal()) {
+        setTimeout(() => openInstallModal(), 900);
+    }
+}
 
 function initAuthPageServiceWorker() {
+    if (window.Capacitor?.isNativePlatform?.()) return;
     if (!('serviceWorker' in navigator) || window.__swRegisterBound) return;
     window.__swRegisterBound = true;
 
     const base = getAppBase();
-    const swPath = `${base}sw.js`;
+    const swPath = `${base}OneSignalSDKWorker.js`;
 
     navigator.serviceWorker.register(swPath, { 
         scope: base,
@@ -39,20 +287,8 @@ function safeNavigate(url) {
     const current = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
     const target = String(url || '').split('?')[0].toLowerCase();
     if (!target || current === target) return;
-    
     window.__appRedirectLock = true;
-    AudioManager.play('TRANSITION', 0.2);
-    
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#020617;opacity:0;transition:opacity 0.3s ease;pointer-events:none;';
-    document.body.appendChild(overlay);
-    
-    requestAnimationFrame(() => {
-        overlay.style.opacity = '1';
-        setTimeout(() => {
-            window.location.replace(url);
-        }, 300);
-    });
+    window.location.replace(url);
 }
 
 function ensureLoginNoticeNode() {
@@ -127,6 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window[LOGIN_BOOT_FLAG] = true;
     initAuthPageServiceWorker();
     initPushNotifications().catch(() => {});
+    setupInstallModal();
 
     let authTransitionInProgress = false;
     let redirected = false;

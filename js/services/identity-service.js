@@ -1,16 +1,16 @@
 import { getDocument } from "../firebase-service.js";
 import { parseGuestMeta } from "../utils/match-utils.js";
-import { buildAvatarUrl, getIdentityInitials } from "./identity-utils.js";
 
 const identityCache = new Map();
 
-function escapeHtml(raw = "") {
-  return String(raw || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+function getInitials(name = "") {
+  return String(name || "")
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0] || "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "J";
 }
 
 function normalizeIdentity(raw = {}, fallbackUid = "") {
@@ -21,7 +21,7 @@ function normalizeIdentity(raw = {}, fallbackUid = "") {
     name,
     shortName: name.split(/\s+/)[0] || name,
     photo,
-    initials: getIdentityInitials(name),
+    initials: getInitials(name),
     level: Number(raw?.nivel || raw?.level || 2.5),
     isGuest: raw?.isGuest === true || raw?.isGuestProfile === true,
   };
@@ -82,26 +82,7 @@ export async function resolveIdentity(uid, options = {}) {
     return normalizedStoredGuest;
   }
 
-  const fallback = normalizeIdentity({
-    uid: safeUid,
-    nombre: "Jugador",
-  }, safeUid);
+  const fallback = normalizeIdentity({ uid: safeUid, nombre: "Jugador" }, safeUid);
   identityCache.set(safeUid, fallback);
   return fallback;
-}
-
-export async function resolveDisplayName(uid, options = {}) {
-  const identity = await resolveIdentity(uid, options);
-  return identity?.name || "Jugador";
-}
-
-export function renderIdentityAvatar(identity = {}, className = "avatar") {
-  const safeName = escapeHtml(identity?.name || "Jugador");
-  const safeInitials = escapeHtml(identity?.initials || getIdentityInitials(identity?.name || "Jugador"));
-  const safeClass = escapeHtml(className);
-  const photo = String(identity?.photo || "").trim();
-  if (photo) {
-    return `<img src="${escapeHtml(photo)}" class="${safeClass}" alt="${safeName}" onerror="this.outerHTML='<span class=&quot;${safeClass} avatar-fallback&quot;>${safeInitials}</span>'" />`;
-  }
-  return `<span class="${safeClass} avatar-fallback">${safeInitials}</span>`;
 }

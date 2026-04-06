@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file match-service.js
  * @version 19.5 (Final V7 Refactor)
  * @description Premium Match Management Service for Padeluminatis.
@@ -6,16 +6,11 @@
  * Fully aligned with Premium V7 "Ultra Vibrant" aesthetics.
  */
 
-import { db, getDocument, subscribeDoc, auth, storage } from './firebase-service.js';
+import { db, getDocument, subscribeDoc, auth } from './firebase-service.js';
 import { 
     doc, getDoc, getDocs, collection, deleteDoc, onSnapshot, runTransaction,
-    query, orderBy, where, limit, addDoc, updateDoc, setDoc, serverTimestamp, Timestamp 
+    query, orderBy, where, limit, addDoc, updateDoc, serverTimestamp 
 } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js';
-import {
-    ref,
-    uploadBytes,
-    getDownloadURL
-} from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-storage.js';
 import { triggerFeedback, handleOperationError, FEEDBACK } from './modules/feedback-system.js';
 import { showToast } from './ui-core.js'; // Keep for legacy/direct use if needed
 import { processMatchResults, parseMatchResult } from './ranking-service.js';
@@ -26,8 +21,6 @@ import { logError } from "./core/app-logger.js";
 import { analyticsCount, analyticsTiming } from "./core/analytics.js";
 import { rateLimitCheck } from "./core/rate-limit.js";
 import { getDivisionByRating } from "./config/elo-system.js";
-import { ensureGuestProfile } from "./services/guest-player-service.js";
-import { resolveIdentity } from "./services/identity-service.js";
 
 /*
   PROD_AUDIT_NEXT_PHASE (analysis only):
@@ -39,81 +32,6 @@ import { resolveIdentity } from "./services/identity-service.js";
 */
 
 let apoingStyleInjected = false;
-const eventDocCache = new Map();
-// Fallback para evitar ReferenceError en tabs de detalle
-async function renderExtendedBreakdown(container, matchId) {
-    if (!container || !matchId) return;
-    container.innerHTML = `<div class="center p-10 opacity-50">Cargando desglose de puntos...</div>`;
-    try {
-        const detailSnap = await window.getDocsSafe(query(collection(db, "matchPointDetails"), where("matchId", "==", matchId), limit(1)));
-        const detail = detailSnap?.docs?.[0]?.data?.() || null;
-        if (!detail) {
-            container.innerHTML = `<div class="p-4 rounded-2xl border border-dashed border-white/10 text-center text-[10px] uppercase tracking-widest opacity-40">No hay desglose guardado</div>`;
-            return;
-        }
-
-        const scoringSystem = String(detail?.scoringSystem || detail?.systemVersion || "default").toLowerCase();
-        const scoringLabel = scoringSystem.includes("atp") ? "ATP Hybrid Competitive" : "ELO Hibrido Club";
-        const allocations = Array.isArray(detail?.playerAllocations) ? detail.playerAllocations.filter((item) => !item?.isGuest) : [];
-        const pointsPerSet = Array.isArray(detail?.pointsPerSet) ? detail.pointsPerSet : [];
-
-        const setRows = pointsPerSet.map((setInfo) => `
-            <div class="bd-item-v7">
-                <span class="bd-label">SET ${setInfo.set}</span>
-                <span class="bd-val">${setInfo.gamesA}-${setInfo.gamesB}</span>
-            </div>
-        `).join("");
-
-        const playerCards = allocations.map((item) => {
-            const breakdown = item?.substrings || {};
-            const analysis = item?.analysis || {};
-            const real = analysis?.breakdown?.desgloseReal || {};
-            const delta = Number(item?.delta || 0);
-            return `
-                <div class="atp-break-card">
-                    <div class="flex-row between items-center mb-2">
-                        <span class="text-[10px] font-black text-white uppercase tracking-wider">${(item?.name || item?.nombre || item?.nombreUsuario || "Jugador").toUpperCase()}</span>
-                        <span class="text-[11px] font-black ${delta >= 0 ? "text-sport-green" : "text-danger"}">${delta >= 0 ? "+" : ""}${delta.toFixed(2)}</span>
-                    </div>
-                    <div class="atp-break-grid">
-                        <div><span>Base</span><b>${Number(breakdown.base || 0).toFixed(2)}</b></div>
-                        <div><span>Comp</span><b>${Number(breakdown.habilidad || 0).toFixed(2)}</b></div>
-                        <div><span>Margen</span><b>${Number(breakdown.clutch || 0).toFixed(2)}</b></div>
-                        <div><span>Seed</span><b>${Number(real.seedIndividual || 0).toFixed(0)}</b></div>
-                        <div><span>Gap pareja</span><b>${Number(real.diferenciaConCompanero || 0).toFixed(2)}</b></div>
-                        <div><span>Reparto</span><b>${Number(real.repartoPareja || 0).toFixed(2)}</b></div>
-                    </div>
-                    ${real.roleHint ? `<div class="atp-role-hint">${String(real.roleHint).replace(/_/g, " ")}</div>` : ""}
-                </div>
-            `;
-        }).join("");
-
-        container.innerHTML = `
-            <div class="elo-breakdown-v7 animate-fade-in">
-                <div class="flex-row between items-center mb-3">
-                    <span class="text-[9px] font-black text-primary uppercase tracking-widest">Desglose extendido</span>
-                    <span class="pm-chip">${scoringLabel}</span>
-                </div>
-                <div class="bd-grid-v7 mb-4">${setRows || `<div class="bd-item-v7"><span class="bd-label">SETS</span><span class="bd-val">--</span></div>`}</div>
-                <div class="atp-break-summary">
-                    <div><span>Sistema</span><b>${scoringLabel}</b></div>
-                    <div><span>Balance</span><b>${Number(detail?.zeroSumCheck || 0).toFixed(2)}</b></div>
-                    <div><span>Total puntos</span><b>${Number(detail?.totalPoints || 0)}</b></div>
-                </div>
-                <div class="flex-col gap-3 mt-4">${playerCards || `<div class="opacity-40 text-center text-[10px] uppercase tracking-widest">Sin datos de jugadores</div>`}</div>
-            </div>
-        `;
-    } catch (error) {
-        console.error("Extended breakdown render failed", error);
-        container.innerHTML = `<div class="p-4 rounded-2xl border border-red-500/20 text-center text-[10px] uppercase tracking-widest text-red-300">No se pudo cargar el desglose</div>`;
-    }
-}
-async function getEventDocCached(eventId) {
-    if (!eventId) return null;
-    const ev = await getDocument("eventos", eventId);
-    if (ev) eventDocCache.set(eventId, ev);
-    return ev || eventDocCache.get(eventId) || null;
-}
 function ensureApoingStyles() {
     if (apoingStyleInjected || document.getElementById('apoing-link-style')) return;
     const style = document.createElement('style');
@@ -135,39 +53,9 @@ function ensureApoingStyles() {
       .md-tab-btn.active{border-color:rgba(34,211,238,.6);background:rgba(34,211,238,.12);color:#e0fbff}
       .md-tab-panel{display:flex;flex-direction:column;gap:14px}
       .md-tab-panel.hidden{display:none}
-      .scoring-select-v7{
-        width:100%;min-height:48px;border-radius:16px;border:1px solid rgba(255,255,255,.12);
-        background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
-        color:#fff;padding:0 14px;font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase;
-        box-shadow:0 12px 24px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.06);
-      }
-      .scoring-select-v7 option{background:#08111f;color:#fff}
-      .scoring-help-v7{font-size:10px;line-height:1.45;color:rgba(255,255,255,.58);padding-left:2px}
-      .atp-break-summary{
-        display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;
-      }
-      .atp-break-summary div,.atp-break-card{
-        border:1px solid rgba(255,255,255,.1);border-radius:16px;background:rgba(255,255,255,.04);
-      }
-      .atp-break-summary div{padding:12px}
-      .atp-break-summary span,.atp-break-grid span{
-        display:block;font-size:9px;font-weight:900;letter-spacing:1px;text-transform:uppercase;opacity:.55
-      }
-      .atp-break-summary b{display:block;margin-top:6px;font-size:13px;font-weight:900;color:#fff}
-      .atp-break-card{padding:12px}
-      .atp-break-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-      .atp-break-grid b{display:block;margin-top:4px;font-size:12px;font-weight:900;color:#fff}
-      .atp-role-hint{
-        margin-top:10px;padding:8px 10px;border-radius:999px;display:inline-flex;align-items:center;
-        border:1px solid rgba(251,191,36,.2);background:rgba(251,191,36,.08);color:#fcd34d;
-        font-size:9px;font-weight:900;letter-spacing:1px;text-transform:uppercase;
-      }
       .ai-coach-btn-v1{
         border:1px solid rgba(198,255,0,.35);background:rgba(198,255,0,.1);color:#dfff8a;
         border-radius:10px;padding:7px 10px;font-size:10px;font-weight:900;letter-spacing:1px;
-      }
-      @media (max-width:560px){
-        .atp-break-summary,.atp-break-grid{grid-template-columns:1fr 1fr}
       }
       @keyframes apoingPulse{
         0%{box-shadow:0 0 0 0 rgba(0,212,255,.28)}
@@ -177,86 +65,6 @@ function ensureApoingStyles() {
     `;
     document.head.appendChild(style);
     apoingStyleInjected = true;
-}
-
-function parseGuestMeta(uid) {
-    if (!uid) return null;
-    const s = String(uid);
-    if (!s.startsWith('GUEST_') && !s.startsWith('invitado_') && !s.startsWith('manual_')) return null;
-    const parts = s.split('_');
-    if (parts.length >= 4) {
-        const levelRaw = parts[parts.length - 2];
-        const level = parseFloat(levelRaw);
-        const nameRaw = parts.slice(1, parts.length - 2).join(' ');
-        const name = nameRaw.replace(/_/g, ' ').trim() || 'Invitado';
-        return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
-    }
-    const name = (parts[1] || 'Invitado').replace(/_/g, ' ').trim() || 'Invitado';
-    const level = parseFloat(parts[2]);
-    return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
-}
-
-function getEventUserNameMap() {
-    if (!window.__eventUserNameMap) window.__eventUserNameMap = new Map();
-    return window.__eventUserNameMap;
-}
-
-function getEventUserMetaMap() {
-    if (!window.__eventUserMetaMap) window.__eventUserMetaMap = new Map();
-    return window.__eventUserMetaMap;
-}
-
-export function indexEventUserNames(eventDoc) {
-    if (!eventDoc) return;
-    const map = getEventUserNameMap();
-    const metaMap = getEventUserMetaMap();
-    const inscritos = Array.isArray(eventDoc.inscritos) ? eventDoc.inscritos : [];
-    inscritos.forEach((i) => {
-        const uid = i?.uid;
-        const name = i?.nombre || i?.nombreUsuario;
-        if (uid && name) map.set(String(uid), String(name));
-        if (uid) {
-            metaMap.set(String(uid), {
-                name: name || parseGuestMeta(uid)?.name || "Jugador",
-                level: Number(i?.nivel || 2.5),
-                photo: i?.fotoPerfil || i?.fotoURL || "",
-            });
-        }
-    });
-    const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
-    teams.forEach((t) => {
-        const players = Array.isArray(t?.players) ? t.players : [];
-        players.forEach((p) => {
-            const uid = p?.uid || p?.id;
-            const name = p?.nombre || p?.nombreUsuario;
-            if (uid && name) map.set(String(uid), String(name));
-            if (uid) {
-                metaMap.set(String(uid), {
-                    name: name || parseGuestMeta(uid)?.name || "Jugador",
-                    level: Number(p?.nivel || 2.5),
-                    photo: p?.fotoPerfil || p?.fotoURL || "",
-                });
-            }
-        });
-    });
-}
-
-function getEventUserName(uid) {
-    if (!uid) return null;
-    try {
-        return getEventUserNameMap().get(String(uid)) || null;
-    } catch {
-        return null;
-    }
-}
-
-function getEventUserMeta(uid) {
-    if (!uid) return null;
-    try {
-        return getEventUserMetaMap().get(String(uid)) || null;
-    } catch {
-        return null;
-    }
 }
 
 function renderApoingLink(cta = "Comprobar reserva en Apoing", extraClass = "") {
@@ -298,7 +106,7 @@ function ensurePostMatchSummaryStyles() {
     postMatchSummaryStyleInjected = true;
 }
 
-async function showPostMatchSummaryModal(rankingSync = {}, matchId = null, resultStr = null) {
+async function showPostMatchSummaryModal(rankingSync = {}, matchId = null) {
     const meUid = auth.currentUser?.uid;
     const meChange = (rankingSync?.changes || []).find((c) => c?.uid === meUid);
     const analysis = meChange?.analysis;
@@ -311,9 +119,6 @@ async function showPostMatchSummaryModal(rankingSync = {}, matchId = null, resul
     const bonus = Number(analysis.bonusDelta || analysis.puntosCalculados?.rendimientoBonus || 0);
     const prog = Math.max(0, Math.min(100, Number(analysis.levelProgressAfter || 0)));
     const division = getDivisionByRating(newPts);
-    const scoringSystem = String(rankingSync?.summary?.scoringSystem || analysis?.systemVersion || "default");
-    const scoringLabel = String(scoringSystem).includes("atp") ? "ATP Hybrid Competitive" : "ELO Hibrido Club";
-    const setsText = resultStr || rankingSync?.summary?.sets || "Completado";
 
     await new Promise((resolve) => {
         const overlay = document.createElement("div");
@@ -322,14 +127,7 @@ async function showPostMatchSummaryModal(rankingSync = {}, matchId = null, resul
         overlay.innerHTML = `
           <div class="post-match-sheet animate-up">
             <div class="post-match-title">Resumen Post-Partido</div>
-            <div style="margin-top:10px;display:flex;justify-content:flex-start;">
-              <span class="pm-chip">${scoringLabel}</span>
-            </div>
             <div class="post-match-main">
-              <div class="pm-cell" style="grid-column: span 4; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; text-align: center;">
-                 <span style="font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.6); text-transform: uppercase;">Resultado Oficial</span>
-                 <div style="font-size: 32px; font-weight: 900; font-style: italic; color: #fff; margin-top: 4px; letter-spacing: -1px;">${setsText}</div>
-              </div>
               <div class="pm-cell"><span>Rating anterior</span><b>${oldPts}</b></div>
               <div class="pm-cell"><span>Rating nuevo</span><b>${newPts}</b></div>
               <div class="pm-cell"><span>Delta</span><b class="${delta >= 0 ? "pm-delta-pos" : "pm-delta-neg"}">${delta >= 0 ? "+" : ""}${delta.toFixed(0)}</b></div>
@@ -342,31 +140,15 @@ async function showPostMatchSummaryModal(rankingSync = {}, matchId = null, resul
               </div>
               <div class="pm-bar"><div id="pm-prog-bar" class="pm-bar-fill"></div></div>
             </div>
-            <div class="pm-foot flex-wrap">
+            <div class="pm-foot">
               <span class="pm-chip" style="color:${division.color};border-color:${division.color}66"><i class="fas ${division.icon}"></i> ${division.label}</span>
-              <div class="flex gap-2">
-                <button class="pm-btn" id="pm-share-btn" style="background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.3); color: #00d4ff;">
-                  <i class="fas fa-share-nodes"></i> ALARDEAR
-                </button>
-                <button class="pm-btn" id="pm-continue-btn">CONTINUAR</button>
-              </div>
+              <button class="pm-btn" id="pm-continue-btn">CONTINUAR</button>
             </div>
           </div>
         `;
         document.body.appendChild(overlay);
         const bar = overlay.querySelector("#pm-prog-bar");
         setTimeout(() => { if (bar) bar.style.width = `${prog}%`; }, 60);
-
-        overlay.querySelector("#pm-share-btn")?.addEventListener("click", async () => {
-             const btn = overlay.querySelector("#pm-share-btn");
-             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> GENERANDO...';
-             try {
-                 const { shareMatchResult } = await import('./utils/share-utils.js');
-                 await shareMatchResult(analysis, { matchId });
-             } catch(e) { console.error("Share failed", e); }
-             btn.innerHTML = '<i class="fas fa-share-nodes"></i> ALARDEAR';
-        });
-
         overlay.querySelector("#pm-continue-btn")?.addEventListener("click", () => {
             overlay.remove();
             resolve();
@@ -393,227 +175,26 @@ function getMatchDate(match) {
     return Number.isFinite(d?.getTime?.()) ? d : null;
 }
 
-function hasMatchResult(match) {
-    if (!match) return false;
-    if (typeof match.resultado === "string") return match.resultado.trim().length > 0;
-    if (typeof match?.resultado?.sets === "string") return match.resultado.sets.trim().length > 0;
-    return false;
-}
-
-function getScoringSystemLabel(systemKey = "default") {
-    return String(systemKey || "default").toLowerCase() === "atp_test"
-        ? "ATP Hybrid Competitive"
-        : "ELO Hibrido Club";
-}
-
 function getFilledPlayers(match) {
-    return getMatchPlayers(match).filter((id) => id).length;
+    return (match?.jugadores || []).filter((id) => id).length;
 }
 
 function canReportResultNow(match) {
     const date = getMatchDate(match);
     if (!date) return false;
-    // For event matches, allow reporting once the match time has passed (no 90min wait)
-    const isEventMatch = !!match?.eventoId || match?._col === 'eventoPartidos';
-    // Count players from both jugadores and playerUids
-    const filledPlayers = getFilledPlayers(match);
-    const filledFromUids = Array.isArray(match?.playerUids) ? match.playerUids.filter(Boolean).length : 0;
-    const hasEnoughPlayers = filledPlayers >= MAX_PLAYERS || filledFromUids >= MAX_PLAYERS;
-    if (!hasEnoughPlayers) return false;
-    if (isEventMatch) return Date.now() >= date.getTime();
+    if (getFilledPlayers(match) < MAX_PLAYERS) return false;
     return Date.now() >= (date.getTime() + MATCH_DURATION_MS);
 }
 
 function autoMarkPlayedIfNeeded(matchData) {
     if (!matchData) return matchData;
     const state = String(matchData.estado || "").toLowerCase();
-    const blocked = state === "cancelado" || state === "anulado" || state === "jugado";
-    if (blocked || hasMatchResult(matchData)) return matchData;
-    return matchData;
-}
-
-const MATCH_MEDIA_LIMIT = 12;
-const MATCH_MEDIA_MAX_MB = 12;
-const MATCH_MEDIA_MAX_VIDEO_SEC = 10;
-
-function getPlayerPoints(p) {
-    const raw = p?.points ?? p?.puntosRanking ?? p?.elo ?? 1000;
-    return Number.isFinite(raw) ? Number(raw) : 1000;
-}
-
-function computeBalanceSuggestion(players = []) {
-    if (!players || players.length < 4) return null;
-    if (!players[0] || !players[1] || !players[2] || !players[3]) return null;
-
-    const baseA = (getPlayerPoints(players[0]) + getPlayerPoints(players[1])) / 2;
-    const baseB = (getPlayerPoints(players[2]) + getPlayerPoints(players[3])) / 2;
-    const baseDiff = baseA - baseB;
-    const absBase = Math.abs(baseDiff);
-
-    let best = { diff: absBase, fromIdx: null, toIdx: null };
-    const swaps = [
-        [0, 2],
-        [0, 3],
-        [1, 2],
-        [1, 3],
-    ];
-    swaps.forEach(([a, b]) => {
-        const tmp = [...players];
-        const t = tmp[a]; tmp[a] = tmp[b]; tmp[b] = t;
-        const aAvg = (getPlayerPoints(tmp[0]) + getPlayerPoints(tmp[1])) / 2;
-        const bAvg = (getPlayerPoints(tmp[2]) + getPlayerPoints(tmp[3])) / 2;
-        const diff = Math.abs(aAvg - bAvg);
-        if (diff < best.diff) best = { diff, fromIdx: a, toIdx: b, newDiff: aAvg - bAvg };
-    });
-
-    if (absBase < 120) return null;
-    if (best.fromIdx === null || best.diff >= absBase - 40) return null;
-    return {
-        fromIdx: best.fromIdx,
-        toIdx: best.toIdx,
-        newDiff: best.newDiff || 0,
-    };
-}
-
-async function getMatchWatchDoc(matchId, uid) {
-    if (!matchId || !uid) return null;
-    const snap = await getDocs(query(collection(db, 'matchWatchers'), where('matchId', '==', matchId), where('uid', '==', uid), limit(1)));
-    if (snap.empty) return null;
-    const d = snap.docs[0];
-    return { id: d.id, ...d.data() };
-}
-
-async function toggleMatchWatch(matchId, col, uid) {
-    if (!matchId || !uid) return false;
-    const existing = await getMatchWatchDoc(matchId, uid);
-    if (existing?.id) {
-        await deleteDoc(doc(db, 'matchWatchers', existing.id));
-        return false;
-    }
-    await addDoc(collection(db, 'matchWatchers'), {
-        matchId,
-        matchCollection: col || '',
-        uid,
-        createdAt: serverTimestamp(),
-    });
-    return true;
-}
-
-async function notifyMatchWatchers(matchId, matchDate, col, excludeUids = []) {
-    if (!matchId) return;
-    const snap = await getDocs(query(collection(db, 'matchWatchers'), where('matchId', '==', matchId), limit(80)));
-    if (snap.empty) return;
-    const when = matchDate ? matchDate.toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'proximamente';
-    const targets = snap.docs
-        .map(d => d.data()?.uid)
-        .filter(uid => uid && !excludeUids.includes(uid));
-    if (targets.length) {
-        await createNotification(
-            targets,
-            'Plaza liberada',
-            `Se libero una plaza para el partido del ${when}.`,
-            'match_opened',
-            'calendario.html',
-            { type: 'match_opened', matchId, matchCollection: col, dedupId: `slot_open_${matchId}` }
-        );
-    }
-    await Promise.all(snap.docs.map(d => deleteDoc(d.ref).catch(() => {})));
-}
-
-async function fetchMatchMedia(matchId) {
-    if (!matchId) return [];
-    try {
-        const snap = await getDocs(
-            query(
-                collection(db, 'matchMedia'),
-                where('matchId', '==', matchId),
-                orderBy('createdAt', 'desc'),
-                limit(MATCH_MEDIA_LIMIT)
-            )
-        );
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch (e) {
-        const code = String(e?.code || '').toLowerCase();
-        if (!code.includes('failed-precondition') && !code.includes('missing-index')) {
-            throw e;
-        }
-        const snap = await getDocs(
-            query(
-                collection(db, 'matchMedia'),
-                where('matchId', '==', matchId),
-                limit(MATCH_MEDIA_LIMIT)
-            )
-        );
-        const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        return rows.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-    }
-}
-
-async function getUserMatchMedia(matchId, uid) {
-    if (!matchId || !uid) return null;
-    const snap = await getDocs(query(collection(db, 'matchMedia'), where('matchId', '==', matchId), where('createdBy', '==', uid), limit(1)));
-    if (snap.empty) return null;
-    const d = snap.docs[0];
-    return { id: d.id, ...d.data() };
-}
-
-async function uploadMatchMediaFile({ matchId, matchCollection, uid, file }) {
-    const ext = (file?.name || '').split('.').pop() || 'bin';
-    const safeExt = ext.replace(/[^a-z0-9]/gi, '').slice(0, 6) || 'bin';
-    const path = `matches/${matchId}/${uid}/${Date.now()}.${safeExt}`;
-    const sRef = ref(storage, path);
-    await uploadBytes(sRef, file);
-    const url = await getDownloadURL(sRef);
-    const mediaType = file.type && file.type.startsWith('video') ? 'video' : 'image';
-    const docRef = await addDoc(collection(db, 'matchMedia'), {
-        matchId,
-        matchCollection: matchCollection || '',
-        url,
-        type: mediaType,
-        createdBy: uid,
-        createdAt: serverTimestamp(),
-        size: file.size || 0,
-        name: file.name || '',
-    });
-    return { id: docRef.id, url, type: mediaType };
-}
-
-async function validateMatchMediaFile(file) {
-    if (!file) return { ok: false, reason: 'Archivo invalido.' };
-    const sizeMb = (file.size || 0) / (1024 * 1024);
-    if (sizeMb > MATCH_MEDIA_MAX_MB) return { ok: false, reason: `Maximo ${MATCH_MEDIA_MAX_MB}MB.` };
-    if (file.type.startsWith('video')) {
-        const url = URL.createObjectURL(file);
-        try {
-            const duration = await new Promise((resolve) => {
-                const video = document.createElement('video');
-                video.preload = 'metadata';
-                video.onloadedmetadata = () => resolve(video.duration || 0);
-                video.onerror = () => resolve(0);
-                video.src = url;
-            });
-            if (duration > MATCH_MEDIA_MAX_VIDEO_SEC) return { ok: false, reason: `Maximo ${MATCH_MEDIA_MAX_VIDEO_SEC}s.` };
-        } finally {
-            URL.revokeObjectURL(url);
-        }
-    }
-    return { ok: true };
-}
-
-function renderMatchMediaItem(item) {
-    if (!item?.url) return '';
-    if (item.type === 'video') {
-        return `
-            <div class="match-media-item">
-                <video controls preload="metadata" src="${item.url}"></video>
-            </div>
-        `;
-    }
-    return `
-        <div class="match-media-item">
-            <img src="${item.url}" alt="media">
-        </div>
-    `;
+    const blocked = state === "cancelado" || state === "anulado" || state === "jugado" || state === "jugada";
+    if (blocked || matchData.resultado?.sets) return matchData;
+    if (!canReportResultNow(matchData)) return matchData;
+    // Server-side scheduler is the source of truth for estado="jugada".
+    // We only mirror the expected state in UI to avoid client-driven writes.
+    return { ...matchData, estado: "jugada" };
 }
 
 
@@ -634,305 +215,60 @@ function getEventLinkValue() {
     if (parts.length < 2) return null;
     return { eventoId: parts[0], eventMatchId: parts[1], phase: parts[2] || '' };
 }
-function resolveEventTeamMap(eventDoc) {
-    const teams = Array.isArray(eventDoc?.teams) ? eventDoc.teams : [];
-    return new Map(teams.map(t => [t.id, t]));
-}
-
-function resolveMyTeamId(eventDoc, uid) {
-    if (!eventDoc || !uid) return null;
-    const teams = Array.isArray(eventDoc?.teams) ? eventDoc.teams : [];
-    const team = teams.find(t => Array.isArray(t?.playerUids) && t.playerUids.includes(uid));
-    return team?.id || null;
-}
-
-function resolveMyGroup(eventDoc, myTeamId) {
-    if (!eventDoc || !myTeamId) return null;
-    const groups = eventDoc.groups || {};
-    const found = Object.entries(groups).find(([, ids]) => Array.isArray(ids) && ids.includes(myTeamId));
-    return found ? found[0] : null;
-}
-
-function isEventMatchPlayed(m) {
-    const state = String(m?.estado || '').toLowerCase();
-    return state === 'jugado' || !!m?.resultado || !!m?.ganadorTeamId;
-}
-
-function resolveEventPlayersForMatch(eventDoc, match) {
-    if (eventDoc && (match?.teamAId || match?.teamBId)) {
-        const map = resolveEventTeamMap(eventDoc);
-        const teamA = map.get(match.teamAId);
-        const teamB = map.get(match.teamBId);
-        const players = [
-            ...(teamA?.playerUids || []),
-            ...(teamB?.playerUids || []),
-        ];
-        if (players.length) return players;
-    }
-    return Array.isArray(match?.playerUids) ? match.playerUids : [];
-}
-
-function normalizeTeamName(value) {
-    return String(value || "").trim().toLowerCase();
-}
-
-function isUnknownTeamName(value) {
-    const n = normalizeTeamName(value);
-    if (!n) return true;
-    const compact = n.replace(/\s+/g, "");
-    if (["tbd", "tbd.", "tbd?", "tdb", "?", "unknown"].includes(n)) return true;
-    if (["tbd", "tbd.", "tbd?", "tdb", "tbdvs", "tbdvstbd", "tbdtbd", "unknown"].includes(compact)) return true;
-    if (["desconocido", "desconocidos", "por confirmar", "por definir", "pendiente"].includes(n)) return true;
-    return false;
-}
 
 async function loadEventLinkOptions(dateStr, hour, uid) {
     const sel = document.getElementById('inp-event-link');
     if (!sel || !uid) return;
-    sel.innerHTML = `<option value="">Buscando tus partidos de evento...</option>`;
+    sel.innerHTML = `<option value="">Sin vincular (partido normal)</option>`;
     try {
-        let rows = [];
-        const eventDocs = new Map();
-
         const snap = await getDocs(query(collection(db, 'eventoPartidos'), where('playerUids', 'array-contains', uid), limit(300)));
-        rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-        if (!rows.length) {
-            const evSnap = await getDocs(collection(db, 'eventos'));
-            const evs = evSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            const myEvents = evs.filter((ev) => {
-                const inTeams = Array.isArray(ev?.teams) && ev.teams.some((t) => Array.isArray(t?.playerUids) && t.playerUids.includes(uid));
-                const inInscritos = Array.isArray(ev?.inscritos) && ev.inscritos.includes(uid);
-                return inTeams || inInscritos;
-            });
-            myEvents.forEach((ev) => eventDocs.set(ev.id, ev));
-            if (myEvents.length) {
-                const matchSnaps = await Promise.all(
-                    myEvents.map((ev) => getDocs(query(collection(db, 'eventoPartidos'), where('eventoId', '==', ev.id), limit(400))))
-                );
-                rows = matchSnaps.flatMap((s) => s.docs.map((d) => ({ id: d.id, ...d.data() })));
-            }
-        }
-
-        const eventIds = [...new Set(rows.map(r => r.eventoId).filter(Boolean))];
-        await Promise.all(eventIds.map(async (id) => {
-            if (eventDocs.has(id)) return;
-            const evSnap = await getDoc(doc(db, 'eventos', id));
-            if (evSnap.exists()) eventDocs.set(id, { id, ...evSnap.data() });
-        }));
-
-        const matchesByEvent = new Map();
-        rows.forEach((m) => {
-            const list = matchesByEvent.get(m.eventoId) || [];
-            list.push(m);
-            matchesByEvent.set(m.eventoId, list);
-        });
-
-        const pending = [];
-        matchesByEvent.forEach((list, eventId) => {
-            const ev = eventDocs.get(eventId);
-            const myTeamId = resolveMyTeamId(ev, uid);
-            if (!myTeamId) return;
-            const myGroup = resolveMyGroup(ev, myTeamId);
-            const faced = new Set();
-            list.forEach((m) => {
-                if (!isEventMatchPlayed(m)) return;
-                if (m.teamAId === myTeamId && m.teamBId) faced.add(m.teamBId);
-                if (m.teamBId === myTeamId && m.teamAId) faced.add(m.teamAId);
-            });
-            const seenOpponents = new Set();
-            list.forEach((m) => {
-                if (isEventMatchPlayed(m)) return;
-                if (m.linkedMatchId) return;
-                if (!m.teamAId || !m.teamBId) return;
-                if (m.teamAId !== myTeamId && m.teamBId !== myTeamId) return;
-                const opponentId = m.teamAId === myTeamId ? m.teamBId : m.teamAId;
-                if (!opponentId) return;
-                if (faced.has(opponentId)) return;
-                const phase = String(m.phase || '').toLowerCase();
-                const isGroupStage = phase === 'group' || phase === 'league';
-                if (myGroup && isGroupStage && String(m.group || '') !== String(myGroup)) return;
-                if (seenOpponents.has(opponentId)) return;
-                seenOpponents.add(opponentId);
-                const teamMap = resolveEventTeamMap(ev);
-                const teamA = teamMap.get(m.teamAId);
-                const teamB = teamMap.get(m.teamBId);
-                const teamAName = (!m.teamAName || isUnknownTeamName(m.teamAName)) && teamA?.name ? teamA.name : m.teamAName;
-                const teamBName = (!m.teamBName || isUnknownTeamName(m.teamBName)) && teamB?.name ? teamB.name : m.teamBName;
-                pending.push({ ...m, teamAName, teamBName, _eventDoc: ev, _myTeamId: myTeamId, _opponentId: opponentId });
-            });
-        });
-
-        window._pendingEventMatches = pending
+        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const pending = rows
+            .filter((m) => String(m.estado || '') !== 'jugado')
+            .filter((m) => !m.fecha || !Number.isFinite(new Date(m.fecha?.toDate ? m.fecha.toDate() : m.fecha).getTime()))
             .sort((a, b) => String(a.phase || '').localeCompare(String(b.phase || '')));
 
-        if (window._pendingEventMatches.length === 0) {
-            sel.innerHTML = `<option value="">No tienes partidos pendientes</option>`;
-            const info = document.getElementById('event-link-help');
-            if (info) info.textContent = 'No se encontraron partidos de evento para sincronizar.';
-            return;
-        }
-
-        const options = window._pendingEventMatches.map((m) => {
+        const options = pending.map((m) => {
             const phase = String(m.phase || 'evento').toUpperCase();
-            const groupTag = m.group ? ` · GRUPO ${String(m.group).toUpperCase()}` : '';
-            const label = `${phase}${groupTag} · ${m.teamAName || 'Equipo A'} VS ${m.teamBName || 'Equipo B'}`;
+            const label = `${phase} · ${m.teamAName || '?'} VS ${m.teamBName || '?'}`;
             return `<option value="${m.eventoId}|${m.id}|${m.phase || ''}">${label}</option>`;
         });
 
-        sel.innerHTML = `<option value="">-- ELIGE PARTIDO DEL EVENTO --</option>${options.join('')}`;
-
-        sel.onchange = () => {
-            const val = sel.value;
-            if (!val) return;
-            const parts = val.split('|');
-            const emId = parts[1];
-            const em = window._pendingEventMatches.find(x => x.id === emId);
-            if (em) {
-                const players = resolveEventPlayersForMatch(em._eventDoc, em);
-                const jugs = [...players];
-                while(jugs.length < 4) jugs.push(null);
-                window._initialJugadores = jugs;
-                for(let i=0; i<4; i++) {
-                    window.renderUserInCreationSlot(i, jugs[i]);
-                }
-                showToast("Sincronizacion", "Jugadores del evento cargados en los huecos", "info");
-            }
-        };
-
+        sel.innerHTML = `<option value="">Sin vincular (partido normal)</option>${options.join('')}`;
+        if (options.length > 0) {
+            sel.selectedIndex = 1;
+        }
         const info = document.getElementById('event-link-help');
-        if (info) info.textContent = `Tienes ${window._pendingEventMatches.length} partidos de evento pendientes para vincular.`;
-
-    } catch (err) {
-        console.error("Error loading event options:", err);
+        if (info) {
+            info.textContent = options.length
+                ? `Partidos de evento pendientes: ${options.length}. Se selecciona automaticamente el siguiente rival.`
+                : 'No tienes partidos de evento pendientes sin fecha.';
+        }
+    } catch (_) {
         const info = document.getElementById('event-link-help');
-        if (info) info.textContent = 'Error al conectar con la base de datos de eventos.';
+        if (info) info.textContent = 'No se pudieron cargar partidos de evento.';
     }
 }
 
-window.renderUserInCreationSlot = async (idx, uid) => {
-    if (!uid) {
-        window.removeUserFromNew(idx);
-        return;
-    }
-    let u = window.psUsersCache?.find(x => x.id === uid);
-    if (!u) {
-        try {
-            const guest = parseGuestMeta(uid);
-            if (guest) {
-                u = { id: uid, nombreUsuario: `${guest.name} (Inv)`, nivel: guest.level, fotoPerfil: './imagenes/Logojafs.png' };
-            } else {
-                const d = await getDoc(doc(db, 'usuarios', uid));
-                u = d.exists() ? { id: d.id, ...d.data() } : null;
-            }
-        } catch(e) { console.error("Error loading user for slot", e); }
-    }
-    if (u) {
-        window.selectUserForNew(uid, idx);
-    }
-};
-
-export async function syncLinkedEventMatchFromRegularMatch(matchId, col, resultStr) {
+async function syncLinkedEventMatchFromRegularMatch(matchId, col, resultStr) {
     try {
         const mSnap = await getDoc(doc(db, col, matchId));
         if (!mSnap.exists()) return;
         const m = mSnap.data() || {};
         const eventMatchId = m.eventMatchId || m?.eventLink?.eventMatchId;
         if (!eventMatchId) return;
-        const evRef = doc(db, 'eventoPartidos', eventMatchId);
-        const evSnap = await getDoc(evRef);
-        const evMatch = evSnap.exists() ? evSnap.data() : {};
-        const alreadyProcessed = String(evMatch?.standingsProcessedResult || '') === String(resultStr || '');
         const parsed = parseMatchResult(resultStr);
-        const winnerTeamId = parsed.winnerTeam === 'A'
-            ? (m.eventTeamAId || evMatch?.teamAId)
-            : (m.eventTeamBId || evMatch?.teamBId);
+        const winnerTeamId = parsed.winnerTeam === 'A' ? m.eventTeamAId : m.eventTeamBId;
         if (!winnerTeamId) return;
-        await updateDoc(evRef, {
+        await updateDoc(doc(db, 'eventoPartidos', eventMatchId), {
             resultado: resultStr,
             ganadorTeamId: winnerTeamId,
-            ganador: parsed.winnerTeam,
             estado: 'jugado',
             linkedMatchId: matchId,
             linkedMatchCollection: col,
-            standingsProcessedResult: resultStr,
-            standingsProcessedAt: alreadyProcessed ? (evMatch?.standingsProcessedAt || serverTimestamp()) : serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
-        if (!alreadyProcessed) {
-            const eventId = evMatch?.eventoId || m?.eventoId || null;
-            const teamAId = evMatch?.teamAId || m?.eventTeamAId || null;
-            const teamBId = evMatch?.teamBId || m?.eventTeamBId || null;
-            const loserTeamId = winnerTeamId === teamAId ? teamBId : teamAId;
-            const winnerName = winnerTeamId === teamAId ? (evMatch?.teamAName || m?.eventTeamAName) : (evMatch?.teamBName || m?.eventTeamBName);
-            const loserName = loserTeamId === teamAId ? (evMatch?.teamAName || m?.eventTeamAName) : (evMatch?.teamBName || m?.eventTeamBName);
-            if (eventId && winnerTeamId && loserTeamId) {
-                await applyEventStandingsUpdate(eventId, teamAId, teamBId, winnerTeamId, loserTeamId, winnerName, loserName, parsed);
-            }
-        }
     } catch (_) {}
-}
-
-// Update event standings (eventoClasificacion) when a linked event match is resolved.
-async function applyEventStandingsUpdate(eventId, teamAId, teamBId, winnerTeamId, loserTeamId, winnerName, loserName, parsed = null) {
-    try {
-        const evSnap = await getDoc(doc(db, 'eventos', eventId));
-        const ev = evSnap.exists() ? evSnap.data() : {};
-        const canUpdateStandings =
-            auth.currentUser?.email === "Juanan221091@gmail.com" ||
-            ev?.organizadorId === auth.currentUser?.uid ||
-            ev?.organizerId === auth.currentUser?.uid ||
-            ev?.createdBy === auth.currentUser?.uid;
-        if (!canUpdateStandings) return;
-        const ptsWin = Number(ev?.puntosVictoria || 2);
-        const ptsLoss = Number(ev?.puntosDerrota || 1);
-
-        const winRef = doc(db, 'eventoClasificacion', `${eventId}_${winnerTeamId}`);
-        const loseRef = doc(db, 'eventoClasificacion', `${eventId}_${loserTeamId}`);
-        const [winSnap, loseSnap] = await Promise.all([getDoc(winRef), getDoc(loseRef)]);
-        const winData = winSnap.exists() ? winSnap.data() : {};
-        const loseData = loseSnap.exists() ? loseSnap.data() : {};
-
-        const teamAGames = Number(parsed?.teamAGames || 0);
-        const teamBGames = Number(parsed?.teamBGames || 0);
-        const winnerIsA = winnerTeamId && teamAId ? winnerTeamId === teamAId : false;
-        const winGamesFor = winnerIsA ? teamAGames : teamBGames;
-        const winGamesAgainst = winnerIsA ? teamBGames : teamAGames;
-        const loseGamesFor = winnerIsA ? teamBGames : teamAGames;
-        const loseGamesAgainst = winnerIsA ? teamAGames : teamBGames;
-
-        const winPF = Number(winData.puntosGanados || 0) + winGamesFor;
-        const winPA = Number(winData.puntosPerdidos || 0) + winGamesAgainst;
-        const losePF = Number(loseData.puntosGanados || 0) + loseGamesFor;
-        const losePA = Number(loseData.puntosPerdidos || 0) + loseGamesAgainst;
-
-        await Promise.all([
-            setDoc(winRef, {
-                eventoId: eventId,
-                uid: winnerTeamId,
-                nombre: winnerName || winData.nombre || winnerTeamId,
-                pj: Number(winData.pj || 0) + 1,
-                ganados: Number(winData.ganados || 0) + 1,
-                puntos: Number(winData.puntos || 0) + ptsWin,
-                puntosGanados: winPF,
-                puntosPerdidos: winPA,
-                diferencia: winPF - winPA,
-            }, { merge: true }),
-            setDoc(loseRef, {
-                eventoId: eventId,
-                uid: loserTeamId,
-                nombre: loserName || loseData.nombre || loserTeamId,
-                pj: Number(loseData.pj || 0) + 1,
-                perdidos: Number(loseData.perdidos || 0) + 1,
-                puntos: Number(loseData.puntos || 0) + ptsLoss,
-                puntosGanados: losePF,
-                puntosPerdidos: losePA,
-                diferencia: losePF - losePA,
-            }, { merge: true }),
-        ]);
-    } catch (e) {
-        console.warn("applyEventStandingsUpdate failed", e);
-    }
 }
 
 /**
@@ -959,14 +295,10 @@ window.executeCreateMatch = async (dateStr, hour) => {
     
     const matchDate = new Date(`${dateStr}T${hour}`);
     const linkedEvent = getEventLinkValue();
-
-    if (type === 'evento' && !linkedEvent) {
-        return triggerFeedback({ title: "SELECCIÓN REQUERIDA", msg: "Para crear un partido de evento, debes seleccionar uno de la lista.", type: "warning" });
-    }
     
     const createT0 = performance.now();
     try {
-        const { showLoading, hideLoading } = await import('./modules/ui-loader.js');
+        const { showLoading, hideLoading } = await import('./modules/ui-loader.js?v=6.5');
         showLoading("Creando partido en la Matrix...");
 
         const creatorDoc = await getDocument('usuarios', auth.currentUser.uid);
@@ -1021,9 +353,9 @@ window.executeCreateMatch = async (dateStr, hour) => {
         if (validPlayers.length === MAX_PLAYERS) {
             try {
                 const profiles = await Promise.all(jugs.map(async uid => {
-                    const guest = parseGuestMeta(uid);
-                    if (guest) {
-                        return { id: uid, puntosRanking: 1000, nivel: guest.level || 2.5 }; 
+                    if (uid.startsWith('GUEST_')) {
+                        const parts = uid.split('_');
+                        return { id: uid, puntosRanking: 1000, nivel: parseFloat(parts[2]) || 2.5 }; 
                     }
                     const d = await getDoc(doc(db, 'usuarios', uid));
                     return d.exists() ? d.data() : { puntosRanking: 1000, nivel: 2.5 };
@@ -1073,20 +405,15 @@ window.executeCreateMatch = async (dateStr, hour) => {
         }
 
         if (targets.length > 0) {
-            const isReto = type === 'reto';
-            const notifType = visibility === 'private'
-                ? (isReto ? 'new_challenge' : 'private_invite')
-                : (isReto ? 'new_challenge' : 'match_opened');
+            const notifType = visibility === 'private' ? 'private_invite' : 'match_opened';
             const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
             const time = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-            const notifMsg = isReto
-                ? `${creatorName} te ha retado para el ${day} a las ${time}.`
-                : (visibility === 'private'
-                    ? `${creatorName} te invito a una partida privada el ${day} a las ${time}.`
-                    : `${creatorName} creo una partida para el ${day} a las ${time}.`);
+            const notifMsg = visibility === 'private'
+                ? `${creatorName} te invitó a una partida privada el ${day} a las ${time}.`
+                : `${creatorName} creó una partida para el ${day} a las ${time}.`;
             await createNotification(
                 targets,
-                "Padeluminatis",
+                "¡Padeluminatis!",
                 notifMsg,
                 notifType,
                 'calendario.html',
@@ -1099,7 +426,7 @@ window.executeCreateMatch = async (dateStr, hour) => {
         if (window.closeMatchModal) window.closeMatchModal();
         else document.getElementById('modal-match')?.classList.remove('active');
     } catch(e) {
-        const { hideLoading } = await import('./modules/ui-loader.js');
+        const { hideLoading } = await import('./modules/ui-loader.js?v=6.5');
         hideLoading();
         handleOperationError(e);
     }
@@ -1116,9 +443,8 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         matchDetailUnsub = null;
     }
     ensureApoingStyles();
-    const isEventType = type === 'eventoPartidos' || String(type || '').toLowerCase().includes('evento');
-    const isReto = !isEventType && type ? type.toLowerCase().includes('reto') : false;
-    const col = isEventType ? 'eventoPartidos' : (isReto ? 'partidosReto' : 'partidosAmistosos');
+    const isReto = type ? type.toLowerCase().includes('reto') : false;
+    const col = isReto ? 'partidosReto' : 'partidosAmistosos';
     
     window._currentMatchId = matchId;
     window._currentMatchCol = col;
@@ -1132,30 +458,11 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         }
         m = autoMarkPlayedIfNeeded(m);
 
-        const isParticipant = !!viewerUid && isUserInMatch(m, viewerUid);
+        const isParticipant = !!viewerUid && m.jugadores?.includes(viewerUid);
         const isAdmin = viewerData?.rol === 'Admin' || auth.currentUser?.email === 'Juanan221091@gmail.com';
         const isOrganizer = !!viewerUid && (m.organizerId === viewerUid || m.creador === viewerUid || isAdmin);
-        const matchState = String(m.estado || '').toLowerCase();
-        const isPlayed = hasMatchResult(m) || matchState === 'cancelado' || matchState === 'anulado';
         const date = m.fecha?.toDate ? m.fecha.toDate() : new Date(m.fecha);
-        let playerIds = Array.isArray(m.jugadores) && m.jugadores.length > 0 ? m.jugadores : (Array.isArray(m.playerUids) ? m.playerUids : []);
-        if (isEventType && m.eventoId) {
-            const ev = await getEventDocCached(m.eventoId);
-            if (ev) {
-                indexEventUserNames(ev);
-                const eventPlayers = resolveEventPlayersForMatch(ev, m);
-                if (eventPlayers && eventPlayers.length) playerIds = eventPlayers;
-            }
-        }
-        const matchForActions = { ...m, jugadores: playerIds };
-        const players = await Promise.all([0, 1, 2, 3].map(i => getPlayerData(playerIds[i])));
-        const balanceSuggestion = computeBalanceSuggestion(players);
-        const watchDoc = viewerUid ? await getMatchWatchDoc(matchId, viewerUid) : null;
-        const isWatching = !!watchDoc;
-        const mediaItems = await fetchMatchMedia(matchId);
-        const userMediaCount = viewerUid
-            ? mediaItems.filter((m) => m?.createdBy === viewerUid).length
-            : 0;
+        const players = await Promise.all([0, 1, 2, 3].map(i => getPlayerData(m.jugadores?.[i])));
 
         const renderSlimPlayer = (p, rev = false) => {
             const name = p?.name || 'LIBRE';
@@ -1220,7 +527,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                                 <div class="w-1 h-3 bg-primary rounded-full"></div>
                                 <span class="text-[10px] font-black uppercase tracking-widest opacity-80">Alineación</span>
                              </div>
-                             ${isReto ? '<span class="text-[8px] font-black text-sport-gold border border-sport-gold/30 px-2 py-0.5 rounded-full">ES RANKED</span>' : '<span class="text-[8px] font-black opacity-30">AMISTOSO</span>'}
+                             ${isReto ? '<span class="text-[8px] font-black text-sport-gold border border-sport-gold/30 px-2 py-0.5 rounded-full">⚡ RANKED</span>' : '<span class="text-[8px] font-black opacity-30">AMISTOSO</span>'}
                         </div>
                         
                         <div class="players-grid-read relative z-10">
@@ -1251,7 +558,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     </div>
 
                     <div class="actions-grid-v7">
-                        ${renderMatchActions(matchForActions, isParticipant, isOrganizer, isAdmin, viewerUid || '', matchId, col)}
+                        ${renderMatchActions(m, isParticipant, isOrganizer, isAdmin, viewerUid || '', matchId, col)}
                     </div>
                 </div>
             `;
@@ -1267,18 +574,8 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         const p1 = Math.min(Math.max(50 + (diff * 20), 10), 90);
         const p2 = 100 - p1;
 
-        let cName = "Jugador";
-        if (m.creador) {
-            const creatorSnap = await getDoc(doc(db, "usuarios", m.creador));
-            if (creatorSnap.exists()) {
-                cName = creatorSnap.data().nombreUsuario || creatorSnap.data().nombre || cName;
-            }
-        } else if (m.organizerId) {
-            const orgSnap = await getDoc(doc(db, "usuarios", m.organizerId));
-            if (orgSnap.exists()) {
-                cName = orgSnap.data().nombreUsuario || orgSnap.data().nombre || cName;
-            }
-        }
+        const creatorSnap = await getDoc(doc(db, "usuarios", m.creador));
+        const cName = creatorSnap.exists() ? (creatorSnap.data().nombreUsuario || creatorSnap.data().nombre) : 'Jugador';
 
         let eloBreakdownHtml = '';
         if (m.resultado?.sets) {
@@ -1328,51 +625,6 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
             }
         }
 
-        const realPlayerCount = playerIds.filter(Boolean).length;
-        const isFull = realPlayerCount >= MAX_PLAYERS;
-        const balanceHtml = balanceSuggestion ? `
-            <div class="balance-suggest-card">
-                <div class="balance-head">
-                    <span class="balance-title">Sugerencia de balanceo IA</span>
-                    <span class="balance-pill">JUSTO</span>
-                </div>
-                <p>Para un partido mas justo, sugerimos que <b>${players[balanceSuggestion.fromIdx]?.name}</b> cambie con <b>${players[balanceSuggestion.toIdx]?.name}</b>.</p>
-                ${isOrganizer ? `<button class="btn-balance-apply" data-from="${balanceSuggestion.fromIdx}" data-to="${balanceSuggestion.toIdx}"><i class="fas fa-exchange-alt"></i> Aplicar cambio</button>` : `<span class="balance-note">Solo el organizador puede aplicar el cambio.</span>`}
-            </div>
-        ` : '';
-        const watchHtml = (!isParticipant && isFull) ? `
-            <div class="match-watch-card">
-                <div class="watch-left">
-                    <span class="watch-title">Partido completo</span>
-                    <span class="watch-sub">Activa aviso si se libera una plaza.</span>
-                </div>
-                <button id="btn-watch-slot" class="btn-watch-slot ${isWatching ? 'active' : ''}">
-                    <i class="fas fa-bell"></i> ${isWatching ? 'Aviso activo' : 'Avisame'}
-                </button>
-            </div>
-        ` : '';
-        const mediaItemsHtml = mediaItems.length ? mediaItems.map(renderMatchMediaItem).join('') : `<div class="match-media-empty">Sin recuerdos aun.</div>`;
-        const maxMediaPerUser = 3;
-        const canUploadMedia = isParticipant && isPlayed && userMediaCount < maxMediaPerUser;
-        const mediaHtml = `
-            <div class="match-media-card">
-                <div class="match-media-head">
-                    <span class="match-media-title">Galeria de match</span>
-                    <span class="match-media-pill">${mediaItems.length} items</span>
-                </div>
-                <div class="match-media-grid">${mediaItemsHtml}</div>
-                ${canUploadMedia ? `
-                    <div class="match-media-upload">
-                        <input type="file" id="match-media-input" accept="image/*,video/mp4,video/webm" hidden>
-                        <button id="btn-match-media-upload" class="btn-match-media-upload">
-                            <i class="fas fa-cloud-upload-alt"></i> Subir foto o video
-                        </button>
-                        <span class="match-media-hint">Max ${MATCH_MEDIA_MAX_VIDEO_SEC}s video o ${MATCH_MEDIA_MAX_MB}MB. (${userMediaCount}/${maxMediaPerUser})</span>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-
         container.innerHTML = `
             <div class="match-detail-v7 animate-up">
                 <div class="detail-hero-v7 flex-col center">
@@ -1384,7 +636,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     <span class="hero-time-v7">${date.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})}</span>
                     <div class="hero-date-v7">
                         ${date.toLocaleDateString('es-ES', {weekday:'long', day:'numeric'}).toUpperCase()}
-                        <span class="dash">—"</span>
+                        <span class="dash">—</span>
                         ${date.toLocaleDateString('es-ES', {month:'long'}).toUpperCase()}
                     </div>
                     <div class="mt-4 opacity-80 scale-90">${weatherHtml}</div>
@@ -1418,8 +670,6 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                             <div class="prob-fill t2" style="width: ${p2}%"></div>
                         </div>
                     </div>
-                    ${balanceHtml}
-                    ${watchHtml}
 
                     <div class="apoing-link-wrap mb-4">
                         ${renderApoingLink("Gestionar partida en Apoing", "text-orange-300 border-orange-400/40 bg-orange-500/10")}
@@ -1429,7 +679,6 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     <div class="court-container-v7 mb-3">
                         <div class="court-schema-v7">
                             <div class="court-net"></div>
-                            <div class="court-schema-v7-line-bottom"></div>
                             
                             <div class="players-row-v7 top mb-8">
                                 ${renderPlayerSlot(players[0], 0, { canEdit: isOrganizer, canSelfJoin: !isOrganizer && !isParticipant, mid: matchId, col })}
@@ -1461,13 +710,8 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     ` : ''}
 
                     <div class="actions-grid-v7 flex-col gap-3">
-                    ${renderMatchActions(matchForActions, isParticipant, isOrganizer, isAdmin, viewerUid || '', matchId, col)}
+                        ${renderMatchActions(m, isParticipant, isOrganizer, isAdmin, viewerUid || '', matchId, col)}
                     </div>
-                    ${!isPlayed ? `
-                        <div class="match-social-actions">
-                            <button id="pm-share-poster-btn" class="pm-btn pm-btn-ghost"><i class="fas fa-share-nodes"></i> Compartir cartel</button>
-                        </div>
-                    ` : ''}
                     <div class="mt-3 p-2 rounded-xl border border-white/10 bg-white/5">
                         <div class="flex-row between items-center gap-2">
                             <span class="text-[9px] font-black uppercase tracking-widest text-primary">Consejo IA</span>
@@ -1475,7 +719,6 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         </div>
                         <p id="ai-coach-match-output" class="text-[10px] text-white/75 mt-2">Pulsa generar para obtener consejo pre/post partido.</p>
                     </div>
-                    ${mediaHtml}
                 </div>
 
                 <div id="md-tab-breakdown" class="md-tab-panel hidden">
@@ -1526,87 +769,6 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                 }
             };
         }
-        const balanceBtn = document.querySelector('.btn-balance-apply');
-        if (balanceBtn) {
-            balanceBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const fromIdx = Number(balanceBtn.dataset.from);
-                const toIdx = Number(balanceBtn.dataset.to);
-                if (Number.isFinite(fromIdx) && Number.isFinite(toIdx)) {
-                    window.executeMatchAction('swap', matchId, col, { from: fromIdx, to: toIdx });
-                }
-            });
-        }
-        const watchBtn = document.getElementById('btn-watch-slot');
-        if (watchBtn && viewerUid) {
-            watchBtn.addEventListener('click', async () => {
-                watchBtn.disabled = true;
-                try {
-                    const active = await toggleMatchWatch(matchId, col, viewerUid);
-                    watchBtn.classList.toggle('active', active);
-                    watchBtn.innerHTML = `<i class=\"fas fa-bell\"></i> ${active ? 'Aviso activo' : 'Avisame'}`;
-                } catch (_) {}
-                watchBtn.disabled = false;
-            });
-        }
-        const sharePosterBtn = document.getElementById('pm-share-poster-btn');
-        if (sharePosterBtn) {
-            sharePosterBtn.addEventListener('click', async () => {
-                sharePosterBtn.disabled = true;
-                sharePosterBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
-                try {
-                    const { shareMatchPoster } = await import('./utils/share-utils.js');
-                    const formatPosterName = (p) => {
-                        const rawName = (p?.name || '').trim();
-                        if (!rawName || rawName.toLowerCase() === 'desconocido') return null;
-                        return rawName;
-                    };
-                    const getLvl = (p) => Number.isFinite(p?.level) ? Number(p.level) : null;
-                    let teamA = [formatPosterName(players[0]), formatPosterName(players[1])].filter(Boolean);
-                    let teamB = [formatPosterName(players[2]), formatPosterName(players[3])].filter(Boolean);
-                    let levelsA = [getLvl(players[0]), getLvl(players[1])].filter(v => v !== null);
-                    let levelsB = [getLvl(players[2]), getLvl(players[3])].filter(v => v !== null);
-                    if (!teamA.length && (m?.teamAName || m?.equipoA)) teamA = [String(m.teamAName || m.equipoA)];
-                    if (!teamB.length && (m?.teamBName || m?.equipoB)) teamB = [String(m.teamBName || m.equipoB)];
-                    const when = date.toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-                    await shareMatchPoster({ title: 'PROXIMO PARTIDO', teamA, teamB, levelsA, levelsB, when, club: 'PADELUMINATIS CLUB' });
-                } catch (e) {
-                    console.error('Share poster failed', e);
-                }
-                sharePosterBtn.disabled = false;
-                sharePosterBtn.innerHTML = '<i class="fas fa-share-nodes"></i> Compartir cartel';
-            });
-        }
-        const mediaBtn = document.getElementById('btn-match-media-upload');
-        const mediaInput = document.getElementById('match-media-input');
-        if (mediaBtn && mediaInput && viewerUid) {
-            mediaBtn.addEventListener('click', () => mediaInput.click());
-            mediaInput.addEventListener('change', async () => {
-                const file = mediaInput.files?.[0];
-                if (!file) return;
-                const check = await validateMatchMediaFile(file);
-                if (!check.ok) {
-                    showToast('Media', check.reason || 'Archivo no valido', 'warning');
-                    mediaInput.value = '';
-                    return;
-                }
-                mediaBtn.disabled = true;
-                mediaBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subiendo...';
-                try {
-                    await uploadMatchMediaFile({ matchId, matchCollection: col, uid: viewerUid, file });
-                    showToast('Media', 'Subida completada', 'success');
-                    const fresh = await getDocument(col, matchId);
-                    render(fresh);
-                } catch (e) {
-                    console.error('upload media failed', e);
-                    showToast('Media', 'No se pudo subir', 'error');
-                } finally {
-                    mediaBtn.disabled = false;
-                    mediaBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Subir foto o video';
-                    mediaInput.value = '';
-                }
-            });
-        }
         if (isParticipant) initMatchChat(matchId, col);
     };
 
@@ -1631,19 +793,19 @@ window.switchMatchDetailTab = (tab = 'lineup') => {
  * Renders the match creation form for a specific date and time.
  * V7 Styled.
  */
-export async function renderCreationForm(container, dateStr, hour, currentUser, userData, preFillPlayers = null) {
+export async function renderCreationForm(container, dateStr, hour, currentUser, userData) {
     if (!container) return;
     ensureApoingStyles();
     
     container.innerHTML = `
-        <div class="booking-hub-v7 animate-up p-3">
-            <div class="flex-col center mb-4 text-center">
-                <div class="type-badge-v7 evento mb-1 mx-auto">
-                    <i class="fas fa-shuttle-space"></i>
-                    <span>NUEVO PARTIDO</span>
+        <div class="booking-hub-v7 animate-up p-4">
+            <div class="flex-col center mb-6 text-center">
+                <div class="type-badge-v7 amistoso mb-2 mx-auto">
+                    <i class="fas fa-calendar-plus"></i>
+                    <span>ALTA DE MISIÓN</span>
                 </div>
-                <span class="hero-time-v7 txt-glow" style="display: block; margin: 0;">${hour}</span>
-                <div class="hero-date-v7 opacity-60">
+                <span class="hero-time-v7" style="font-size: 3.8rem; display: block; margin: 4px 0;">${hour}</span>
+                <div class="hero-date-v7" style="margin-bottom: 2px;">
                     ${dateStr.toUpperCase()}
                 </div>
                 <div id="creation-weather" class="scale-90 opacity-80 mt-1"></div>
@@ -1651,103 +813,112 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
 
             <div class="booking-config">
                 <!-- Tipo de Partido -->
-                <span class="cfg-label-v7">MODO DE COMBATE</span>
-                <div class="mode-selector-v7 mb-4">
+                <span class="cfg-label-v7">PROTOCOLO DE JUEGO</span>
+                <div class="mode-selector-v7 mb-5">
                     <div id="opt-am" class="mode-card-v7 active" onclick="setMatchType('amistoso')">
                         <div class="mode-icon"><i class="fas fa-handshake"></i></div>
-                        <span class="m-name">Amistoso</span>
+                        <div>
+                            <span class="m-name">Amistoso</span>
+                            <span class="m-desc text-[9px] opacity-60">Fogueo sin puntos</span>
+                        </div>
                     </div>
                     <div id="opt-re" class="mode-card-v7" onclick="setMatchType('reto')">
-                        <div class="mode-icon"><i class="fas fa-bolt"></i></div>
-                        <span class="m-name">Reto Pro</span>
-                    </div>
-                    <div id="opt-ev" class="mode-card-v7" onclick="setMatchType('evento')">
                         <div class="mode-icon"><i class="fas fa-trophy"></i></div>
-                        <span class="m-name">Evento</span>
+                        <div>
+                            <span class="m-name">Reto Pro</span>
+                            <span class="m-desc text-[9px] opacity-60">Ranked Match</span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Event Link Section -->
-                <div id="event-link-container" class="hidden-v5 mb-4 animate-fade-in">
-                    <div class="l-input-box p-3 bg-primary/5 rounded-xl border border-primary/20">
-                        <label class="text-[9px] font-black text-primary uppercase block mb-1">VINCULAR A EVENTO</label>
-                        <select id="inp-event-link" class="bg-transparent border-none text-white font-black text-[12px] w-full outline-none">
-                            <option value="">Cargando eventos...</option>
-                        </select>
-                        <p id="event-link-help" class="text-[10px] text-muted mt-2">Identifica tu partido en la lista superior</p>
-                    </div>
+                <div class="apoing-link-wrap mb-4">
+                    ${renderApoingLink("Gestionar partida en Apoing", "text-orange-300 border-orange-400/40 bg-orange-500/10")}
                 </div>
 
-                <!-- Alineación -->
-                <span class="cfg-label-v7">FORMACIÓN TúCTICA</span>
-                <div class="court-container-v7 mb-4">
-                    <div class="court-schema-v7" style="padding: 20px 10px; min-height: 220px;">
+                <!-- Alineación Táctica -->
+                <span class="cfg-label-v7">ALINEACIÓN TÁCTICA</span>
+                <div class="court-container-v7 mb-5">
+                    <div class="court-schema-v7" style="padding: 24px 12px; min-height: 240px;">
                         <div class="court-net"></div>
-                        <div class="court-schema-v7-line-bottom"></div>
                         
-                        <div class="players-row-v7 top mb-8">
-                            ${await renderCreationSlot(0, preFillPlayers?.[0], currentUser, userData)}
-                            ${await renderCreationSlot(1, preFillPlayers?.[1], currentUser, userData, 'COMPAÑERO')}
+                        <div class="players-row-v7 top mb-10">
+                            <div class="p-slot-v7 active" id="slot-0-wrap">
+                                <div class="p-img-box" style="border-color:var(--primary)">
+                                    <img src="${userData.fotoPerfil || userData.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.nombreUsuario || userData.nombre || 'TÚ')}&background=random&color=fff`}">
+                                </div>
+                                <span class="p-badge" style="color:var(--primary); border-color:currentColor">${(userData.nivel || 2.5).toFixed(1)}</span>
+                                <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:var(--primary)">${userData.nombreUsuario || 'TÚ'}</span>
+                            </div>
+                            <div class="p-slot-v7 pointer" id="slot-1-wrap" onclick="window.handleCreationSlotClick(1)">
+                                <div class="p-img-box empty" style="border-color:var(--primary); opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
+                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:var(--primary); opacity:0.5">COMPAÑERO</span>
+                            </div>
                         </div>
                         
                         <div class="vs-divider-v7">
-                           <div class="vs-line"></div>
-                           <div class="vs-circle">VS</div>
-                           <div class="vs-line"></div>
+                           <div class="vs-line" style="background:rgba(255,255,255,0.1)"></div>
+                           <div class="vs-circle" style="background:#0a0e19; border-color:rgba(255,255,255,0.2)">VS</div>
+                           <div class="vs-line" style="background:rgba(255,255,255,0.1)"></div>
                         </div>
                         
-                        <div class="players-row-v7 bottom mt-8">
-                            ${await renderCreationSlot(2, preFillPlayers?.[2], currentUser, userData, 'RIVAL 1')}
-                            ${await renderCreationSlot(3, preFillPlayers?.[3], currentUser, userData, 'RIVAL 2')}
+                        <div class="players-row-v7 bottom mt-10">
+                            <div class="p-slot-v7 pointer" id="slot-2-wrap" onclick="window.handleCreationSlotClick(2)">
+                                <div class="p-img-box empty" style="border-color:var(--secondary); opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
+                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:var(--secondary); opacity:0.5">RIVAL 1</span>
+                            </div>
+                            <div class="p-slot-v7 pointer" id="slot-3-wrap" onclick="window.handleCreationSlotClick(3)">
+                                <div class="p-img-box empty" style="border-color:var(--secondary); opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
+                                <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:var(--secondary); opacity:0.5">RIVAL 2</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Configuración -->
-                <span class="cfg-label-v7">DETALLES DE PISTA</span>
-                <div class="flex-row gap-2 mb-4">
-                    <div class="l-input-box flex-1 p-2.5 bg-white/5 rounded-xl border border-white/10">
-                        <label class="text-[8px] font-black text-muted uppercase block mb-0.5">ESTADO</label>
-                        <select id="inp-surface" class="bg-transparent border-none text-white font-bold text-[11px] w-full outline-none">
+                <!-- Configuración Técnica -->
+                <span class="cfg-label-v7">PARÁMETROS TÁCTICOS</span>
+                <div class="flex-row gap-3 mb-5">
+                    <div class="l-input-box flex-1 p-3 bg-white/5 rounded-xl border border-white/5">
+                        <label class="text-[6px] font-black text-muted uppercase block mb-1">SUPERFICIE</label>
+                        <select id="inp-surface" class="bg-transparent border-none text-white font-black text-[10px] text-center w-full outline-none">
                             <option value="indoor">INDOOR</option>
                             <option value="outdoor">OUTDOOR</option>
                         </select>
                     </div>
-                    <div class="l-input-box flex-1 p-2.5 bg-white/5 rounded-xl border border-white/10">
-                        <label class="text-[8px] font-black text-muted uppercase block mb-0.5">UBICACIÓN</label>
-                        <select id="sel-court" class="bg-transparent border-none text-white font-bold text-[11px] w-full outline-none" onchange="window.toggleCourtInput(this)">
+                    <div class="l-input-box flex-1 p-3 bg-white/5 rounded-xl border border-white/5">
+                        <label class="text-[6px] font-black text-muted uppercase block mb-1">PISTA</label>
+                        <select id="sel-court" class="bg-transparent border-none text-white font-black text-[10px] text-center w-full outline-none" onchange="window.toggleCourtInput(this)">
                             <option value="Mistral-Homes">MISTRAL</option>
                             <option value="custom">OTRA...</option>
                         </select>
-                        <input type="text" id="inp-court-custom" class="hidden mt-1 bg-white/10 border-none w-full text-[10px] p-1 rounded text-white font-bold" placeholder="...">
+                        <input type="text" id="inp-court-custom" class="hidden mt-1 bg-white/10 border-none w-full text-[9px] p-1 rounded text-white font-bold uppercase" placeholder="..." oninput="document.getElementById('inp-court').value = this.value">
                         <input type="hidden" id="inp-court" value="Mistral-Homes">
                     </div>
                 </div>
                 
-                <div class="range-box-v7 mb-4" style="padding: 10px 6px;">
+                <div class="range-box-v7 mb-5" style="padding: 12px 6px;">
                     <div class="val-input">
-                        <span style="font-size: 8px;">LVL MIN</span>
-                        <input type="number" id="inp-min-lvl" value="2.0" step="0.1" style="font-size: 1rem;">
+                        <span style="font-size: 7px; margin-bottom: 2px;">LVL MIN</span>
+                        <input type="number" id="inp-min-lvl" value="2.0" step="0.1" max="7" style="font-size: 1.1rem; height: 24px;">
                     </div>
                     <div class="range-sep"></div>
                      <div class="val-input">
-                        <span style="font-size: 8px;">LVL MAX</span>
-                        <input type="number" id="inp-max-lvl" value="6.0" step="0.1" style="font-size: 1rem;">
+                        <span style="font-size: 7px; margin-bottom: 2px;">LVL MAX</span>
+                        <input type="number" id="inp-max-lvl" value="6.0" step="0.1" max="7" style="font-size: 1.1rem; height: 24px;">
                     </div>
                 </div>
 
-                <div id="reto-options" class="hidden-v5 mb-4">
-                    <div class="bet-input-wrap-v7" style="padding: 8px 12px; background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.3);">
-                        <i class="fas fa-crown text-sport-gold"></i>
-                        <input type="number" id="inp-bet" value="50" style="font-size: 1rem; color: var(--sport-gold);">
-                        <span class="suffix text-[9px] font-black text-sport-gold">PUNTOS</span>
+                <div id="reto-options" class="hidden-v5 mb-5">
+                    <div class="bet-input-wrap-v7" style="padding: 10px 15px;">
+                        <i class="fas fa-coins text-sport-gold text-lg"></i>
+                        <input type="number" id="inp-bet" value="50" placeholder="Apuesta" style="font-size: 1rem;">
+                        <span class="suffix text-[8px] font-black">PUNTOS</span>
                     </div>
                 </div>
 
-                <div class="flex-row items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10 mb-5">
+                <div class="flex-row items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 mb-6">
                     <div class="flex-col">
                         <span class="text-white font-black text-[10px] tracking-widest">PARTIDA PRIVADA</span>
-                        <span class="text-[8px] text-muted uppercase">SOLO CON INVITACIÓN</span>
+                        <span class="text-[7px] text-muted uppercase">SOLO CON INVITACIÓN</span>
                     </div>
                     <label class="toggle-v7">
                         <input type="checkbox" id="inp-private" onchange="window._creationVisibility = this.checked ? 'private' : 'public'">
@@ -1755,12 +926,20 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                     </label>
                 </div>
 
-                <button class="btn-confirm-v7 mission-btn w-full" onclick="executeCreateMatch('${dateStr}', '${hour}')">
-                    <div class="flex-row center gap-3">
-                        <span class="t-main" style="letter-spacing: 2px;">DESPLEGAR MISIÓN</span>
-                        <i class="fas fa-location-arrow"></i>
-                    </div>
-                </button>
+                <div class="l-input-box mb-5 p-3 bg-white/5 rounded-xl border border-white/5">
+                    <label class="text-[7px] font-black text-muted uppercase block mb-1">VINCULAR A EVENTO</label>
+                    <select id="inp-event-link" class="bg-transparent border-none text-white font-black text-[10px] w-full outline-none">
+                        <option value="">Sin vincular (partido normal)</option>
+                    </select>
+                    <p id="event-link-help" class="text-[9px] text-muted mt-2">Cargando partidos de evento...</p>
+                </div>
+
+                <div class="flex-col gap-2">
+                    <button class="btn-confirm-v7" onclick="executeCreateMatch('${dateStr}', '${hour}')">
+                        <span class="t-main">DESPLEGAR MISIÓN</span>
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
             </div>
         </div>
     `;
@@ -1783,28 +962,16 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
     // Temp state
     window._creationType = 'amistoso';
     window._creationVisibility = 'public';
-    window._initialJugadores = preFillPlayers || [currentUser.uid, null, null, null];
+    window._initialJugadores = [currentUser.uid, null, null, null];
 
     window.setMatchType = (t) => {
         window._creationType = t;
         const optAm = document.getElementById('opt-am');
         const optRe = document.getElementById('opt-re');
-        const optEv = document.getElementById('opt-ev');
         const retoOpts = document.getElementById('reto-options');
-        const evOpts = document.getElementById('event-link-container');
-
         if (optAm) optAm.classList.toggle('active', t === 'amistoso');
         if (optRe) optRe.classList.toggle('active', t === 'reto');
-        if (optEv) optEv.classList.toggle('active', t === 'evento');
-        
         if (retoOpts) retoOpts.classList.toggle('hidden-v5', t !== 'reto');
-        if (evOpts) evOpts.classList.toggle('hidden-v5', t !== 'evento');
-        
-        // Reset link value if not in evento mode
-        if (t !== 'evento') {
-            const sel = document.getElementById('inp-event-link');
-            if (sel) sel.value = "";
-        }
     };
 
     window.setMatchVisibility = (v) => {
@@ -1818,83 +985,20 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
     loadEventLinkOptions(dateStr, hour, currentUser?.uid).catch(() => {});
 }
 
-async function renderCreationSlot(idx, preUid, currentUser, userData, label = "") {
-    const uid = preUid || (idx === 0 ? currentUser.uid : null);
-    const p = uid ? await getPlayerData(uid) : null;
-    const isTeamA = idx < 2;
-    const teamColor = isTeamA ? 'var(--primary)' : 'var(--secondary)';
-    
-    if (p) {
-        const name = uid === currentUser.uid ? 'Tú' : p.name;
-        return `
-            <div class="p-slot-v7 active" id="slot-${idx}-wrap">
-                <div class="p-img-box" style="border-color:${teamColor}">
-                    <img src="${p.photo}">
-                </div>
-                <span class="p-badge" style="color:${teamColor}; border-color:currentColor">${p.level.toFixed(1)}</span>
-                <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${teamColor}">${name}</span>
-            </div>
-        `;
-    }
-    return `
-        <div class="p-slot-v7 pointer" id="slot-${idx}-wrap" onclick="window.handleCreationSlotClick(${idx})">
-            <div class="p-img-box empty" style="border-color:${teamColor}; opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
-            <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:${teamColor}; opacity:0.5">${label || (idx < 2 ? 'COMPAÑERO' : 'RIVAL')}</span>
-        </div>
-    `;
-}
-
 /**
  * Fetches refined player data.
  * @private
  */
 async function getPlayerData(uid) {
-    const fallback = { name: 'Vacío', photo: `https://ui-avatars.com/api/?name=V&background=random&color=fff`, level: 2.5, id: null, points: 1000 };
-    if (!uid) return fallback;
-    
-    // Normalize UID to string just in case
-    const sUid = String(uid);
-    const eventName = getEventUserName(sUid);
-    const eventMeta = getEventUserMeta(sUid);
-    
-    // Robust Guest Detection
-    const guestMeta = parseGuestMeta(sUid);
-    if (guestMeta) {
-        const name = eventMeta?.name || eventName || guestMeta.name || 'Invitado';
-        const level = Number.isFinite(eventMeta?.level) ? eventMeta.level : (Number.isFinite(guestMeta.level) ? guestMeta.level : 2.5);
-        const photo = eventMeta?.photo || `./imagenes/Logojafs.png`;
-        return { name, level, id: sUid, isGuest: true, photo, points: 1000 };
+    if (!uid) return null;
+    if (uid.startsWith('GUEST_')) {
+        const parts = uid.split('_');
+        return { name: parts[1], level: parseFloat(parts[2]), id: uid, isGuest: true, pala: parts[3] || 'Desconocida' };
     }
-
-    const cached = Array.isArray(window.psUsersCache) ? window.psUsersCache.find(x => x && x.id === sUid) : null;
-    if (cached) {
-        const name = cached.nombreUsuario || cached.nombre || 'Jugador';
-        const photo = cached.fotoPerfil || cached.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
-        return { name, photo, level: cached.nivel || 2.5, id: sUid, points: cached.puntosRanking || 1000 };
-    }
-
-    try {
-        const d = await getDocument('usuarios', sUid);
-        if (!d) {
-            if (eventMeta) {
-                const name = eventMeta.name || eventName || 'Jugador';
-                const photo = eventMeta.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
-                return { name, photo, level: eventMeta.level || 2.5, id: sUid, points: 1000 };
-            }
-            return { ...fallback, name: eventName || 'Jugador', id: sUid };
-        }
-        const name = d.nombreUsuario || d.nombre || 'Jugador';
-        const photo = d.fotoPerfil || d.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
-        return { name, photo, level: d.nivel || 2.5, id: sUid, points: d.puntosRanking || 1000 };
-    } catch(e) {
-        console.warn("getPlayerData failed for", sUid, e);
-        if (eventMeta) {
-            const name = eventMeta.name || eventName || 'Jugador';
-            const photo = eventMeta.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
-            return { name, photo, level: eventMeta.level || 2.5, id: sUid, points: 1000 };
-        }
-        return { ...fallback, name: eventName || 'Jugador', id: sUid };
-    }
+    const d = await getDocument('usuarios', uid);
+    const name = d.nombreUsuario || d.nombre;
+    const photo = d.fotoPerfil || d.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+    return d ? { name, photo, level: d.nivel || 2.5, id: uid } : null;
 }
 
 /**
@@ -1908,10 +1012,9 @@ function renderPlayerSlot(p, idx, options = {}) {
     
     if (p) {
         const photo = p.photo || p.fotoPerfil || p.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random&color=fff`;
-        const pid = String(p.id || "");
         return `
             <div class="p-slot-v7 pointer" 
-                 onclick="${mid && pid && !pid.startsWith('GUEST_') ? `window.viewProfile('${pid}')` : ''}">
+                 onclick="${mid && !p.id.startsWith('GUEST_') ? `window.viewProfile('${p.id}')` : ''}">
                 <div class="p-img-box" style="border-color:${teamColor}">
                     <img src="${photo}">
                 </div>
@@ -1935,62 +1038,16 @@ function renderPlayerSlot(p, idx, options = {}) {
     `;
 }
 
-function normalizePlayerList(list) {
-    if (!Array.isArray(list)) return [];
-    return list
-        .map((p) => {
-            if (typeof p === "string") return p;
-            if (typeof p === "number") return String(p);
-            return p?.uid || p?.id || p?.userId || null;
-        })
-        .filter(Boolean);
-}
-
-function getMatchPlayers(match) {
-    if (!match) return [];
-    const jugs = normalizePlayerList(match.jugadores);
-    if (jugs.length) return jugs;
-    const uids = normalizePlayerList(match.playerUids);
-    if (uids.length) return uids;
-    const teamA = normalizePlayerList(match.equipoA);
-    const teamB = normalizePlayerList(match.equipoB);
-    const merged = [...teamA, ...teamB].filter(Boolean);
-    if (merged.length) return merged;
-    const players = normalizePlayerList(match.players);
-    if (players.length) return players;
-    const ids = normalizePlayerList(match.playerIds);
-    if (ids.length) return ids;
-    return [];
-}
-
-function isUserInMatch(match, uid) {
-    if (!uid || !match) return false;
-    if (match.creador === uid || match.organizerId === uid) return true;
-    if (getMatchPlayers(match).includes(uid)) return true;
-    // Also check playerUids directly (used by eventoPartidos)
-    if (Array.isArray(match.playerUids) && match.playerUids.includes(uid)) return true;
-    // Check team arrays
-    if (Array.isArray(match.equipoA) && match.equipoA.includes(uid)) return true;
-    if (Array.isArray(match.equipoB) && match.equipoB.includes(uid)) return true;
-    const invited = normalizePlayerList(match.invitedUsers);
-    return invited.includes(uid);
-}
-
 /**
  * Determines available actions for a match.
  */
 function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col) {
-    const realPlayerCount = getMatchPlayers(m).filter(v => v).length;
-    const hasResult = hasMatchResult(m);
+    const realPlayerCount = (m.jugadores || []).filter(v => v).length;
+    const hasResult = !!m.resultado?.sets;
     const matchState = String(m.estado || '').toLowerCase();
     const isPlayed = hasResult || matchState === 'cancelado' || matchState === 'anulado';
     const canReportNow = canReportResultNow(m);
-    if (isPlayed) {
-        if (isAdmin) {
-            return `<button class="btn-confirm-v7" onclick="openResultForm('${id}', '${col}')"><span class="t-main">EDITAR RESULTADO</span><i class="fas fa-pen"></i></button>`;
-        }
-        return `<button class="btn-confirm-v7 opacity-80" onclick="openResultForm('${id}', '${col}')"><span class="t-main">SOLO LECTURA</span><i class="fas fa-eye"></i></button>`;
-    }
+    if (isPlayed) return `<button class="btn-confirm-v7 opacity-80" onclick="openResultForm('${id}', '${col}')"><span class="t-main">SOLO LECTURA</span><i class="fas fa-eye"></i></button>`;
 
     let actionsHtml = '';
     
@@ -2047,7 +1104,7 @@ function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col
             </div>
             ${realPlayerCount === MAX_PLAYERS ? `
                 ${canReportNow || isAdmin ? `
-                    <button class="btn-confirm-v7 btn-report-result mt-2" onclick="openResultForm('${id}', '${col}')">
+                    <button class="btn-confirm-v7 mt-2" onclick="openResultForm('${id}', '${col}')">
                         <span class="t-main">REPORTAR RESULTADO</span>
                         <i class="fas fa-flag-checkered"></i>
                     </button>
@@ -2072,8 +1129,8 @@ window.startSwapMode = async (mid, col) => {
     const match = await getDocument(col, mid);
     if (!match) return;
     const isOrganizer = match.organizerId === myUid || match.creador === myUid || isAdmin;
-    const isParticipant = isUserInMatch(match, myUid);
-    const isPlayed = hasMatchResult(match) || String(match.estado || '').toLowerCase() === 'cancelado' || String(match.estado || '').toLowerCase() === 'anulado';
+    const isParticipant = (match.jugadores || []).includes(myUid);
+    const isPlayed = !!match.resultado?.sets || String(match.estado || '').toLowerCase() === 'cancelado' || String(match.estado || '').toLowerCase() === 'anulado';
     if (isPlayed || canReportResultNow(match)) {
         showToast("BLOQUEADO", "No se puede cambiar posición en un partido finalizado.", "warning");
         return;
@@ -2153,14 +1210,14 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             const rl = rateLimitCheck(`match_${action}:${user.uid}:${id}`, { windowMs: 5 * 60 * 1000, max: 12, minIntervalMs: 1800 });
             if (!rl.ok) return showToast("BLOQUEADO", "Demasiadas acciones repetidas. Espera unos segundos.", "warning");
         }
-        const { showLoading, hideLoading } = await import('./modules/ui-loader.js');
+        const { showLoading, hideLoading } = await import('./modules/ui-loader.js?v=6.5');
         const labels = { 'join': 'Uniéndose...', 'leave': 'Abandonando...', 'delete': 'Cancelando...', 'remove': 'Procesando...', 'add': 'Añadiendo...' };
         showLoading(labels[action] || "Sincronizando...", true);
 
         const isAdmin = (await getDocument('usuarios', user.uid))?.rol === 'Admin' || user.email === 'Juanan221091@gmail.com';
         const isOrganizer = m.organizerId === user.uid || m.creador === user.uid || isAdmin;
         const mState = String(m.estado || '').toLowerCase();
-        const isPlayed = hasMatchResult(m) || mState === 'cancelado' || mState === 'anulado';
+        const isPlayed = !!m.resultado?.sets || mState === 'cancelado' || mState === 'anulado';
         const isPastKickoff = Number.isFinite(matchDate?.getTime?.()) && Date.now() > matchDate.getTime();
         const timeLockedActions = ['join', 'add', 'swap'];
         if (isPastKickoff && !isPlayed && timeLockedActions.includes(action)) {
@@ -2223,7 +1280,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 } catch(err) {}
                 
                 // Match Filled Notification
-                const others = jugs.filter(uid => uid && uid !== user.uid && !(typeof uid === 'string' && uid.startsWith('GUEST_')));
+                const others = jugs.filter(uid => uid !== user.uid && !uid.startsWith('GUEST_'));
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
                 const time = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
                 await createNotification(
@@ -2263,7 +1320,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 }
 
                 jugs[idx] = null;
-                const activeJugs = jugs.filter(id => id && !(typeof id === 'string' && id.startsWith('GUEST_')));
+                const activeJugs = jugs.filter(id => id && !id.startsWith('GUEST_'));
                 
                 if (activeJugs.length === 0 && jugs.filter(id => id).length === 0) {
                     await deleteDoc(ref);
@@ -2276,9 +1333,6 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                         equipoA: [jugs[0], jugs[1]],
                         equipoB: [jugs[2], jugs[3]]
                     });
-                    if (wasFull && jugs.filter(id => id).length < MAX_PLAYERS) {
-                        await notifyMatchWatchers(id, matchDate, col, [user.uid]);
-                    }
 
                     if (wasFull) {
                         try {
@@ -2289,7 +1343,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                     
                     const meDoc = await getDocument('usuarios', user.uid);
                     const leaveName = meDoc?.nombreUsuario || meDoc?.nombre || 'Un jugador';
-                    const stillInMatch = jugs.filter(id => id && id !== user.uid && !(typeof id === 'string' && id.startsWith('GUEST_')));
+                    const stillInMatch = jugs.filter(id => id && id !== user.uid && !id.startsWith('GUEST_'));
                     if (stillInMatch.length > 0) {
                         const leaveDay = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
                         await createNotification(
@@ -2311,7 +1365,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
             
             if (confirm("¿Abortar misión?")) {
-                const others = jugs.filter(uid => uid && uid !== user.uid && !(typeof uid === 'string' && uid.startsWith('GUEST_')));
+                const others = jugs.filter(uid => uid !== user.uid && !uid.startsWith('GUEST_'));
                 const adminDoc = await getDocument('usuarios', user.uid);
                 const adminName = adminDoc?.nombreUsuario || adminDoc?.nombre || 'El organizador';
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
@@ -2331,7 +1385,6 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
         else if (action === 'remove') {
             if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
             
-            const wasFull = jugs.filter(id => id).length === MAX_PLAYERS;
             const removedUid = jugs[extra.idx];
             if (removedUid && !removedUid.startsWith('GUEST_')) {
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
@@ -2354,7 +1407,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
 
             // If we removed the creator, reassign or handle it
             if (extra.idx === 0) {
-                 const newCreator = jugs.find(j => j && !(typeof j === 'string' && j.startsWith('GUEST_')));
+                 const newCreator = jugs.find(j => j && !j.startsWith('GUEST_'));
                  if (newCreator) {
                      updates.creador = newCreator;
                      updates.organizerId = newCreator;
@@ -2363,9 +1416,6 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             }
 
             await updateDoc(ref, updates);
-            if (wasFull && jugs.filter(id => id).length < MAX_PLAYERS) {
-                await notifyMatchWatchers(id, matchDate, col, [removedUid || user.uid]);
-            }
             hideLoading();
             triggerFeedback({title: "ELIMINADO", msg: "Jugador expulsado", type: "info"});
         }
@@ -2404,7 +1454,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
              }
              jugs = addResult.players || jugs;
              
-             if (typeof extra.uid === 'string' && !extra.uid.startsWith('GUEST_')) {
+             if (!extra.uid.startsWith('GUEST_')) {
                 const day = matchDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
                 const currentPlayers = jugs.filter(id => id).length;
                 await createNotification(
@@ -2444,7 +1494,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             if(window.closeMatchModal) window.closeMatchModal();
         }
     } catch(e) { 
-        const { hideLoading } = await import('./modules/ui-loader.js');
+        const { hideLoading } = await import('./modules/ui-loader.js?v=6.5');
         hideLoading();
         handleOperationError(e); 
     }
@@ -2458,27 +1508,23 @@ async function initMatchChat(id, col) {
     if (!box) return;
     const q = query(collection(db, col, id, 'chat'), orderBy('timestamp', 'asc'), limit(30));
     safeOnSnapshot(q, async (snap) => {
-        try {
-            const msgs = await Promise.all(snap.docs.map(async d => {
-                try {
-                    const data = d.data();
-                    const sender = await getPlayerName(data.uid);
-                    const isMe = data.uid === auth.currentUser?.uid;
-                    return `
-                        <div class="flex-row items-end gap-2 mb-2 ${isMe ? 'justify-end' : ''}">
-                            <div class="px-3 py-2 rounded-xl text-[10px] ${isMe ? 'bg-primary text-black' : 'bg-white/10 text-white'}" style="max-width:80%">
-                                <div class="font-black opacity-50 text-[7px] mb-1 uppercase">${sender}</div>
-                                ${data.text}
-                            </div>
-                        </div>
-                    `;
-                } catch(e) { return ''; }
-            }));
-            box.innerHTML = msgs.length > 0 ? msgs.join('') : '<div class="center opacity-20 text-[8px] py-10">CANAL LIMPIO</div>';
-            box.scrollTop = box.scrollHeight;
-        } catch(e) { console.warn("Chat render error", e); }
+        const msgs = await Promise.all(snap.docs.map(async d => {
+            const data = d.data();
+            const sender = await getPlayerName(data.uid);
+            const isMe = data.uid === auth.currentUser?.uid;
+            // Use simple chat styling since comms-panel handles container
+            return `
+                <div class="flex-row items-end gap-2 mb-2 ${isMe ? 'justify-end' : ''}">
+                    <div class="px-3 py-2 rounded-xl text-[10px] ${isMe ? 'bg-primary text-black' : 'bg-white/10 text-white'}" style="max-width:80%">
+                        <div class="font-black opacity-50 text-[7px] mb-1 uppercase">${sender}</div>
+                        ${data.text}
+                    </div>
+                </div>
+            `;
+        }));
+        box.innerHTML = msgs.length > 0 ? msgs.join('') : '<div class="center opacity-20 text-[8px] py-10">CANAL LIMPIO</div>';
+        box.scrollTop = box.scrollHeight;
     });
-
 }
 
 window.sendMatchChat = async (id, col) => {
@@ -2564,256 +1610,41 @@ async function resolveMentionTargets(matchId, col, text, senderUid) {
 
 async function getPlayerName(uid) {
     if (!uid) return 'Anónimo';
-    const eventName = getEventUserName(uid);
-    if (eventName) return eventName;
-    const identity = await resolveIdentity(uid).catch(() => null);
-    if (identity?.name) return identity.name;
-    const g = parseGuestMeta(uid);
-    if (g?.name) return g.name;
-    if (uid.startsWith('invitado_') || uid.startsWith('manual_')) {
-        const token = uid.split('_')[1];
-        return token && Number.isNaN(Number(token)) ? token : 'Invitado';
-    }
+    if (uid.startsWith('GUEST_')) return uid.split('_')[1];
     const d = await getDocument('usuarios', uid);
     return d?.nombreUsuario || d?.nombre || 'Jugador';
 }
 
 window.closeMatchModal = () => {
     document.getElementById('modal-match')?.classList.remove('active');
-    document.getElementById('modal-result-form')?.classList.remove('active');
     if (typeof matchDetailUnsub === "function") {
         try { matchDetailUnsub(); } catch (_) {}
         matchDetailUnsub = null;
     }
 };
 
-// Ensure there's a usable modal container for the result form on any page.
-function ensureResultModalArea() {
-    let area = document.getElementById('match-detail-area');
-    if (area) {
-        // Make sure the parent modal is visible
-        const parentModal = area.closest('.modal-overlay');
-        if (parentModal) parentModal.classList.add('active');
-        return area;
-    }
-
-    // Try existing modal-match first (calendar page)
-    let modal = document.getElementById('modal-match');
-    if (modal) {
-        modal.classList.add('active');
-        area = modal.querySelector('#match-detail-area') || modal.querySelector('.modal-body');
-        if (area) return area;
-    }
-
-    // Always create a fresh dedicated modal for the result form
-    // This prevents conflicts with evento-detalle's modal-match-detail-ed
-    const existingResultModal = document.getElementById('modal-result-form');
-    if (existingResultModal) existingResultModal.remove();
-
-    modal = document.createElement('div');
-    modal.id = 'modal-result-form';
-    modal.className = 'modal-overlay active';
-    modal.innerHTML = `
-        <div class="modal-card glass-strong" style="max-width:480px;">
-            <div class="modal-header">
-                <h3 class="modal-title" id="modal-titulo">REGISTRAR RESULTADO</h3>
-                <button class="close-btn" onclick="document.getElementById('modal-result-form').classList.remove('active')">×</button>
-            </div>
-            <div class="modal-body scroll-y" id="match-detail-area" style="max-height: 80vh;"></div>
-        </div>
-    `;
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.classList.remove('active');
-    });
-    document.body.appendChild(modal);
-
-    return document.getElementById('match-detail-area');
-}
-
-function extractSetScores(resultStr = "") {
-    const matches = String(resultStr || "").match(/\d+\s*-\s*\d+/g) || [];
-    return matches.map((m) => m.replace(/\s+/g, ""));
-}
-
-function safeParseMatchResult(resultStr = "") {
-    try {
-        return parseMatchResult(resultStr);
-    } catch {
-        return null;
-    }
-}
-
-function buildStandingsDelta(parsed, winnerIsA, ptsWin, ptsLoss) {
-    return {
-        a: {
-            pj: 1,
-            ganados: winnerIsA ? 1 : 0,
-            perdidos: winnerIsA ? 0 : 1,
-            puntos: winnerIsA ? ptsWin : ptsLoss,
-            pg: parsed.teamAGames,
-            pp: parsed.teamBGames,
-        },
-        b: {
-            pj: 1,
-            ganados: winnerIsA ? 0 : 1,
-            perdidos: winnerIsA ? 1 : 0,
-            puntos: winnerIsA ? ptsLoss : ptsWin,
-            pg: parsed.teamBGames,
-            pp: parsed.teamAGames,
-        },
-    };
-}
-
-async function adminOverrideMatchResult(matchDoc, col, resultStr) {
-    const matchId = matchDoc?.id;
-    if (!matchId) return { success: false, error: "missing_match_id" };
-
-    const parsedNew = parseMatchResult(resultStr);
-    const winnerIsA = parsedNew.winnerTeam === "A";
-    const teamAId = matchDoc.teamAId || matchDoc.equipoAUid || null;
-    const teamBId = matchDoc.teamBId || matchDoc.equipoBUid || null;
-    const eventId = matchDoc.eventoId || matchDoc.eventId || null;
-
-    const updatePayload = {
-        estado: "jugado",
-        resultado: { sets: resultStr },
-        ...(teamAId && teamBId ? { ganadorTeamId: winnerIsA ? teamAId : teamBId, ganador: winnerIsA ? "A" : "B" } : {}),
-        standingsProcessedAt: serverTimestamp(),
-        standingsProcessedResult: resultStr,
-        updatedAt: serverTimestamp(),
-    };
-
-    if (col !== "eventoPartidos" || !eventId || !teamAId || !teamBId) {
-        await updateDoc(doc(db, col, matchId), updatePayload);
-        return { success: true, skippedRanking: true };
-    }
-
-    const ev = await getDocument("eventos", eventId);
-    const ptsWin = Number(ev?.puntosVictoria || 2);
-    const ptsLoss = Number(ev?.puntosDerrota || 1);
-    const prevRaw = matchDoc?.standingsProcessedResult || matchDoc?.resultado?.sets || "";
-    const prevParsed = prevRaw && prevRaw !== resultStr ? safeParseMatchResult(prevRaw) : null;
-    const prevWinnerIsA = prevParsed ? prevParsed.winnerTeam === "A" : null;
-
-    const nextDelta = buildStandingsDelta(parsedNew, winnerIsA, ptsWin, ptsLoss);
-    const prevDelta = prevParsed ? buildStandingsDelta(prevParsed, prevWinnerIsA, ptsWin, ptsLoss) : null;
-
-    const applyDelta = (base, delta) => {
-        const pj = Math.max(0, Number(base.pj || 0) + Number(delta.pj || 0));
-        const ganados = Math.max(0, Number(base.ganados || 0) + Number(delta.ganados || 0));
-        const perdidos = Math.max(0, Number(base.perdidos || 0) + Number(delta.perdidos || 0));
-        const puntos = Math.max(0, Number(base.puntos || 0) + Number(delta.puntos || 0));
-        const puntosGanados = Math.max(0, Number(base.puntosGanados || 0) + Number(delta.pg || 0));
-        const puntosPerdidos = Math.max(0, Number(base.puntosPerdidos || 0) + Number(delta.pp || 0));
-        const diferencia = puntosGanados - puntosPerdidos;
-        return { pj, ganados, perdidos, puntos, puntosGanados, puntosPerdidos, diferencia };
-    };
-
-    await runTransaction(db, async (tx) => {
-        const aKey = `${eventId}_${teamAId}`;
-        const bKey = `${eventId}_${teamBId}`;
-        const aRef = doc(db, "eventoClasificacion", aKey);
-        const bRef = doc(db, "eventoClasificacion", bKey);
-        const aSnap = await tx.get(aRef);
-        const bSnap = await tx.get(bRef);
-        const aData = aSnap.exists() ? aSnap.data() : {};
-        const bData = bSnap.exists() ? bSnap.data() : {};
-
-        const deltaA = { ...nextDelta.a };
-        const deltaB = { ...nextDelta.b };
-        if (prevDelta) {
-            deltaA.pj -= prevDelta.a.pj;
-            deltaA.ganados -= prevDelta.a.ganados;
-            deltaA.perdidos -= prevDelta.a.perdidos;
-            deltaA.puntos -= prevDelta.a.puntos;
-            deltaA.pg -= prevDelta.a.pg;
-            deltaA.pp -= prevDelta.a.pp;
-
-            deltaB.pj -= prevDelta.b.pj;
-            deltaB.ganados -= prevDelta.b.ganados;
-            deltaB.perdidos -= prevDelta.b.perdidos;
-            deltaB.puntos -= prevDelta.b.puntos;
-            deltaB.pg -= prevDelta.b.pg;
-            deltaB.pp -= prevDelta.b.pp;
-        }
-
-        const aNext = applyDelta(aData, deltaA);
-        const bNext = applyDelta(bData, deltaB);
-
-        tx.set(
-            aRef,
-            {
-                eventoId: eventId,
-                uid: teamAId,
-                nombre: matchDoc.teamAName || matchDoc.equipoA || aData.nombre || teamAId,
-                ...aNext,
-            },
-            { merge: true },
-        );
-        tx.set(
-            bRef,
-            {
-                eventoId: eventId,
-                uid: teamBId,
-                nombre: matchDoc.teamBName || matchDoc.equipoB || bData.nombre || teamBId,
-                ...bNext,
-            },
-            { merge: true },
-        );
-
-        tx.update(doc(db, col, matchId), updatePayload);
-    });
-
-    return { success: true, skippedRanking: true };
-}
-
-export const openResultForm = async (id, col) => {
-    const area = ensureResultModalArea();
+window.openResultForm = async (id, col) => {
+    const area = document.getElementById('match-detail-area');
     if (!area) return;
-    
     ensureApoingStyles();
-    console.log("[ResultForm] open", { id, col });
     const meUid = auth.currentUser?.uid;
     const matchDoc = await getDocument(col, id);
     if (!matchDoc) {
         showToast("ERROR", "No se pudo cargar el partido.", "error");
         return;
     }
-    console.log("[ResultForm] matchDoc loaded", matchDoc);
-    let players = Array.isArray(matchDoc?.jugadores) ? matchDoc.jugadores : (Array.isArray(matchDoc?.playerUids) ? matchDoc.playerUids : []);
-    
-    if (col === 'eventoPartidos' && matchDoc?.eventoId) {
-        const evSnap = await getDocument('eventos', matchDoc.eventoId);
-        if (evSnap) {
-            indexEventUserNames(evSnap);
-            players = resolveEventPlayersForMatch(evSnap, matchDoc);
-            console.log("[ResultForm] event players resolved", { players, eventoId: matchDoc.eventoId });
-        }
-    }
-
+    const players = Array.isArray(matchDoc?.jugadores) ? matchDoc.jugadores : [];
     const meData = meUid ? await getDocument("usuarios", meUid) : null;
     const isAdmin = meData?.rol === "Admin" || auth.currentUser?.email === "Juanan221091@gmail.com";
-    const isParticipant = !!meUid && (players.includes(meUid) || (matchDoc.creador === meUid) || (matchDoc.organizadorId === meUid));
-    const hasResult = hasMatchResult(matchDoc);
+    const isParticipant = !!meUid && players.includes(meUid);
+    const hasResult = !!matchDoc?.resultado?.sets;
     const state = String(matchDoc?.estado || "").toLowerCase();
     const isPlayed = hasResult || state === "cancelado" || state === "anulado";
-    const allowAdminEdit = isAdmin === true;
-    const resultReadRaw = matchDoc?.resultado?.sets || (typeof matchDoc?.resultado === "string" ? matchDoc.resultado : "");
-    const resultRead = resultReadRaw || 'Sin resultado';
-    const scoringSystemCurrent = String(
-        matchDoc?.scoringSystem ||
-        matchDoc?.eloSummary?.scoringSystem ||
-        "default"
-    ).toLowerCase();
-    let parsed = null;
-    try {
-        if (resultReadRaw) parsed = parseMatchResult(resultReadRaw);
-    } catch (e) {
-        console.warn("[ResultForm] parseMatchResult failed (read-only)", e, { resultReadRaw });
-    }
-    const winA = parsed ? parsed.winnerTeam === 'A' : null;
 
-    if (isPlayed && !allowAdminEdit) {
+    if (isPlayed) {
+        const resultRead = matchDoc?.resultado?.sets || 'Sin resultado';
+        const parsed = parseMatchResult(resultRead);
+        const winA = parsed.winnerTeam === 'A';
         
         area.innerHTML = `
             <div class="booking-hub-v7 animate-up p-3 max-w-sm mx-auto">
@@ -2823,7 +1654,7 @@ export const openResultForm = async (id, col) => {
                 </div>
 
                 <div class="flex-row items-stretch gap-2 mb-6">
-                     <div class="flex-1 flex-col items-center p-4 rounded-2xl border ${winA === null ? 'border-white/10 bg-white/3' : winA ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/3 opacity-60'}">
+                     <div class="flex-1 flex-col items-center p-4 rounded-2xl border ${winA ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/3 opacity-60'}">
                         <span class="text-[8px] font-black text-muted uppercase mb-2">Equipo A</span>
                         ${winA ? '<span class="text-[10px] font-bold text-primary mb-2"><i class="fas fa-trophy mr-1"></i> GANADOR</span>' : ''}
                         <div class="flex-row gap-1">
@@ -2836,9 +1667,9 @@ export const openResultForm = async (id, col) => {
                         <span class="text-xl font-black italic text-muted">VS</span>
                      </div>
 
-                     <div class="flex-1 flex-col items-center p-4 rounded-2xl border ${winA === null ? 'border-white/10 bg-white/3' : !winA ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/3 opacity-60'}">
+                     <div class="flex-1 flex-col items-center p-4 rounded-2xl border ${!winA ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/3 opacity-60'}">
                         <span class="text-[8px] font-black text-muted uppercase mb-2">Equipo B</span>
-                        ${winA === null ? '' : !winA ? '<span class="text-[10px] font-bold text-primary mb-2"><i class="fas fa-trophy mr-1"></i> GANADOR</span>' : ''}
+                        ${!winA ? '<span class="text-[10px] font-bold text-primary mb-2"><i class="fas fa-trophy mr-1"></i> GANADOR</span>' : ''}
                         <div class="flex-row gap-1">
                             <div class="w-8 h-8 rounded-full bg-white/10 border border-white/10 overflow-hidden"><img src="https://ui-avatars.com/api/?name=B1&background=random" class="w-full h-full object-cover"></div>
                             <div class="w-8 h-8 rounded-full bg-white/10 border border-white/10 overflow-hidden"><img src="https://ui-avatars.com/api/?name=B2&background=random" class="w-full h-full object-cover"></div>
@@ -2861,9 +1692,8 @@ export const openResultForm = async (id, col) => {
         return;
     }
 
-    const adminEditMode = isPlayed && allowAdminEdit;
-
     if (!isParticipant && !isAdmin) {
+        const resultRead = matchDoc?.resultado?.sets || 'Aún sin resultado';
         area.innerHTML = `
             <div class="booking-hub-v7 animate-up p-3 max-w-sm mx-auto">
                 <h3 class="hub-title-v7 text-center mb-4">Resultado del Partido</h3>
@@ -2920,8 +1750,7 @@ export const openResultForm = async (id, col) => {
     }
 
     // Fetch player names for MVP selection
-    const playersResolved = Array.isArray(players) && players.length ? players : [];
-    const playerNames = await Promise.all(playersResolved.map(async (uid) => {
+    const playerNames = await Promise.all(players.map(async (uid) => {
         if (!uid) return { id: null, name: 'Vacío' };
         const name = await getPlayerName(uid);
         return { id: uid, name };
@@ -2931,10 +1760,6 @@ export const openResultForm = async (id, col) => {
     area.innerHTML = `
         <div class="booking-hub-v7 animate-up p-2 max-w-sm mx-auto">
             <h3 class="hub-title-v7 text-center mb-6">Resultados</h3>
-            ${adminEditMode ? `
-            <div class="mb-4 p-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 text-[10px] text-amber-300 font-bold uppercase tracking-widest text-center">
-                Modo Admin · Edición de resultado
-            </div>` : ''}
             <div class="flex-col gap-4 mb-6">
                 ${[1, 2, 3].map(i => `
                     <div class="range-box-v7 justify-between" id="set-row-${i}">
@@ -2957,10 +1782,6 @@ export const openResultForm = async (id, col) => {
                 </select>
             </div>
 
-            <!-- Hidden scoring system, forced to ATP -->
-            <input type="hidden" id="scoring-system-select" value="atp_test">
-
-
             <button class="btn-confirm-v7" id="btn-save-res">
                 <span class="t-main">REGISTRAR DATOS</span>
                 <i class="fas fa-save"></i>
@@ -2968,17 +1789,6 @@ export const openResultForm = async (id, col) => {
             ${renderApoingLink("Comprobar reserva en Apoing")}
         </div>
     `;
-
-    const existingSets = extractSetScores(resultReadRaw);
-    if (existingSets.length) {
-        existingSets.slice(0, 3).forEach((setStr, idx) => {
-            const parts = setStr.split("-");
-            const s1 = document.getElementById(`s${idx + 1}-1`);
-            const s2 = document.getElementById(`s${idx + 1}-2`);
-            if (s1) s1.value = parts[0] || '';
-            if (s2) s2.value = parts[1] || '';
-        });
-    }
 
     window.checkSets = () => {
         const s1_1 = parseInt(document.getElementById('s1-1').value) || 0;
@@ -3002,9 +1812,6 @@ export const openResultForm = async (id, col) => {
             }
         }
     };
-    if (existingSets.length) {
-        window.checkSets();
-    }
 
     document.getElementById('btn-save-res').onclick = async () => {
         const saveBtn = document.getElementById('btn-save-res');
@@ -3019,9 +1826,6 @@ export const openResultForm = async (id, col) => {
         }
         
         if (res.length < 2) return showToast("INCOMPLETO", "Se requieren al menos 2 sets", "warning");
-        if (res.some(r => String(r) === "0-0")) {
-            return showToast("RESULTADO INVÁLIDO", "No puedes registrar sets 0-0. Introduce marcadores reales.", "warning");
-        }
 
         const resultT0 = performance.now();
         try {
@@ -3032,32 +1836,11 @@ export const openResultForm = async (id, col) => {
             showToast("Guardando...", "Registrando resultado oficial del partido.", "info");
             const resultStr = res.join(' ');
             const mvpId = document.getElementById('mvp-select')?.value || null;
-            const scoringSystem = 'atp_test';
-            const adminOverride = adminEditMode && matchDoc?.rankingProcessedAt != null;
             
-            if (adminOverride) {
-                console.log("[ResultForm] admin override", { id, col, resultStr });
-                await adminOverrideMatchResult({ id, ...matchDoc }, col, resultStr);
-                await syncLinkedEventMatchFromRegularMatch(id, col, resultStr);
-                showToast("RESULTADO ACTUALIZADO", "Edición admin aplicada.", "success");
-                window.closeMatchModal();
-                return;
-            }
-
             // We only call processMatchResults, it will handle estado: 'jugado' atomically
-            const rankingSync = await processMatchResults(id, col, resultStr, { mvpId, scoringSystem });
+            const rankingSync = await processMatchResults(id, col, resultStr, { mvpId });
             if (!rankingSync?.success) {
-                const rawErr = rankingSync?.error || 'ranking-sync-failed';
-                console.warn("[ResultForm] ranking error", { id, col, rawErr });
-                const friendly = String(rawErr || '').includes("Match or players invalid")
-                    ? "No se pudo procesar: faltan jugadores confirmados (equipos incompletos)."
-                    : String(rawErr || '').includes("Teams incomplete")
-                        ? "No se pudo procesar: equipos incompletos en el evento."
-                        : String(rawErr || '').includes("permission")
-                            ? "No tienes permisos para registrar este resultado."
-                            : "No se pudo procesar el resultado. Intenta de nuevo en unos minutos.";
-                showToast("RESULTADO NO GUARDADO", friendly, "error");
-                throw new Error(rawErr);
+                throw new Error(rankingSync?.error || 'ranking-sync-failed');
             }
             await syncLinkedEventMatchFromRegularMatch(id, col, resultStr);
             const meData = await getDocument('usuarios', auth.currentUser.uid);
@@ -3071,7 +1854,7 @@ export const openResultForm = async (id, col) => {
                     "Resultado subido",
                     `${meName} subió el resultado: ${resultStr}.`,
                     "result_uploaded",
-                    "ranking.html",
+                    "puntosRanking.html",
                     { type: "result_uploaded", matchId: id, dedupId: `result_uploaded_${id}` },
                 );
             }
@@ -3083,12 +1866,12 @@ export const openResultForm = async (id, col) => {
             analyticsTiming("match.report_result_ms", performance.now() - resultT0);
             showToast(
                 "DATOS GUARDADOS",
-                rankingSync?.skipped ? `Resultado guardado (${getScoringSystemLabel(scoringSystem)}).` : `Ranking actualizado · ${getScoringSystemLabel(scoringSystem)}`,
+                rankingSync?.skipped ? "Resultado guardado (ranking ya procesado)." : "Ranking actualizado",
                 "success"
             );
             window.closeMatchModal();
             if (!rankingSync?.skipped) {
-                await showPostMatchSummaryModal(rankingSync, id, resultStr);
+                await showPostMatchSummaryModal(rankingSync, id);
             } else {
                 setTimeout(() => {
                     try { window.location.href = `diario.html?matchId=${id}`; } catch (_) {}
@@ -3104,8 +1887,8 @@ export const openResultForm = async (id, col) => {
         }
     };
 };
-window.openResultForm = openResultForm;
 
+// --- DYNAMIC UI HELPERS ---
 window.toggleCourtInput = (sel) => {
     const customInp = document.getElementById('inp-court-custom');
     const finalInp = document.getElementById('inp-court');
@@ -3136,22 +1919,22 @@ window.openPlayerSelector = async (matchId, col, extra) => {
             
             <div class="p-4">
                 <div class="ps-tabs flex-row gap-2 mb-4">
-                    <div class="ps-tab active flex-1 p-2 text-center rounded-xl bg-primary text-black font-black text-xs cursor-pointer shadow-glow-sm" onclick="window.switchPsTab(this, 'search')">EXISTENTE</div>
+                    <div class="ps-tab active flex-1 p-2 text-center rounded-xl bg-primary text-black font-black text-xs cursor-pointer" onclick="window.switchPsTab(this, 'search')">EXISTENTE</div>
                     <div class="ps-tab flex-1 p-2 text-center rounded-xl bg-white/5 text-white font-black text-xs cursor-pointer" onclick="window.switchPsTab(this, 'guest')">INVITADO</div>
                 </div>
                 
                 <div id="ps-panel-search">
-                    <input type="text" id="ps-search" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold mb-3 outline-none focus:border-primary focus:bg-white/10 transition-all" placeholder=" Buscar nombre o apodo..." oninput="window.filterPsUsers(this.value)">
-                    <div id="ps-list" class="flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scroll pr-1">
+                    <input type="text" id="ps-search" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold mb-3 outline-none focus:border-primary/50" placeholder="Buscar jugador..." oninput="window.filterPsUsers(this.value)">
+                    <div id="ps-list" class="flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scroll">
                         <!-- Users Rendered Here -->
                     </div>
                 </div>
                 
                 <div id="ps-panel-guest" class="hidden flex-col gap-3">
-                    <input type="text" id="guest-name" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary focus:bg-white/10 transition-all" placeholder=" Nombre Invitado">
+                    <input type="text" id="guest-name" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary/50" placeholder="Nombre Invitado">
                     <div class="flex-row gap-2">
-                        <input type="number" id="guest-level" class="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary focus:bg-white/10 transition-all" placeholder=" Nivel (2.5)" step="0.1" value="2.5">
-                        <input type="text" id="guest-pala" class="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary focus:bg-white/10 transition-all" placeholder=" Pala (Opcional)">
+                        <input type="number" id="guest-level" class="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary/50" placeholder="Nivel (2.5)" step="0.1">
+                        <input type="text" id="guest-pala" class="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-primary/50" placeholder="Pala (Opcional)">
                     </div>
                 </div>
 
@@ -3159,7 +1942,7 @@ window.openPlayerSelector = async (matchId, col, extra) => {
                     CONFIRMAR INVITADO <i class="fas fa-check ml-2"></i>
                 </button>
 
-                <button class="w-full py-4 mt-6 bg-white/10 rounded-xl text-white font-black text-xs tracking-widest border border-white/10 hover:bg-white/20 transition-all" onclick="this.closest('.modal-overlay').remove()">
+                <button class="w-full py-4 mt-6 bg-white/10 rounded-xl text-white font-black text-xs tracking-widest border border-white/10 hover:bg-white/20" onclick="this.closest('.modal-overlay').remove()">
                     FINALIZAR SELECCIÓN
                 </button>
             </div>
@@ -3174,11 +1957,11 @@ window.openPlayerSelector = async (matchId, col, extra) => {
 
 window.switchPsTab = (tab, mode) => {
     document.querySelectorAll('.ps-tab').forEach(t => {
-        t.classList.remove('bg-primary', 'text-black', 'shadow-glow-sm');
+        t.classList.remove('bg-primary', 'text-black');
         t.classList.add('bg-white/5', 'text-white');
     });
     tab.classList.remove('bg-white/5', 'text-white');
-    tab.classList.add('bg-primary', 'text-black', 'shadow-glow-sm');
+    tab.classList.add('bg-primary', 'text-black');
     
     document.getElementById('ps-panel-search').classList.toggle('hidden', mode !== 'search');
     document.getElementById('ps-panel-guest').classList.toggle('hidden', mode !== 'guest');
@@ -3194,69 +1977,30 @@ window.filterPsUsers = (q) => {
     
     document.getElementById('ps-list').innerHTML = filtered.map(u => {
         const isNew = mid === 'NEW';
-        const action = isNew 
-            ? `window.selectUserForNew('${u.id}')` 
-            : `window.animateSelectionAndAdd('${u.id}', '${mid}', '${col}', ${extra.idx}, event)`;
+        const action = isNew ? `window.selectUserForNew('${u.id}')` : `window.executeMatchAction('add', '${mid}', '${col}', {uid:'${u.id}', idx:${extra.idx}})`;
+        const finalAction = `${action}; showToast('Añadido', 'Jugador seleccionado');`;
         
-        const nombre = u.nombreUsuario || u.nombre || 'Jugador';
-        const hasFoto = u.fotoPerfil && !u.fotoPerfil.includes('Logojafs.png');
-        const initials = ((nombre.trim().split(' ')[0]?.[0] || '') + (nombre.trim().split(' ')[1]?.[0] || '')).toUpperCase() || 'JP';
-        
-        const avatarHtml = hasFoto 
-            ? `<img src="${u.fotoPerfil}" class="w-10 h-10 min-w-10 min-h-10 rounded-full bg-black object-cover border-2 border-primary/20 shadow-sm">`
-            : `<div class="w-10 h-10 min-w-10 min-h-10 rounded-full bg-gradient-to-br from-primary/80 to-primary-dark flex center font-black text-black text-[13px] shadow-glow-sm border-2 border-primary/30">${initials}</div>`;
-
         return `
-        <div class="flex-row items-center gap-4 p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-primary/50 cursor-pointer transition-all hover:bg-white/10" onclick="${action}">
-            ${avatarHtml}
-            <div class="flex-col flex-1 pl-1">
-                <span class="text-sm font-black text-white tracking-tight">${nombre}</span>
-                <span class="text-[10px] text-primary/80 font-bold tracking-widest mt-0.5">Lv. ${(Number(u.nivel) || 2.5).toFixed(2)}</span>
+        <div class="flex-row items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/50 cursor-pointer transition-all hover:bg-white/10" onclick="${finalAction}">
+            <img src="${u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png'}" class="w-8 h-8 rounded-full bg-black/50 object-cover border border-white/10">
+            <div class="flex-col flex-1">
+                <span class="text-xs font-bold text-white">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
+                <span class="text-[9px] text-muted">Nivel ${(u.nivel || 2.5).toFixed(2)}</span>
             </div>
-            <div class="w-8 h-8 rounded-full bg-white/10 flex center hover:bg-primary transition-colors hover:text-black">
-                <i class="fas fa-plus text-xs"></i>
-            </div>
+            <i class="fas fa-plus text-primary text-xs"></i>
         </div>
         `;
     }).join('');
 };
 
-window.animateSelectionAndAdd = (uid, mid, col, idx, eventOrNull) => {
-    const e = eventOrNull || (typeof event !== 'undefined' ? event : null);
-    const sourceEl = e?.currentTarget;
-    const targetEl = document.getElementById(`slot-${idx}-wrap`);
-    
-    if (sourceEl && targetEl) {
-        animatePlayerSelection(sourceEl, targetEl, () => {
-             window.executeMatchAction('add', mid, col, { uid, idx });
-             showToast('Añadido', 'Jugador reclutado en el squad');
-        });
-    } else {
-        window.executeMatchAction('add', mid, col, { uid, idx });
-    }
-    
-    const modal = document.querySelector('.modal-overlay.active');
-    if (modal && modal.innerHTML.includes('AÑADIR JUGADOR')) modal.remove();
-};
-
-
-window.addGuest = async (mid, col, extra) => {
+window.addGuest = (mid, col, extra) => {
     const name = document.getElementById('guest-name').value.trim();
     const level = document.getElementById('guest-level').value || 2.5;
     const pala = document.getElementById('guest-pala').value.trim() || 'Desconocida';
     
     if (!name) return showToast("ERROR", "Nombre requerido", "error");
     
-    const guestProfile = await ensureGuestProfile({
-        name,
-        level: parseFloat(level),
-        source: 'match_service',
-        extra: { palaFavorita: pala }
-    }).catch((e) => {
-        console.error('ensureGuestProfile failed', e);
-        return null;
-    });
-    const guestId = guestProfile?.id || `GUEST_${name}_${level}_${pala}`;
+    const guestId = `GUEST_${name}_${level}_${pala}`;
     
     if (mid === 'NEW') {
         const u = { id: guestId, nombreUsuario: name + ' (Inv)', nivel: parseFloat(level), fotoPerfil: './imagenes/Logojafs.png', isGuest: true };
@@ -3266,104 +2010,38 @@ window.addGuest = async (mid, col, extra) => {
     } else {
         window.executeMatchAction('add', mid, col, { uid: guestId, idx: extra.idx });
     }
-    showToast('Invitado', `Se ha guardado ${name} con nivel ${Number(level).toFixed(1)}`, 'success');
+    showToast('Invitado', 'Se ha añadido al squad');
 };
  
-window.selectUserForNew = (uid, forceIdx = null) => {
-    let idx = forceIdx;
-    if (idx === null) {
-        if (!window.psMatchContext || !window.psMatchContext.extra) return;
-        idx = window.psMatchContext.extra.idx;
-    }
-    
-    if (!window._initialJugadores) window._initialJugadores = [null, null, null, null];
-    
-    const sourceEl = typeof event !== 'undefined' ? event?.currentTarget : null;
-    const targetEl = document.getElementById(`slot-${idx}-wrap`);
-    if (sourceEl && targetEl) {
-        animatePlayerSelection(sourceEl, targetEl, () => finalizeSelection(uid, idx));
-    } else {
-        finalizeSelection(uid, idx);
-    }
-};
+// CSS injection removed. Styles moved to css/premium-v7.css
 
-function finalizeSelection(uid, idx) {
-    if (!window._initialJugadores) return;
-    window._initialJugadores[idx] = uid;
+window.selectUserForNew = (uid) => {
+    const extra = window.psMatchContext.extra; 
+    window._initialJugadores[extra.idx] = uid;
     
-    let u = (window.psUsersCache || []).find(x => x.id === uid);
-    if (!u) {
-         if (uid && uid.startsWith('GUEST_')) {
-             const parts = uid.split('_');
-             u = { id: uid, nombreUsuario: parts[1] + ' (Inv)', nivel: parseFloat(parts[2]), fotoPerfil: './imagenes/Logojafs.png' };
-         } else {
-             u = { id: uid, nombreUsuario: 'Jugador...', nivel: 2.5, fotoPerfil: './imagenes/Logojafs.png' };
-         }
+    let u = window.psUsersCache.find(x => x.id === uid);
+    if (!u && uid.startsWith('GUEST_')) {
+         const parts = uid.split('_');
+         u = { nombreUsuario: parts[1] + ' (Inv)', nivel: parseFloat(parts[2]), fotoPerfil: './imagenes/Logojafs.png' };
     }
     
-    const slot = document.getElementById(`slot-${idx}-wrap`);
+    const slot = document.getElementById(`slot-${extra.idx}-wrap`);
     if(slot && u) {
-        const isTeamA = idx < 2;
+        const isTeamA = extra.idx < 2;
         const color = isTeamA ? 'var(--primary)' : 'var(--secondary)';
         
-        const nombre = u.nombreUsuario || u.nombre || 'Jugador';
-        const hasFoto = u.fotoPerfil && !u.fotoPerfil.includes('Logojafs.png');
-        const initials = ((nombre.trim().split(' ')[0]?.[0] || '') + (nombre.trim().split(' ')[1]?.[0] || '')).toUpperCase() || 'JP';
-        
-        const avatarHtml = hasFoto
-            ? `<img src="${u.fotoPerfil}" class="w-full h-full object-cover">`
-            : `<div class="w-full h-full flex center font-black text-black text-xs bg-gradient-to-br from-primary to-lime-500">${initials}</div>`;
-        
         slot.className = "p-slot-v7 pointer";
-        slot.onclick = () => window.removeUserFromNew(idx); 
+        slot.onclick = null; 
         slot.innerHTML = `
-            <div class="p-img-box" style="border-color:${color}; overflow:hidden;">
-                ${avatarHtml}
+            <div class="p-img-box" style="border-color:${color}">
+                <img src="${u.fotoPerfil || u.fotoURL || './imagenes/Logojafs.png'}">
             </div>
             <span class="p-badge" style="color:${color}; border-color:currentColor">${(Number(u.nivel)||2.5).toFixed(1)}</span>
-            <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${color}">${nombre}</span>
-            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px] shadow-lg z-10 hover:scale-[1.1] transition-transform" onclick="event.stopPropagation(); window.removeUserFromNew(${idx})"><i class="fas fa-times"></i></button>
+            <span class="text-[9px] font-black uppercase tracking-widest mt-1 truncate w-16 text-center" style="color:${color}">${u.nombreUsuario || u.nombre || 'Jugador'}</span>
+            <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex center text-white text-[8px] shadow-lg z-10 hover:scale-110 transition-transform" onclick="event.stopPropagation(); window.removeUserFromNew(${extra.idx})"><i class="fas fa-times"></i></button>
         `;
     }
-    
-    setTimeout(() => {
-        const modal = document.querySelector('.modal-overlay.active');
-        if (modal && modal.innerHTML.includes('AÑADIR JUGADOR')) modal.remove();
-    }, 300);
-}
-
-function animatePlayerSelection(source, target, callback) {
-    if (!source || !target) return;
-    const srcRect = source.getBoundingClientRect();
-    const dstRect = target.getBoundingClientRect();
-    const clone = source.cloneNode(true);
-    clone.style.position = 'fixed';
-    clone.style.top = srcRect.top + 'px';
-    clone.style.left = srcRect.left + 'px';
-    clone.style.width = srcRect.width + 'px';
-    clone.style.height = srcRect.height + 'px';
-    clone.style.zIndex = '10000';
-    clone.style.transition = 'all 0.6s cubic-bezier(0.19, 1, 0.22, 1)';
-    clone.style.pointerEvents = 'none';
-    clone.classList.add('shadow-glow-primary');
-    
-    document.body.appendChild(clone);
-    
-    requestAnimationFrame(() => {
-        clone.style.top = dstRect.top + 'px';
-        clone.style.left = dstRect.left + 'px';
-        clone.style.width = dstRect.width + 'px';
-        clone.style.height = dstRect.height + 'px';
-        clone.style.opacity = '0';
-        clone.style.transform = 'scale(0.5)';
-    });
-    
-    setTimeout(() => {
-        clone.remove();
-        if (callback) callback();
-    }, 600);
-}
-
+};
 
 window.handleCreationSlotClick = (idx) => {
     if (!Array.isArray(window._initialJugadores)) {
@@ -3393,19 +2071,3 @@ window.removeUserFromNew = (idx) => {
         slot.onclick = () => window.handleCreationSlotClick(idx);
     }
 };
-
-export async function createLinkedMatchFromEvent(eventMatchId, slotDate) {
-    const ref = doc(db, 'eventoPartidos', eventMatchId);
-    const safeDate = slotDate instanceof Date ? slotDate : new Date(slotDate);
-    await updateDoc(ref, {
-        fecha: Timestamp.fromDate(safeDate),
-        estado: 'abierto'
-    });
-}
-
-
-
-
-
-
-

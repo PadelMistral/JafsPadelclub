@@ -60,7 +60,7 @@ export function hasValidResult(match) {
 
 export function isFinishedMatch(match) {
   const state = String(match?.estado || "").toLowerCase();
-  if (state === "jugado" || state === "finalizado") return true;
+  if (state === "jugado" || state === "jugada" || state === "finalizado") return true;
   return hasValidResult(match);
 }
 
@@ -70,18 +70,11 @@ export function isCancelledMatch(match) {
 }
 
 export function getCanonicalMatchState(matchOrState = null, resultStr = "") {
-  const rawState =
-    typeof matchOrState === "string"
-      ? matchOrState
-      : String(matchOrState?.estado || "");
+  const rawState = typeof matchOrState === "string" ? matchOrState : String(matchOrState?.estado || "");
   const normalizedState = String(rawState || "").trim().toLowerCase();
-  const normalizedResult =
-    resultStr ||
-    (typeof matchOrState === "object" ? getResultSetsString(matchOrState) : "");
+  const normalizedResult = resultStr || (typeof matchOrState === "object" ? getResultSetsString(matchOrState) : "");
 
-  if (normalizedState === "cancelado" || normalizedState === "anulado") {
-    return normalizedState;
-  }
+  if (normalizedState === "cancelado" || normalizedState === "anulado") return normalizedState;
   if (normalizeStoredResultString(normalizedResult)) return "jugado";
   if (["pendiente", "programado", "finalizado"].includes(normalizedState)) {
     return normalizedState === "finalizado" ? "jugado" : "abierto";
@@ -120,14 +113,10 @@ export function buildBaseMatchPayload({
   courtType = "normal",
   extra = {},
 } = {}) {
-  const normalizedPlayers = Array.isArray(players)
-    ? players.slice(0, 4).map((id) => (id ? String(id) : null))
-    : [];
+  const normalizedPlayers = Array.isArray(players) ? players.slice(0, 4).map((id) => (id ? String(id) : null)) : [];
   while (normalizedPlayers.length < 4) normalizedPlayers.push(null);
 
-  const normalizedSides = Array.isArray(sidePreferences)
-    ? sidePreferences.slice(0, 4)
-    : [];
+  const normalizedSides = Array.isArray(sidePreferences) ? sidePreferences.slice(0, 4) : [];
   while (normalizedSides.length < 4) {
     normalizedSides.push(normalizedSides.length % 2 === 0 ? "derecha" : "reves");
   }
@@ -144,9 +133,7 @@ export function buildBaseMatchPayload({
     equipoA: normalizedPlayers.slice(0, 2),
     equipoB: normalizedPlayers.slice(2, 4),
     sidePreferences: normalizedSides,
-    posiciones: normalizedSides.map((side) =>
-      String(side || "").toLowerCase().includes("der") ? "drive" : "reves",
-    ),
+    posiciones: normalizedSides.map((side) => String(side || "").toLowerCase().includes("der") ? "drive" : "reves"),
     surface: surface || "indoor",
     courtType: courtType || "normal",
     timestamp: extra.timestamp ?? null,
@@ -215,9 +202,7 @@ export function getMatchTeamPlayerIds(match, side = "A") {
   if (!match) return [];
   const safeSide = String(side || "A").toUpperCase() === "B" ? "B" : "A";
   const directPlayers = normalizePlayerIds(
-    safeSide === "A"
-      ? (match.teamAPlayers || match.playersA || match.equipoA)
-      : (match.teamBPlayers || match.playersB || match.equipoB),
+    safeSide === "A" ? (match.teamAPlayers || match.playersA || match.equipoA) : (match.teamBPlayers || match.playersB || match.equipoB),
   );
   if (directPlayers.length) return directPlayers.slice(0, 2);
 
@@ -226,9 +211,6 @@ export function getMatchTeamPlayerIds(match, side = "A") {
   return safeSide === "A" ? normalized.slice(0, 2) : normalized.slice(2, 4);
 }
 
-/**
- * Parses guest metadata from a synthetic UID like GUEST_Name_Level_Timestamp
- */
 export function parseGuestMeta(uid) {
   if (!uid) return null;
   const s = String(uid);
@@ -247,6 +229,5 @@ export function parseGuestMeta(uid) {
     const name = (parts[1] || "Invitado").replace(/_/g, " ").trim() || "Invitado";
     return { name, level, raw: s };
   }
-  const name = joinedName;
-  return { name, level: Number.isFinite(level) ? level : 2.5, raw: s };
+  return { name: joinedName, level: Number.isFinite(level) ? level : 2.5, raw: s };
 }

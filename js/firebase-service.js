@@ -191,14 +191,6 @@ export async function uploadProfilePhoto(uid, file) {
   await uploadBytes(sRef, file);
   return getDownloadURL(sRef);
 }
-
-export async function uploadUserGalleryPhoto(uid, file) {
-  const safeName = String(file?.name || "photo.jpg").replace(/[^a-zA-Z0-9._-]+/g, "-");
-  const path = `users/${uid}/gallery/${Date.now()}-${safeName}`;
-  const sRef = ref(storage, path);
-  await uploadBytes(sRef, file);
-  return getDownloadURL(sRef);
-}
 /**
  * Presence System - Simple Version
  */
