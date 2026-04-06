@@ -80,40 +80,30 @@
     </main>
 
     <div id="app-download-modal" class="app-download-modal" aria-hidden="true">
-        <div class="app-download-modal__backdrop" data-close-download-modal></div>
-        <section class="app-download-modal__dialog" aria-labelledby="app-download-title">
-            <button id="app-download-close" type="button" class="app-download-modal__close" aria-label="Cerrar">
-                <i class="fas fa-xmark"></i>
-            </button>
-            <div class="app-download-pill">APP MOVIL</div>
-            <h2 id="app-download-title" class="app-download-title">Descarga PADELUMINATIS en tu movil</h2>
-            <p id="app-download-copy" class="app-download-copy">
-                Instala la version Android o abre la guia correcta para iPhone.
-            </p>
-            <a
-                id="app-download-link"
-                class="btn btn-primary btn-lg w-full app-download-link"
-                href="./PADELUMINATIS-mobile-debug.apk"
-                download="PADELUMINATIS-mobile-debug.apk"
-                type="application/vnd.android.package-archive"
-            >
-                <span class="app-download-link__glow" aria-hidden="true"></span>
-                <span class="app-download-link__icon"><i class="fas fa-mobile-screen-button"></i></span>
-                <span class="app-download-link__text">
-                    <strong id="app-download-label">Descargar APK Android</strong>
-                    <small>Instalacion directa desde tu movil</small>
-                </span>
-                <span class="app-download-link__arrow" aria-hidden="true"><i class="fas fa-arrow-down"></i></span>
-            </a>
-            <button id="app-download-help" type="button" class="btn-ghost app-download-help">
-                <i class="fas fa-circle-info"></i>
-                <span>Como instalarla</span>
-            </button>
-            <p class="app-download-note">
-                Android descargara la APK. En iPhone te mostramos la guia adecuada, porque iOS no instala archivos APK.
-            </p>
-            <button id="app-download-later" type="button" class="app-download-later">Seguir en la web</button>
-        </section>
+        <div class="app-download-card">
+            <div class="app-hero-bg">
+                <div class="app-hero-particles"></div>
+                <img src="./imagenes/Logojafs.png" alt="Logo" class="app-hero-icon">
+            </div>
+            <div class="app-content">
+                <span class="app-badge">Disponible para Android</span>
+                <h3 class="app-title" id="app-download-label">INSTALAR APP OFICIAL</h3>
+                <p class="app-desc" id="app-download-copy">Disfruta de la mejor experiencia Padeluminatis con notificaciones nativas, mayor velocidad y acceso total.</p>
+                
+                <div class="app-features">
+                    <div class="app-feature-item"><i class="fas fa-bolt"></i> Máxima fluidez</div>
+                    <div class="app-feature-item"><i class="fas fa-bell"></i> Push nativas</div>
+                    <div class="app-feature-item"><i class="fas fa-shield-halved"></i> Acceso seguro</div>
+                    <div class="app-feature-item"><i class="fas fa-satellite-dish"></i> Live Updates</div>
+                </div>
+
+                <a href="https://github.com/TU-USUARIO/JafsPadel/releases/latest/download/app-debug.apk" class="app-btn-download" id="app-download-link">
+                    <i class="fas fa-download mr-2"></i> Descargar APK
+                </a>
+
+                <button class="app-btn-later" id="app-download-later">Quizás más tarde</button>
+            </div>
+        </div>
     </div>
 
     <style>
@@ -325,208 +315,176 @@
             width: 100%;
         }
 
+        /* Premium App Modal v2.0 */
         .app-download-modal {
             position: fixed;
             inset: 0;
             z-index: 20000;
-            display: none;
-            align-items: flex-start;
+            display: flex;
+            align-items: center;
             justify-content: center;
-            padding: clamp(18px, 7vh, 72px) 20px 20px;
+            padding: 20px;
+            background: rgba(2, 6, 23, 0.88);
+            backdrop-filter: blur(12px);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .app-download-modal.is-open {
-            display: flex;
+            opacity: 1;
+            visibility: visible;
         }
 
-        .app-download-modal__backdrop {
-            position: absolute;
-            inset: 0;
-            background: rgba(2, 6, 23, 0.76);
-            backdrop-filter: blur(10px);
-        }
-
-        .app-download-modal__dialog {
+        .app-download-card {
             position: relative;
-            z-index: 1;
-            width: min(92vw, 420px);
-            padding: 20px 18px;
-            border-radius: 24px;
-            background: linear-gradient(145deg, rgba(8, 14, 30, 0.96), rgba(6, 30, 46, 0.92));
-            border: 1px solid rgba(0, 212, 255, 0.22);
-            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-            display: grid;
-            gap: 10px;
-            overflow: hidden;
-            position: relative;
-            animation: downloadModalIn 0.24s ease;
-            margin-top: clamp(4px, 4vh, 56px);
-        }
-
-        .app-download-modal__dialog::before {
-            content: "";
-            position: absolute;
-            inset: -20% auto auto -10%;
-            width: 180px;
-            height: 180px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(0, 212, 255, 0.26) 0%, rgba(0, 212, 255, 0) 72%);
-            pointer-events: none;
-        }
-
-        .app-download-modal__close {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            width: 38px;
-            height: 38px;
-            border-radius: 999px;
+            width: 100%;
+            max-width: 440px;
+            background: 
+                radial-gradient(circle at top left, rgba(198, 255, 0, 0.08), transparent 40%),
+                linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(6, 10, 22, 0.99));
             border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(255, 255, 255, 0.06);
-            color: #fff;
-            display: inline-flex;
+            border-radius: 32px;
+            overflow: hidden;
+            box-shadow: 0 42px 100px rgba(0, 0, 0, 0.6);
+            transform: translateY(30px) scale(0.95);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .app-download-modal.is-open .app-download-card {
+            transform: translateY(0) scale(1);
+        }
+
+        .app-hero-bg {
+            height: 140px;
+            background: linear-gradient(135deg, #0ea5e9, #c6ff00);
+            display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-        }
-
-        .app-download-pill {
-            width: fit-content;
-            padding: 6px 10px;
-            border-radius: 999px;
-            background: rgba(198, 255, 0, 0.12);
-            border: 1px solid rgba(198, 255, 0, 0.24);
-            color: #dfff8a;
-            font-size: 0.68rem;
-            font-weight: 800;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-
-        .app-download-title {
-            margin: 0;
-            color: #fff;
-            font-size: 1.16rem;
-            font-weight: 800;
-            letter-spacing: 0.4px;
-            padding-right: 34px;
-        }
-
-        .app-download-copy,
-        .app-download-note {
-            margin: 0;
-            color: rgba(255, 255, 255, 0.72);
-            font-size: 0.86rem;
-            line-height: 1.45;
-        }
-
-        @media (min-width: 900px) {
-            .app-download-modal {
-                padding-top: clamp(28px, 10vh, 110px);
-            }
-
-            .app-download-modal__dialog {
-                width: min(92vw, 448px);
-                margin-top: 0;
-                transform: translateY(0);
-            }
-        }
-
-        @media (max-width: 640px) {
-            .app-download-modal {
-                padding: max(12px, env(safe-area-inset-top, 0px) + 10px) 14px 14px;
-            }
-
-            .app-download-modal__dialog {
-                width: min(100%, 420px);
-                border-radius: 22px;
-            }
-        }
-
-        .app-download-link {
-            text-decoration: none;
             position: relative;
-            overflow: hidden;
-            isolation: isolate;
-            display: grid;
-            grid-template-columns: auto 1fr auto;
-            align-items: center;
-            gap: 14px;
-            padding: 16px 18px;
-            border-radius: 18px;
-            background: linear-gradient(135deg, #c6ff00 0%, #3cf0ff 48%, #0ea5e9 100%);
-            border: 0;
-            box-shadow: 0 18px 30px rgba(0, 212, 255, 0.28), 0 10px 22px rgba(198, 255, 0, 0.22);
-            animation: appDownloadFloat 2.8s ease-in-out infinite;
         }
 
-        .app-download-link__glow {
+        .app-hero-icon {
+            width: 84px;
+            height: 84px;
+            background: #fff;
+            border-radius: 22px;
+            padding: 12px;
+            box-shadow: 0 20px 48px rgba(0, 212, 255, 0.3);
+            z-index: 2;
+        }
+
+        .app-hero-particles {
             position: absolute;
             inset: 0;
-            background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.24) 30%, transparent 55%);
-            transform: translateX(-120%);
-            animation: appDownloadShine 3.2s linear infinite;
-            pointer-events: none;
+            overflow: hidden;
+            opacity: 0.3;
         }
 
-        .app-download-link__icon,
-        .app-download-link__arrow {
-            position: relative;
-            z-index: 1;
-            width: 42px;
-            height: 42px;
-            border-radius: 14px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(8, 14, 30, 0.16);
-            color: #04111b;
-            font-size: 1.05rem;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+        .app-content {
+            padding: 32px 28px;
+            text-align: center;
         }
 
-        .app-download-link__text {
-            position: relative;
-            z-index: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 2px;
-            color: #04111b;
+        .app-badge {
+            display: inline-block;
+            background: rgba(198, 255, 0, 0.15);
+            color: #c6ff00;
+            padding: 6px 14px;
+            border-radius: 99px;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            border: 1px solid rgba(198, 255, 0, 0.25);
+            margin-bottom: 16px;
+        }
+
+        .app-title {
+            color: #fff;
+            font-size: 24px;
+            font-weight: 950;
+            margin: 0 0 12px;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
+        }
+
+        .app-desc {
+            color: rgba(255, 255, 255, 0.65);
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.5;
+            margin-bottom: 28px;
+        }
+
+        .app-features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 32px;
             text-align: left;
         }
 
-        .app-download-link__text strong {
-            font-size: 1rem;
-            font-weight: 900;
-            letter-spacing: 0.3px;
+        .app-feature-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+        }
+
+        .app-feature-item i {
+            color: #c6ff00;
+            font-size: 10px;
+            width: 18px;
+            height: 18px;
+            background: rgba(198, 255, 0, 0.1);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .app-btn-download {
+            background: linear-gradient(90deg, #c6ff00, #3cf0ff);
+            color: #020617;
+            padding: 18px 24px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 950;
+            letter-spacing: 0.5px;
             text-transform: uppercase;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            box-shadow: 0 16px 32px rgba(198, 255, 0, 0.25);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 16px;
         }
 
-        .app-download-link__text small {
-            font-size: 0.72rem;
-            font-weight: 700;
-            opacity: 0.82;
-            letter-spacing: 0.3px;
+        .app-btn-download:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 24px 48px rgba(198, 255, 0, 0.35);
         }
 
-        .app-download-link:hover {
-            transform: translateY(-3px) scale(1.01);
-            box-shadow: 0 24px 42px rgba(0, 212, 255, 0.34), 0 14px 28px rgba(198, 255, 0, 0.28);
-        }
-
-        .app-download-help {
-            max-width: none;
-        }
-
-        .app-download-later {
-            border: 0;
+        .app-btn-later {
+            color: rgba(255, 255, 255, 0.3);
             background: transparent;
-            color: rgba(255, 255, 255, 0.72);
-            font-size: 0.82rem;
-            font-weight: 700;
+            border: 0;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
             cursor: pointer;
-            padding: 6px 0 0;
+            transition: color 0.2s ease;
+        }
+
+        .app-btn-later:hover {
+            color: rgba(255, 255, 255, 0.6);
         }
 
         @keyframes appDownloadFloat {
@@ -687,48 +645,30 @@
 
         const showInstallGuide = () => {
             if (isIOS) {
-                alert('En iPhone no se puede instalar una APK. Usa Compartir > Anadir a pantalla de inicio para la version web instalada. Si quieres app nativa iOS, el siguiente paso es sacar una build con Xcode y el archivo GoogleService-Info.plist.');
+                alert('En iPhone no se puede instalar una APK. Usa Compartir > Añadir a pantalla de inicio para la versión web instalada.');
                 return;
             }
-
-            if (isAndroid) {
-                alert('Pulsa Descargar APK. Cuando termine la descarga, Android te pedira permiso para instalar la app desde tu navegador. El permiso de notificaciones se pedira dentro de la app al activarlas.');
-                return;
-            }
-
-            alert('Desde Android puedes descargar la APK directamente. Desde iPhone usa la PWA o una futura version TestFlight.');
+            alert('Pulsa Descargar APK para bajar la aplicación oficial.');
         };
 
         if (isIOS) {
-            downloadLabel.textContent = 'Usar en iPhone';
-            downloadCopy.textContent = 'En iPhone abrimos la guia correcta: PWA instalada ahora o app nativa por TestFlight mas adelante.';
-            downloadLink.removeAttribute('download');
-            downloadLink.setAttribute('href', './');
-            downloadLink.addEventListener('click', (event) => {
-                event.preventDefault();
-                showInstallGuide();
-            });
-        } else if (!isAndroid) {
-            downloadLabel.textContent = 'Ver opciones de app';
-            downloadCopy.textContent = 'En Android puedes descargar la APK. En otros dispositivos mostramos la guia adecuada.';
-            downloadLink.removeAttribute('download');
-            downloadLink.setAttribute('href', './');
-            downloadLink.addEventListener('click', (event) => {
+            if (downloadLabel) downloadLabel.textContent = 'USAR EN IPHONE';
+            if (downloadCopy) downloadCopy.textContent = 'En iPhone instalamos la versión PWA (Compartir > Añadir a pantalla de inicio).';
+            downloadLink?.removeAttribute('download');
+            downloadLink?.setAttribute('href', '#');
+            downloadLink?.addEventListener('click', (event) => {
                 event.preventDefault();
                 showInstallGuide();
             });
         }
 
-        helpButton?.addEventListener('click', showInstallGuide);
-        closeDownloadModal?.addEventListener('click', hideDownloadModal);
         closeDownloadLater?.addEventListener('click', hideDownloadModal);
-        downloadModal?.querySelector('[data-close-download-modal]')?.addEventListener('click', hideDownloadModal);
 
         if (!isNativeApp) {
             let dismissed = false;
             try { dismissed = sessionStorage.getItem(modalDismissKey) === '1'; } catch (_) {}
             if (!dismissed) {
-                window.setTimeout(openDownloadModal, 450);
+                window.setTimeout(openDownloadModal, 1500);
             }
         }
     </script>
