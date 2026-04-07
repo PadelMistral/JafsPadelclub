@@ -1224,12 +1224,18 @@ const HUMAN_MESSAGES = {
   default: { title: "Estado de los avisos", message: "Comprueba que tienes la app instalada y que has permitido las notificaciones.", steps: [] },
 };
 
-export async function getPushStatusHuman() {
-  const status = await checkNotificationStatus();
+export async function getPushStatusHuman(existingStatus = null) {
+  const status = existingStatus || await checkNotificationStatus();
   const canReceive = status.backgroundReady;
   const firstIssue = status.issues?.[0] || "default";
   const human = HUMAN_MESSAGES[firstIssue] || HUMAN_MESSAGES.default;
-  return { ok: canReceive, ...human, status };
+  return {
+    ok: canReceive,
+    ...human,
+    status,
+    label: canReceive ? "Listos en segundo plano" : human.title,
+    state: canReceive ? "ok" : "warn",
+  };
 }
 
 let notificationHelpModalEl = null;

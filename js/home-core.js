@@ -1988,7 +1988,7 @@ async function renderNotificationHealthCard() {
 
   try {
     const status = await checkNotificationStatus();
-    const human = getPushStatusHuman(status);
+    const human = await getPushStatusHuman(status);
     setState(human.label || "Listas", human.state || "ok");
   } catch (e) {
     console.warn("Notify health error", e);
