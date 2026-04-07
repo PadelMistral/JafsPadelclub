@@ -1,0 +1,829 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   SPECTACLE V2.0 — DRAMATIC VISUAL OVERHAUL
+   Regla 60:30:10 · Themes que transforman TODO · Deportivo Premium
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────
+   1. THEME VARIABLES — 60:30:10 System
+   60% = base/bg, 30% = cards/surfaces, 10% = accent/CTA
+   ───────────────────────────────────── */
+:root,
+[data-theme="galactic"] {
+  --t-60: #080c18;                /* 60% — deep void */
+  --t-30: rgba(14, 22, 42, 0.92); /* 30% — card surface */
+  --t-30-solid: #0e162a;
+  --t-10: #c6ff00;                /* 10% — accent pop */
+  --t-10-rgb: 198, 255, 0;
+  --t-glow: rgba(198, 255, 0, 0.12);
+  --t-border: rgba(198, 255, 0, 0.12);
+  --t-border-subtle: rgba(255,255,255,0.06);
+  --t-text: #f0f4ff;
+  --t-text-dim: rgba(240,244,255,0.5);
+  --t-card-gradient: linear-gradient(145deg, rgba(198,255,0,0.04) 0%, transparent 40%);
+  --t-card-hover: rgba(198,255,0,0.06);
+  --t-card-radius: 20px;
+  --t-badge-bg: rgba(198,255,0,0.12);
+  --t-badge-color: #c6ff00;
+  --t-tab-active: linear-gradient(135deg, rgba(198,255,0,0.15), rgba(198,255,0,0.05));
+  --t-input-focus: rgba(198,255,0,0.25);
+  --t-btn-primary: linear-gradient(135deg, #c6ff00, #a3e635);
+  --t-btn-text: #000;
+  --t-success: #22c55e;
+  --t-danger: #ef4444;
+  --t-warning: #fbbf24;
+}
+
+[data-theme="sunset"] {
+  --t-60: #1a0a12;
+  --t-30: rgba(45, 16, 24, 0.92);
+  --t-30-solid: #2d1018;
+  --t-10: #ff6b6b;
+  --t-10-rgb: 255, 107, 107;
+  --t-glow: rgba(255,107,107,0.12);
+  --t-border: rgba(255,107,107,0.15);
+  --t-border-subtle: rgba(255,180,140,0.08);
+  --t-text: #ffe4e6;
+  --t-text-dim: rgba(255,228,230,0.5);
+  --t-card-gradient: linear-gradient(145deg, rgba(255,107,107,0.06) 0%, rgba(249,115,22,0.03) 40%, transparent 70%);
+  --t-card-hover: rgba(255,107,107,0.08);
+  --t-card-radius: 24px;
+  --t-badge-bg: rgba(255,107,107,0.15);
+  --t-badge-color: #ff6b6b;
+  --t-tab-active: linear-gradient(135deg, rgba(255,107,107,0.18), rgba(249,115,22,0.08));
+  --t-input-focus: rgba(255,107,107,0.3);
+  --t-btn-primary: linear-gradient(135deg, #ff6b6b, #f97316);
+  --t-btn-text: #fff;
+}
+
+[data-theme="ocean"] {
+  --t-60: #001824;
+  --t-30: rgba(0, 40, 60, 0.92);
+  --t-30-solid: #00283c;
+  --t-10: #06d6a0;
+  --t-10-rgb: 6, 214, 160;
+  --t-glow: rgba(6,214,160,0.12);
+  --t-border: rgba(6,214,160,0.15);
+  --t-border-subtle: rgba(6,182,212,0.08);
+  --t-text: #ecfeff;
+  --t-text-dim: rgba(236,254,255,0.5);
+  --t-card-gradient: linear-gradient(145deg, rgba(6,214,160,0.06) 0%, rgba(6,182,212,0.03) 40%, transparent 70%);
+  --t-card-hover: rgba(6,214,160,0.08);
+  --t-card-radius: 22px;
+  --t-badge-bg: rgba(6,214,160,0.15);
+  --t-badge-color: #06d6a0;
+  --t-tab-active: linear-gradient(135deg, rgba(6,214,160,0.18), rgba(6,182,212,0.08));
+  --t-input-focus: rgba(6,214,160,0.3);
+  --t-btn-primary: linear-gradient(135deg, #06d6a0, #0ea5e9);
+  --t-btn-text: #000;
+}
+
+[data-theme="neon"] {
+  --t-60: #05010e;
+  --t-30: rgba(16, 4, 40, 0.92);
+  --t-30-solid: #100428;
+  --t-10: #00ff9f;
+  --t-10-rgb: 0, 255, 159;
+  --t-glow: rgba(0,255,159,0.15);
+  --t-border: rgba(0,255,159,0.2);
+  --t-border-subtle: rgba(214,0,255,0.08);
+  --t-text: #f0f4ff;
+  --t-text-dim: rgba(240,244,255,0.5);
+  --t-card-gradient: linear-gradient(145deg, rgba(0,255,159,0.06) 0%, rgba(214,0,255,0.04) 50%, transparent 80%);
+  --t-card-hover: rgba(0,255,159,0.08);
+  --t-card-radius: 18px;
+  --t-badge-bg: rgba(0,255,159,0.15);
+  --t-badge-color: #00ff9f;
+  --t-tab-active: linear-gradient(135deg, rgba(0,255,159,0.2), rgba(214,0,255,0.08));
+  --t-input-focus: rgba(0,255,159,0.3);
+  --t-btn-primary: linear-gradient(135deg, #00ff9f, #d600ff);
+  --t-btn-text: #000;
+}
+
+[data-theme="matrix"] {
+  --t-60: #000600;
+  --t-30: rgba(0, 18, 0, 0.94);
+  --t-30-solid: #001200;
+  --t-10: #00ff41;
+  --t-10-rgb: 0, 255, 65;
+  --t-glow: rgba(0,255,65,0.12);
+  --t-border: rgba(0,255,65,0.18);
+  --t-border-subtle: rgba(0,255,65,0.06);
+  --t-text: #b8ffca;
+  --t-text-dim: rgba(184,255,202,0.5);
+  --t-card-gradient: linear-gradient(145deg, rgba(0,255,65,0.05) 0%, transparent 40%);
+  --t-card-hover: rgba(0,255,65,0.06);
+  --t-card-radius: 8px;
+  --t-badge-bg: rgba(0,255,65,0.12);
+  --t-badge-color: #00ff41;
+  --t-tab-active: linear-gradient(135deg, rgba(0,255,65,0.15), rgba(0,60,0,0.3));
+  --t-input-focus: rgba(0,255,65,0.3);
+  --t-btn-primary: linear-gradient(135deg, #00ff41, #16a34a);
+  --t-btn-text: #000;
+}
+
+[data-theme="elegant"] {
+  --t-60: #0a0806;
+  --t-30: rgba(22, 16, 8, 0.94);
+  --t-30-solid: #161008;
+  --t-10: #d4af37;
+  --t-10-rgb: 212, 175, 55;
+  --t-glow: rgba(212,175,55,0.1);
+  --t-border: rgba(212,175,55,0.18);
+  --t-border-subtle: rgba(212,175,55,0.06);
+  --t-text: #fef3d0;
+  --t-text-dim: rgba(254,243,208,0.5);
+  --t-card-gradient: linear-gradient(145deg, rgba(212,175,55,0.06) 0%, rgba(140,100,20,0.03) 40%, transparent 70%);
+  --t-card-hover: rgba(212,175,55,0.06);
+  --t-card-radius: 16px;
+  --t-badge-bg: rgba(212,175,55,0.15);
+  --t-badge-color: #d4af37;
+  --t-tab-active: linear-gradient(135deg, rgba(212,175,55,0.18), rgba(140,100,20,0.08));
+  --t-input-focus: rgba(212,175,55,0.3);
+  --t-btn-primary: linear-gradient(135deg, #d4af37, #b8860b);
+  --t-btn-text: #000;
+}
+
+[data-theme="winter"] {
+  --t-60: #0f1e3a;
+  --t-30: rgba(30, 58, 120, 0.25);
+  --t-30-solid: #1e3a78;
+  --t-10: #38bdf8;
+  --t-10-rgb: 56, 189, 248;
+  --t-glow: rgba(56,189,248,0.12);
+  --t-border: rgba(56,189,248,0.15);
+  --t-border-subtle: rgba(125,211,252,0.08);
+  --t-text: #e0f2fe;
+  --t-text-dim: rgba(224,242,254,0.5);
+  --t-card-gradient: linear-gradient(145deg, rgba(56,189,248,0.06) 0%, rgba(125,211,252,0.03) 40%, transparent 70%);
+  --t-card-hover: rgba(56,189,248,0.08);
+  --t-card-radius: 24px;
+  --t-badge-bg: rgba(56,189,248,0.15);
+  --t-badge-color: #38bdf8;
+  --t-tab-active: linear-gradient(135deg, rgba(56,189,248,0.18), rgba(125,211,252,0.08));
+  --t-input-focus: rgba(56,189,248,0.3);
+  --t-btn-primary: linear-gradient(135deg, #38bdf8, #0ea5e9);
+  --t-btn-text: #000;
+}
+
+[data-theme="minimal"] {
+  --t-60: #f3f7fb;
+  --t-30: rgba(255,255,255,0.95);
+  --t-30-solid: #ffffff;
+  --t-10: #0f172a;
+  --t-10-rgb: 15, 23, 42;
+  --t-glow: rgba(15,23,42,0.06);
+  --t-border: rgba(15,23,42,0.1);
+  --t-border-subtle: rgba(15,23,42,0.05);
+  --t-text: #0f172a;
+  --t-text-dim: rgba(15,23,42,0.5);
+  --t-card-gradient: linear-gradient(145deg, rgba(15,23,42,0.02) 0%, transparent 40%);
+  --t-card-hover: rgba(15,23,42,0.04);
+  --t-card-radius: 16px;
+  --t-badge-bg: rgba(15,23,42,0.08);
+  --t-badge-color: #0f172a;
+  --t-tab-active: linear-gradient(135deg, rgba(15,23,42,0.08), rgba(15,23,42,0.04));
+  --t-input-focus: rgba(15,23,42,0.15);
+  --t-btn-primary: linear-gradient(135deg, #0f172a, #334155);
+  --t-btn-text: #fff;
+}
+
+[data-theme="arcade"] {
+  --t-60: #0d0221;
+  --t-30: rgba(26, 5, 51, 0.94);
+  --t-30-solid: #1a0533;
+  --t-10: #ff00ff;
+  --t-10-rgb: 255, 0, 255;
+  --t-glow: rgba(255,0,255,0.15);
+  --t-border: rgba(255,0,255,0.25);
+  --t-border-subtle: rgba(0,255,255,0.1);
+  --t-text: #ffff00;
+  --t-text-dim: rgba(255,255,0,0.5);
+  --t-card-gradient: none;
+  --t-card-hover: rgba(255,0,255,0.08);
+  --t-card-radius: 4px;
+  --t-badge-bg: rgba(255,0,255,0.2);
+  --t-badge-color: #ff00ff;
+  --t-tab-active: linear-gradient(135deg, rgba(255,0,255,0.2), rgba(0,255,255,0.1));
+  --t-input-focus: rgba(255,0,255,0.3);
+  --t-btn-primary: linear-gradient(135deg, #ff00ff, #00ffff);
+  --t-btn-text: #000;
+}
+
+/* ─────────────────────────────────────
+   2. CARD SYSTEM — Themed Glass Cards
+   Every card now reacts to theme
+   ───────────────────────────────────── */
+.card-premium-v7,
+.card-premium,
+.glass-strong,
+.settings-card,
+.history-card-premium,
+.ai-insight-card,
+.stat-card-v9,
+.kpi-card,
+.fut-card-wrap,
+.nexus-item-v9,
+.elo-match-row,
+.notif-item-v5,
+.hv2-welcome,
+.hv2-match-card,
+.hv2-promo-card,
+.hv2-promo-card-mini,
+.hv2-event-spotlight,
+.hv2-setup-card,
+.hv2-collapsible-summary,
+.hv2-brief-card,
+.nexus-glass,
+.sport-card,
+.modal-card,
+.rank-breakdown-card,
+.bracket-match,
+.cal-event-card,
+.diary-card-v9,
+.journal-card-v9,
+.rival-intel-panel,
+.soft-prompt-card,
+.hv2-pulse-card,
+.hv2-club-card,
+.system-chart-card,
+.system-explain-card,
+.elo-explainer-box {
+  background: var(--t-card-gradient), var(--t-30) !important;
+  border: 1px solid var(--t-border-subtle) !important;
+  border-radius: var(--t-card-radius) !important;
+  color: var(--t-text) !important;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.04) !important;
+  backdrop-filter: blur(20px) saturate(130%);
+  -webkit-backdrop-filter: blur(20px) saturate(130%);
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Hover — dramatic lift with themed glow */
+.card-premium-v7:hover,
+.card-premium:hover,
+.glass-strong:hover,
+.settings-card:hover,
+.history-card-premium:hover,
+.stat-card-v9:hover,
+.kpi-card:hover,
+.nexus-item-v9:hover,
+.hv2-match-card:hover,
+.hv2-promo-card:hover,
+.hv2-promo-card-mini:hover,
+.hv2-brief-card:hover,
+.hv2-pulse-card:hover,
+.hv2-club-card:hover,
+.elo-match-row:hover,
+.notif-item-v5:hover,
+.diary-card-v9:hover,
+.journal-card-v9:hover {
+  transform: translateY(-4px) scale(1.01) !important;
+  border-color: var(--t-border) !important;
+  box-shadow:
+    0 16px 48px rgba(0,0,0,0.35),
+    0 0 24px var(--t-glow),
+    inset 0 1px 0 rgba(255,255,255,0.06) !important;
+}
+
+/* Card accent line — left side glow bar */
+.card-premium-v7::before,
+.hv2-match-card::before,
+.hv2-promo-card-mini::before,
+.notif-item-v5::before,
+.elo-match-row::before,
+.history-card-premium::before,
+.diary-card-v9::before {
+  content: '' !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 12% !important;
+  bottom: 12% !important;
+  width: 3px !important;
+  background: linear-gradient(180deg, transparent, rgb(var(--t-10-rgb)), transparent) !important;
+  border-radius: 0 3px 3px 0 !important;
+  opacity: 0 !important;
+  transition: opacity 0.3s ease !important;
+  z-index: 2 !important;
+}
+
+.card-premium-v7:hover::before,
+.hv2-match-card:hover::before,
+.hv2-promo-card-mini:hover::before,
+.notif-item-v5:hover::before,
+.elo-match-row:hover::before,
+.history-card-premium:hover::before,
+.diary-card-v9:hover::before {
+  opacity: 1 !important;
+}
+
+/* ─────────────────────────────────────
+   3. MODAL — Themed Premium
+   ───────────────────────────────────── */
+.modal-card {
+  background:
+    radial-gradient(ellipse at top left, rgba(var(--t-10-rgb), 0.06), transparent 40%),
+    radial-gradient(ellipse at bottom right, rgba(var(--t-10-rgb), 0.03), transparent 40%),
+    var(--t-30) !important;
+  border: 1px solid var(--t-border) !important;
+  border-radius: clamp(20px, 4vw, 30px) !important;
+  box-shadow:
+    0 40px 100px rgba(0,0,0,0.6),
+    0 0 0 1px rgba(var(--t-10-rgb), 0.05),
+    inset 0 1px 0 rgba(255,255,255,0.06) !important;
+  max-width: min(460px, calc(100vw - 16px)) !important;
+}
+
+.modal-header {
+  border-bottom: 1px solid rgba(var(--t-10-rgb), 0.08) !important;
+  padding: clamp(14px, 3vw, 22px) clamp(16px, 3vw, 24px) clamp(12px, 2vw, 18px) !important;
+}
+
+.modal-title {
+  background: linear-gradient(135deg, var(--t-text), rgb(var(--t-10-rgb))) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  font-size: clamp(12px, 2.5vw, 15px) !important;
+  font-weight: 900 !important;
+  letter-spacing: 1.5px !important;
+}
+
+.modal-body {
+  padding: clamp(14px, 3vw, 22px) clamp(16px, 3vw, 24px) !important;
+}
+
+/* ─────────────────────────────────────
+   4. BUTTONS — Themed + Sporty
+   ───────────────────────────────────── */
+.btn-save-v9,
+.btn-primary,
+.hv2-promo-arrow,
+.btn-br-v9 {
+  background: var(--t-btn-primary) !important;
+  color: var(--t-btn-text) !important;
+  border: none !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  border-radius: clamp(10px, 2vw, 14px) !important;
+  box-shadow: 0 4px 16px rgba(var(--t-10-rgb), 0.2) !important;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.btn-save-v9:hover,
+.btn-primary:hover,
+.btn-br-v9:hover {
+  transform: translateY(-2px) scale(1.03) !important;
+  box-shadow: 0 8px 28px rgba(var(--t-10-rgb), 0.35) !important;
+}
+
+.btn-save-v9:active,
+.btn-primary:active {
+  transform: scale(0.97) !important;
+}
+
+/* ─────────────────────────────────────
+   5. TABS — Themed Active States
+   ───────────────────────────────────── */
+.hv2-tab,
+.tab-btn,
+[class*="rank-tab"],
+.seg-node-v9 {
+  border-radius: clamp(10px, 2vw, 14px) !important;
+  font-weight: 800 !important;
+  font-size: clamp(10px, 1.8vw, 12px) !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  padding: clamp(8px, 1.5vw, 12px) clamp(12px, 2vw, 18px) !important;
+  border: 1px solid var(--t-border-subtle) !important;
+  color: var(--t-text-dim) !important;
+}
+
+.hv2-tab.active,
+.tab-btn.active,
+[class*="rank-tab"].active,
+.seg-node-v9.active {
+  background: var(--t-tab-active) !important;
+  border-color: var(--t-border) !important;
+  color: rgb(var(--t-10-rgb)) !important;
+  box-shadow: 0 4px 16px rgba(var(--t-10-rgb), 0.1),
+              inset 0 1px 0 rgba(255,255,255,0.06) !important;
+}
+
+.hv2-tab:hover,
+.tab-btn:hover,
+[class*="rank-tab"]:hover,
+.seg-node-v9:hover {
+  transform: translateY(-1px) !important;
+  border-color: rgba(var(--t-10-rgb), 0.15) !important;
+  color: var(--t-text) !important;
+}
+
+/* ─────────────────────────────────────
+   6. BADGES & CHIPS — Themed
+   ───────────────────────────────────── */
+.v3-badge,
+.hv2-rank-chip,
+.hv2-division-chip,
+.hv2-mc-badge {
+  background: var(--t-badge-bg) !important;
+  color: var(--t-badge-color) !important;
+  border: 1px solid rgba(var(--t-10-rgb), 0.2) !important;
+  font-weight: 900 !important;
+  border-radius: clamp(6px, 1.5vw, 10px) !important;
+  text-shadow: 0 0 8px rgba(var(--t-10-rgb), 0.3) !important;
+}
+
+/* ─────────────────────────────────────
+   7. INPUTS — Themed Focus
+   ───────────────────────────────────── */
+.input-v9,
+.select-v9,
+.area-v9,
+input.input,
+select.input,
+textarea.input,
+input[class*="input"],
+select[class*="select"],
+textarea[class*="area"] {
+  background: rgba(var(--t-10-rgb), 0.03) !important;
+  border: 1px solid var(--t-border-subtle) !important;
+  border-radius: clamp(10px, 2vw, 14px) !important;
+  color: var(--t-text) !important;
+  padding: clamp(10px, 2vw, 14px) clamp(12px, 2.5vw, 18px) !important;
+  font-size: clamp(12px, 2.2vw, 14px) !important;
+  transition: all 0.25s ease !important;
+}
+
+.input-v9:focus,
+.select-v9:focus,
+.area-v9:focus,
+input.input:focus,
+textarea.input:focus {
+  border-color: rgb(var(--t-10-rgb)) !important;
+  box-shadow: 0 0 0 3px var(--t-input-focus), 0 4px 16px rgba(0,0,0,0.2) !important;
+  background: rgba(var(--t-10-rgb), 0.06) !important;
+  outline: none !important;
+}
+
+/* ─────────────────────────────────────
+   8. RANGE SLIDERS — Themed
+   ───────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  height: 5px !important;
+  background: rgba(var(--t-10-rgb), 0.1) !important;
+  border-radius: 5px !important;
+  outline: none !important;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  background: rgb(var(--t-10-rgb)) !important;
+  cursor: pointer !important;
+  box-shadow: 0 0 12px rgba(var(--t-10-rgb), 0.4) !important;
+  transition: all 0.2s ease !important;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2) !important;
+  box-shadow: 0 0 20px rgba(var(--t-10-rgb), 0.5) !important;
+}
+
+/* ─────────────────────────────────────
+   9. ANIMATIONS — Dramatic Entrances
+   ───────────────────────────────────── */
+@keyframes sp-enter {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes sp-enter-left {
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes sp-pulse-border {
+  0%, 100% { border-color: var(--t-border-subtle); }
+  50% { border-color: var(--t-border); }
+}
+@keyframes sp-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--t-10-rgb), 0); }
+  50% { box-shadow: 0 0 20px 4px rgba(var(--t-10-rgb), 0.1); }
+}
+@keyframes sp-count {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes sp-shine {
+  0% { left: -100%; }
+  100% { left: 200%; }
+}
+
+/* Apply entrance to all main page sections */
+.page-content > section,
+.page-content > div,
+.page-content > details {
+  animation: sp-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.page-content > *:nth-child(1)  { animation-delay: 0.03s; }
+.page-content > *:nth-child(2)  { animation-delay: 0.08s; }
+.page-content > *:nth-child(3)  { animation-delay: 0.13s; }
+.page-content > *:nth-child(4)  { animation-delay: 0.18s; }
+.page-content > *:nth-child(5)  { animation-delay: 0.23s; }
+.page-content > *:nth-child(6)  { animation-delay: 0.28s; }
+.page-content > *:nth-child(7)  { animation-delay: 0.33s; }
+.page-content > *:nth-child(8)  { animation-delay: 0.38s; }
+.page-content > *:nth-child(9)  { animation-delay: 0.43s; }
+.page-content > *:nth-child(10) { animation-delay: 0.48s; }
+
+/* Shine sweep on welcome card */
+.hv2-welcome::after {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: -100% !important;
+  width: 50% !important;
+  height: 100% !important;
+  background: linear-gradient(90deg, transparent, rgba(var(--t-10-rgb), 0.05), transparent) !important;
+  animation: sp-shine 4s ease-in-out infinite !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+}
+
+/* ─────────────────────────────────────
+   10. RANKING — Spectacular Podium
+   ───────────────────────────────────── */
+.podium-item {
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  border: 1px solid var(--t-border-subtle) !important;
+  border-radius: var(--t-card-radius) !important;
+}
+
+.podium-item:hover {
+  transform: translateY(-10px) scale(1.05) !important;
+  border-color: var(--t-border) !important;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.4), 0 0 30px var(--t-glow) !important;
+  z-index: 5 !important;
+}
+
+/* Ranking rows */
+.rank-row,
+.rank-user-row,
+[class*="rank-row"] {
+  border-bottom: 1px solid var(--t-border-subtle) !important;
+  transition: all 0.25s ease !important;
+  padding: clamp(10px, 2vw, 16px) clamp(12px, 2.5vw, 18px) !important;
+  position: relative !important;
+}
+
+.rank-row:hover,
+.rank-user-row:hover,
+[class*="rank-row"]:hover {
+  background: var(--t-card-hover) !important;
+  transform: translateX(4px) !important;
+  border-color: rgba(var(--t-10-rgb), 0.1) !important;
+}
+
+/* ─────────────────────────────────────
+   11. SECTIONS & HEADERS — Themed
+   ───────────────────────────────────── */
+.hv2-section-title,
+.hv2-tr-title,
+.section-title,
+.cfg-label-v7,
+.nexus-title {
+  color: rgb(var(--t-10-rgb)) !important;
+  text-shadow: 0 0 12px rgba(var(--t-10-rgb), 0.2) !important;
+}
+
+.hv2-collapsible-summary {
+  border-color: var(--t-border-subtle) !important;
+}
+
+.hv2-collapsible-summary:hover {
+  border-color: var(--t-border) !important;
+}
+
+/* ─────────────────────────────────────
+   12. HEADER & NAV — Themed
+   ───────────────────────────────────── */
+.app-header {
+  border-bottom: 1px solid var(--t-border-subtle) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3), 0 1px 0 rgba(var(--t-10-rgb), 0.05) inset !important;
+}
+
+.bottom-nav {
+  border-top: 1px solid var(--t-border-subtle) !important;
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.4), 0 -1px 0 rgba(var(--t-10-rgb), 0.05) inset !important;
+}
+
+.bottom-nav .nav-icon.active,
+.bottom-nav .nav-item.active .nav-icon,
+.bottom-nav a.active .nav-icon {
+  color: rgb(var(--t-10-rgb)) !important;
+  text-shadow: 0 0 12px rgba(var(--t-10-rgb), 0.4) !important;
+}
+
+/* ─────────────────────────────────────
+   13. SCROLLBARS — Themed
+   ───────────────────────────────────── */
+*::-webkit-scrollbar { width: 4px; height: 4px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(var(--t-10-rgb), 0.15);
+  border-radius: 99px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--t-10-rgb), 0.3);
+}
+
+/* ─────────────────────────────────────
+   14. SELECTION — Themed
+   ───────────────────────────────────── */
+::selection {
+  background: rgba(var(--t-10-rgb), 0.25) !important;
+  color: var(--t-text) !important;
+}
+
+/* ─────────────────────────────────────
+   15. SKELETON / LOADING — Themed
+   ───────────────────────────────────── */
+.skeleton,
+.is-loading,
+.hv2-skeleton-row,
+[class*="skeleton"] {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--t-10-rgb), 0.03) 0%,
+    rgba(var(--t-10-rgb), 0.08) 40%,
+    rgba(var(--t-10-rgb), 0.03) 80%
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: shimmer 1.5s ease-in-out infinite !important;
+  border-radius: var(--t-card-radius) !important;
+  border: none !important;
+  min-height: 60px;
+}
+
+/* ─────────────────────────────────────
+   16. TEXT OVERFLOW PROTECTION
+   ───────────────────────────────────── */
+.hv2-name,
+.rank-user-name,
+.match-player-name,
+[class*="player-name"],
+[class*="user-name"],
+.n-val,
+.hv2-xp-val {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* ─────────────────────────────────────
+   17. RESPONSIVE — All screen sizes
+   ───────────────────────────────────── */
+@media (max-width: 375px) {
+  .page-content { --page-shell-x: 8px !important; }
+  h1 { font-size: clamp(1.1rem, 6vw, 1.5rem) !important; }
+  .modal-card {
+    max-width: 100vw !important;
+    border-radius: 22px 22px 0 0 !important;
+    max-height: 92vh !important;
+  }
+  .modal-overlay {
+    padding: 0 !important;
+    align-items: flex-end !important;
+  }
+  .hv2-stats-bar { gap: 2px !important; flex-wrap: wrap !important; }
+  .hv2-xp-val { font-size: clamp(13px, 3.5vw, 16px) !important; }
+  .hv2-xp-lbl { font-size: 7px !important; }
+}
+
+@media (max-width: 480px) {
+  .system-visual-grid { grid-template-columns: 1fr !important; }
+  .grid-auto-fill { grid-template-columns: 1fr !important; }
+  .rank-row, [class*="rank-row"] { padding: 10px 12px !important; }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  .modal-card { border-radius: 26px !important; }
+}
+
+@media (min-width: 1025px) {
+  .page-content { max-width: 1100px !important; }
+  .modal-card { max-width: 480px !important; border-radius: 30px !important; }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .modal-card { max-height: 95vh !important; }
+  .page-content { --page-bottom: 80px !important; }
+}
+
+/* ─────────────────────────────────────
+   18. CLOSE BUTTON — Premium
+   ───────────────────────────────────── */
+.close-btn {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  border-radius: 10px !important;
+}
+.close-btn:hover {
+  transform: rotate(90deg) scale(1.1) !important;
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #ff6b6b !important;
+}
+
+/* ─────────────────────────────────────
+   19. AVATARS — Themed Ring
+   ───────────────────────────────────── */
+.hv2-avatar-ring,
+.avatar-status {
+  border-color: rgb(var(--t-10-rgb)) !important;
+}
+
+.hv2-avatar-img:hover,
+.rank-user-avatar:hover {
+  border-color: rgba(var(--t-10-rgb), 0.4) !important;
+  box-shadow: 0 0 16px rgba(var(--t-10-rgb), 0.15) !important;
+  transform: scale(1.08) !important;
+}
+
+/* ─────────────────────────────────────
+   20. TOAST / ALERTS — Themed
+   ───────────────────────────────────── */
+.toast,
+.swal2-popup {
+  background: var(--t-30) !important;
+  border: 1px solid var(--t-border) !important;
+  border-radius: var(--t-card-radius) !important;
+  color: var(--t-text) !important;
+  backdrop-filter: blur(20px) !important;
+}
+
+/* ─────────────────────────────────────
+   21. SPORT VISUAL ACCENTS
+   ───────────────────────────────────── */
+/* Glow text for titles */
+.text-primary,
+.glow-text-blue {
+  color: rgb(var(--t-10-rgb)) !important;
+  text-shadow: 0 0 16px rgba(var(--t-10-rgb), 0.3) !important;
+}
+
+/* Sport dividers */
+.hv2-tr-head,
+.hv2-section-head {
+  border-bottom: 1px solid rgba(var(--t-10-rgb), 0.1) !important;
+}
+
+/* ─────────────────────────────────────
+   22. REDUCED MOTION
+   ───────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─────────────────────────────────────
+   23. SAFE AREA SUPPORT
+   ───────────────────────────────────── */
+.page-content {
+  padding-left: max(var(--page-shell-x, 12px), env(safe-area-inset-left)) !important;
+  padding-right: max(var(--page-shell-x, 12px), env(safe-area-inset-right)) !important;
+}
+
+/* ─────────────────────────────────────
+   24. GLOBAL ICON ANIMATIONS
+   ───────────────────────────────────── */
+button:hover > i[class*="fa-"],
+a:hover > i[class*="fa-"],
+.hv2-promo-icon-bg:hover i {
+  transform: scale(1.15) !important;
+  transition: transform 0.2s ease !important;
+}
+
+button:active > i[class*="fa-"],
+a:active > i[class*="fa-"] {
+  transform: scale(0.9) !important;
+}
+
+/* ─────────────────────────────────────
+   25. PRINT
+   ───────────────────────────────────── */
+@media print {
+  .sport-bg, .ai-fab, #vecina-chat-panel, nav, footer { display: none !important; }
+  body { background: white !important; color: black !important; }
+}
