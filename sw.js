@@ -4,7 +4,7 @@
 
 importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 
-const CACHE_NAME = "jafs-padel-runtime-v5";
+const CACHE_NAME = "jafs-padel-runtime-v6";
 const BASE_PATH = new URL(self.registration.scope || "/").pathname.replace(/\/$/, "");
 const withBase = (path) =>
   path.startsWith("http")
