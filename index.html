@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#020617">
+    <title>Acceso | JafsPadel</title>
+    <meta name="description" content="Accede a JafsPadel y gestiona tus partidos de forma simple">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" href="./imagenes/Logojafs.png" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/global.css">
+    <link rel="stylesheet" href="./css/auth.css">
+</head>
+
+<body class="body-auth">
+    <div class="sport-bg"></div>
+
+    <div id="master-loader" class="master-loader">
+        <div class="loader-cosmic-bg"></div>
+        <div class="loader-box">
+            <div class="loader-visual">
+                <div class="loader-ring"></div>
+                <div class="loader-ring inner"></div>
+                    <img src="./imagenes/Logojafs.png" class="loader-logo" alt="JafsPadel">
+            </div>
+            <div class="loader-text-group">
+                <div id="loader-status" class="loader-status">Iniciando sincronizacion</div>
+                <div class="loader-bar-container">
+                    <div id="progress-fill" class="loader-bar-fill"></div>
+                </div>
+                <div class="loader-percentage">0%</div>
+            </div>
+        </div>
+    </div>
+
+    <main class="auth-screen">
+        <div class="auth-card animate-fade-in" id="login-form-card">
+            <div class="auth-card-glow"></div>
+            <div class="auth-header">
+                <div class="auth-logo-box">
+                <img src="./imagenes/Logojafs.png" class="auth-logo" alt="JafsPadel">
+                </div>
+                <h1 class="auth-title">ACCESO</h1>
+                <p class="auth-subtitle">Sincroniza tu ficha</p>
+            </div>
+
+            <form id="loginForm" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <div class="input-icon-wrapper">
+                        <input type="text" id="email" autocomplete="username" placeholder="correo@ejemplo.com">
+                        <i class="fas fa-user input-icon"></i>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contrasena</label>
+                    <div class="input-icon-wrapper">
+                        <input type="password" id="password" autocomplete="current-password" placeholder="********">
+                        <i class="fas fa-lock input-icon"></i>
+                        <i class="fas fa-eye toggle-pass" id="togglePassword"></i>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg w-full">
+                    <i class="fas fa-shield-halved"></i> Acceder
+                </button>
+            </form>
+
+
+            <div class="auth-footer">
+                <a href="recuperar.html" class="auth-link">Olvidaste tu contrasena?</a>
+                <div class="auth-sep"></div>
+                <a href="registro.html" class="auth-link">Crear nuevo usuario</a>
+            </div>
+
+            <section class="apk-banner" aria-labelledby="apk-banner-title">
+                <button type="button" class="apk-banner-dismiss" id="apk-banner-dismiss" aria-label="Cerrar aviso">
+                    <i class="fas fa-xmark"></i>
+                </button>
+                <span class="apk-banner-badge">Android + PWA</span>
+                <h2 class="apk-banner-title" id="apk-banner-title">Instala la app completa</h2>
+                <p class="apk-banner-copy">
+                    Descarga la APK oficial o abre la guia de instalacion para usar JafsPadel con avisos y acceso rapido.
+                </p>
+                <div class="apk-banner-actions">
+                    <a href="#" class="apk-banner-primary" id="apk-banner-link">
+                        <i class="fas fa-download"></i> Descargar APK
+                    </a>
+                    <button type="button" class="apk-banner-secondary" id="apk-banner-open-modal">
+                        <i class="fas fa-mobile-screen-button"></i> Ver detalles
+                    </button>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <div id="app-download-modal" class="app-download-modal" aria-hidden="true">
+        <div class="app-download-card">
+            <div class="app-hero-bg">
+                <div class="app-hero-particles"></div>
+                <img src="./imagenes/Logojafs.png" alt="Logo" class="app-hero-icon">
+            </div>
+            <div class="app-content">
+                <span class="app-badge">Disponible para Android</span>
+                <h3 class="app-title" id="app-download-label">INSTALAR APP OFICIAL</h3>
+                <p class="app-desc" id="app-download-copy">Disfruta de la mejor experiencia JafsPadel con notificaciones nativas, mayor velocidad y acceso total.</p>
+                
+                <div class="app-features">
+                    <div class="app-feature-item"><i class="fas fa-bolt"></i> Máxima fluidez</div>
+                    <div class="app-feature-item"><i class="fas fa-bell"></i> Push nativas</div>
+                    <div class="app-feature-item"><i class="fas fa-shield-halved"></i> Acceso seguro</div>
+                    <div class="app-feature-item"><i class="fas fa-satellite-dish"></i> Live updates</div>
+                </div>
+
+                <a href="#" class="app-btn-download" id="app-download-link">
+                    <i class="fas fa-download mr-2"></i> Descargar APK
+                </a>
+
+                <button class="app-btn-later" id="app-download-later">Quizás más tarde</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .master-loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100dvh;
+            min-height: 100vh;
+            z-index: 30000;
+            background: #02040a;
+            display: none;
+            /* Hidden by default */
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            isolation: isolate;
+        }
+
+        .loader-cosmic-bg {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(198, 255, 0, 0.05) 0%, transparent 70%);
+            animation: pulseBg 4s infinite alternate;
+        }
+
+        @keyframes pulseBg {
+            from {
+                opacity: 0.3;
+                transform: scale(1);
+            }
+
+            to {
+                opacity: 0.7;
+                transform: scale(1.2);
+            }
+        }
+
+        .loader-box {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            z-index: 10;
+            width: min(92vw, 360px);
+            margin: 0 auto;
+        }
+
+        .loader-visual {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loader-logo {
+            width: 70px;
+            height: 70px;
+            object-fit: contain;
+            filter: drop-shadow(0 0 20px rgba(198, 255, 0, 0.4));
+            z-index: 5;
+            animation: logoPulse 2s infinite ease-in-out;
+            margin-bottom: 0 !important;
+        }
+
+        @keyframes logoPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                filter: drop-shadow(0 0 20px rgba(198, 255, 0, 0.4));
+            }
+
+            50% {
+                transform: scale(1.05);
+                filter: drop-shadow(0 0 35px rgba(198, 255, 0, 0.7));
+            }
+        }
+
+        .loader-ring {
+            position: absolute;
+            inset: 0;
+            border: 2px solid rgba(198, 255, 0, 0.1);
+            border-top: 2px solid #c6ff00;
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+        }
+
+        .loader-ring.inner {
+            inset: 15px;
+            border: 1px solid rgba(0, 212, 255, 0.1);
+            border-bottom: 1px solid #00d4ff;
+            animation: spinReverse 2.5s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes spinReverse {
+            to {
+                transform: rotate(-360deg);
+            }
+        }
+
+        .loader-text-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            width: 280px;
+        }
+
+        .loader-status {
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-family: 'Rajdhani';
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        .loader-bar-container {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .loader-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #c6ff00, #00d4ff);
+            box-shadow: 0 0 15px rgba(198, 255, 0, 0.5);
+            transition: width 0.3s ease;
+        }
+
+        .loader-percentage {
+            font-size: 0.6rem;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.3);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+
+        .toggle-pass {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+        }
+
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 15px auto;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            width: 100%;
+            max-width: 280px;
+        }
+
+        .auth-divider::before,
+        .auth-divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            padding: 14px;
+            font-weight: 700;
+            width: 100%;
+            max-width: 300px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .auth-footer {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 18px;
+            text-align: center;
+            width: 100%;
+        }
+
+        .apk-banner {
+            position: fixed;
+            right: 18px;
+            bottom: 18px;
+            z-index: 16000;
+            width: min(380px, calc(100vw - 28px));
+            padding: 18px;
+            border-radius: 24px;
+            background:
+                radial-gradient(circle at top right, rgba(198, 255, 0, 0.16), transparent 35%),
+                linear-gradient(180deg, rgba(5, 10, 24, 0.96), rgba(7, 18, 38, 0.98));
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+            text-align: center;
+        }
+
+        .apk-banner-dismiss {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+        }
+
+        .apk-banner-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(198, 255, 0, 0.16);
+            border: 1px solid rgba(198, 255, 0, 0.28);
+            color: #d9ff72;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .apk-banner-title {
+            margin: 12px 0 8px;
+            color: #fff;
+            font-size: 1.3rem;
+            font-weight: 900;
+            letter-spacing: 0.01em;
+        }
+
+        .apk-banner-copy {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.74);
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }
+
+        .apk-banner-actions {
+            display: grid;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .apk-banner-primary,
+        .apk-banner-secondary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            min-height: 50px;
+            border-radius: 16px;
+            font-weight: 800;
+            text-decoration: none;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .apk-banner-primary {
+            background: linear-gradient(90deg, #c6ff00, #49e6ff);
+            color: #04111f;
+            box-shadow: 0 18px 30px rgba(73, 230, 255, 0.16);
+        }
+
+        .apk-banner-secondary {
+            background: rgba(255, 255, 255, 0.04);
+            color: #e5eefc;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .apk-banner-primary:hover,
+        .apk-banner-secondary:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 640px) {
+            .apk-banner {
+                right: 12px;
+                left: 12px;
+                bottom: 12px;
+                width: auto;
+            }
+        }
+
+        /* Premium App Modal v2.0 */
+        .app-download-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 20000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(2, 6, 23, 0.88);
+            backdrop-filter: blur(12px);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .app-download-modal.is-open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .app-download-card {
+            position: relative;
+            width: 100%;
+            max-width: 440px;
+            background: 
+                radial-gradient(circle at top left, rgba(198, 255, 0, 0.08), transparent 40%),
+                linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(6, 10, 22, 0.99));
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 32px;
+            overflow: hidden;
+            box-shadow: 0 42px 100px rgba(0, 0, 0, 0.6);
+            transform: translateY(30px) scale(0.95);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .app-download-modal.is-open .app-download-card {
+            transform: translateY(0) scale(1);
+        }
+
+        .app-hero-bg {
+            height: 140px;
+            background: linear-gradient(135deg, #0ea5e9, #c6ff00);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .app-hero-icon {
+            width: 84px;
+            height: 84px;
+            background: #fff;
+            border-radius: 22px;
+            padding: 12px;
+            box-shadow: 0 20px 48px rgba(0, 212, 255, 0.3);
+            z-index: 2;
+        }
+
+        .app-hero-particles {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            opacity: 0.3;
+        }
+
+        .app-content {
+            padding: 32px 28px;
+            text-align: center;
+        }
+
+        .app-badge {
+            display: inline-block;
+            background: rgba(198, 255, 0, 0.15);
+            color: #c6ff00;
+            padding: 6px 14px;
+            border-radius: 99px;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            border: 1px solid rgba(198, 255, 0, 0.25);
+            margin-bottom: 16px;
+        }
+
+        .app-title {
+            color: #fff;
+            font-size: 24px;
+            font-weight: 950;
+            margin: 0 0 12px;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
+        }
+
+        .app-desc {
+            color: rgba(255, 255, 255, 0.65);
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.5;
+            margin-bottom: 28px;
+        }
+
+        .app-features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 32px;
+            text-align: left;
+        }
+
+        .app-feature-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+        }
+
+        .app-feature-item i {
+            color: #c6ff00;
+            font-size: 10px;
+            width: 18px;
+            height: 18px;
+            background: rgba(198, 255, 0, 0.1);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .app-btn-download {
+            background: linear-gradient(90deg, #c6ff00, #3cf0ff);
+            color: #020617;
+            padding: 18px 24px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 950;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            box-shadow: 0 16px 32px rgba(198, 255, 0, 0.25);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .app-btn-download:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 24px 48px rgba(198, 255, 0, 0.35);
+        }
+
+        .app-btn-later {
+            color: rgba(255, 255, 255, 0.3);
+            background: transparent;
+            border: 0;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .app-btn-later:hover {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        @keyframes appDownloadFloat {
+            0%, 100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-2px);
+            }
+        }
+
+        @keyframes appDownloadShine {
+            from {
+                transform: translateX(-120%);
+            }
+
+            to {
+                transform: translateX(130%);
+            }
+        }
+
+        @keyframes downloadModalIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px) scale(0.97);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .auth-sep {
+            height: 1px;
+            width: 40px;
+            margin: 4px auto;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .auth-transitioning .auth-screen {
+            display: none !important;
+        }
+
+        html.auth-transitioning,
+        body.auth-transitioning {
+            overflow: hidden !important;
+            background: #02040a !important;
+        }
+
+        body.auth-transitioning>.sport-bg,
+        body.auth-transitioning>.auth-screen {
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
+        body.auth-transitioning > :not(#master-loader) {
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
+        .welcome-entry-toast {
+            position: fixed;
+            inset: 0;
+            z-index: 12000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            animation: welcomeFadeOut 2.1s ease forwards;
+        }
+
+        .welcome-entry-toast .welcome-entry-card {
+            padding: 24px 28px;
+            border-radius: 20px;
+            border: 1px solid rgba(198, 255, 0, 0.5);
+            background: linear-gradient(135deg, rgba(2, 6, 23, 0.94), rgba(8, 47, 73, 0.82));
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45), 0 0 32px rgba(198, 255, 0, 0.25);
+            text-align: center;
+            transform: translateY(8px) scale(0.95);
+            animation: welcomePopIn 0.45s cubic-bezier(0.2, 1, 0.2, 1) forwards;
+        }
+
+        .welcome-entry-toast .welcome-entry-title {
+            font-size: 2rem;
+            font-weight: 900;
+            letter-spacing: 1.5px;
+            color: #c6ff00;
+            text-transform: uppercase;
+        }
+
+        .welcome-entry-toast .welcome-entry-sub {
+            margin-top: 6px;
+            font-size: 0.9rem;
+            font-weight: 800;
+            color: rgba(255, 255, 255, 0.86);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        @keyframes welcomePopIn {
+            to {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes welcomeFadeOut {
+            0%, 75% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+            }
+        }
+    </style>
+
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initPWAShell } from './js/modules/pwa-shell.js';
+        import { APP_APK_URL } from './js/app-config.js';
+        initThemeSystem();
+        initGalaxyBackground();
+        initPWAShell('acceso');
+
+        const ua = navigator.userAgent || '';
+        const isIOS = /iPad|iPhone|iPod/i.test(ua);
+        const isAndroid = /Android/i.test(ua);
+        const isNativeApp = Boolean(window.Capacitor?.isNativePlatform?.() || ['android', 'ios'].includes(window.Capacitor?.getPlatform?.() || ''));
+        const downloadModal = document.getElementById('app-download-modal');
+        const downloadLink = document.getElementById('app-download-link');
+        const downloadLabel = document.getElementById('app-download-label');
+        const downloadCopy = document.getElementById('app-download-copy');
+        const helpButton = document.getElementById('app-download-help');
+        const closeDownloadModal = document.getElementById('app-download-close');
+        const closeDownloadLater = document.getElementById('app-download-later');
+        const apkBannerLink = document.getElementById('apk-banner-link');
+        const apkBannerOpenModal = document.getElementById('apk-banner-open-modal');
+        const apkBannerDismiss = document.getElementById('apk-banner-dismiss');
+        const modalDismissKey = 'padeluminatis_download_modal_closed_session';
+        const bannerDismissKey = 'padeluminatis_apk_banner_closed_session';
+        const apkUrl = APP_APK_URL || './JafsPadelclub-mobile-release.apk';
+
+        if (downloadLink) {
+            downloadLink.href = apkUrl;
+            downloadLink.setAttribute('download', 'JafsPadelclub-mobile-release.apk');
+        }
+        if (apkBannerLink) {
+            apkBannerLink.href = apkUrl;
+            apkBannerLink.setAttribute('download', 'JafsPadelclub-mobile-release.apk');
+        }
+
+        const openDownloadModal = () => {
+            if (!downloadModal) return;
+            downloadModal.classList.add('is-open');
+            downloadModal.setAttribute('aria-hidden', 'false');
+        };
+
+        const hideApkBanner = () => {
+            const banner = document.querySelector('.apk-banner');
+            if (!banner) return;
+            banner.style.display = 'none';
+            try { sessionStorage.setItem(bannerDismissKey, '1'); } catch (_) {}
+        };
+
+        const hideDownloadModal = () => {
+            if (!downloadModal) return;
+            downloadModal.classList.remove('is-open');
+            downloadModal.setAttribute('aria-hidden', 'true');
+            try { sessionStorage.setItem(modalDismissKey, '1'); } catch (_) {}
+        };
+
+        if (isNativeApp && downloadModal) {
+            downloadModal.remove();
+            document.querySelector('.apk-banner')?.remove();
+        }
+
+        apkBannerOpenModal?.addEventListener('click', openDownloadModal);
+        apkBannerDismiss?.addEventListener('click', hideApkBanner);
+
+        const showInstallGuide = () => {
+            if (isIOS) {
+                alert('En iPhone no se puede instalar una APK. Usa Compartir > Anadir a pantalla de inicio para la version web instalada.');
+                return;
+            }
+            alert('Pulsa Descargar APK para bajar la aplicacion oficial.');
+        };
+
+        if (isIOS) {
+            if (downloadLabel) downloadLabel.textContent = 'USAR EN IPHONE';
+            if (downloadCopy) downloadCopy.textContent = 'En iPhone instalamos la version PWA (Compartir > Anadir a pantalla de inicio).';
+            downloadLink?.removeAttribute('download');
+            downloadLink?.setAttribute('href', '#');
+            downloadLink?.addEventListener('click', (event) => {
+                event.preventDefault();
+                showInstallGuide();
+            });
+        }
+
+        closeDownloadLater?.addEventListener('click', hideDownloadModal);
+
+        if (!isNativeApp) {
+            try {
+                if (sessionStorage.getItem(bannerDismissKey) === '1') {
+                    document.querySelector('.apk-banner')?.remove();
+                }
+            } catch (_) {}
+        }
+    </script>
+    <script type="module" src="./js/login.js"></script>
+</body>
+
+</html>

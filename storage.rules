@@ -1,0 +1,50 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.email == 'Juanan221091@gmail.com'
+      );
+    }
+
+    // Profile pictures
+    match /users/{uid}/{fileName} {
+      allow read: if true;
+      allow write: if signedIn() && request.auth.uid == uid
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // User shared gallery for profile/admin review
+    match /users/{uid}/gallery/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid
+                   && request.resource.size < 8 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Admin / system assets (optional future use)
+    match /admin/{allPaths=**} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Match media uploads
+    match /matches/{matchId}/{uid}/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid
+                   && request.resource.size < 12 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*') ||
+                       request.resource.contentType.matches('video/.*'));
+    }
+
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
