@@ -76,27 +76,27 @@
                 <a href="registro.html" class="auth-link">Crear nuevo usuario</a>
             </div>
 
-            <section class="apk-banner" aria-labelledby="apk-banner-title">
-                <button type="button" class="apk-banner-dismiss" id="apk-banner-dismiss" aria-label="Cerrar aviso">
-                    <i class="fas fa-xmark"></i>
-                </button>
-                <span class="apk-banner-badge">Android + PWA</span>
-                <h2 class="apk-banner-title" id="apk-banner-title">Instala la app completa</h2>
-                <p class="apk-banner-copy">
-                    Descarga la APK oficial o abre la guia de instalacion para usar JafsPadel con avisos y acceso rapido.
-                </p>
-                <div class="apk-banner-actions">
-                    <a href="#" class="apk-banner-primary" id="apk-banner-link">
-                        <i class="fas fa-download"></i> Descargar APK
-                    </a>
-                    <button type="button" class="apk-banner-secondary" id="apk-banner-open-modal">
-                        <i class="fas fa-mobile-screen-button"></i> Ver detalles
-                    </button>
-                </div>
-            </section>
-
         </div>
     </main>
+
+    <section class="apk-banner" aria-labelledby="apk-banner-title">
+        <button type="button" class="apk-banner-dismiss" id="apk-banner-dismiss" aria-label="Cerrar aviso">
+            <i class="fas fa-xmark"></i>
+        </button>
+        <span class="apk-banner-badge">Android + PWA</span>
+        <h2 class="apk-banner-title" id="apk-banner-title">App oficial disponible</h2>
+        <p class="apk-banner-copy">
+            Instala la APK oficial para tener acceso directo, mejor respuesta y avisos nativos. Si prefieres seguir en web, puedes cerrar este aviso.
+        </p>
+        <div class="apk-banner-actions">
+            <a href="#" class="apk-banner-primary" id="apk-banner-link">
+                <i class="fas fa-download"></i> Descargar APK
+            </a>
+            <button type="button" class="apk-banner-secondary" id="apk-banner-open-modal">
+                <i class="fas fa-mobile-screen-button"></i> Ver detalles
+            </button>
+        </div>
+    </section>
 
     <div id="app-download-modal" class="app-download-modal" aria-hidden="true">
         <div class="app-download-card">
@@ -336,18 +336,51 @@
 
         .apk-banner {
             position: fixed;
-            right: 18px;
-            bottom: 18px;
+            right: 22px;
+            top: 22px;
             z-index: 16000;
-            width: min(380px, calc(100vw - 28px));
-            padding: 18px;
-            border-radius: 24px;
+            width: min(360px, calc(100vw - 32px));
+            padding: 18px 18px 16px;
+            border-radius: 26px;
             background:
                 radial-gradient(circle at top right, rgba(198, 255, 0, 0.16), transparent 35%),
                 linear-gradient(180deg, rgba(5, 10, 24, 0.96), rgba(7, 18, 38, 0.98));
             border: 1px solid rgba(255, 255, 255, 0.12);
             box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
-            text-align: center;
+            text-align: left;
+            overflow: hidden;
+            animation: apkBannerFloatIn 0.65s cubic-bezier(0.22, 1, 0.36, 1), apkBannerPulse 3.6s ease-in-out 0.9s infinite;
+        }
+
+        .apk-banner::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, rgba(198, 255, 0, 0.14), transparent 42%, rgba(73, 230, 255, 0.12));
+            opacity: 0.9;
+            pointer-events: none;
+        }
+
+        @keyframes apkBannerFloatIn {
+            from {
+                opacity: 0;
+                transform: translate3d(0, -14px, 0) scale(0.96);
+            }
+
+            to {
+                opacity: 1;
+                transform: translate3d(0, 0, 0) scale(1);
+            }
+        }
+
+        @keyframes apkBannerPulse {
+            0%, 100% {
+                box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+            }
+
+            50% {
+                box-shadow: 0 28px 72px rgba(14, 165, 233, 0.22);
+            }
         }
 
         .apk-banner-dismiss {
@@ -381,7 +414,7 @@
         .apk-banner-title {
             margin: 12px 0 8px;
             color: #fff;
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             font-weight: 900;
             letter-spacing: 0.01em;
         }
@@ -436,7 +469,9 @@
                 right: 12px;
                 left: 12px;
                 bottom: 12px;
+                top: auto;
                 width: auto;
+                text-align: center;
             }
         }
 
