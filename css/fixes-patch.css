@@ -1,0 +1,1177 @@
+/* ════════════════════════════════════════════════════════════
+   FIXES-PATCH.CSS — Padeluminatis Pro · Global Bug Fixes v1.0
+   Correcciones: loader, header, navbar, grid, fondo, propuesta
+   ════════════════════════════════════════════════════════════ */
+
+/* ─── 1. FONDO: garantizar que .sport-bg cubre siempre ─── */
+html, body {
+  background: #000206 !important;
+  min-height: 100dvh;
+}
+
+.sport-bg {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: -1000 !important;
+  pointer-events: none !important;
+  min-height: 100dvh !important;
+  width: 100vw !important;
+}
+
+/* ─── 2. PAGE-CONTENT: padding correcto con header + navbar ─── */
+.page-content {
+  padding-top: calc(var(--app-header-h, 56px) + env(safe-area-inset-top, 0px) + 16px) !important;
+  padding-bottom: calc(var(--app-nav-h, 80px) + env(safe-area-inset-bottom, 0px) + 16px) !important;
+  width: min(100%, var(--page-shell-max, 1320px));
+  margin-inline: auto;
+  padding-inline: clamp(10px, 3vw, 20px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100dvh;
+  position: relative;
+  z-index: 1;
+}
+
+/* home.html usa display: grid desde home-v2, respetamos con override */
+.home-page.page-content {
+  display: grid !important;
+  grid-template-columns: 1fr;
+  gap: 12px !important;
+}
+
+/* ─── 3. APP HEADER: posición fija y z-index correcto ─── */
+.app-header {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 9000 !important;
+  height: var(--app-header-h, 56px) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  padding-inline: 16px !important;
+  background:
+    radial-gradient(circle at top right, rgba(198, 255, 0, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(4, 8, 20, 0.98), rgba(2, 6, 14, 0.96)) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+}
+
+/* ─── 4. BOTTOM NAV: posición fija correcta ─── */
+.bottom-nav {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 9000 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px) !important;
+  background:
+    radial-gradient(circle at top center, rgba(0,212,255,0.06), transparent 32%),
+    linear-gradient(180deg, rgba(4,10,22,0.97), rgba(2,6,14,0.99)) !important;
+  border-top: 1px solid rgba(255,255,255,0.07) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  box-shadow: 0 -6px 32px rgba(0,0,0,0.36) !important;
+}
+
+.nav-dock-v8 {
+  display: grid !important;
+  grid-template-columns: repeat(5, 1fr) !important;
+  gap: 4px !important;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+  align-items: center !important;
+  max-width: 560px !important;
+  margin-inline: auto !important;
+}
+
+/* ─── 5. GLOBAL LOADER — sin conflicto con master-loader ─── */
+.global-loader {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 25000 !important;
+  background: rgba(0,2,6,0.97) !important;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+.global-loader.active {
+  display: flex !important;
+}
+.global-loader.fade-out {
+  animation: loaderFadeOut 0.5s ease forwards !important;
+}
+@keyframes loaderFadeOut {
+  to { opacity: 0; pointer-events: none; }
+}
+
+/* master-loader en index.html por encima de todo */
+.master-loader {
+  z-index: 30000 !important;
+}
+
+/* ─── 6. CORRECCIONES ANIMACIONES ─── */
+/* Evitar que animate-up choque con position:fixed de loader */
+.animate-up {
+  animation: fadeInUp 0.48s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Prevenir animaciones infinitas bloqueando scroll */
+.hv2-welcome,
+.app-header,
+.bottom-nav {
+  will-change: transform;
+}
+
+/* ─── 7. GRID IMPROVEMENTS — evitar huecos y overflow ─── */
+.hv2-promo-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+  gap: 10px !important;
+  width: 100% !important;
+}
+
+.hv2-stats-bar {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+@media (min-width: 420px) {
+  .hv2-stats-bar {
+    grid-template-columns: repeat(6, 1fr) !important;
+  }
+}
+
+/* Evitar que secciones 'hidden' dejen hueco */
+.hidden {
+  display: none !important;
+}
+
+/* ─── 8. FUENTES RESPONSIVAS ─── */
+:root {
+  --fs-xs:   clamp(0.625rem, 1.8vw, 0.75rem);
+  --fs-sm:   clamp(0.7rem,   2vw,   0.875rem);
+  --fs-base: clamp(0.8rem,   2.2vw, 1rem);
+  --fs-lg:   clamp(0.9rem,   2.5vw, 1.125rem);
+  --fs-xl:   clamp(1rem,     3vw,   1.25rem);
+  --fs-2xl:  clamp(1.2rem,   4vw,   1.5rem);
+  --fs-hero: clamp(1.6rem,   7vw,   2.8rem);
+}
+
+.hv2-name {
+  font-size: var(--fs-hero) !important;
+  line-height: 1.05 !important;
+}
+
+.page-title-pro {
+  font-size: var(--fs-2xl) !important;
+}
+
+.section-title {
+  font-size: var(--fs-sm) !important;
+}
+
+h1 {
+  font-size: var(--fs-2xl) !important;
+}
+
+/* ─── 9. CHAT PROPUESTA — ESTILO WHATSAPP ─── */
+
+/* Panel de propuesta — estilo chat moderno */
+.proposal-chat-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 12px;
+  min-height: 220px;
+  max-height: 340px;
+  scroll-behavior: smooth;
+  background: rgba(0,0,0,0.2);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.06);
+  margin-block: 12px;
+}
+
+/* Burbujas estilo WhatsApp */
+.proposal-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 82%;
+  animation: proposalMsgIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+@keyframes proposalMsgIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Mensaje propio — derecha */
+.proposal-msg.me {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+/* Mensaje de otros — izquierda */
+.proposal-msg:not(.me) {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.proposal-msg-meta {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.2px;
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+
+.proposal-msg-text {
+  padding: 10px 14px;
+  border-radius: 18px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+/* Burbuja propia */
+.proposal-msg.me .proposal-msg-text {
+  background: linear-gradient(135deg, #c6ff00, #8ee000);
+  color: #020617;
+  font-weight: 700;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 4px 16px rgba(198,255,0,0.2);
+}
+
+/* Burbuja ajena */
+.proposal-msg:not(.me) .proposal-msg-text {
+  background: rgba(255,255,255,0.09);
+  color: rgba(255,255,255,0.92);
+  border-bottom-left-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+/* Input del chat propuesta */
+.proposal-chat-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+}
+.proposal-chat-input.whatsapp {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 28px;
+  padding: 6px 8px 6px 16px;
+  gap: 8px;
+}
+.proposal-chat-input.whatsapp #proposal-chat-text {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+  padding: 6px 0;
+  min-width: 0;
+}
+.proposal-chat-input.whatsapp #proposal-chat-text::placeholder {
+  color: rgba(255,255,255,0.3);
+  font-size: 12px;
+}
+.proposal-chat-input.whatsapp #proposal-send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c6ff00, #8ee000);
+  color: #020617;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 900;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.proposal-chat-input.whatsapp #proposal-send-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(198,255,0,0.3);
+}
+/* Override texto "Enviar" → icono */
+.proposal-chat-input.whatsapp #proposal-send-btn::after {
+  content: '\f1d8';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+}
+.proposal-chat-input.whatsapp #proposal-send-btn {
+  font-size: 0; /* Oculta texto, muestra FA icon vía ::after */
+}
+.proposal-chat-input.whatsapp #proposal-send-btn::after {
+  font-size: 14px;
+}
+
+/* Acciones del chat (BTNs abajo) */
+.proposal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+/* Header del modal propuesta ahora abierto tipo botón FAB */
+#proposal-modal.modal-overlay,
+#proposal-modal .modal-card {
+  max-width: min(94vw, 700px) !important;
+}
+
+/* ─── 10. MODAL — mejorar transición y bordes ─── */
+.modal-card {
+  border-radius: 26px !important;
+  transform: translateY(28px) scale(0.96);
+  transition: transform 0.38s cubic-bezier(0.34,1.56,0.64,1), opacity 0.28s ease !important;
+}
+.modal-overlay.active .modal-card {
+  transform: translateY(0) scale(1) !important;
+}
+
+/* ─── 11. TOAST correctamente por encima del header ─── */
+.toast-container {
+  z-index: 10500 !important;
+  top: calc(var(--app-header-h, 56px) + env(safe-area-inset-top, 0px) + 10px) !important;
+}
+
+/* ─── 12. FAB IA + PWA install — no se solapan ─── */
+#vecina-chat-fab.ai-fab {
+  bottom: calc(var(--app-nav-h, 80px) + env(safe-area-inset-bottom, 0px) + 14px) !important;
+  right: 16px !important;
+  z-index: 8900 !important;
+}
+#pwa-install-launcher {
+  bottom: calc(var(--app-nav-h, 80px) + env(safe-area-inset-bottom, 0px) + 72px) !important;
+  right: 16px !important;
+  z-index: 8800 !important;
+}
+
+/* ─── 13. RESPONSIVE SMALL SCREENS ─── */
+@media (max-width: 360px) {
+  .hv2-promo-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .nav-dock-v8 {
+    gap: 2px !important;
+    padding-inline: 6px !important;
+  }
+  .hv2-name {
+    font-size: clamp(1.4rem, 10vw, 2rem) !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .hv2-promo-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+  .page-content {
+    max-width: 800px !important;
+    margin-inline: auto !important;
+    padding-inline: 24px !important;
+  }
+}
+
+/* ─── 14. CORRECCIÓN HEADER + LOADER en páginas públicas ─── */
+.body-auth .app-header,
+.body-auth .bottom-nav,
+.body-auth #pwa-install-launcher,
+.body-auth #vecina-chat-fab {
+  display: none !important;
+}
+
+/* ─── 15. APP SHELL BANNER (update/offline) — encima del header ─── */
+.app-shell-banner {
+  position: fixed !important;
+  top: calc(var(--app-header-h, 56px) + env(safe-area-inset-top, 0px) + 8px) !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 9500 !important;
+  width: min(calc(100vw - 24px), 460px) !important;
+  border-radius: 16px !important;
+  background:
+    linear-gradient(135deg, rgba(6,12,28,0.97), rgba(2,6,18,0.99)) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45) !important;
+  backdrop-filter: blur(18px) !important;
+  padding: 12px 14px !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+.app-shell-banner.hidden {
+  display: none !important;
+}
+
+/* ─── 16. SECCIÓN con huecos entre cards ─── */
+.hv2-matches-section,
+.hv2-quick-access,
+.hv2-events-promo {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* ─── 17. NAV ITEM — active state mejorado ─── */
+.nav-item-v8.active .nav-icon-v8 {
+  color: var(--item-clr, var(--primary)) !important;
+  filter: drop-shadow(0 0 8px var(--item-clr, rgba(198,255,0,0.5))) !important;
+  transform: scale(1.18) translateY(-3px) !important;
+}
+.nav-item-v8.active .nav-label-v8 {
+  color: var(--item-clr, var(--primary)) !important;
+  font-weight: 900 !important;
+}
+.nav-active-dot {
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--item-clr, var(--primary));
+  margin: 2px auto 0;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.nav-item-v8.active .nav-active-dot {
+  opacity: 1;
+  box-shadow: 0 0 6px var(--item-clr, rgba(198,255,0,0.6));
+}
+
+/* CENTER ITEM del nav */
+.nav-item-v8.center-item .nav-icon-v8.main-action {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00d4ff, #c6ff00);
+  color: #020617;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  box-shadow: 0 6px 20px rgba(0,212,255,0.35), 0 0 0 3px rgba(0,212,255,0.15);
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1),
+              box-shadow 0.2s ease;
+  margin-bottom: 2px;
+}
+.nav-item-v8.center-item:hover .nav-icon-v8.main-action,
+.nav-item-v8.center-item.active .nav-icon-v8.main-action {
+  transform: scale(1.12) translateY(-4px);
+  box-shadow: 0 10px 28px rgba(0,212,255,0.45), 0 0 0 4px rgba(0,212,255,0.2);
+}
+
+/* ─── 18. PROPOSAL MODAL — estilo WhatsApp completo ─── */
+#proposal-modal .modal-card {
+  display: flex;
+  flex-direction: column;
+  height: min(90dvh, 680px);
+  overflow: hidden;
+}
+#proposal-modal .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0 !important;
+}
+#proposal-view-chat {
+  flex: 1;
+  display: flex !important;
+  flex-direction: column;
+  padding: 14px;
+  gap: 8px;
+  overflow-y: auto;
+}
+#proposal-view-chat.hidden { display: none !important; }
+
+/* Botón Nueva Propuesta en lista */
+.proposal-new-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 18px;
+  background: linear-gradient(135deg, rgba(198,255,0,0.12), rgba(0,212,255,0.08));
+  border: 1px solid rgba(198,255,0,0.3);
+  border-radius: 16px;
+  color: #c6ff00;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  margin-bottom: 10px;
+}
+.proposal-new-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(198,255,0,0.2);
+}
+
+/* Card propuesta en lista */
+#proposal-view-list > div[class*="p-3"] {
+  border-radius: 16px !important;
+  background:
+    radial-gradient(circle at top left, rgba(198,255,0,0.05), transparent 40%),
+    rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.09) !important;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+#proposal-view-list > div[class*="p-3"]:hover {
+  transform: translateY(-2px);
+  border-color: rgba(198,255,0,0.25) !important;
+}
+
+/* Vote chips */
+.proposal-vote-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 14px;
+}
+.proposal-vote-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.proposal-vote-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.75);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.proposal-vote-chip strong {
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+}
+.proposal-vote-chip:hover {
+  border-color: rgba(198,255,0,0.4);
+  background: rgba(198,255,0,0.08);
+}
+.proposal-vote-chip.is-selected {
+  border-color: #c6ff00 !important;
+  background: rgba(198,255,0,0.15) !important;
+  color: #c6ff00 !important;
+  box-shadow: 0 0 12px rgba(198,255,0,0.2);
+}
+.proposal-vote-chip.is-selected strong {
+  color: #c6ff00;
+}
+
+/* ─── 19. PWA APP SHELL BANNER estilos ─── */
+.app-shell-banner__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.app-shell-banner__icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(0,212,255,0.1);
+  border: 1px solid rgba(0,212,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.app-shell-banner__bg-icon {
+  color: #00d4ff;
+  font-size: 14px;
+}
+.app-shell-banner__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.app-shell-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.app-shell-banner__btn {
+  padding: 7px 13px;
+  border-radius: 10px;
+  background: rgba(0,212,255,0.15);
+  border: 1px solid rgba(0,212,255,0.3);
+  color: #00d4ff;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.app-shell-banner__btn.hidden { display: none; }
+.app-shell-banner__ghost {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+/* tone variants */
+.app-shell-banner.is-success {
+  border-color: rgba(34,197,94,0.3) !important;
+}
+.app-shell-banner.is-warning {
+  border-color: rgba(251,191,36,0.3) !important;
+}
+.app-shell-banner.is-info {
+  border-color: rgba(0,212,255,0.3) !important;
+}
+
+/* ─── 20. SOFT PROMPT CARD (Mantente al día) ─── */
+.soft-prompt-card {
+  position: fixed !important;
+  z-index: 9999 !important;
+  top: calc(var(--app-header-h, 60px) + env(safe-area-inset-top, 20px) + 10px) !important;
+  bottom: auto !important;
+  left: 0 !important;
+  right: 0 !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: calc(100% - 32px) !important;
+  max-width: 440px !important;
+  transform: none !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+}
+
+/* ─── 21. NEXT MATCH — ESTADO SIN PARTIDO MEJORADO ─── */
+.hv2-no-match-rich {
+  display: flex !important;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 18px;
+  align-items: stretch;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 22px;
+  background: linear-gradient(155deg, rgba(8,14,32,0.85), rgba(4,10,24,0.9));
+  backdrop-filter: blur(10px);
+}
+.hv2-no-match-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.hv2-no-match-main i {
+  font-size: 28px;
+  color: rgba(0, 212, 255, 0.4);
+  flex-shrink: 0;
+}
+.hv2-no-match-main > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hv2-no-match-main strong {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 15px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.hv2-no-match-main span {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.4;
+}
+.hv2-no-match-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+}
+.hv2-no-match-note.warn {
+  border-color: rgba(251,191,36,0.3);
+  background: rgba(251,191,36,0.05);
+  color: rgba(251,191,36,0.7);
+}
+.hv2-no-match-note i { font-size: 13px; flex-shrink: 0; }
+.hv2-no-match-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.hv2-no-match-actions .hv2-inline-btn {
+  flex: 1;
+  min-width: 100px;
+  justify-content: center;
+}
+
+/* ─── 22. INLINE BUTTON STYLES ─── */
+.hv2-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.85);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  white-space: nowrap;
+  font-family: inherit;
+  text-decoration: none;
+}
+.hv2-inline-btn:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.25);
+  transform: translateY(-2px);
+  color: #fff;
+}
+.hv2-inline-btn.primary {
+  background: linear-gradient(135deg, rgba(0,212,255,0.18), rgba(0,212,255,0.08));
+  border-color: rgba(0,212,255,0.4);
+  color: #00d4ff;
+}
+.hv2-inline-btn.primary:hover {
+  background: linear-gradient(135deg, rgba(0,212,255,0.28), rgba(0,212,255,0.16));
+  border-color: rgba(0,212,255,0.7);
+  box-shadow: 0 6px 20px rgba(0,212,255,0.2);
+}
+.hv2-inline-btn.compact {
+  padding: 6px 10px;
+  font-size: 10px;
+  border-radius: 10px;
+}
+.hv2-inline-btn i { font-size: 11px; }
+
+/* ─── 23. SCOREBOARD EXTRAS ─── */
+.hv2-sb-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 10px;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.25);
+  font-size: 10px;
+  color: rgba(251,191,36,0.8);
+  z-index: 3;
+  position: relative;
+}
+.hv2-sb-alert i { font-size: 12px; flex-shrink: 0; }
+.hv2-sb-alert span { flex: 1; }
+.hv2-sb-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ─── 24. PROMO GRID 6 COLUMNS ─── */
+.hv2-promo-grid-6 {
+  grid-template-columns: repeat(3, 1fr) !important;
+}
+@media (min-width: 480px) {
+  .hv2-promo-grid-6 {
+    grid-template-columns: repeat(6, 1fr) !important;
+  }
+}
+.hv2-promo-grid-6 .hv2-promo-card-mini {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 12px 8px;
+  gap: 8px;
+}
+.hv2-promo-grid-6 .hv2-promo-icon-bg {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+.hv2-promo-grid-6 .hv2-promo-icon-bg i {
+  font-size: 14px;
+}
+.hv2-promo-grid-6 .hv2-promo-info {
+  align-items: center;
+}
+.hv2-promo-grid-6 .hv2-promo-t {
+  font-size: 11px;
+}
+.hv2-promo-grid-6 .hv2-promo-s {
+  font-size: 8px;
+}
+
+/* ─── 25. PROPOSAL ACTION + MEMBER GRIDS ─── */
+.proposal-action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.proposal-action-grid .hv2-inline-btn {
+  flex: 1;
+  min-width: 90px;
+  justify-content: center;
+}
+.proposal-member-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+}
+.proposal-member-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 52px;
+}
+.proposal-member-chip.empty .proposal-member-avatar {
+  border-style: dashed;
+  opacity: 0.4;
+}
+.proposal-member-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.7);
+  overflow: hidden;
+}
+.proposal-member-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.proposal-member-chip > span {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.5);
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* ─── 26. PROPOSAL LIST SHELL ─── */
+.proposal-list-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+.proposal-list-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.proposal-list-top > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.proposal-list-top strong {
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+}
+.proposal-list-top span {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+}
+.proposal-card-v2 {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  text-align: left;
+  color: inherit;
+  font-family: inherit;
+}
+.proposal-card-v2:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(0,212,255,0.25);
+  transform: translateY(-2px);
+}
+.proposal-card-v2.is-mine {
+  border-color: rgba(198,255,0,0.2);
+}
+.proposal-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.p-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.p-badge {
+  font-size: 10px;
+  font-weight: 900;
+  padding: 2px 8px;
+  border-radius: 50px;
+  background: rgba(0,212,255,0.12);
+  border: 1px solid rgba(0,212,255,0.25);
+  color: #00d4ff;
+  white-space: nowrap;
+}
+.p-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 9px;
+  color: rgba(255,255,255,0.35);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.proposal-card-copy {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.4;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.proposal-empty-copy {
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  text-align: center;
+  padding: 24px 12px;
+  line-height: 1.5;
+}
+
+/* ─── 27. PROPOSAL CREATE SHELL ─── */
+.proposal-create-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+.proposal-create-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.proposal-create-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.proposal-create-head strong {
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+}
+.proposal-create-head span {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+}
+.proposal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.proposal-invite-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+.proposal-invite-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  font-family: inherit;
+}
+.proposal-invite-chip:hover {
+  border-color: rgba(0,212,255,0.3);
+  background: rgba(0,212,255,0.06);
+}
+.proposal-invite-chip.is-selected {
+  border-color: #c6ff00 !important;
+  background: rgba(198,255,0,0.1) !important;
+}
+.proposal-invite-chip strong {
+  font-size: 11px;
+  font-weight: 800;
+  color: inherit;
+}
+.proposal-invite-chip small {
+  font-size: 9px;
+  color: rgba(255,255,255,0.4);
+}
+.proposal-create-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.proposal-create-actions .hv2-inline-btn {
+  flex: 1;
+  min-width: 100px;
+  justify-content: center;
+}
+
+/* ─── 28. MSG BUBBLE STYLES ─── */
+.msg-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  max-width: 82%;
+  align-self: flex-start;
+  align-items: flex-start;
+}
+.msg-bubble-wrap.is-me {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.msg-bubble-wrap.is-system {
+  align-self: center;
+  max-width: 100%;
+}
+.msg-bubble-wrap.is-system .msg-bubble {
+  background: rgba(255,255,255,0.05) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+  text-align: center;
+}
+.msg-sender {
+  font-size: 9px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+  padding-left: 4px;
+}
+.msg-bubble {
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-bottom-left-radius: 4px;
+  position: relative;
+}
+.msg-bubble-wrap.is-me .msg-bubble {
+  background: linear-gradient(135deg, rgba(198,255,0,0.25), rgba(198,255,0,0.12));
+  border-color: rgba(198,255,0,0.35);
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 4px;
+}
+.msg-bubble p {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255,255,255,0.9);
+  line-height: 1.45;
+  word-break: break-word;
+}
+.msg-bubble-wrap.is-me .msg-bubble p {
+  color: #fff;
+}
+.msg-time {
+  display: block;
+  font-size: 9px;
+  color: rgba(255,255,255,0.3);
+  margin-top: 4px;
+  text-align: right;
+}
+
+/* ─── 29. PROPOSAL CHAT ACTIONS PANEL ─── */
+.proposal-chat-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
