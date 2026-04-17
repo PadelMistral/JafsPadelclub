@@ -1,4 +1,4 @@
-import { auth, observerAuth as firebaseObserverAuth } from './firebase-service.js';
+import { auth, db, observerAuth as firebaseObserverAuth, getDocument, subscribeCol } from './firebase-service.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js';
 import { logError, logInfo, logWarn } from './core/app-logger.js';
 import { AudioManager } from './modules/audio-manager.js';
@@ -18,6 +18,108 @@ if (typeof window !== 'undefined') {
 if (typeof globalThis !== 'undefined') {
     globalThis.observeAuth = observeAuth;
     globalThis.observerAuth = observerAuth;
+}
+
+const MOJIBAKE_REPLACEMENTS = [
+    ["Ã¡", "á"], ["Ã©", "é"], ["Ã­", "í"], ["Ã³", "ó"], ["Ãº", "ú"],
+    ["Ã", "Á"], ["Ã‰", "É"], ["Ã", "Í"], ["Ã“", "Ó"], ["Ãš", "Ú"],
+    ["Ã±", "ñ"], ["Ã‘", "Ñ"], ["Â¿", "¿"], ["Â¡", "¡"], ["Â·", "·"],
+    ["Âº", "º"], ["Âª", "ª"], ["Â", ""],
+    ["â€¦", "…"], ["â€”", "—"], ["â€“", "–"], ["â€œ", "\""], ["â€", "\""],
+    ["â€˜", "'"], ["â€™", "'"], ["â€¡", "‡"], ["â†’", "→"], ["â†", "←"],
+    ["âœ…", "OK"], ["âš ï¸", "Aviso"], ["âœ“", "OK"],
+    ["ÃƒÂ³", "ó"], ["ÃƒÂ¡", "á"], ["ÃƒÂ©", "é"], ["ÃƒÂ­", "í"], ["ÃƒÂº", "ú"],
+    ["Ã‚", ""], ["Ãƒ", ""],
+];
+
+function repairMojibakeText(value = "") {
+    let output = String(value ?? "");
+    for (const [broken, fixed] of MOJIBAKE_REPLACEMENTS) {
+        output = output.split(broken).join(fixed);
+    }
+    return output;
+}
+
+function getFriendlyErrorMessage(raw = "") {
+    const msg = repairMojibakeText(String(raw || "")).toLowerCase();
+    if (!msg) return "Ha ocurrido un problema inesperado. Prueba de nuevo en unos segundos.";
+    if (msg.includes("permission-denied") || msg.includes("insufficient permissions")) {
+        return "No tienes permisos para ver o hacer esto todavía.";
+    }
+    if (msg.includes("observerauth is not defined")) {
+        return "La app se ha quedado desactualizada. Recarga la pantalla para continuar.";
+    }
+    if (msg.includes("network") || msg.includes("offline") || msg.includes("fetch")) {
+        return "Parece que la conexión no está estable. Revisa internet y vuelve a intentarlo.";
+    }
+    if (msg.includes("failed-precondition")) {
+        return "Falta preparar un índice o un dato interno. Inténtalo de nuevo en un momento.";
+    }
+    if (msg.includes("auth")) {
+        return "Tu sesión necesita actualizarse. Si persiste, vuelve a entrar.";
+    }
+    return "No se pudo completar esta acción. Vuelve a intentarlo en unos segundos.";
+}
+
+function normalizeTextNodeTree(root = document.body) {
+    if (typeof document === "undefined" || !root) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            const parentTag = node?.parentElement?.tagName;
+            if (!node?.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
+            if (parentTag && ["SCRIPT", "STYLE", "NOSCRIPT"].includes(parentTag)) return NodeFilter.FILTER_REJECT;
+            return /Ã|Â|â/.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        },
+    });
+    const dirtyNodes = [];
+    while (walker.nextNode()) dirtyNodes.push(walker.currentNode);
+    dirtyNodes.forEach((node) => {
+        node.nodeValue = repairMojibakeText(node.nodeValue);
+    });
+}
+
+function normalizeElementAttributes(root = document.body) {
+    if (typeof document === "undefined" || !root?.querySelectorAll) return;
+    root.querySelectorAll("[title],[placeholder],[aria-label]").forEach((el) => {
+        ["title", "placeholder", "aria-label"].forEach((attr) => {
+            const current = el.getAttribute(attr);
+            if (current && /Ã|Â|â/.test(current)) {
+                el.setAttribute(attr, repairMojibakeText(current));
+            }
+        });
+    });
+}
+
+function normalizeVisibleCopy(root = document.body) {
+    normalizeTextNodeTree(root);
+    normalizeElementAttributes(root);
+    if (root === document.body || root === document.documentElement) {
+        if (document.title && /Ã|Â|â/.test(document.title)) {
+            document.title = repairMojibakeText(document.title);
+        }
+        const htmlLang = document.documentElement.getAttribute("lang");
+        if (!htmlLang) document.documentElement.setAttribute("lang", "es");
+    }
+}
+
+function bindCopyNormalizer() {
+    if (typeof window === "undefined" || window.__copyNormalizerBound) return;
+    window.__copyNormalizerBound = true;
+    const run = () => normalizeVisibleCopy(document.body);
+    document.addEventListener("DOMContentLoaded", run, { passive: true });
+    requestAnimationFrame(run);
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes?.forEach((node) => {
+                if (node?.nodeType === Node.TEXT_NODE && /Ã|Â|â/.test(node.nodeValue || "")) {
+                    node.nodeValue = repairMojibakeText(node.nodeValue);
+                } else if (node?.nodeType === Node.ELEMENT_NODE) {
+                    normalizeVisibleCopy(node);
+                }
+            });
+        });
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
 }
 
 function ensureRuntimePolishStyles() {
@@ -42,6 +144,18 @@ function ensureRuntimePolishStyles() {
           radial-gradient(circle at top left, rgba(0,212,255,0.14), transparent 30%),
           linear-gradient(180deg, rgba(10,15,28,0.98), rgba(5,9,18,0.99)) !important;
         box-shadow: 0 32px 80px rgba(0,0,0,0.56), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+      }
+      .modal-overlay {
+        z-index: 20000 !important;
+        padding:
+          calc(var(--app-header-h, 72px) + env(safe-area-inset-top, 0px) + 10px)
+          14px
+          calc(var(--app-nav-h, 78px) + env(safe-area-inset-bottom, 0px) + 12px) !important;
+        align-items: flex-start !important;
+      }
+      .modal-overlay .modal-card {
+        max-height: calc(100dvh - var(--app-header-h, 72px) - var(--app-nav-h, 78px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 28px) !important;
+        margin: 0 auto !important;
       }
       .modal-header { padding: 16px 18px 12px !important; }
       .modal-body { padding: 16px 18px 18px !important; }
@@ -149,7 +263,7 @@ function ensureBootLoader() {
         loader = document.createElement('div');
         loader.id = 'app-boot-loader';
         loader.className = 'app-boot-loader';
-        const msgs = ['Sincronizando Datos', 'Cargando Campo', 'Preparando Sesión', 'Conectando...'];
+        const msgs = ['Sincronizando Datos', 'Cargando Campo', 'Preparando SesiÃ³n', 'Conectando...'];
         const msg = msgs[Math.floor(Math.random() * msgs.length)];
         loader.innerHTML = `
           <div class="app-boot-core">
@@ -231,7 +345,7 @@ function initGlobalFeedbackHooks() {
         errorHits += 1;
         const msg = typeof err === 'string' ? err : (err?.message || 'Error desconocido');
         console.error("[CRITICAL UI ERROR]", err);
-        showToast('Ups, algo salio mal', `Detalle: ${msg.slice(0, 50)}...`, 'error');
+        showToast('Algo no ha ido bien', getFriendlyErrorMessage(msg), 'error');
         if (errorHits >= 5) showErrorBoundary();
     };
 
@@ -254,12 +368,12 @@ function initGlobalFeedbackHooks() {
 
     window.addEventListener('offline', () => {
         AudioManager.play('ERROR', 0.25);
-        showToast('Sin conexión', 'Verifica internet para sincronizar datos.', 'warning');
+        showToast('Sin conexión', 'Verifica internet para sincronizar tus datos.', 'warning');
     });
 
     window.addEventListener('online', () => {
         AudioManager.play('SUCCESS', 0.25);
-        showToast('Conexión restablecida', 'Sincronización reanudada.', 'success');
+        showToast('Conexión restablecida', 'La sincronización se ha reanudado.', 'success');
     });
 }
 
@@ -320,6 +434,7 @@ function safeNavigate(url) {
 function toLastSeenDate(value) {
     if (!value) return null;
     if (typeof value?.toDate === 'function') return value.toDate();
+    if (value.seconds) return new Date(value.seconds * 1000);
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return null;
     return parsed;
@@ -361,42 +476,82 @@ async function fetchPresenceBuckets(limitOnline = 80, limitRecent = 140, include
     const { collection, query, where, limit, orderBy } = await import('https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js');
     const threshold = new Date(Date.now() - 5 * 60 * 1000);
 
-    const onlineSnap = await getDocsSafe(
-        query(
-            collection(db, 'usuarios'),
-            where('ultimoAcceso', '>', threshold),
-            limit(limitOnline),
-        ),
-        'online-nexus-online',
-    );
-
-    const online = (onlineSnap?.docs || [])
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => Number(b.puntosRanking || 1000) - Number(a.puntosRanking || 1000));
+    let online = [];
+    try {
+        const onlineSnap = await window.getDocsSafe(
+            query(
+                collection(db, 'usuarios'),
+                where('ultimoAcceso', '>', threshold),
+                limit(limitOnline)
+            ),
+            'online-nexus-online'
+        );
+        online = (onlineSnap?.docs || [])
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => Number(b.puntosRanking || 1000) - Number(a.puntosRanking || 1000));
+    } catch (e) {
+        console.warn('[Nexus] Online query failed (check Firestore index for ultimoAcceso):', e?.message || e);
+        // Fallback: load all and filter locally
+        try {
+            const fallbackSnap = await window.getDocsSafe(
+                query(collection(db, 'usuarios'), orderBy('ultimoAcceso', 'desc'), limit(limitOnline)),
+                'online-nexus-online-fb'
+            );
+            online = (fallbackSnap?.docs || [])
+                .map((d) => ({ id: d.id, ...d.data() }))
+                .filter((u) => {
+                    const d = toLastSeenDate(u.ultimoAcceso);
+                    return d && d.getTime() > threshold.getTime();
+                })
+                .sort((a, b) => Number(b.puntosRanking || 1000) - Number(a.puntosRanking || 1000));
+        } catch (e2) {
+            console.error('[Nexus] Fallback query also failed:', e2?.message || e2);
+        }
+    }
 
     let offline = [];
     if (includeOffline) {
-        const recentSnap = await getDocsSafe(
-            query(
-                collection(db, 'usuarios'),
-                orderBy('ultimoAcceso', 'desc'),
-                limit(limitRecent),
-            ),
-            'online-nexus-recent',
-        );
+        try {
+            const recentSnap = await window.getDocsSafe(
+                query(
+                    collection(db, 'usuarios'),
+                    orderBy('ultimoAcceso', 'desc'),
+                    limit(limitRecent)
+                ),
+                'online-nexus-recent'
+            );
 
-        const onlineIds = new Set(online.map((u) => u.id));
-        offline = (recentSnap?.docs || [])
-            .map((d) => ({ id: d.id, ...d.data() }))
-            .filter((u) => !onlineIds.has(u.id))
-            .sort((a, b) => {
-                const aMs = toLastSeenDate(a.ultimoAcceso)?.getTime() || 0;
-                const bMs = toLastSeenDate(b.ultimoAcceso)?.getTime() || 0;
-                return bMs - aMs;
-            });
+            const onlineIds = new Set(online.map((u) => u.id));
+            offline = (recentSnap?.docs || [])
+                .map((d) => ({ id: d.id, ...d.data() }))
+                .filter((u) => !onlineIds.has(u.id))
+                .sort((a, b) => {
+                    const aMs = toLastSeenDate(a.ultimoAcceso)?.getTime() || 0;
+                    const bMs = toLastSeenDate(b.ultimoAcceso)?.getTime() || 0;
+                    return bMs - aMs;
+                });
+        } catch (e) {
+            console.warn('[Nexus] Offline query failed:', e?.message || e);
+        }
     }
 
     return { online, offline };
+}
+
+async function updateHeaderOnlineIndicator() {
+    if (typeof document === 'undefined') return;
+    const countEl = document.getElementById('header-online-count');
+    const onlineEl = document.querySelector('.header-online');
+    if (!countEl || !onlineEl) return;
+    try {
+        const buckets = await fetchPresenceBuckets(40, 60, false);
+        const totalOnline = Array.isArray(buckets?.online) ? buckets.online.length : 0;
+        countEl.textContent = String(totalOnline);
+        onlineEl.setAttribute('title', `${totalOnline} usuario${totalOnline === 1 ? '' : 's'} conectados`);
+        onlineEl.classList.toggle('is-empty', totalOnline === 0);
+    } catch (_) {
+        countEl.textContent = '--';
+    }
 }
 
 function ensureOnlineNexusStyles() {
@@ -466,10 +621,11 @@ async function openOnlineNexusModal() {
         const buckets = await fetchPresenceBuckets(80, 160, canSeeOffline);
         onlineUsers = buckets.online;
         offlineUsers = buckets.offline;
-      } catch (_) {
-        countEl.textContent = 'Sin conexión';
-        onlineListEl.innerHTML = '<div class="online-nexus-empty">No se pudo cargar online</div>';
-        if (offlineListEl) offlineListEl.innerHTML = '<div class="online-nexus-empty">No se pudo cargar offline</div>';
+      } catch (err) {
+        console.error('[Nexus] render failed:', err?.message || err);
+        // Don't show "sin conexión" — show 0 gracefully
+        countEl.textContent = '0 ONLINE AHORA';
+        onlineListEl.innerHTML = '<div class="online-nexus-empty">No hay usuarios conectados ahora</div>';
         return;
       }
 
@@ -483,14 +639,15 @@ async function openOnlineNexusModal() {
         const photo = u.fotoPerfil || u.fotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff`;
         const lvl = Number(u.nivel || 2.5).toFixed(2);
         const meCls = u.id === onlineNexusCurrentUid ? 'me' : '';
+        const lastSeen = formatLastSeen(u.ultimoAcceso);
         return `
           <div class="online-nexus-item ${meCls}" onclick="window.viewProfile('${u.id}')">
-            <img src="${photo}" alt="${u.nombreUsuario || u.nombre || 'Jugador'}" class="online-nexus-avatar" loading="lazy">
+            <img src="${photo}" alt="${displayName}" class="online-nexus-avatar" loading="lazy" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(displayName[0]||'J')}&background=random&color=fff'">
             <div class="online-nexus-main">
-              <span class="online-nexus-name">${(u.nombreUsuario || u.nombre || 'Jugador').toUpperCase()}</span>
-              <span class="online-nexus-sub">${(u.rol || 'Jugador').toUpperCase()} · ACTIVO AHORA</span>
+              <span class="online-nexus-name">${displayName.toUpperCase()}</span>
+              <span class="online-nexus-sub">${(u.rol || 'Jugador').toUpperCase()} · NV ${lvl} · ${lastSeen}</span>
             </div>
-            <span class="online-nexus-pill">NV ${lvl}</span>
+            <span class="online-nexus-pill">🟢 ONLINE</span>
           </div>
         `;
       }).join('')
@@ -541,6 +698,15 @@ function initOnlineNexusBindings(uid) {
 
     window.showOnlineNexus = () => openOnlineNexusModal();
     window.showOnlineUsers = () => openOnlineNexusModal();
+
+    updateHeaderOnlineIndicator().catch(() => {});
+    if (window.__headerOnlineCountTimer) clearInterval(window.__headerOnlineCountTimer);
+    window.__headerOnlineCountTimer = setInterval(() => {
+        updateHeaderOnlineIndicator().catch(() => {});
+    }, 45000);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') updateHeaderOnlineIndicator().catch(() => {});
+    });
 }
 
 if (typeof window !== 'undefined' && !window.viewProfile) {
@@ -556,12 +722,15 @@ import { getAppBase } from './modules/path-utils.js';
  * UTILS & CONFIG
  */
 export function initAppUI(activePageName) {
+    logInfo('page_init', { page: activePageName || 'unknown', path: window.location.pathname || '' });
     if (typeof window !== 'undefined') {
         const currentPath = (window.location.pathname || '').toLowerCase();
         if (window.__appUIInitPath === currentPath) return;
         window.__appUIInitPath = currentPath;
     }
 
+    bindCopyNormalizer();
+    normalizeVisibleCopy(document.body);
     initGlobalFeedbackHooks();
     ensureRuntimePolishStyles();
     ensureGlobalBackgroundLayer();
@@ -864,8 +1033,8 @@ export function showToast(title, body, type = 'info') {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
     const TOAST_TYPES = new Set(['success', 'error', 'warning', 'info']);
-    let normalizedTitle = typeof title === 'string' ? title.trim() : '';
-    let normalizedBody = typeof body === 'string' ? body.trim() : '';
+    let normalizedTitle = typeof title === 'string' ? repairMojibakeText(title).trim() : '';
+    let normalizedBody = typeof body === 'string' ? repairMojibakeText(body).trim() : '';
     let normalizedType = typeof type === 'string' ? type.trim().toLowerCase() : 'info';
  
     if (normalizedType === 'error') AudioManager.play('ERROR', 0.4);
@@ -968,7 +1137,7 @@ export function countUp(el, target, duration = 2000) {
 }
 
 /**
- * Modal de preferencia de lado (inscripción eventos).
+ * Modal de preferencia de lado (inscripciÃ³n eventos).
  * @returns {Promise<'derecha'|'reves'|'flex'|null>}
  */
 export function showSidePreferenceModal() {
@@ -982,14 +1151,14 @@ export function showSidePreferenceModal() {
         overlay.innerHTML = `
             <div class="modal-card modal-side-pref-card">
                 <div class="modal-header">
-                    <h3 id="side-pref-title" class="modal-title"><i class="fas fa-hand-point-up"></i> Posición preferida</h3>
+                    <h3 id="side-pref-title" class="modal-title"><i class="fas fa-hand-point-up"></i> PosiciÃ³n preferida</h3>
                     <button type="button" class="modal-close" aria-label="Cerrar">&times;</button>
                 </div>
                 <div class="modal-body">
                     <p class="side-pref-desc">Elige tu lado preferido para el emparejamiento:</p>
                     <div class="side-pref-btns">
                         <button type="button" class="btn-side-opt" data-value="derecha"><i class="fas fa-hand-point-right"></i> Derecha</button>
-                        <button type="button" class="btn-side-opt" data-value="reves"><i class="fas fa-hand-point-left"></i> Revés</button>
+                        <button type="button" class="btn-side-opt" data-value="reves"><i class="fas fa-hand-point-left"></i> RevÃ©s</button>
                         <button type="button" class="btn-side-opt btn-side-opt-flex" data-value="flex"><i class="fas fa-arrows-left-right"></i> Me da igual</button>
                     </div>
                 </div>
@@ -1023,3 +1192,8 @@ export function showSidePreferenceModal() {
 if (typeof window !== 'undefined') {
     window.showSidePreferenceModal = showSidePreferenceModal;
 }
+
+
+
+
+

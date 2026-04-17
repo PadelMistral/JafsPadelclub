@@ -1,4 +1,4 @@
-// js/admin.js - Premium Console v9.5 Logic (Unified & Accordion-Driven)
+﻿// js/admin.js - Premium Console v9.5 Logic (Unified & Accordion-Driven)
 import { db, auth, observerAuth, getDocument, updateDocument, addDocument, getDocsSafe } from "./firebase-service.js";
 import { collection, collectionGroup, query, orderBy, limit, serverTimestamp, deleteDoc, doc, setDoc, getDocs, deleteField } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI, showToast } from "./ui-core.js";
@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return window.location.replace("home.html");
         }
 
-        // Inyectar UI dinámica
+        // Inyectar UI dinÃ¡mica
         try {
             const { injectHeader, injectNavbar } = await import('./modules/ui-loader.js');
             if (me) {
@@ -108,6 +108,7 @@ function bindFilters() {
 function bindSystemActions() {
     ensureEloActionOptions();
     document.getElementById("btn-broadcast")?.addEventListener("click", runBroadcast);
+    document.getElementById("btn-push-self-test")?.addEventListener("click", runSelfPushTest);
     document.getElementById("btn-refresh-pwa-health")?.addEventListener("click", () => renderPwaHealthPanel(true));
     document.getElementById("btn-export-admin-snapshot")?.addEventListener("click", exportAdminSnapshot);
     document.getElementById("btn-execute-maint")?.addEventListener("click", async () => {
@@ -130,7 +131,7 @@ function bindSystemActions() {
     
     document.getElementById("btn-execute-delete-matches")?.addEventListener("click", () => {
         const action = document.getElementById("matches-delete-action")?.value;
-        if (!action || action === "none") return showToast("Aviso", "Selecciona una opción de borrado", "info");
+        if (!action || action === "none") return showToast("Aviso", "Selecciona una opciÃ³n de borrado", "info");
         window.deleteMatchesByFilter(action);
     });
 
@@ -144,8 +145,8 @@ async function runHistoricalRecalc(systemKey = "default") {
     const confirmed = await confirmAdminAction({
         title: isAtp ? "PRUEBA ATP" : "RECONSTR_HISTORICA",
         message: isAtp
-            ? "Se va a reconstruir todo el historial desde el base_level usando el sistema ATP de prueba. ¿Proceder?"
-            : "Se va a reconstruir todo el historial de puntos ELO desde el base_level. ¿Proceder?",
+            ? "Se va a reconstruir todo el historial desde el base_level usando el sistema ATP de prueba. Â¿Proceder?"
+            : "Se va a reconstruir todo el historial de puntos ELO desde el base_level. Â¿Proceder?",
         confirmLabel: isAtp ? "PROBAR ATP" : "EXECUTE_REBUILD",
         danger: true
     });
@@ -165,7 +166,7 @@ async function runHistoricalRecalc(systemKey = "default") {
         const { pct, current, total, matchId } = e.detail;
         if (bar) bar.style.width = `${pct}%`;
         if (pctEl) pctEl.textContent = `${pct}%`;
-        if (statusEl) statusEl.textContent = `${isAtp ? "ATP" : "ELO"} · Procesando match ${current}/${total} [${String(matchId || "").substring(0,8)}...]`;
+        if (statusEl) statusEl.textContent = `${isAtp ? "ATP" : "ELO"} Â· Procesando match ${current}/${total} [${String(matchId || "").substring(0,8)}...]`;
     };
 
     window.addEventListener("adminRecalcProgress", onProgress);
@@ -173,12 +174,12 @@ async function runHistoricalRecalc(systemKey = "default") {
     try {
         const res = isAtp ? await window.RESTORE_AND_RECALC_FROM_BASE_ATP() : await window.RESTORE_AND_RECALC_FROM_BASE();
         if (res?.success) {
-            showToast("ÉXITO", isAtp ? "Reconstrucción ATP completada" : "Sincronización histórica completa", "success");
+            showToast("Ã‰XITO", isAtp ? "ReconstrucciÃ³n ATP completada" : "SincronizaciÃ³n histÃ³rica completa", "success");
             await refreshAll();
         }
     } catch (e) {
         console.error(e);
-        showToast("Error", "Fallo crítico en reconstrucción", "error");
+        showToast("Error", "Fallo crÃ­tico en reconstrucciÃ³n", "error");
     } finally {
         window.removeEventListener("adminRecalcProgress", onProgress);
         if (indicator) {
@@ -287,7 +288,7 @@ function shouldDeleteDuplicate(keep, candidate) {
 }
 
 async function cleanupEventDuplicates() {
-    if (!(await confirmAdminAction({ title: "Limpiar duplicados", message: "Se analizarán y limpiarán duplicados de eventos y partidos huérfanos.", confirmLabel: "Analizar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Limpiar duplicados", message: "Se analizarÃ¡n y limpiarÃ¡n duplicados de eventos y partidos huÃ©rfanos.", confirmLabel: "Analizar", danger: true }))) return;
     showToast("Limpieza", "Analizando eventoPartidos...", "info");
     try {
         const snap = await getDocsSafe(collection(db, "eventoPartidos"));
@@ -328,7 +329,7 @@ async function cleanupEventDuplicates() {
             return;
         }
 
-        if (!(await confirmAdminAction({ title: "Eliminar duplicados", message: `Se eliminarán ${toDelete.length} registros duplicados o huérfanos.`, confirmLabel: "Eliminar", danger: true }))) return;
+        if (!(await confirmAdminAction({ title: "Eliminar duplicados", message: `Se eliminarÃ¡n ${toDelete.length} registros duplicados o huÃ©rfanos.`, confirmLabel: "Eliminar", danger: true }))) return;
 
         for (const m of toDelete) {
             await deleteDoc(doc(db, "eventoPartidos", m.id));
@@ -342,7 +343,7 @@ async function cleanupEventDuplicates() {
 }
 
 async function cleanupOldEventMatches() {
-    if (!(await confirmAdminAction({ title: "Limpiar eventos antiguos", message: "Se borrarán los partidos ligados a eventos antiguos o no activos.", confirmLabel: "Continuar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Limpiar eventos antiguos", message: "Se borrarÃ¡n los partidos ligados a eventos antiguos o no activos.", confirmLabel: "Continuar", danger: true }))) return;
     const activeIds = new Set(
         eventsArr
             .filter(e => !["finalizado", "cancelado"].includes(String(e?.estado || "").toLowerCase()))
@@ -354,7 +355,7 @@ async function cleanupOldEventMatches() {
         const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         const toDelete = rows.filter(m => !activeIds.has(String(m.eventoId || "")));
         if (!toDelete.length) return showToast("OK", "No hay partidos antiguos", "success");
-        if (!(await confirmAdminAction({ title: "Eliminar partidos antiguos", message: `Se eliminarán ${toDelete.length} partidos de eventos no activos.`, confirmLabel: "Eliminar", danger: true }))) return;
+        if (!(await confirmAdminAction({ title: "Eliminar partidos antiguos", message: `Se eliminarÃ¡n ${toDelete.length} partidos de eventos no activos.`, confirmLabel: "Eliminar", danger: true }))) return;
         for (const m of toDelete) {
             await deleteDoc(doc(db, "eventoPartidos", m.id));
             if (m.linkedMatchId && m.linkedMatchCollection) {
@@ -390,7 +391,7 @@ function showRecalcReport(res, title = "Recalculo") {
                     <div class="text-[10px] font-black text-muted uppercase tracking-widest mb-2">Errores</div>
                     <div class="flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scroll">
                         ${errors.map(e => `<div class="p-2 rounded-lg bg-white/5 border border-white/10 text-[10px]">
-                            <div><b>${e.col}</b> · ${e.id}</div>
+                            <div><b>${e.col}</b> Â· ${e.id}</div>
                             <div class="opacity-70">${e.error}</div>
                         </div>`).join("")}
                     </div>
@@ -407,7 +408,7 @@ window.saveEloConfig = async () => {
     const k = Number(document.getElementById("cfg-elo-k")?.value || 32);
 
     try {
-        showToast("Guardando...", "Actualizando parámetros de puntuación", "info");
+        showToast("Guardando...", "Actualizando parÃ¡metros de puntuaciÃ³n", "info");
         await updateDocument("systemConfigs", "elo", {
             victoryPoints: win,
             lossPoints: loss,
@@ -416,9 +417,9 @@ window.saveEloConfig = async () => {
             updatedBy: auth.currentUser?.uid || "admin"
         });
         
-        showToast("Configuración Guardada", "Los nuevos valores se aplicarán a futuros cálculos.", "success");
+        showToast("ConfiguraciÃ³n Guardada", "Los nuevos valores se aplicarÃ¡n a futuros cÃ¡lculos.", "success");
     } catch (e) {
-        showToast("Error", "No se pudo guardar la configuración", "error");
+        showToast("Error", "No se pudo guardar la configuraciÃ³n", "error");
     }
 };
 
@@ -539,14 +540,14 @@ window.jumpAdminPane = (paneName = "users") => {
 
 window.forceAppUpdateAdmin = async () => {
     try {
-        if (!confirm("¿Seguro que quieres forzar la recarga de toda la aplicación en todos los móviles de los usuarios? Saldrá un aviso pidiendo que actualicen.")) return;
-        showToast("Forzando update...", "Enviando señal de actualización a la base de datos...", "info");
+        if (!confirm("Â¿Seguro que quieres forzar la recarga de toda la aplicaciÃ³n en todos los mÃ³viles de los usuarios? SaldrÃ¡ un aviso pidiendo que actualicen.")) return;
+        showToast("Forzando update...", "Enviando seÃ±al de actualizaciÃ³n a la base de datos...", "info");
         await setDoc(doc(db, "systemConfigs", "forceUpdate"), {
             versionStamp: Date.now(),
             updatedBy: auth.currentUser?.uid || "admin",
-            message: "Por favor, pulsa aquí para aplicar la nueva actualización y corregir errores recientes."
+            message: "Por favor, pulsa aquÃ­ para aplicar la nueva actualizaciÃ³n y corregir errores recientes."
         }, { merge: true });
-        showToast("¡HECHO!", "Señal enviada a todos los usuarios en línea", "success");
+        showToast("Â¡HECHO!", "SeÃ±al enviada a todos los usuarios en lÃ­nea", "success");
     } catch (e) {
         showToast("Error", e.message, "error");
     }
@@ -578,9 +579,9 @@ function renderAdminOpsOverview() {
     }
     latestBox.innerHTML = `
         <strong>${escapeHtml(String(latest.action || "cambio").replace(/_/g, " "))}</strong>
-        <span>${escapeHtml(latest.entityType || "sistema")} · ${escapeHtml(latest.entityId || "global")}</span>
+        <span>${escapeHtml(latest.entityType || "sistema")} Â· ${escapeHtml(latest.entityId || "global")}</span>
         <span>${escapeHtml(describeAuditLog(latest))}</span>
-        <span class="opacity-60">${escapeHtml(formatAuditStamp(latest.createdAt))} · ${escapeHtml(latest.actorEmail || latest.actorUid || "admin")}</span>
+        <span class="opacity-60">${escapeHtml(formatAuditStamp(latest.createdAt))} Â· ${escapeHtml(latest.actorEmail || latest.actorUid || "admin")}</span>
     `;
 }
 
@@ -628,7 +629,7 @@ function renderAppErrorsFeed() {
             entry.column ? `col ${entry.column}` : null,
             entry.uid ? `usuario ${resolveAdminEntityLabel("usuarios", entry.uid)}` : null,
         ].filter(Boolean);
-        const viewport = entry.viewport ? ` · ${entry.viewport}` : "";
+        const viewport = entry.viewport ? ` Â· ${entry.viewport}` : "";
         return `
             <div class="audit-entry app-error-entry app-error-entry--${severity}">
                 <div class="audit-entry__meta">
@@ -636,7 +637,7 @@ function renderAppErrorsFeed() {
                     <span>${escapeHtml(formatAppErrorStamp(entry.createdAt))}${escapeHtml(viewport)}</span>
                 </div>
                 <div class="audit-entry__title">${escapeHtml(title)}</div>
-                <div class="audit-entry__body">${escapeHtml(metaBits.join(" · ") || "Sin contexto adicional")}</div>
+                <div class="audit-entry__body">${escapeHtml(metaBits.join(" Â· ") || "Sin contexto adicional")}</div>
                 ${entry.href ? `<div class="audit-entry__body opacity-60">${escapeHtml(String(entry.href).slice(0, 120))}</div>` : ""}
             </div>
         `;
@@ -687,9 +688,9 @@ function renderUserAdminSnapshot(user) {
     const latestType = snapshot.latestMatch
         ? (snapshot.latestMatch.col === "eventoPartidos" ? "Torneo" : snapshot.latestMatch.col === "partidosReto" ? "Reto" : "Amistoso")
         : "Sin actividad";
-    const insight = snapshot.lastInsight?.text || "La IA aún no tiene memoria suficiente para este jugador.";
+    const insight = snapshot.lastInsight?.text || "La IA aÃºn no tiene memoria suficiente para este jugador.";
     const auditText = snapshot.latestAudit
-        ? `${String(snapshot.latestAudit.action || "acción").replace(/_/g, " ")} · ${formatAuditStamp(snapshot.latestAudit.createdAt)}`
+        ? `${String(snapshot.latestAudit.action || "acciÃ³n").replace(/_/g, " ")} Â· ${formatAuditStamp(snapshot.latestAudit.createdAt)}`
         : "Sin cambios admin recientes";
 
     return `
@@ -702,29 +703,29 @@ function renderUserAdminSnapshot(user) {
                 </div>
             </div>
             <div class="admin-field-group">
-                <label>Último acceso</label>
+                <label>Ãšltimo acceso</label>
                 <div class="input-v9">${getUserLastSeenLabel(user)}</div>
             </div>
             <div class="admin-field-group">
-                <label>Próximos partidos</label>
+                <label>PrÃ³ximos partidos</label>
                 <div class="input-v9">${snapshot.openMatches} pendientes</div>
             </div>
             <div class="admin-field-group">
-                <label>Último partido</label>
-                <div class="input-v9">${latestType} · ${latestDate}</div>
+                <label>Ãšltimo partido</label>
+                <div class="input-v9">${latestType} Â· ${latestDate}</div>
             </div>
             <div class="admin-field-group col-span-2">
                 <label>Memoria IA reciente</label>
                 <div class="input-v9" style="line-height:1.45;">${escapeHtml(insight)}</div>
             </div>
             <div class="admin-field-group col-span-2">
-                <label>Último cambio admin</label>
+                <label>Ãšltimo cambio admin</label>
                 <div class="input-v9">${escapeHtml(auditText)}</div>
             </div>
             <div class="admin-field-group col-span-2">
-                <label>Centro histórico</label>
+                <label>Centro histÃ³rico</label>
                 <div class="input-v9 flex-row between">
-                    <span>Partidos, diario, IA y auditoría</span>
+                    <span>Partidos, diario, IA y auditorÃ­a</span>
                     <button class="btn-v9 ghost sm" onclick="window.openUserAdminHistory('${user.id}'); event.stopPropagation();">
                         <i class="fas fa-timeline"></i> VER
                     </button>
@@ -737,7 +738,7 @@ function renderUserAdminSnapshot(user) {
 function formatShortText(value = "", max = 180) {
     const clean = String(value || "").replace(/\s+/g, " ").trim();
     if (!clean) return "Sin detalle";
-    return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+    return clean.length > max ? `${clean.slice(0, max - 1)}â€¦` : clean;
 }
 
 function getUserById(uid) {
@@ -825,7 +826,7 @@ function renderUserHistoryModalContent(user) {
                 <span>Diario</span>
                 <span>${formatDateShort(entry?.fecha || entry?.timestamp || entry?.createdAt)}</span>
             </div>
-            <div class="audit-entry__title">${escapeHtml(entry?.rival || entry?.title || "Entrada táctica")}</div>
+            <div class="audit-entry__title">${escapeHtml(entry?.rival || entry?.title || "Entrada tÃ¡ctica")}</div>
             <div class="audit-entry__body">${escapeHtml(formatShortText(entry?.coachNote || entry?.memoryNote || entry?.tactica?.leccion || ""))}</div>
         </div>
     `).join("") : `<div class="audit-feed-empty">Sin entradas de diario registradas.</div>`;
@@ -839,7 +840,7 @@ function renderUserHistoryModalContent(user) {
             <div class="audit-entry__title">${escapeHtml(String(item?.type || "general").toUpperCase())}</div>
             <div class="audit-entry__body">${escapeHtml(formatShortText(item?.text || ""))}</div>
         </div>
-    `).join("") : `<div class="audit-feed-empty">La IA aún no ha generado memoria útil para este jugador.</div>`;
+    `).join("") : `<div class="audit-feed-empty">La IA aÃºn no ha generado memoria Ãºtil para este jugador.</div>`;
 
     const auditHtml = relevantAudit.length ? relevantAudit.map((item) => `
         <div class="audit-entry">
@@ -847,7 +848,7 @@ function renderUserHistoryModalContent(user) {
                 <span>${escapeHtml(resolveAdminActorLabel(item.actorEmail, item.actorUid))}</span>
                 <span>${formatAuditStamp(item.createdAt)}</span>
             </div>
-            <div class="audit-entry__title">${escapeHtml(String(item.action || "acción").replace(/_/g, " ").toUpperCase())}</div>
+            <div class="audit-entry__title">${escapeHtml(String(item.action || "acciÃ³n").replace(/_/g, " ").toUpperCase())}</div>
             <div class="audit-entry__body">${escapeHtml(describeAuditLog(item))}</div>
         </div>
     `).join("") : `<div class="audit-feed-empty">Sin cambios administrativos recientes para este usuario.</div>`;
@@ -882,11 +883,11 @@ function renderUserHistoryModalContent(user) {
             </div>
             <div class="admin-history-grid">
                 <section>
-                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">Últimos partidos</div>
+                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">Ãšltimos partidos</div>
                     <div class="audit-feed">${matchHtml}</div>
                 </section>
                 <section>
-                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">Diario táctico</div>
+                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">Diario tÃ¡ctico</div>
                     <div class="audit-feed">${diaryHtml}</div>
                 </section>
                 <section>
@@ -894,7 +895,7 @@ function renderUserHistoryModalContent(user) {
                     <div class="audit-feed">${aiHtml}</div>
                 </section>
                 <section>
-                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">Auditoría admin</div>
+                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">AuditorÃ­a admin</div>
                     <div class="audit-feed">${auditHtml}</div>
                 </section>
             </div>
@@ -922,14 +923,14 @@ function describeAuditLog(item) {
     if (payload?.points) parts.push(`${payload.points} pts`);
     if (payload?.count) parts.push(`${payload.count} registros`);
     if (payload?.role) parts.push(`rol ${payload.role}`);
-    return parts.join(" · ") || "Sin detalle adicional";
+    return parts.join(" Â· ") || "Sin detalle adicional";
 }
 
 function renderAuditFeed() {
     const container = document.getElementById("admin-audit-feed");
     if (!container) return;
     if (!auditLogs.length) {
-        container.innerHTML = `<div class="audit-feed-empty">Aún no hay actividad registrada en el panel.</div>`;
+        container.innerHTML = `<div class="audit-feed-empty">AÃºn no hay actividad registrada en el panel.</div>`;
         return;
     }
 
@@ -939,11 +940,11 @@ function renderAuditFeed() {
                 <span>${escapeHtml(resolveAdminActorLabel(item.actorEmail, item.actorUid, users))}</span>
                 <span>${formatAuditStamp(item.createdAt)}</span>
             </div>
-            <div class="audit-entry__title">${escapeHtml(String(item.action || "acción").replace(/_/g, " ").toUpperCase())}</div>
+            <div class="audit-entry__title">${escapeHtml(String(item.action || "acciÃ³n").replace(/_/g, " ").toUpperCase())}</div>
             <div class="audit-entry__body">
                 <span class="status-highlight">${escapeHtml(item.entityType || "sistema")}</span>
                 <span class="match-highlight">${escapeHtml(resolveAdminEntityLabel(item.entityType, item.entityId, { users, guestProfiles, matchesArr, eventsArr }))}</span>
-                · ${escapeHtml(describeAuditLog(item))}
+                Â· ${escapeHtml(describeAuditLog(item))}
             </div>
         </article>
     `).join("");
@@ -978,7 +979,7 @@ function renderUsers() {
         else if (notifPermission === "default") { notifLabel = "Sin permiso"; notifClass = "acc-badge text-amber-300"; }
         else if (notifPermission === "granted" && stat.enabled > 0) { notifLabel = "Activas"; notifClass = "acc-badge text-green-300"; }
         else if (notifPermission === "granted" && stat.count === 0) { notifLabel = "Sin dispositivo"; notifClass = "acc-badge text-amber-300"; }
-        else if (notifPermission === "granted") { notifLabel = "Sin suscripción"; notifClass = "acc-badge text-amber-300"; }
+        else if (notifPermission === "granted") { notifLabel = "Sin suscripciÃ³n"; notifClass = "acc-badge text-amber-300"; }
         const seenStr = stat.lastSeenAt ? stat.lastSeenAt.toLocaleDateString("es-ES") : "N/D";
         const displayName = escapeHtml(u.nombreUsuario || u.nombre || "SIN NOMBRE");
         const displayEmail = escapeHtml(u.email || "Sin email");
@@ -1003,7 +1004,7 @@ function renderUsers() {
             <div class="acc-content">
                 <div class="admin-grid-v9">
                     <div class="admin-field-group">
-                        <label>Nombre Público</label>
+                        <label>Nombre PÃºblico</label>
                         <input type="text" class="input-v9" value="${u.nombreUsuario || ''}" id="u-nick-${u.id}">
                     </div>
                     <div class="admin-field-group">
@@ -1048,7 +1049,7 @@ function renderUsers() {
                         <label>Notificaciones</label>
                         <div class="input-v9 flex-row between">
                             <span class="${notifClass}">${notifLabel}</span>
-                            <span class="text-[10px] opacity-60">${stat.enabled || 0}/${stat.count || 0} · ${seenStr}</span>
+                            <span class="text-[10px] opacity-60">${stat.enabled || 0}/${stat.count || 0} Â· ${seenStr}</span>
                         </div>
                     </div>
                     <div class="admin-field-group">
@@ -1253,8 +1254,8 @@ function renderMatches() {
             const label = resolveUserDisplayName(uid, m);
             const isGuest = String(uid).startsWith('GUEST_') || String(uid).startsWith('invitado_') || String(uid).startsWith('manual_');
             return `<span class="text-[10px] ${isGuest ? 'text-amber-400' : 'text-white/70'}">${escapeHtml(label)}</span>`;
-        }).join(' · ') || '<span class="text-[10px] opacity-30">Sin jugadores</span>';
-        const eloProcessed = m.rankingProcessedAt ? '✅ Procesado' : (isPlayed(m) ? '⚠️ Sin ELO' : '—');
+        }).join(' Â· ') || '<span class="text-[10px] opacity-30">Sin jugadores</span>';
+        const eloProcessed = m.rankingProcessedAt ? 'âœ… Procesado' : (isPlayed(m) ? 'âš ï¸ Sin ELO' : 'â€”');
         const eloStatusColor = m.rankingProcessedAt ? 'text-green-400' : (isPlayed(m) ? 'text-amber-400' : 'opacity-30');
         const usersVsLabel = getMatchUsersVsLabel(m);
 
@@ -1264,7 +1265,7 @@ function renderMatches() {
                 <div class="acc-icon-box"><i class="fas fa-microchip"></i></div>
                 <div class="acc-main">
                     <span class="acc-title">${escapeHtml(usersVsLabel)}</span>
-                    <span class="acc-sub">${dateStr} · ${typeLabel}</span>
+                    <span class="acc-sub">${dateStr} Â· ${typeLabel}</span>
                 </div>
                 <div class="acc-badges">
                     <span class="acc-badge">${isPlayed(m) ? res : 'PENDING_RESULT'}</span>
@@ -1332,7 +1333,7 @@ function renderEvents() {
                 <div class="acc-icon-box"><i class="fas fa-trophy"></i></div>
                 <div class="acc-main">
                     <span class="acc-title">${e.nombre}</span>
-                    <span class="acc-sub">${e.formato?.toUpperCase()} · ${e.estado?.toUpperCase()}</span>
+                    <span class="acc-sub">${e.formato?.toUpperCase()} Â· ${e.estado?.toUpperCase()}</span>
                 </div>
                 <div class="acc-badges">
                     <span class="acc-badge">${(e.inscritos||[]).length} INSCRITOS</span>
@@ -1350,12 +1351,12 @@ function renderEvents() {
                         </select>
                     </div>
                     <div class="admin-field-group">
-                        <label>Máximo de Plazas</label>
+                        <label>MÃ¡ximo de Plazas</label>
                         <input type="number" class="input-v9" value="${e.plazasMax || 16}" id="ev-plazas-${e.id}">
                     </div>
                 </div>
                 <div class="flex-row gap-3 mt-6">
-                    <button class="btn-v9 primary flex-1" onclick="window.saveEventAdmin('${e.id}')">ACTUALIZAR CONFIGURACIÓN</button>
+                    <button class="btn-v9 primary flex-1" onclick="window.saveEventAdmin('${e.id}')">ACTUALIZAR CONFIGURACIÃ“N</button>
                     <button class="btn-v9 ghost" onclick="window.location.href='evento-detalle.html?id=${e.id}&admin=1'">MODIFICAR EQUIPOS / BRACKET</button>
                 </div>
             </div>
@@ -1593,7 +1594,7 @@ function renderProposals() {
                         <div class="admin-acc-head" onclick="this.parentElement.classList.toggle('active')">
                             <div class="flex-col">
                                 <span class="admin-acc-title">${escapeHtml(p.title || "Propuesta")}</span>
-                                <span class="admin-acc-sub">${status} · ${escapeHtml(names || "sin participantes")}</span>
+                                <span class="admin-acc-sub">${status} Â· ${escapeHtml(names || "sin participantes")}</span>
                                 <span class="text-[9px] opacity-50">${dates}</span>
                             </div>
                             <button class="btn-v9 ghost" onclick="event.stopPropagation(); window.openProposalAdminChat('${p.id}')">Ver chat</button>
@@ -1692,8 +1693,8 @@ function renderAdminAvatar(user = {}) {
 }
 
 function confirmAdminAction({
-    title = "Confirmar acción",
-    message = "¿Quieres continuar?",
+    title = "Confirmar acciÃ³n",
+    message = "Â¿Quieres continuar?",
     confirmLabel = "Continuar",
     danger = false,
 } = {}) {
@@ -1768,7 +1769,7 @@ window.saveUserAdmin = async (uid) => {
         uid,
         kind: "admin_profile_update",
         title: "Perfil actualizado desde admin",
-        text: `Rol ${data.rol || "Jugador"} · Nivel ${Number(data.nivel || 2.5).toFixed(2)}${icsUrl ? " · Calendario conectado" : ""}`,
+        text: `Rol ${data.rol || "Jugador"} Â· Nivel ${Number(data.nivel || 2.5).toFixed(2)}${icsUrl ? " Â· Calendario conectado" : ""}`,
         tag: "Admin",
         tone: "admin",
         entityId: uid,
@@ -1834,7 +1835,7 @@ window.saveMatchAdmin = async (id, col) => {
     }
     const validation = validateMatchAdminPayload({ resultStr, dateVal, state: estadoVal });
     if (!validation.valid) {
-        return showToast("VALIDACIÓN", validation.errors[0], "warning");
+        return showToast("VALIDACIÃ“N", validation.errors[0], "warning");
     }
     
     const data = buildMatchPersistencePatch({
@@ -1857,8 +1858,8 @@ window.saveMatchAdmin = async (id, col) => {
             kind: "match_admin_update",
             title: resultStr ? "Resultado actualizado por admin" : "Partido actualizado por admin",
             text: resultStr
-                ? `Marcador ${resultStr}${estadoVal ? ` · Estado ${estadoVal}` : ""}`
-                : `Estado ${estadoVal || "actualizado"}${dateVal ? ` · ${dateVal}` : ""}`,
+                ? `Marcador ${resultStr}${estadoVal ? ` Â· Estado ${estadoVal}` : ""}`
+                : `Estado ${estadoVal || "actualizado"}${dateVal ? ` Â· ${dateVal}` : ""}`,
             tag: "Partido",
             tone: "match",
             matchId: id,
@@ -1877,7 +1878,7 @@ window.saveMatchAdmin = async (id, col) => {
             if (res?.success && !res?.skipped) {
                 const teamA = Number(res?.summary?.teamADelta || 0).toFixed(2);
                 const teamB = Number(res?.summary?.teamBDelta || 0).toFixed(2);
-                showToast("SISTEMA", `ELO actualizado · A ${teamA} / B ${teamB}`, "success");
+                showToast("SISTEMA", `ELO actualizado Â· A ${teamA} / B ${teamB}`, "success");
             } else if (res?.skipped) {
                 showToast("SISTEMA", "ELO ya procesado (mismo resultado)", "info");
             } else {
@@ -1903,7 +1904,7 @@ window.createGuestProfileAdmin = async () => {
     const name = String(document.getElementById("guest-create-name")?.value || "").trim();
     const level = Number(document.getElementById("guest-create-level")?.value || 2.5);
     if (!name) return showToast("Invitados", "Indica un nombre para el invitado", "warning");
-    if (!Number.isFinite(level)) return showToast("Invitados", "Indica un nivel válido", "warning");
+    if (!Number.isFinite(level)) return showToast("Invitados", "Indica un nivel vÃ¡lido", "warning");
     const guestId = `GUEST_${name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_${Math.round(level * 100)}`;
     try {
         await setDoc(doc(db, "invitados", guestId), {
@@ -1968,7 +1969,7 @@ window.saveGuestProfileAdmin = async (guestId) => {
 
 window.deleteGuestProfileAdmin = async (guestId) => {
     if (!guestId) return;
-    if (!(await confirmAdminAction({ title: "Eliminar invitado", message: "Se eliminará el perfil competitivo del invitado. Los partidos no se borran, pero perderás esta referencia guardada.", confirmLabel: "Eliminar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Eliminar invitado", message: "Se eliminarÃ¡ el perfil competitivo del invitado. Los partidos no se borran, pero perderÃ¡s esta referencia guardada.", confirmLabel: "Eliminar", danger: true }))) return;
     try {
         await deleteDoc(doc(db, "invitados", guestId));
         showToast("Invitados", "Perfil eliminado", "success");
@@ -2180,7 +2181,7 @@ function renderAdminDiagnosticCard(row = {}) {
     const breakdown = row?.analysis?.breakdown || row?.substrings || {};
     const { additiveRows, metricRows } = buildAdminCalcRows(breakdown);
     const formula = additiveRows.length
-        ? additiveRows.map((item) => `${item.label} ${formatAdminDelta(item.value)}`).join(" · ")
+        ? additiveRows.map((item) => `${item.label} ${formatAdminDelta(item.value)}`).join(" Â· ")
         : `Base ${formatAdminDelta(delta)}`;
 
     return `
@@ -2220,7 +2221,7 @@ function renderAdminDiagnosticCard(row = {}) {
                                 <span>${item.label}</span>
                                 <strong>${typeof item.value === "number" ? item.value.toFixed(2) : escapeAdminAttr(item.value)}</strong>
                             </div>
-                        `).join("") : `<div class="admin-empty">Sin métricas adicionales</div>`}
+                        `).join("") : `<div class="admin-empty">Sin mÃ©tricas adicionales</div>`}
                     </div>
                 </section>
             </div>
@@ -2311,7 +2312,7 @@ async function openAdminRecalcModal(id, col, resultStr) {
             <div class="admin-recalc-hero">
                 <div class="admin-recalc-hero-label">Marcador del recalculo</div>
                 <div class="admin-recalc-hero-score">${resultStr}</div>
-                <div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,.68);">${slots.map((slot) => slot.name).join(" · ")}</div>
+                <div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,.68);">${slots.map((slot) => slot.name).join(" Â· ")}</div>
             </div>
             ${guestRows ? `<div style="display:grid;gap:10px;"><div class="admin-recalc-section-title">Invitados o perfiles no detectados</div>${guestRows}</div>` : ""}
             <div class="admin-recalc-toolbar">
@@ -2327,7 +2328,7 @@ async function openAdminRecalcModal(id, col, resultStr) {
     if (heroPlayers) {
         heroPlayers.className = "admin-recalc-hero-players";
         heroPlayers.removeAttribute("style");
-        heroPlayers.textContent = slots.map((slot) => slot.name).join(" · ");
+        heroPlayers.textContent = slots.map((slot) => slot.name).join(" Â· ");
     }
 
     adminRecalcModalState = { id, col, resultStr, match, slots, guestOverrides: {}, preview: null };
@@ -2345,7 +2346,7 @@ async function openAdminRecalcModal(id, col, resultStr) {
         const { processMatchResults } = await import("./ranking-service.js");
         const res = await processMatchResults(id, col, resultStr, { guestOverrides });
         if (!res?.success) throw new Error(res?.error || "No se pudo recalcular.");
-        showToast("ÉXITO", "Cálculo ELO guardado", "success");
+        showToast("Ã‰XITO", "CÃ¡lculo ELO guardado", "success");
         modal.classList.remove("active");
         await refreshAll();
     });
@@ -2357,7 +2358,7 @@ async function openAdminRecalcModal(id, col, resultStr) {
             return;
         }
         if (!currentUser?.uid) {
-          showToast("Sesión no lista", "Espera un momento e intenta de nuevo.", "warning");
+          showToast("SesiÃ³n no lista", "Espera un momento e intenta de nuevo.", "warning");
           return;
         }
         await persistAdminGuestOverrides(guestOverrides);
@@ -2369,7 +2370,7 @@ async function openAdminRecalcModal(id, col, resultStr) {
             manualReason: "Ajuste manual desde admin"
         });
         if (!res?.success) throw new Error(res?.error || "No se pudo guardar el ajuste manual.");
-        showToast("ÉXITO", "Puntuación manual guardada", "success");
+        showToast("Ã‰XITO", "PuntuaciÃ³n manual guardada", "success");
         modal.classList.remove("active");
         await refreshAll();
     });
@@ -2449,7 +2450,7 @@ window.openUserAdminHistory = (uid) => {
     modal.classList.add("active");
     const title = document.getElementById("user-history-admin-title");
     const body = document.getElementById("user-history-admin-body");
-    if (title) title.textContent = `Historial · ${user.nombreUsuario || user.nombre || "Usuario"}`;
+    if (title) title.textContent = `Historial Â· ${user.nombreUsuario || user.nombre || "Usuario"}`;
     if (body) body.innerHTML = renderUserHistoryModalContent(user);
 };
 
@@ -2470,7 +2471,7 @@ window.approveUserAdmin = async (uid) => {
 };
 
 window.deleteUserAdmin = async (uid) => {
-    if (!(await confirmAdminAction({ title: "Eliminar usuario", message: "Esta acción borrará el usuario seleccionado del sistema.", confirmLabel: "Eliminar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Eliminar usuario", message: "Esta acciÃ³n borrarÃ¡ el usuario seleccionado del sistema.", confirmLabel: "Eliminar", danger: true }))) return;
     await deleteDoc(doc(db, "usuarios", uid));
     await logAdminAudit("delete_user", "usuarios", uid).catch(() => {});
     showToast("SISTEMA", "Usuario borrado", "warn");
@@ -2478,7 +2479,7 @@ window.deleteUserAdmin = async (uid) => {
 };
 
 window.deleteMatchAdmin = async (id, col) => {
-    if (!(await confirmAdminAction({ title: "Eliminar partido", message: "Esta acción borrará el partido seleccionado.", confirmLabel: "Eliminar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Eliminar partido", message: "Esta acciÃ³n borrarÃ¡ el partido seleccionado.", confirmLabel: "Eliminar", danger: true }))) return;
     await deleteDoc(doc(db, col, id));
     await logAdminAudit("delete_match", col, id).catch(() => {});
     refreshAll();
@@ -2494,7 +2495,7 @@ window.deleteMatchesByFilter = async (mode = "all") => {
     if (type !== "all") data = data.filter(m => m.col === type);
 
     if (!data.length) return showToast("SISTEMA", "No hay partidos para borrar", "info");
-    if (!(await confirmAdminAction({ title: "Borrado masivo", message: `Se borrarán ${data.length} partidos del bloque ${mode.toUpperCase()}.`, confirmLabel: "Borrar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Borrado masivo", message: `Se borrarÃ¡n ${data.length} partidos del bloque ${mode.toUpperCase()}.`, confirmLabel: "Borrar", danger: true }))) return;
     for (const m of data) await deleteDoc(doc(db, m.col, m.id));
     await logAdminAudit("bulk_delete_matches", type === "all" ? "matches" : type, mode, { count: data.length }).catch(() => {});
     showToast("SISTEMA", `Eliminados ${data.length} partidos`, "success");
@@ -2514,7 +2515,7 @@ window.saveUserRanking = async (uid) => {
         uid,
         kind: "ranking_admin_update",
         title: "Ranking ajustado por admin",
-        text: `Nuevo ranking ${pts} puntos · Nivel ${levelFromRating(pts).toFixed(2)}`,
+        text: `Nuevo ranking ${pts} puntos Â· Nivel ${levelFromRating(pts).toFixed(2)}`,
         tag: "Ranking",
         tone: "elo",
         entityId: uid,
@@ -2549,7 +2550,7 @@ function isPlayed(m) {
 async function runBroadcast() {
     const title = String(document.getElementById("sys-broadcast-title").value || "").trim().slice(0, 120);
     const msg = String(document.getElementById("sys-broadcast-message").value || "").trim().slice(0, 600);
-    if (!title || !msg) return showToast("Aviso", "Escribe un título y un mensaje válidos.", "info");
+    if (!title || !msg) return showToast("Aviso", "Escribe un titulo y un mensaje validos.", "info");
     const uids = users.map(u => u.id);
     if (!uids.length) return showToast("Aviso", "No hay usuarios cargados para enviar el comunicado.", "info");
     await sendCoreNotification(uids, title, msg, "info", "home.html");
@@ -2557,9 +2558,39 @@ async function runBroadcast() {
         title,
         count: uids.length
     }).catch(() => {});
-    showToast("ANUNCIO", "Enviado con éxito", "success");
+    showToast("ANUNCIO", "Enviado con exito", "success");
 }
 
+async function runSelfPushTest() {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return showToast("Aviso", "No hay sesion activa para lanzar la prueba.", "info");
+    const title = "Prueba de aviso en segundo plano";
+    const message = "Si este aviso te llega con la app cerrada, el circuito OneSignal y Worker esta funcionando.";
+    try {
+        showToast("Push test", "Enviando aviso de prueba a este dispositivo...", "info");
+        const ok = await sendCoreNotification(
+            [uid],
+            title,
+            message,
+            "info",
+            "notificaciones.html",
+            {
+                source: "admin_self_test",
+                backgroundTest: true,
+                dedupId: `admin_self_test_${uid}_${Date.now()}`
+            }
+        );
+        await logAdminAudit("self_push_test", "system", uid, {
+            title,
+            status: ok ? "sent" : "failed"
+        }).catch(() => {});
+        if (ok) showToast("Push test", "Aviso enviado. Cierra la app y comprueba si entra en segundo plano.", "success");
+        else showToast("Push test", "No se pudo enviar el aviso de prueba.", "error");
+    } catch (e) {
+        console.error("Self push test error:", e);
+        showToast("Push test", e?.message || "Error lanzando el aviso de prueba.", "error");
+    }
+}
 function buildAdminSnapshotPayload() {
     const localHealth = {
         online: navigator.onLine,
@@ -2651,7 +2682,7 @@ async function exportAdminSnapshot() {
             matches: payload.systemSummary.totals.matches,
             events: payload.systemSummary.totals.events,
         }).catch(() => {});
-        showToast("Exportación lista", "Se ha descargado un snapshot operativo del sistema.", "success");
+        showToast("ExportaciÃ³n lista", "Se ha descargado un snapshot operativo del sistema.", "success");
     } catch (error) {
         console.error(error);
         showToast("Error", "No se pudo generar el snapshot del panel.", "error");
@@ -2672,7 +2703,7 @@ async function resetPresence() {
 }
 
 async function clearLogs() {
-    showToast("SISTEMA", "Función no disponible en esta build", "info");
+    showToast("SISTEMA", "FunciÃ³n no disponible en esta build", "info");
 }
 
 async function recoverFromRankingLogs() {
@@ -2681,7 +2712,7 @@ async function recoverFromRankingLogs() {
         message: "Se intentara restaurar el ultimo estado conocido de cada jugador desde los logs.",
         confirmLabel: "Recuperar"
     }))) return;
-    showToast("RECUPERACIÓN", "Consultando registros históricos...", "info");
+    showToast("RECUPERACIÃ“N", "Consultando registros histÃ³ricos...", "info");
     try {
         const snap = await getDocsSafe(query(collection(db, "rankingLogs"), orderBy("timestamp", "desc")));
         if (!snap || snap.empty) {
@@ -2702,7 +2733,7 @@ async function recoverFromRankingLogs() {
         });
 
         if (latestStates.size === 0) {
-            return showToast("AVISO", "No se encontraron datos válidos en los logs", "warn");
+            return showToast("AVISO", "No se encontraron datos vÃ¡lidos en los logs", "warn");
         }
 
         if (!(await confirmAdminAction({
@@ -2721,11 +2752,11 @@ async function recoverFromRankingLogs() {
             ok++;
         }
         
-        showToast("ÉXITO", `Recuperación completada: ${ok} usuarios actualizados.`, "success");
+        showToast("Ã‰XITO", `RecuperaciÃ³n completada: ${ok} usuarios actualizados.`, "success");
         await refreshAll();
     } catch (e) {
         console.error("Recovery Error:", e);
-        showToast("ERROR", "No se pudo completar la recuperación", "error");
+        showToast("ERROR", "No se pudo completar la recuperaciÃ³n", "error");
     }
 }
 
@@ -2735,7 +2766,7 @@ async function recoverMatchesFromLogs() {
         message: "Se intentaran reconstruir partidos finalizados a partir de los registros de puntos.",
         confirmLabel: "Reconstruir"
     }))) return;
-    showToast("RECONSTRUCCIÓN", "Analizando fragmentos de datos...", "info");
+    showToast("RECONSTRUCCIÃ“N", "Analizando fragmentos de datos...", "info");
     try {
         let snap = await getDocsSafe(collection(db, "rankingLogs"));
         if (!snap || snap.empty) {
@@ -2787,7 +2818,7 @@ async function recoverMatchesFromLogs() {
             restored++;
         }
         
-        showToast("ÉXITO", `Restauración completa: ${restored} partidos recuperados, ${skipped} ya existían.`, "success");
+        showToast("Ã‰XITO", `RestauraciÃ³n completa: ${restored} partidos recuperados, ${skipped} ya existÃ­an.`, "success");
         await refreshAll();
     } catch (e) {
         console.error("Match Recovery Error:", e);
@@ -2808,7 +2839,7 @@ window.confirmCreateMatchAdmin = async () => {
     const state = document.getElementById('adm-create-state').value;
 
     const validation = validateMatchAdminPayload({ dateVal: dateInput, state });
-    if (!validation.valid) return showToast("VALIDACIÓN", validation.errors[0], "warning");
+    if (!validation.valid) return showToast("VALIDACIÃ“N", validation.errors[0], "warning");
 
     const matchData = {
         fecha: new Date(dateInput),
@@ -2839,7 +2870,7 @@ window.confirmCreateMatchAdmin = async () => {
             matchCollection: col,
             entityId: createdRef?.id || null
         }).catch(() => {});
-        showToast("ÉXITO", "Partido creado manualmente", "success");
+        showToast("Ã‰XITO", "Partido creado manualmente", "success");
         document.getElementById('modal-admin-create-match').classList.remove('active');
         refreshAll();
     } catch (e) {
@@ -2854,11 +2885,11 @@ window.openCreateEventWizard = () => {
 };
 
 window.syncApoingAdmin = async () => {
-    showToast("APOING", "Iniciando sincronización forzada...", "info");
+    showToast("APOING", "Iniciando sincronizaciÃ³n forzada...", "info");
     try {
         const { syncApoingReservations } = await import('./calendario.js');
         await syncApoingReservations(true);
-        showToast("APOING", "Sincronización completada", "success");
+        showToast("APOING", "SincronizaciÃ³n completada", "success");
         refreshAll();
     } catch (e) {
         showToast("ERROR", "Fallo al sincronizar Apoing", "error");
@@ -2867,7 +2898,7 @@ window.syncApoingAdmin = async () => {
 
 
 window.resetEloToBase = async () => {
-    if (!(await confirmAdminAction({ title: "Reset global ELO", message: "Se reseteará a todos los jugadores a 1000 puntos. Esta acción es irreversible.", confirmLabel: "Resetear", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Reset global ELO", message: "Se resetearÃ¡ a todos los jugadores a 1000 puntos. Esta acciÃ³n es irreversible.", confirmLabel: "Resetear", danger: true }))) return;
     showToast("PROCESANDO", "Reseteando ranking global...", "info");
     
     const { ELO_CONFIG } = await import("./config/elo-system.js");
@@ -2889,7 +2920,7 @@ window.resetEloToBase = async () => {
 
 window.saveApoingAdmin = async (id) => {
     const url = document.getElementById(`ap-url-${id}`).value;
-    if (!url.includes('.ics')) return showToast("ERROR", "URL ICS no válida", "error");
+    if (!url.includes('.ics')) return showToast("ERROR", "URL ICS no vÃ¡lida", "error");
     
     await updateDocument("apoingCalendars", id, { icsUrl: url });
     await logAdminAudit("update_apoing_link", "apoingCalendars", id, { url }).catch(() => {});
@@ -2946,3 +2977,6 @@ function renderGlobalHistory() {
         </tr>`;
     }).join('');
 }
+
+
+

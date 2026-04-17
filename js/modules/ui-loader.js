@@ -7,6 +7,18 @@ import { AudioManager } from './audio-manager.js';
 // Initialize theme system immediately  
 initThemeSystem();
 
+if (typeof window !== 'undefined') {
+    guardAuth((user) => {
+        const path = window.location.pathname.toLowerCase();
+        const publicPages = ['index.html', 'registro.html', 'terms.html', 'privacy.html', 'offline.html'];
+        const isPublic = publicPages.some((page) => path.includes(page)) || path === '/' || path.endsWith('/') || path === '';
+        if (!user && !isPublic) {
+            logInfo('session_guard_redirect_login', { path });
+            window.location.replace('index.html');
+        }
+    });
+}
+
 const PUBLIC_PAGES = ['index.html', 'registro.html'];
 
 function emitToast(title, body = '', type = 'info') {
@@ -336,11 +348,16 @@ function bindHeaderProfileMenu(userData = null) {
     });
     historyBtn?.addEventListener("click", () => {
         closeMenu();
-        window.location.href = "historial.html";
+        window.location.href = "diario.html";
     });
     racketsBtn?.addEventListener("click", () => {
         closeMenu();
         window.location.href = "palas.html";
+    });
+    const apkBtn = document.getElementById("header-go-apk");
+    apkBtn?.addEventListener("click", () => {
+        closeMenu();
+        window.location.href = "descargar_apk.html";
     });
     adminViewBtn?.addEventListener("click", async () => {
         closeMenu();
@@ -400,7 +417,7 @@ function getCurrentPageMeta() {
     const pageMap = {
         'home.html': { id: 'home', subtitle: 'INICIO' },
         'calendario.html': { id: 'calendar', subtitle: 'CALENDARIO' },
-        'diario.html': { id: 'diary', subtitle: 'DIARIO' },
+        'diario.html': { id: 'history', subtitle: 'HISTORIAL' },
         'ranking.html': { id: 'ranking', subtitle: 'RANKING' },
         'historial.html': { id: 'history', subtitle: 'HISTORIAL' },
         'perfil.html': { id: 'profile', subtitle: 'PERFIL' },
@@ -455,6 +472,7 @@ export async function injectHeader(userData = null) {
             <div class="header-online" onclick="window.showOnlineNexus && window.showOnlineNexus()" title="Usuarios conectados">
                 <span class="header-online-dot"></span>
                 <i class="fas fa-satellite-dish"></i>
+                <span id="header-online-count" class="header-online-count">--</span>
             </div>
  
             <div class="header-notif" onclick="window.location.href='notificaciones.html'" title="Notificaciones">
@@ -471,8 +489,9 @@ export async function injectHeader(userData = null) {
                         <span class="header-menu-sub">${escapeUiLoaderHtml(pageMeta.subtitle)}</span>
                     </div>
                     <div class="header-menu-grid">
-                        <button class="header-menu-action" id="header-go-history"><i class="fas fa-clock-rotate-left"></i> Historial</button>
+                        <button class="header-menu-action" id="header-go-history"><i class="fas fa-book-open"></i> Diario</button>
                         <button class="header-menu-action" id="header-go-palas"><i class="fas fa-table-tennis-paddle-ball"></i> Palas</button>
+                        <button class="header-menu-action" id="header-go-apk" style="color:#00d4ff;"><i class="fas fa-download"></i> App Nativa</button>
                     </div>
                     ${isAdmin ? `
                         <button class="header-menu-action" id="header-toggle-admin-view" style="color:var(--sport-gold); border: 1px solid rgba(var(--sport-gold-rgb), 0.2); background: rgba(var(--sport-gold-rgb), 0.05); margin-top: 10px;">
@@ -565,8 +584,8 @@ export async function injectNavbar(activePage) {
         { id: 'home', icon: icons.home, label: 'Inicio', link: 'home.html', color: '#2bbcff' },
         { id: 'ranking', icon: icons.ranking, label: 'Ranking', link: 'ranking.html', color: '#93ea08' },
         { id: 'calendar', icon: icons.calendar, label: 'Calendario', link: 'calendario.html', center: true },
-        { id: 'diary', icon: icons.events, label: 'Diario', link: 'diario.html', color: '#ae00ff' },
-        { id: 'events', icon: icons.history, label: 'Eventos', link: 'eventos.html', color: '#c6ff00' }
+        { id: 'history', icon: `<i class="fa-solid fa-clock-rotate-left"></i>`, label: 'Historial', link: 'historial.html', color: '#ae00ff' },
+        { id: 'events', icon: icons.events, label: 'Eventos', link: 'eventos.html', color: '#c6ff00' }
     ];
 
 

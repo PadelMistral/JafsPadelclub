@@ -3,6 +3,7 @@
 import {
   auth,
   db,
+  observerAuth,
   subscribeDoc,
   updateDocument,
   getDocument,
@@ -96,7 +97,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <div class="modal-header relative overflow-hidden p-6">
                     <div class="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-50"></div>
                     <div class="relative z-10 flex-col">
-                        <span class="text-[9px] font-black text-primary tracking-[4px] uppercase mb-1">Análisis Táctico</span>
+                        <span class="text-[9px] font-black text-primary tracking-[4px] uppercase mb-1">AnÃ¡lisis TÃ¡ctico</span>
                         <h2 class="text-2xl font-black italic text-white leading-none">${date.toLocaleDateString("es-ES", { day: "numeric", month: "long" }).toUpperCase()}</h2>
                         <span class="text-[10px] font-bold text-muted mt-2 uppercase">${entry.tipo} | ${entry.posicion.toUpperCase()} | ${entry.hora.toUpperCase()}</span>
                     </div>
@@ -123,25 +124,25 @@ document.addEventListener("DOMContentLoaded", async () => {
                             <p class="text-xs text-white/80 italic">"${entry.tactica?.clave || "No registrada"}"</p>
                         </div>
                         <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
-                            <h4 class="text-[9px] font-black text-sport-red uppercase tracking-widest mb-2">Daño Recibido</h4>
-                            <p class="text-xs text-white/80">${entry.tactica?.damageReceived || entry.tactica?.["dañoRecibido"] || "N/A"}</p>
+                            <h4 class="text-[9px] font-black text-sport-red uppercase tracking-widest mb-2">DaÃ±o Recibido</h4>
+                            <p class="text-xs text-white/80">${entry.tactica?.damageReceived || entry.tactica?.["daÃ±oRecibido"] || "N/A"}</p>
                         </div>
                         <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
-                            <h4 class="text-[9px] font-black text-sport-green uppercase tracking-widest mb-2">Daño Infligido</h4>
-                            <p class="text-xs text-white/80">${entry.tactica?.damageInflicted || entry.tactica?.["dañoInfligido"] || "N/A"}</p>
+                            <h4 class="text-[9px] font-black text-sport-green uppercase tracking-widest mb-2">DaÃ±o Infligido</h4>
+                            <p class="text-xs text-white/80">${entry.tactica?.damageInflicted || entry.tactica?.["daÃ±oInfligido"] || "N/A"}</p>
                         </div>
                     </div>
 
                     <!-- Mood & Biometrics -->
                     <div class="p-5 bg-gradient-to-br from-primary/5 to-transparent rounded-3xl border border-primary/10">
                         <div class="flex-row between items-center mb-4">
-                            <span class="text-[9px] font-black text-white/40 uppercase tracking-widest">Estado Biométrico</span>
+                            <span class="text-[9px] font-black text-white/40 uppercase tracking-widest">Estado BiomÃ©trico</span>
                             <span class="badge-premium-v7 sm neutral" style="font-size: 8px;">${entry.biometria?.mood?.toUpperCase()}</span>
                         </div>
                         <div class="flex-row gap-3">
                              <div class="flex-1 flex-col center p-2 bg-black/20 rounded-xl">
                                 <span class="text-sm font-black text-white">${entry.biometria?.fisico}/10</span>
-                                <span class="text-[7px] text-muted font-bold uppercase mt-1">Físico</span>
+                                <span class="text-[7px] text-muted font-bold uppercase mt-1">FÃ­sico</span>
                              </div>
                              <div class="flex-1 flex-col center p-2 bg-black/20 rounded-xl">
                                 <span class="text-sm font-black text-white">${entry.biometria?.mental}/10</span>
@@ -177,7 +178,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 </div>
                 
                 <div class="p-6 bg-black/20 border-t border-white/5 flex-row center">
-                    <button class="btn btn-primary btn-sm w-full" onclick="this.closest('.modal-overlay').remove()">CERRAR ANÁLISIS</button>
+                    <button class="btn btn-primary btn-sm w-full" onclick="this.closest('.modal-overlay').remove()">CERRAR ANÃLISIS</button>
                 </div>
             </div>
         `;
@@ -191,7 +192,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           document.getElementById("inp-match-selector").value;
         if (!mId) {
           showToast(
-            "ACCIÓN REQUERIDA",
+            "ACCIÃ“N REQUERIDA",
             "Debes seleccionar un partido completado para crear un reporte.",
             "warning",
           );
@@ -206,7 +207,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           if (!match || (!match.resultado && match.estado !== "finalizado" && match.estado !== "jugado")) {
             showToast(
               "PARTIDO PENDIENTE",
-              "El partido seleccionado aún no tiene resultado registrado. Juega primero, analiza después.",
+              "El partido seleccionado aÃºn no tiene resultado registrado. Juega primero, analiza despuÃ©s.",
               "warning",
             );
             return;
@@ -261,8 +262,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       title.textContent = "CONTEXTO GLOBAL";
     } else {
       btnPrev.style.display = "block";
-      if (currentStep === 2) title.textContent = "BIOMETRÍA Y EVALUACIÓN";
-      if (currentStep === 3) title.textContent = "ANÁLISIS FINAL";
+      if (currentStep === 2) title.textContent = "BIOMETRÃA Y EVALUACIÃ“N";
+      if (currentStep === 3) title.textContent = "ANÃLISIS FINAL";
     }
 
     if (currentStep === totalSteps) {
@@ -311,7 +312,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
-  auth.onAuthStateChanged((user) => {
+  observerAuth((user) => {
     if (user) {
       currentUser = user;
       subscribeDoc("usuarios", user.uid, (data) => {
@@ -462,7 +463,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                       </div>
                       <div class="flex-col gap-1">
                           <div class="flex-row between text-[8px] font-black text-muted uppercase">
-                              <span>Relajación (Flojera)</span>
+                              <span>RelajaciÃ³n (Flojera)</span>
                               <span class="val-floj-${idx}">3</span>
                           </div>
                           <input type="range" class="eval-range weakness" min="1" max="10" value="3" oninput="this.previousElementSibling.children[1].innerText=this.value">
@@ -540,10 +541,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     overlay.innerHTML = `
       <div class="modal-card glass-strong animate-up p-5" style="max-width:420px">
         <h3 class="text-lg font-black italic mb-4">RECUERDO DEL PARTIDO</h3>
-        <p class="text-xs text-white/80 mb-4">${entry.aiSummary || "Análisis procesado."}</p>
+        <p class="text-xs text-white/80 mb-4">${entry.aiSummary || "AnÃ¡lisis procesado."}</p>
         ${entry.coachNote ? `<p class="text-xs text-white/70 mb-4"><b>Nota del coach:</b> ${entry.coachNote}</p>` : ""}
         <div class="p-4 bg-black/40 rounded-2xl flex-row between items-center">
-            <span class="text-[10px] font-black text-muted uppercase">SENSACIÓN MEDIA</span>
+            <span class="text-[10px] font-black text-muted uppercase">SENSACIÃ“N MEDIA</span>
             <span class="text-xl font-black text-primary">${avg.toFixed(1)}/10</span>
         </div>
         <button class="btn btn-primary w-full mt-6" onclick="this.closest('.modal-overlay').remove()">OK</button>
@@ -568,7 +569,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         fecha: new Date().toISOString(),
         matchId: entryMode === "match" ? val("inp-match-id") : null,
         sessionMode: entryMode,
-        tipo: entryMode === "note" ? "Nota Libre" : val("inp-tipo") || "Sesión",
+        tipo: entryMode === "note" ? "Nota Libre" : val("inp-tipo") || "SesiÃ³n",
         hora: val("inp-hora") || "N/A",
         surface: document.querySelector("#surface-selector .active")?.dataset?.val || "indoor",
         posicion: document.querySelector("#pos-selector .active")?.dataset?.val || "reves",
@@ -659,7 +660,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         transaction.update(userRef, { diario: currentJournal });
       });
 
-      showToast("GUARDADO", "Análisis sincronizado.", "success");
+      showToast("GUARDADO", "AnÃ¡lisis sincronizado.", "success");
       await addPlayerHistoryEntry({
         uid: currentUser.uid,
         kind: "diary_entry",
@@ -728,7 +729,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             <summary class="journal-acc-head">
               <div class="flex-col">
                 <span class="text-[9px] font-black uppercase tracking-widest text-primary">${e.tipo || "SESION"}</span>
-                <span class="text-xs font-black text-white">${date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })} · ${String(e.hora || "--:--").toUpperCase()}</span>
+                <span class="text-xs font-black text-white">${date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })} Â· ${String(e.hora || "--:--").toUpperCase()}</span>
               </div>
               <div class="mood-badge ${isNote ? "text-cyan-300" : moodColor} border border-white/10 px-3 py-1 rounded-full bg-black/40">
                 <span class="text-[10px] font-black uppercase">${isNote ? "NOTA" : e.biometria?.mood || "N/A"}</span>
@@ -818,4 +819,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     toggleChat();
   };
 });
+
+
 

@@ -1,5 +1,5 @@
-/* js/palas.js - Padel Lab Core V5.0 */
-import { auth, db } from "./firebase-service.js";
+﻿/* js/palas.js - Padel Lab Core V5.0 */
+import { auth, db, observerAuth } from "./firebase-service.js";
 import { initAppUI, showToast } from "./ui-core.js";
 import { collection, addDoc, query } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 
@@ -147,7 +147,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     return true;
   }
 
-  auth.onAuthStateChanged((user) => {
+  observerAuth((user) => {
     if (user) {
       currentUser = user;
       loadPalas();
@@ -327,3 +327,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   };
 });
+
+

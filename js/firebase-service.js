@@ -1,4 +1,4 @@
-﻿// firebase-service.js - Core Services (v6.0)
+// firebase-service.js - Core Services (v6.0)
 import { app, auth, db, storage } from "./firebase-init.js";
 import {
   onAuthStateChanged,
@@ -136,6 +136,7 @@ export async function getDocsSafe(q, label = "") {
 
 if (typeof window !== "undefined") {
   window.getDocsSafe = getDocsSafe;
+  window.subscribeCol = subscribeCol;
 }
 
 export function subscribeDoc(col, id, callback) {

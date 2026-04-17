@@ -23,6 +23,13 @@ export function normalizeTeamToken(value = "") {
 export function isUnknownTeamName(value = "") {
   const normalized = normalizeTeamToken(value);
   if (!normalized) return true;
+  // Si la cadena mide al menos 20 caracteres y contiene mayormente código (como UUID & UUID)
+  const tokens = normalized.split(/[\s&/|,-]+/);
+  // Add another split for "vs" because regex \bvs\b is harder in split directly without keeping it
+  const cleanTokens = tokens.flatMap(t => t.split(/\bvs\b/i)).map(t => t.trim()).filter(Boolean);
+  const looksLikeUids = cleanTokens.some(t => t.length >= 20 && /^[a-z0-9_-]+$/i.test(t));
+  if (looksLikeUids) return true;
+  
   if (UNKNOWN_TEAM_NAMES.has(normalized)) return true;
   const compact = normalized.replace(/\s+/g, "");
   return ["tbdvs", "tbdvstbd", "tbdtbd", "pendientevs"].includes(compact);

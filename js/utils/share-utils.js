@@ -340,19 +340,30 @@ export async function generateMatchPosterImage(matchData = {}) {
     ctx.stroke();
 
     if (isPlayed) {
-        // PREMUM SCORE DISPLAY
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.font = '900 16px Rajdhani';
-        ctx.fillText('MARCADOR FINAL', 540, boxY + 35);
-        
+        // SCORE: show real sets or 'FINALIZADO' - never 'F' alone
+        const displayScore = matchData.sets && String(matchData.sets).trim().length > 1
+            ? String(matchData.sets).trim()
+            : (matchData.resultado || matchData.score || 'FINALIZADO');
         ctx.fillStyle = '#ffffff';
         ctx.font = 'italic 900 110px Rajdhani';
         ctx.save();
         ctx.shadowColor = 'rgba(184, 255, 0, 0.4)';
         ctx.shadowBlur = 20;
-        ctx.fillText(matchData.sets || 'F', 540, boxY + 125);
+        ctx.fillText(displayScore, 540, boxY + 125);
         ctx.restore();
+
+        // Winner label under score
+        if (matchData.winner) {
+            const winnerKey2 = String(matchData.winner || '').toUpperCase();
+            const teamAArr = Array.isArray(matchData.teamA) ? matchData.teamA : [];
+            const teamBArr = Array.isArray(matchData.teamB) ? matchData.teamB : [];
+            const winTeam = winnerKey2 === 'A'
+                ? teamAArr.map(p => typeof p === 'object' ? (p.name || p.nombreUsuario || 'J') : p).join(' & ')
+                : teamBArr.map(p => typeof p === 'object' ? (p.name || p.nombreUsuario || 'J') : p).join(' & ');
+            ctx.fillStyle = 'rgba(184,255,0,0.9)';
+            ctx.font = '900 18px Rajdhani';
+            ctx.fillText(`🏆 GANADORES: ${winTeam.toUpperCase()}`, 540, boxY + 152);
+        }
     } else {
         // UPCOMING DATE DISPLAY
         ctx.textAlign = 'center';
@@ -458,29 +469,93 @@ export async function generateMatchPosterImage(matchData = {}) {
         ctx.fillStyle = '#00d4ff'; ctx.font = '900 24px Rajdhani'; ctx.fillText(`${pctA}%`, 270, 870);
         ctx.fillStyle = '#fff'; ctx.font = '900 24px Rajdhani'; ctx.fillText(`${pctB}%`, 810, 870);
     } else if (isPlayed) {
-        // Winner text banner at bottom
+        // Winner celebration banner
+        const displaySets = matchData.sets && String(matchData.sets).trim().length > 1
+            ? String(matchData.sets).trim()
+            : (matchData.resultado || 'FINALIZADO');
+        const winnerKeyB = String(matchData.winner || '').toUpperCase();
+        const teamAF = Array.isArray(matchData.teamA) ? matchData.teamA : [];
+        const teamBF = Array.isArray(matchData.teamB) ? matchData.teamB : [];
+        const winnerNameF = winnerKeyB === 'A'
+            ? teamAF.map(p => typeof p === 'object' ? (p.name || 'J') : p).join(' & ')
+            : teamBF.map(p => typeof p === 'object' ? (p.name || 'J') : p).join(' & ');
+
+        // Draw points under players
+        const ptsA = matchData.eloDiffA || 0;
+        const ptsB = matchData.eloDiffB || 0;
+        
+        ctx.textAlign = 'center';
+        if (ptsA) {
+            ctx.fillStyle = ptsA >= 0 ? '#b8ff00' : '#ff3366';
+            ctx.font = '900 24px Rajdhani';
+            ctx.fillText(`${ptsA > 0 ? '+' : ''}${Math.round(ptsA)} PTS`, 280, 730);
+        }
+        if (ptsB) {
+            ctx.fillStyle = ptsB >= 0 ? '#b8ff00' : '#ff3366';
+            ctx.font = '900 24px Rajdhani';
+            ctx.fillText(`${ptsB > 0 ? '+' : ''}${Math.round(ptsB)} PTS`, 800, 730);
+        }
+
+        // Banner fondo
+        roundRect(ctx, 80, 800, 920, 120, 20, 'rgba(184,255,0,0.06)');
+        ctx.strokeStyle = 'rgba(184,255,0,0.25)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
         ctx.fillStyle = '#b8ff00';
         ctx.textAlign = 'center';
         ctx.font = '900 48px Rajdhani';
-        ctx.fillText('RESULTADO: ' + (matchData.sets || 'Finalizado'), 540, 880);
-        
-        ctx.font = '900 24px Rajdhani';
-        ctx.fillStyle = '#00d4ff';
-        const ptsA = matchData.eloDiffA || 0;
-        const ptsB = matchData.eloDiffB || 0;
-        if (ptsA || ptsB) {
-            ctx.fillText(`+${Math.round(isWinnerA ? ptsA : (isWinnerB ? ptsB : 0))} PUNTOS ELO`, 540, 920);
+        ctx.fillText('MARCADOR: ' + displaySets, 540, 855);
+
+        if (winnerNameF) {
+            ctx.font = '900 26px Rajdhani';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('🏆 ' + winnerNameF.toUpperCase() + ' GANAN', 540, 895);
+        }
+
+        if (matchData.summary) {
+            // Function to wrap text
+            const wrapText = (context, text, x, y, maxWidth, lineHeight) => {
+                const words = text.split(' ');
+                let line = '';
+                for(let n = 0; n < words.length; n++) {
+                  let testLine = line + words[n] + ' ';
+                  let metrics = context.measureText(testLine);
+                  let testWidth = metrics.width;
+                  if (testWidth > maxWidth && n > 0) {
+                    context.fillText(line.trim(), x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                  } else {
+                    line = testLine;
+                  }
+                }
+                context.fillText(line.trim(), x, y);
+            };
+
+            // AI Summary background
+            roundRect(ctx, 80, 950, 920, 160, 20, 'rgba(255,255,255,0.03)');
+            
+            ctx.fillStyle = '#00d4ff';
+            ctx.font = '900 18px Rajdhani';
+            ctx.textAlign = 'left';
+            ctx.fillText('RESUMEN TÁCTICO DE IA', 110, 985);
+            
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.font = '500 18px Rajdhani';
+            const cleanSummary = String(matchData.summary).replace(/<br>/g, " ").substring(0, 320);
+            wrapText(ctx, cleanSummary + (cleanSummary.length >= 320 ? "..." : ""), 110, 1020, 860, 28);
+        } else {
+            // === 7. COURT GRAPHIC (BOTTOM) ===
+            ctx.save();
+            ctx.globalAlpha = 0.08;
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(340, 1000, 400, 240);
+            ctx.beginPath(); ctx.moveTo(540, 1000); ctx.lineTo(540, 1240); ctx.stroke();
+            ctx.restore();
         }
     }
-
-    // === 7. COURT GRAPHIC (BOTTOM) ===
-    ctx.save();
-    ctx.globalAlpha = 0.08;
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(340, 1000, 400, 240);
-    ctx.beginPath(); ctx.moveTo(540, 1000); ctx.lineTo(540, 1240); ctx.stroke();
-    ctx.restore();
 
     // === 8. FOOTER ===
     drawBrandFooter(ctx, 1080, 1350, matchData.club || 'JAFS PADEL CLUB');
@@ -522,204 +597,159 @@ export async function generateEventStatusPoster(data = {}) {
         played = [],
         scheduled = [],
         pending = [],
-        standings = [], // Array of { title, rows: [{teamName, pts, pj, pg, pp, pf, pc}] }
+        standings = [],
     } = data;
-
-    // 1. CALCULATE DYNAMIC HEIGHT
-    let dynamicH = 450;
-    if (groupDraw.length) {
-        dynamicH += 100;
-        groupDraw.forEach((group) => {
-             dynamicH += 70 + (Math.max(1, Math.min((group.teams || []).length, 8)) * 34);
-        });
-    }
-    if (played.length) dynamicH += 80 + (played.length * 60);
-    if (scheduled.length) dynamicH += 80 + (scheduled.length * 65);
-    if (pending.length) dynamicH += 80 + (pending.length * 55);
-    if (standings.length) {
-        standings.forEach(g => {
-             dynamicH += 80 + (Math.min(g.rows.length, 6) * 45);
-        });
-    }
-    dynamicH += 150;
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = 1080;
-    canvas.height = Math.max(1600, dynamicH);
+    canvas.width = 1920;
+    canvas.height = 1080;
 
-    // === BACKGROUND ===
-    const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    // === BACKGROUND (16:9) ===
+    const grd = ctx.createLinearGradient(0, 0, 1920, 1080);
     grd.addColorStop(0, '#020617');
     grd.addColorStop(0.3, '#0a0f2b');
     grd.addColorStop(0.7, '#071b26');
     grd.addColorStop(1, '#020617');
     ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, 1920, 1080);
 
-    // Draw grid background
+    // GRID Decorativo
     ctx.strokeStyle = 'rgba(255,255,255,0.03)';
     ctx.lineWidth = 1;
-    for (let x = 0; x <= canvas.width; x += 60) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    for (let x = 0; x <= 1920; x += 60) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 1080); ctx.stroke();
     }
-    for (let y = 0; y <= canvas.height; y += 60) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    for (let y = 0; y <= 1080; y += 60) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(1920, y); ctx.stroke();
+    }
+
+    // Logo opcional
+    const logoImg = await loadImage(logo || 'imagenes/Logojafs.png');
+    if (logoImg) {
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(logoImg, 1920 / 2 - 250, 1080 / 2 - 250, 500, 500);
+        ctx.globalAlpha = 1;
     }
 
     // === HEADER ===
-    const titleY = 120;
     ctx.textAlign = 'left';
     ctx.fillStyle = '#b8ff00';
     ctx.font = '900 36px Rajdhani';
-    ctx.fillText('⚡ ESTADO DEL TORNEO', 80, titleY - 40);
+    ctx.fillText('⚡ ESTADO DEL EVENTO', 80, 80);
     ctx.fillStyle = '#fff';
-    ctx.font = '900 96px Rajdhani';
-    const cleanEventName = String(eventName).toUpperCase().substring(0, 18);
-    ctx.fillText(cleanEventName, 80, titleY + 50);
+    ctx.font = '900 72px Rajdhani';
+    ctx.fillText(String(eventName).toUpperCase().substring(0, 25), 80, 150);
     ctx.fillStyle = '#00d4ff';
     ctx.font = '800 28px Rajdhani';
-    ctx.fillText(new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase(), 80, titleY + 100);
+    ctx.fillText(new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase(), 80, 200);
 
-    let currentY = titleY + 220;
-
-    function renderRoundedBlock(y, h, borderColor) {
-        roundRect(ctx, 80, y, 920, h, 24, 'rgba(0,0,0,0.6)');
+    // Layout configs
+    function renderRoundedBlock(x, y, w, h, borderColor) {
+        roundRect(ctx, x, y, w, h, 16, 'rgba(0,0,0,0.65)');
         ctx.lineWidth = 2;
         ctx.strokeStyle = borderColor;
         ctx.stroke();
     }
 
-    renderRoundedBlock(currentY, 120, 'rgba(0, 212, 255, 0.25)');
-    ctx.fillStyle = '#00d4ff';
-    ctx.font = '900 28px Rajdhani';
-    ctx.fillText('RESUMEN DEL EVENTO', 110, currentY + 42);
-    ctx.fillStyle = '#fff';
-    ctx.font = '800 22px Rajdhani';
-    ctx.fillText(`FORMATO: ${String(eventFormat).toUpperCase()}`, 110, currentY + 82);
-    ctx.fillText(`USUARIOS REGISTRADOS: ${registeredCount}`, 520, currentY + 82);
-    ctx.fillText(`EQUIPOS: ${teamCount}`, 110, currentY + 112);
-    currentY += 160;
+    // COLUMNA 1: INFO GENERAL & CLASIFICACIÓN
+    const c1X = 80;
+    const cW = 540;
+    renderRoundedBlock(c1X, 240, cW, 110, 'rgba(0, 212, 255, 0.25)');
+    ctx.fillStyle = '#00d4ff'; ctx.font = '900 24px Rajdhani'; ctx.fillText('RESUMEN', c1X + 20, 280);
+    ctx.fillStyle = '#fff'; ctx.font = '800 20px Rajdhani'; 
+    ctx.fillText(`FMT: ${String(eventFormat).toUpperCase()}`, c1X + 20, 320);
+    ctx.fillText(`EQUI: ${teamCount}`, c1X + 220, 320);
+    ctx.fillText(`JUG: ${registeredCount}`, c1X + 400, 320);
 
-    if (groupDraw.length) {
-        ctx.fillStyle = '#fbbf24';
-        ctx.font = '900 34px Rajdhani';
-        ctx.fillText('SORTEO Y GRUPOS', 80, currentY);
-        currentY += 50;
-
-        for (const group of groupDraw) {
-            const teams = Array.isArray(group.teams) ? group.teams.slice(0, 8) : [];
-            const boxH = 70 + (Math.max(1, teams.length) * 34);
-            renderRoundedBlock(currentY, boxH, 'rgba(251, 191, 36, 0.25)');
-            ctx.fillStyle = '#fbbf24';
-            ctx.font = '900 28px Rajdhani';
-            ctx.fillText(String(group.title || 'Grupo').toUpperCase(), 110, currentY + 40);
-            let rowY = currentY + 78;
-            ctx.fillStyle = '#fff';
-            ctx.font = '800 22px Rajdhani';
-            teams.forEach((teamName, idx) => {
-                ctx.fillText(`${idx + 1}. ${String(teamName).toUpperCase()}`, 120, rowY);
+    let c1Y = 380;
+    if (standings.length) {
+        ctx.fillStyle = '#b8ff00'; ctx.font = '900 28px Rajdhani'; ctx.fillText('📊 CLASIFICACIÓN', c1X, c1Y);
+        c1Y += 30;
+        standings.slice(0, 2).forEach(group => {
+            const rowCount = Math.min(group.rows.length, 6);
+            const boxH = 50 + (rowCount * 34);
+            renderRoundedBlock(c1X, c1Y, cW, boxH, 'rgba(184, 255, 0, 0.3)');
+            ctx.fillStyle = '#b8ff00'; ctx.font = '900 22px Rajdhani'; ctx.fillText(`GRUPO ${group.title.toUpperCase()}`, c1X + 20, c1Y + 30);
+            ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '800 14px Rajdhani'; 
+            ctx.fillText('EQUIPO', c1X + 20, c1Y + 50); ctx.fillText('PJ', c1X + 400, c1Y + 50); ctx.fillText('PTS', c1X + 480, c1Y + 50); 
+            
+            let rowY = c1Y + 80;
+            group.rows.slice(0, 6).forEach((row, i) => {
+                ctx.fillStyle = (i === 0) ? '#fbbf24' : '#fff';
+                ctx.font = '800 18px Rajdhani'; 
+                ctx.fillText(`${i+1}. ${String(row.teamName).toUpperCase().substring(0,20)}`, c1X + 20, rowY);
+                ctx.fillText(row.pj, c1X + 400, rowY);
+                ctx.fillStyle = (i < 2) ? '#b8ff00' : '#fff'; ctx.font = '900 20px Rajdhani';
+                ctx.fillText(row.pts, c1X + 480, rowY); 
                 rowY += 34;
             });
-            currentY += boxH + 28;
-        }
+            c1Y += boxH + 20;
+        });
+    } else if (groupDraw.length) {
+        ctx.fillStyle = '#fbbf24'; ctx.font = '900 28px Rajdhani'; ctx.fillText('SORTEO DE GRUPOS', c1X, c1Y); c1Y += 35;
+        groupDraw.slice(0, 2).forEach(group => {
+            const teams = Array.isArray(group.teams) ? group.teams.slice(0, 8) : [];
+            const boxH = 50 + (Math.max(1, teams.length) * 28);
+            renderRoundedBlock(c1X, c1Y, cW, boxH, 'rgba(251, 191, 36, 0.25)');
+            ctx.fillStyle = '#fbbf24'; ctx.font = '900 22px Rajdhani'; ctx.fillText(String(group.title).toUpperCase(), c1X + 20, c1Y + 30);
+            let rowY = c1Y + 65;
+            ctx.fillStyle = '#fff'; ctx.font = '800 18px Rajdhani';
+            teams.forEach((tName, i) => { ctx.fillText(`${i+1}. ${String(tName).toUpperCase()}`, c1X + 20, rowY); rowY += 28; });
+            c1Y += boxH + 20;
+        });
     }
 
-    // === STANDINGS ===
-    if (standings.length) {
-        ctx.fillStyle = '#b8ff00'; ctx.font = '900 34px Rajdhani'; ctx.fillText('📊 CLASIFICACIONES', 80, currentY);
-        currentY += 50;
-        
-        for (const group of standings) {
-            const rowCount = Math.min(group.rows.length, 6);
-            const boxH = 90 + (rowCount * 45);
-            renderRoundedBlock(currentY, boxH, 'rgba(184, 255, 0, 0.3)');
-            
-            ctx.fillStyle = '#b8ff00'; ctx.font = '900 28px Rajdhani'; ctx.fillText(`GRUPO ${group.title.toUpperCase()}`, 110, currentY + 45);
-            ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '800 16px Rajdhani'; 
-            ctx.fillText('EQUIPO', 120, currentY + 85);
-            ctx.textAlign = 'center'; 
-            ctx.fillText('PJ', 720, currentY + 85); 
-            ctx.fillText('PTS', 920, currentY + 85); 
-            ctx.textAlign = 'left';
-            
-            let rowY = currentY + 130;
-            group.rows.slice(0, 6).forEach((row, i) => {
-                ctx.fillStyle = (i === 0) ? '#fbbf24' : ((i === 1) ? '#94a3b8' : '#fff');
-                const pColor = (i < 2) ? '#b8ff00' : '#fff';
-                ctx.font = '800 22px Rajdhani'; 
-                ctx.fillText(`${i+1}. ${String(row.teamName).toUpperCase()}`, 120, rowY);
-                
-                ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(row.pj, 720, rowY);
-                ctx.fillStyle = pColor; ctx.font = '900 26px Rajdhani'; ctx.fillText(row.pts, 920, rowY); 
-                ctx.textAlign = 'left';
-                rowY += 45;
-            });
-            currentY += boxH + 40;
-        }
-    }
-
-    // === PLAYED MATCHES ===
+    // COLUMNA 2: PARTIDOS JUGADOS O PROGRAMADOS
+    const c2X = 660; 
+    let c2Y = 120;
     if (played.length) {
-        ctx.fillStyle = '#00d4ff'; ctx.font = '900 34px Rajdhani'; ctx.fillText('🏆 ÚLTIMOS RESULTADOS', 80, currentY);
-        currentY += 50;
-        played.slice(0, 8).forEach(m => {
-            renderRoundedBlock(currentY, 50, 'rgba(0, 212, 255, 0.2)');
-            ctx.fillStyle = '#fff'; ctx.font = '800 20px Rajdhani'; 
-            const nameA = String(m.teamAName || 'Equipo A').substring(0, 18);
-            const nameB = String(m.teamBName || 'Equipo B').substring(0, 18);
-            ctx.fillText(`${nameA}   vs   ${nameB}`, 110, currentY + 33);
-            
-            ctx.textAlign = 'right'; 
-            ctx.fillStyle = '#00d4ff'; ctx.font = '900 24px Rajdhani'; 
-            ctx.fillText(m.resultado || '-', 960, currentY + 34); 
-            ctx.textAlign = 'left';
-            currentY += 65;
+        ctx.fillStyle = '#00d4ff'; ctx.font = '900 30px Rajdhani'; ctx.fillText('🏆 ÚLTIMOS RESULTADOS', c2X, c2Y); c2Y += 40;
+        played.slice(0, 10).forEach(m => {
+            renderRoundedBlock(c2X, c2Y, cW, 56, 'rgba(0, 212, 255, 0.2)');
+            ctx.fillStyle = '#fff'; ctx.font = '800 18px Rajdhani'; 
+            const nA = String(m.teamAName || 'A').substring(0, 15); const nB = String(m.teamBName || 'B').substring(0, 15);
+            ctx.fillText(`${nA} vs ${nB}`, c2X + 20, c2Y + 35);
+            ctx.textAlign = 'right'; ctx.fillStyle = '#00d4ff'; ctx.font = '900 22px Rajdhani'; 
+            ctx.fillText(m.resultado || '-', c2X + cW - 20, c2Y + 36); ctx.textAlign = 'left';
+            c2Y += 66;
         });
-        currentY += 30;
     }
 
-    // === SCHEDULED MATCHES ===
+    // COLUMNA 3: PROGRAMADOS / PENDIENTES
+    const c3X = 1240;
+    let c3Y = 120;
     if (scheduled.length) {
-        ctx.fillStyle = '#ff0055'; ctx.font = '900 34px Rajdhani'; ctx.fillText('🗓️ PRÓXIMOS ENCUENTROS', 80, currentY);
-        currentY += 50;
-        scheduled.slice(0, 6).forEach(m => {
-            renderRoundedBlock(currentY, 50, 'rgba(255, 0, 85, 0.2)');
-            ctx.fillStyle = '#fff'; ctx.font = '800 20px Rajdhani'; 
-            const nameA = String(m.teamAName || 'Equipo A').substring(0, 18);
-            const nameB = String(m.teamBName || 'Equipo B').substring(0, 18);
-            ctx.fillText(`${nameA}   vs   ${nameB}`, 110, currentY + 33);
-            
-            ctx.textAlign = 'right'; 
-            ctx.fillStyle = '#ff0055'; ctx.font = '900 20px Rajdhani'; 
-            ctx.fillText(m.fechaStr || 'FECHA FIJADA', 960, currentY + 33); 
-            ctx.textAlign = 'left';
-            currentY += 65;
+        ctx.fillStyle = '#ff0055'; ctx.font = '900 30px Rajdhani'; ctx.fillText('🗓️ PRÓXIMOS PARTIDOS', c3X, c3Y); c3Y += 40;
+        scheduled.slice(0, 7).forEach(m => {
+            renderRoundedBlock(c3X, c3Y, 600, 56, 'rgba(255, 0, 85, 0.2)');
+            ctx.fillStyle = '#fff'; ctx.font = '800 18px Rajdhani'; 
+            const nA = String(m.teamAName || 'A').substring(0, 16); const nB = String(m.teamBName || 'B').substring(0, 16);
+            ctx.fillText(`${nA} vs ${nB}`, c3X + 20, c3Y + 35);
+            ctx.textAlign = 'right'; ctx.fillStyle = '#ff0055'; ctx.font = '900 18px Rajdhani'; 
+            ctx.fillText(m.fechaStr || 'FIJADO', c3X + 580, c3Y + 35); ctx.textAlign = 'left';
+            c3Y += 66;
         });
-        currentY += 30;
-    }
-
-    // === PENDING MATCHES ===
-    if (pending.length) {
-        ctx.fillStyle = '#fbbf24'; ctx.font = '900 34px Rajdhani'; ctx.fillText('⏳ PARTIDOS PENDIENTES', 80, currentY);
-        currentY += 50;
-        pending.slice(0, 8).forEach(m => {
-            renderRoundedBlock(currentY, 40, 'rgba(251, 191, 36, 0.2)');
-            ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = '700 18px Rajdhani'; 
-            const nameA = String(m.teamAName || 'Equipo A').substring(0, 18);
-            const nameB = String(m.teamBName || 'Equipo B').substring(0, 18);
-            ctx.fillText(`${nameA}   vs   ${nameB}`, 110, currentY + 27);
-            
-            ctx.textAlign = 'right'; 
-            ctx.fillStyle = '#fbbf24'; ctx.font = '700 16px Rajdhani'; 
-            ctx.fillText('¡PROPONER DÍA!', 960, currentY + 27); 
-            ctx.textAlign = 'left';
-            currentY += 55;
+    } else if (pending.length) {
+        ctx.fillStyle = '#fbbf24'; ctx.font = '900 30px Rajdhani'; ctx.fillText('⏳ ENCUENTROS PENDIENTES', c3X, c3Y); c3Y += 40;
+        pending.slice(0, 10).forEach(m => {
+            renderRoundedBlock(c3X, c3Y, 600, 50, 'rgba(251, 191, 36, 0.2)');
+            ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = '700 16px Rajdhani'; 
+            const nA = String(m.teamAName || 'A').substring(0, 18); const nB = String(m.teamBName || 'B').substring(0, 18);
+            ctx.fillText(`${nA} vs ${nB}`, c3X + 20, c3Y + 32);
+            ctx.textAlign = 'right'; ctx.fillStyle = '#fbbf24'; ctx.font = '700 15px Rajdhani'; 
+            ctx.fillText('¡JUEGUEN!', c3X + 580, c3Y + 32); ctx.textAlign = 'left';
+            c3Y += 60;
         });
     }
 
-    // === FOOTER ===
-    drawBrandFooter(ctx, 1080, canvas.height, organizer || 'JAFS PADEL');
+    // === FOOTER COMPLETO 16:9 ===
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#b8ff00'; ctx.font = '900 32px Rajdhani'; 
+    ctx.fillText(String(organizer).toUpperCase(), 1920/2, 1010);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '500 18px Rajdhani'; 
+    ctx.fillText('PADELUMINATIS APPS · MANTÉN PRESIONADO PARA COMPARTIR O GUARDAR', 1920/2, 1045);
+
     const dataUrl = canvas.toDataURL('image/png', 0.95);
     return await downloadDataUrl(dataUrl, `estado_${eventName.toLowerCase().replace(/\s+/g, '_')}.png`);
 }

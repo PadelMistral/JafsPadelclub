@@ -32,7 +32,7 @@ import {
 import { RESULT_LOCK_MS } from "./config/match-constants.js";
 import { getDetailedWeather } from "./external-data.js";
 import { analyticsTiming } from "./core/analytics.js";
-import { APP_APK_URL } from "./app-config.js";
+import { APP_APK_URL, resolveApkDownloadUrl } from "./app-config.js";
 import {
   requestNotificationPermission,
   showNotificationHelpModal,
@@ -47,7 +47,7 @@ import {
   startCorePresence,
 } from "./core/core-engine.js";
 import { computeGroupTable } from "./event-tournament-engine.js";
-import { shareMatchResult, shareMatchPoster } from "./utils/share-utils.js";
+import { shareMatchResult, shareMatchPoster, downloadDataUrl, generateEventStatusPoster } from "./utils/share-utils.js";
 import { getFriendlyTeamName, isUnknownTeamName as sharedIsUnknownTeamName } from "./utils/team-utils.js";
 import { scoreMatchForUser } from "./services/matchmaking-service.js";
 import { buildStableGuestId } from "./services/guest-player-service.js";
@@ -76,6 +76,7 @@ let homeLoadMeasured = false;
 let nexusOnlineUsers = [];
 let nexusAllUsers = [];
 let homeEntryOverlayInterval = null;
+let homeEntryFailSafeTimer = null;
 let homeEntryOverlayValue = 0;
 const HOME_MATCH_CACHE_KEY = "home:matches:v1";
 let showHomeWelcome = false;
@@ -97,6 +98,16 @@ function purgeEventDayAlerts() {
   } catch {}
 }
 purgeEventDayAlerts();
+
+function escapeHtml(text) {
+  if (!text) return "";
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 function compactHomeSecondarySections() {
   const detailsBody = document.querySelector(".hv2-secondary-stack");
@@ -141,8 +152,20 @@ const APOING_PROXY_JINA = "https://r.jina.ai/http://";
 /* Player cache (names + photos) */
 const playerNameCache = new Map();
 const playerPhotoCache = new Map();
+const playerDataCache = new Map(); // uid → { nivel, posicion, foto }
 const eventDocCache = new Map();
 const eventStandingsGroupOverride = new Map();
+
+function timeAgo(dateIn) {
+  if (!dateIn) return "";
+  const d = dateIn instanceof Date ? dateIn : new Date(dateIn);
+  if (isNaN(d)) return "";
+  const diff = Math.floor((new Date() - d) / 1000);
+  if (diff < 60) return `hace unos instantes`;
+  if (diff < 3600) return `hace ${Math.floor(diff/60)}m`;
+  if (diff < 86400) return `hace ${Math.floor(diff/3600)}h`;
+  return `hace ${Math.floor(diff/86400)}d`;
+}
 
 function getEventUserNameMap() {
   if (!window.__eventUserNameMap) window.__eventUserNameMap = new Map();
@@ -247,6 +270,14 @@ async function resolvePlayerName(uid) {
   });
   if (identity?.name) playerNameCache.set(sUid, identity.name);
   if (identity?.photo) playerPhotoCache.set(sUid, identity.photo);
+  // Store full data for poster / level resolution
+  if (identity) {
+    playerDataCache.set(sUid, {
+      nivel: identity.nivel ?? identity.level ?? null,
+      foto: identity.photo || null,
+      posicion: identity.posicionPreferida || identity.posicion || null,
+    });
+  }
   return identity?.name || "Jugador";
 }
 
@@ -324,76 +355,93 @@ function getInitials(name = "") {
     .toUpperCase() || "?";
 }
 /* Init */
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   showHomeWelcome = shouldShowHomeWelcome();
   if (!showHomeWelcome) {
     const overlay = document.getElementById("home-entry-overlay");
     if (overlay) overlay.classList.add("hidden");
     document.body.classList.remove("home-booting");
   }
-  initAppUI("home");
+  try {
+    await initAppUI("home");
+  } catch (e) {
+    console.warn("[Home] initAppUI fallo, seguimos en modo seguro:", e);
+  }
   observeCoreSession({
     onSignedOut: () => {
       cleanup();
       window.location.replace("index.html");
     },
     onReady: async ({ user, userDoc }) => {
-      cleanup();
-      currentUser = user;
-      currentUserData = userDoc || {};
-      currentUserData.computedStreak = await syncComputedStreakForUser(user.uid, currentUserData, { maxLogs: 60 });
-      seedIdentityCache([{ uid: user.uid, ...currentUserData }]);
-      if (showHomeWelcome) {
-        beginHomeEntryOverlay(currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador");
-      } else {
-        const overlay = document.getElementById("home-entry-overlay");
-        if (overlay) overlay.classList.add("hidden");
-        document.body.classList.remove("home-booting");
-      }
-      await injectHeader(currentUserData);
-    injectNavbar("home");
-    compactHomeSecondarySections();
-    normalizeHomeProductCopy();
-    if (typeof fixHomeCopyEncoding === "function") fixHomeCopyEncoding();
-    purgeEventDayAlerts();
-    renderNotificationHealthCard();
-    renderWelcome();
-    bindTabs();
-    initWeather();
-      startPresence();
-      initNexus(); // New: Nexus Online
-      bindNotificationNudge();
-      
-      // Auto-notifications (Real-time watchers)
-      const { initCoreNotifications } = await import("./core/core-engine.js");
-      initCoreNotifications(user.uid);
-
-      // checkSystemAlerts(userDoc); // DEFERRED: allMatches is empty here
-      checkHomeNotices();
-      initProposeMatch();
-      applyHomeMatchCache({ complete: navigator.onLine === false });
-
-      // Loading matches with safety fallback
       try {
+        cleanup();
+        currentUser = user;
+        currentUserData = userDoc || {};
+        try {
+          currentUserData.computedStreak = await syncComputedStreakForUser(user.uid, currentUserData, { maxLogs: 60 });
+        } catch (streakErr) {
+          console.warn("[Home] streak fallback", streakErr);
+          currentUserData.computedStreak = Number(currentUserData?.rachaActual || 0);
+        }
+        seedIdentityCache([{ uid: user.uid, ...currentUserData }]);
+        if (showHomeWelcome) {
+          beginHomeEntryOverlay(currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador");
+        } else {
+          const overlay = document.getElementById("home-entry-overlay");
+          if (overlay) overlay.classList.add("hidden");
+          document.body.classList.remove("home-booting");
+        }
+        try {
+          await injectHeader(currentUserData);
+        } catch (headerErr) {
+          console.warn("[Home] header fallback", headerErr);
+        }
+        try {
+          injectNavbar("home");
+        } catch (navErr) {
+          console.warn("[Home] navbar fallback", navErr);
+        }
+        compactHomeSecondarySections();
+        normalizeHomeProductCopy();
+        if (typeof fixHomeCopyEncoding === "function") fixHomeCopyEncoding();
+        purgeEventDayAlerts();
+        renderNotificationHealthCard();
+        renderWelcome();
+        bindTabs();
+        initWeather();
+        startPresence();
+        initNexus();
+        bindNotificationNudge();
+
+        // Auto-notifications (Real-time watchers)
+        const { initCoreNotifications } = await import("./core/core-engine.js");
+        initCoreNotifications(user.uid);
+
+        checkHomeNotices();
+        initProposeMatch();
+        applyHomeMatchCache({ complete: navigator.onLine === false });
+
+        // Loading matches with safety fallback
+        try {
         const amPromise = subscribeCol(
           "partidosAmistosos",
           (list) => mergeMatches("partidosAmistosos", list),
           [],
-          [["fecha", "asc"]],
+          [["fecha", "desc"]],
           200,
         );
         const rePromise = subscribeCol(
           "partidosReto",
           (list) => mergeMatches("partidosReto", list),
           [],
-          [["fecha", "asc"]],
+          [["fecha", "desc"]],
           200,
         );
         const evPromise = subscribeCol(
           "eventoPartidos",
           (list) => mergeMatches("eventoPartidos", list),
           [],
-          [["fecha", "asc"]],
+          [["fecha", "desc"]],
           400,
         );
 
@@ -426,13 +474,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Fetch Apoing
         syncApoingReservations().catch(() => {});
-      } catch (err) {
-        console.error("Match loading error:", err);
-        applyHomeMatchCache({ complete: true });
-      }
+        } catch (err) {
+          console.error("Match loading error:", err);
+          applyHomeMatchCache({ complete: true });
+        }
 
-      // Final fallback to ensure UI isn't stuck and Today notice shows
-      setTimeout(() => {
+        // Final fallback to ensure UI isn't stuck and Today notice shows
+        setTimeout(() => {
         if (!matchLoadFallbackFired) {
           matchLoadFallbackFired = true;
           renderNextMatch();
@@ -445,11 +493,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         // Force check for today's match even if cache was used
         maybeCreateEventDayNotice();
-      }, 3500);
+        }, 3500);
 
 
-      window.getAICoachContext = () =>
-        getCoreAIContext({ uid: currentUser.uid });
+        window.getAICoachContext = () =>
+          getCoreAIContext({ uid: currentUser.uid });
+      } catch (err) {
+        console.error("[Home] init error:", err);
+        showToast("Error", "Home no pudo terminar la carga. Hemos aplicado modo seguro.", "error");
+        completeHomeEntryOverlay();
+      }
     },
   });
 });
@@ -467,6 +520,7 @@ function cleanup() {
   unsubMyEvents = null;
   unsubNexus = null;
   unsubClubFeed = null;
+  stopNexusRefreshTimer();
   allMatches = [];
   loadedCollections = new Set();
   colSignature.clear();
@@ -500,7 +554,9 @@ function renderWelcome() {
   if (el("welcome-level")) el("welcome-level").textContent = lvl;
   if (el("stat-streak"))
     el("stat-streak").textContent = (streak > 0 ? "+" : "") + streak;
-  if (el("welcome-pending")) el("welcome-pending").textContent = String(played);
+
+  // Tactical stats (Nemesis, Victim, Partner) are now calculated by refreshTacticalStats()
+  refreshTacticalStats().catch(err => console.error("Error refreshing tactical stats:", err));
 
   const hour = new Date().getHours();
   if (el("greeting-text")) {
@@ -603,6 +659,7 @@ async function refreshTacticalStats() {
     const myUid = currentUser.uid;
     const finishedMatches = dedupeEventLinkedMatches(allMatches).filter(m => isFinishedMatch(m));
     const opponentWins = new Map(); // Opponent -> times they beat me
+    const opponentLosses = new Map(); // Opponent -> times I beat them
     const teammateCounts = new Map(); // Teammate -> times played together
     const currentStreak = Number.isFinite(Number(currentUserData?.computedStreak))
         ? Number(currentUserData.computedStreak)
@@ -616,7 +673,7 @@ async function refreshTacticalStats() {
 
         const winnerTeam = resolveWinnerTeam(m);
         const myTeam = players.indexOf(myUid) < 2 ? "A" : "B";
-        const won = winnerTeam === myTeam;
+        const won = (winnerTeam === "A" || winnerTeam === 1) ? myTeam === "A" : (winnerTeam === "B" || winnerTeam === 2) ? myTeam === "B" : false;
 
         // Opponents and Partners
         const myTeammate = myTeam === "A" 
@@ -627,14 +684,16 @@ async function refreshTacticalStats() {
             teammateCounts.set(myTeammate, (teammateCounts.get(myTeammate) || 0) + 1);
         }
 
-        if (!won) {
-            const opponents = myTeam === "A" ? [players[2], players[3]] : [players[0], players[1]];
-            opponents.forEach(opp => {
-                if (opp && !String(opp).startsWith("GUEST_") && opp !== "LIBRE") {
+        const opponents = myTeam === "A" ? [players[2], players[3]] : [players[0], players[1]];
+        opponents.forEach(opp => {
+            if (opp && !String(opp).startsWith("GUEST_") && opp !== "LIBRE") {
+                if (!won) {
                     opponentWins.set(opp, (opponentWins.get(opp) || 0) + 1);
+                } else {
+                    opponentLosses.set(opp, (opponentLosses.get(opp) || 0) + 1);
                 }
-            });
-        }
+            }
+        });
     }
 
     // Update Streak
@@ -684,6 +743,27 @@ async function refreshTacticalStats() {
             nemesisEl.title = `${name} te ha ganado ${maxNemesisWins} veces`;
         } else {
             nemesisEl.textContent = "---";
+        }
+    }
+
+    // Find Victim
+    let topVictimUid = null;
+    let maxVictimLosses = 0;
+    opponentLosses.forEach((losses, uid) => {
+        if (losses > maxVictimLosses) {
+            maxVictimLosses = losses;
+            topVictimUid = uid;
+        }
+    });
+
+    const victimEl = document.getElementById("stat-victim");
+    if (victimEl) {
+        if (topVictimUid) {
+            const name = await resolvePlayerName(topVictimUid);
+            victimEl.textContent = name.split(" ")[0].toUpperCase();
+            victimEl.title = `Le has ganado ${maxVictimLosses} veces`;
+        } else {
+            victimEl.textContent = "---";
         }
     }
 }
@@ -810,9 +890,27 @@ function renderHomeIcsSetup() {
   section.classList.toggle("hidden", hasIcs);
 }
 
-function renderHomeAppInstallNotice() {
+async function renderHomeAppInstallNotice() {
   const host = document.getElementById("home-notice-placeholder");
   if (!host) return;
+
+  // Si ya es APK nativa, no mostrar el banner de descarga
+  const isNative = (() => {
+    try {
+      const cap = window.Capacitor;
+      if (!cap) return false;
+      if (typeof cap.isNativePlatform === "function") return cap.isNativePlatform();
+      const platform = typeof cap.getPlatform === "function" ? cap.getPlatform() : "";
+      return platform === "android" || platform === "ios";
+    } catch (_) { return false; }
+  })();
+
+  if (isNative) {
+    host.classList.add("hidden");
+    host.innerHTML = "";
+    return;
+  }
+
   const storageKey = "home_apk_notice_dismissed_session";
   try {
     if (sessionStorage.getItem(storageKey) === "1") {
@@ -822,19 +920,24 @@ function renderHomeAppInstallNotice() {
     }
   } catch (_) {}
 
+  let apkUrl = APP_APK_URL;
+  try {
+    apkUrl = await resolveApkDownloadUrl();
+  } catch (_) {}
+  const apkAbsoluteUrl = new URL(apkUrl, window.location.href).toString();
+
   host.classList.remove("hidden");
   host.innerHTML = `
     <div class="hv2-app-banner">
       <div class="hv2-app-banner-copy">
-        <span class="hv2-section-title"><i class="fas fa-mobile-screen-button"></i> App oficial ya disponible</span>
-        <p class="hv2-setup-text">Descarga la APK oficial para usar avisos nativos y acceso rapido, o sigue usando la PWA si prefieres continuar en web.</p>
+        <span class="hv2-section-title"><i class="fas fa-mobile-screen-button"></i> App nativa disponible</span>
+        <p class="hv2-setup-text">Descarga directa del APK en tu movil. Al abrir la app te pedira permisos de notificaciones y quedara todo listo.</p>
       </div>
       <div class="hv2-app-banner-actions">
-        <a class="hv2-inline-link" href="${APP_APK_URL}" download="JafsPadelclub-mobile-release.apk">
-          Descargar APK
-          <i class="fas fa-download"></i>
+        <a class="hv2-inline-link" href="${apkAbsoluteUrl}" download="JafsPadelclub-mobile-release.apk" target="_blank" rel="noopener">
+          <i class="fas fa-download"></i> Instalar app
         </a>
-        <button type="button" class="hv2-app-banner-close" id="home-app-banner-close">Seguir en PWA</button>
+        <button type="button" class="hv2-app-banner-close" id="home-app-banner-close">Cerrar</button>
       </div>
     </div>
   `;
@@ -846,6 +949,7 @@ function renderHomeAppInstallNotice() {
     try { sessionStorage.setItem(storageKey, "1"); } catch (_) {}
   });
 }
+
 
 function startClock() {
   function tick() {
@@ -1116,6 +1220,77 @@ function getMyRelevantMatches() {
   return dedupeEventLinkedMatches(allMatches)
     .filter((m) => !isCancelledMatch(m))
     .filter((m) => isMatchRelevantToMe(m));
+}
+
+function getPendingResultMatches() {
+  const now = Date.now();
+  return getMyRelevantMatches().filter((m) => {
+    if (isFinishedMatch(m)) return false;
+    if (Boolean(getResultSetsString(m))) return false;
+    const matchTime = toDateSafe(m?.fecha);
+    if (!matchTime) return false;
+    return now - matchTime.getTime() >= RESULT_LOCK_MS;
+  });
+}
+
+function getProposalDraftKey() {
+  return "proposal:draft:v1";
+}
+
+function saveProposalDraft(draft) {
+  try {
+    localStorage.setItem(getProposalDraftKey(), JSON.stringify(draft));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function buildProposalDraftFromMeta(meta = {}, proposalId = activeProposalId) {
+  const participantIds = Array.isArray(meta?.participantIds) ? meta.participantIds.filter(Boolean) : [];
+  const players = [...participantIds];
+  while (players.length < 4) players.push(null);
+  return {
+    proposalId: proposalId || null,
+    players: players.slice(0, 4),
+    invitedUsers: participantIds.slice(),
+    surface: meta?.surface || "indoor",
+    courtType: meta?.courtType || "normal",
+    createdBy: meta?.createdBy || currentUser?.uid || null,
+    title: meta?.title || "Propuesta de partido",
+  };
+}
+
+function closeProposalModal() {
+  document.getElementById("proposal-modal")?.classList.remove("active");
+}
+
+function cleanupProposalChat() {
+  [proposalChatUnsub, proposalMetaUnsub].forEach((fn) => {
+    if (typeof fn === "function") {
+      try { fn(); } catch {}
+    }
+  });
+  proposalChatUnsub = null;
+  proposalMetaUnsub = null;
+  activeProposalId = null;
+  activeProposalMeta = null;
+}
+
+function preloadProposalUsers() {
+  if (proposalUsersCache.length) return;
+  subscribeCol(
+    "usuarios",
+    (rows) => {
+      proposalUsersCache = (rows || [])
+        .filter((row) => row?.id && row.id !== currentUser?.uid)
+        .map((row) => ({ id: row.id, ...row }))
+        .sort((a, b) => String(a?.nombreUsuario || a?.nombre || "").localeCompare(String(b?.nombreUsuario || b?.nombre || ""), "es"));
+    },
+    [],
+    [["nombreUsuario", "asc"]],
+    120,
+  ).catch(() => {});
 }
 
 function buildPulseActionCard() {
@@ -1737,7 +1912,11 @@ function mergeMyEvents(list = []) {
   myEvents = (list || [])
     .filter((ev) => Array.isArray(ev?.inscritos) && ev.inscritos.some((i) => i?.uid === currentUser.uid))
     .filter((ev) => !["finalizado", "cancelado"].includes(String(ev?.estado || "").toLowerCase()));
-  myEvents.forEach((ev) => indexEventUserNames(ev));
+  // Keep eventDocCache in sync with real-time event data
+  myEvents.forEach((ev) => {
+    if (ev?.id) eventDocCache.set(ev.id, ev);
+    indexEventUserNames(ev);
+  });
   renderEventSpotlight();
   maybeCreateEventDayNotice();
 }
@@ -1802,8 +1981,8 @@ function renderEventSpotlight() {
       ? Object.entries(nextEvent.groups || {}).find(([, ids]) => ids?.includes(myTeamFromEvent.id))?.[0]
       : null;
 
-    const eventMatches = dedupeEventLinkedMatches(allMatches).filter(
-      (m) => isEventMatch(m) && getEventIdFromMatch(m) === nextEvent.id,
+    const eventMatches = allMatches.filter(
+      (m) => String(m.col || "") === "eventoPartidos" && getEventIdFromMatch(m) === nextEvent.id,
     );
     
     const groupMatches = eventMatches.filter((m) => {
@@ -1866,9 +2045,12 @@ function renderEventSpotlight() {
 
         <div id="event-standings-slot" class="hv2-event-standings-container"></div>
         
-        <div class="hv2-event-actions mt-3">
-           <a href="evento-detalle.html?id=${nextEvent.id}" class="btn-event-enter">
-              VER PANEL COMPLETO <i class="fas fa-chevron-right ml-1"></i>
+        <div class="hv2-event-actions mt-3 flex-row gap-2">
+           <button type="button" class="btn-premium-v7 sm shadow flex-1 items-center justify-center gap-1" onclick="window.downloadEventPoster('${nextEvent.id}')">
+             <i class="fas fa-file-arrow-down mr-1"></i> CARTEL
+           </button>
+           <a href="evento-detalle.html?id=${nextEvent.id}" class="btn-event-enter flex-1 text-center bg-white/10 hover:bg-white/20 text-white rounded-full text-[10px] font-black uppercase tracking-widest px-4 py-3 border border-white/20 transition-all duration-300">
+              PANEL <i class="fas fa-chevron-right ml-1"></i>
            </a>
         </div>
       </div>
@@ -2012,19 +2194,26 @@ async function renderEventStandings(eventDoc) {
   const myGroup = getMyGroupFromEvent(eventDoc, myTeamId);
   const activeGroup = eventStandingsGroupOverride.get(eventDoc.id) || myGroup;
 
-  try {
-    const cfg = { 
-      win: eventDoc.puntosVictoria || 3, 
-      draw: eventDoc.puntosEmpate || 1, 
-      loss: eventDoc.puntosDerrota || 0 
-    };
-    
-    // Use the matches we already have in allMatches for this event, but deduplicated
-    const deduped = dedupeEventLinkedMatches(allMatches);
-    const eventMatches = deduped.filter(m => isEventMatch(m) && getEventIdFromMatch(m) === eventDoc.id);
+    try {
+        const cfg = { 
+            win: eventDoc.puntosVictoria || 3, 
+            draw: eventDoc.puntosEmpate || 1, 
+            loss: eventDoc.puntosDerrota || 0 
+        };
+        
+        // Use raw allMatches to get the actual eventoPartidos. 
+        // dedupeEventLinkedMatches hides the original event match and replaces it with the calendar match,
+        // which lacks teamAId, teamBId, and group fields, breaking the standings calculation.
+        const eventMatches = allMatches.filter(m => String(m.col || "") === "eventoPartidos" && getEventIdFromMatch(m) === eventDoc.id);
     const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
 
-    
+    // Brackets logic!
+    const isKnockout = eventDoc.faseActual === 'knockout' || eventDoc.formato === 'knockout';
+    if (isKnockout) {
+        renderKnockoutBracket(eventDoc, eventMatches, myTeamId, slot);
+        return;
+    }
+
     let computedRows = [];
     if (eventDoc.formato === 'league') {
         computedRows = computeGroupTable(eventMatches.filter(m => m.phase === 'league' || !m.phase), teams, cfg);
@@ -2037,10 +2226,151 @@ async function renderEventStandings(eventDoc) {
     renderStandingsRows(computedRows, eventDoc, myTeamId, activeGroup, slot);
   } catch (e) {
     console.error("renderEventStandings fail:", e);
-    slot.innerHTML += `<div class="hv2-event-standings-empty">No se pudo calcular la clasificación.</div>`;
+    slot.innerHTML = `<div class="hv2-event-standings-empty">No se pudo calcular la clasificación.</div>`;
   }
 }
 
+function renderKnockoutBracket(eventDoc, eventMatches, myTeamId, slot) {
+    const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
+    const getTeamName = (id) => teams.find(t => t.id === id)?.nombre || "Por definir";
+    
+    // Deduplicate matches just in case
+    const uniqueMatches = new Map();
+    eventMatches.forEach(m => uniqueMatches.set(m.id || m.matchCode, m));
+    const cleanMatches = Array.from(uniqueMatches.values());
+    
+    let html = `
+      <div class="hv2-standings-header">
+        <span class="hv2-standings-title"><i class="fas fa-sitemap"></i> Cuadro Final</span>
+      </div>
+      <div class="hv2-standings-table-mini bg-black/40 rounded-xl border border-white/5" style="overflow-x:auto; padding:12px;">
+    `;
+    
+    if (!eventDoc.bracket || !eventDoc.bracket.length) {
+        html += `<div class="hv2-event-standings-empty" style="text-align:center; padding:20px; font-size:11px; opacity:0.6;"><i class="fas fa-clock-rotate-left"></i> El cuadro se dibujará al finalizar la fase de grupos.</div></div>`;
+        if (slot) slot.innerHTML = html;
+        return html;
+    }
+
+    const rounds = eventDoc.bracket;
+    html += `<div class="bracket-container" style="transform: scale(0.85); transform-origin: left top; padding-bottom: 20px;"><div class="bracket">`;
+
+    rounds.forEach((round, rIdx) => {
+        const isLast = (rIdx === rounds.length - 1);
+        const isSemi = (rIdx === rounds.length - 2);
+        const label = isLast ? 'FINAL' : (isSemi ? 'SEMIS' : `RONDA ${rIdx + 1}`);
+
+        html += `<div class="bracket-round">
+            <div class="bracket-round-label" style="font-size:14px; color:var(--primary); font-weight:900;">${label}</div>`;
+        
+        round.forEach(m => {
+            const matchData = cleanMatches.find(em => em.matchCode === m.matchCode) || m;
+            const played = matchData.estado === 'jugado' || !!getResultSetsString(matchData);
+            const resultStr = getResultSetsString(matchData) || '';
+            const tA = getTeamName(m.teamAId);
+            const tB = getTeamName(m.teamBId);
+            const isMineA = m.teamAId === myTeamId;
+            const isMineB = m.teamBId === myTeamId;
+            const winnerA = matchData.ganadorTeamId === m.teamAId;
+            const winnerB = matchData.ganadorTeamId === m.teamBId;
+
+            html += `
+            <div class="bracket-match ${!played ? 'pending' : ''}" style="min-width:180px;">
+                <div class="b-team-v9 ${winnerA && played ? 'winner' : ''} ${isMineA ? 'my-row-highlight' : ''}" style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between;">
+                    <span class="b-name-v9" style="font-size:12px; font-weight:800; ${winnerA ? 'color:var(--sport-gold)' : 'color:#fff'};">${tA.substring(0, 16).toUpperCase()}</span>
+                    <span class="b-score-v9" style="font-size:12px; font-weight:900; color:var(--primary);">${winnerA ? 'W' : (played ? '-' : '')}</span>
+                </div>
+                <div class="b-team-v9 ${winnerB && played ? 'winner' : ''} ${isMineB ? 'my-row-highlight' : ''}" style="padding:8px; display:flex; justify-content:space-between;">
+                    <span class="b-name-v9" style="font-size:12px; font-weight:800; ${winnerB ? 'color:var(--sport-gold)' : 'color:#fff'};">${tB.substring(0, 16).toUpperCase()}</span>
+                    <span class="b-score-v9" style="font-size:12px; font-weight:900; color:var(--primary);">${winnerB ? 'W' : (played ? '-' : '')}</span>
+                </div>
+                ${resultStr ? `<div style="text-align:center; padding:4px; font-size:10px; font-weight:900; background:rgba(0,0,0,0.4); color:#b8ff00;">${resultStr}</div>` : ''}
+            </div>`;
+        });
+        html += `</div>`;
+    });
+    
+    html += `</div></div></div>`;
+    if (slot) slot.innerHTML = html;
+    return html;
+}
+
+window.downloadEventPoster = async (eventId) => {
+    const ev = eventDocCache.get(eventId) || myEvents.find(e => e.id === eventId);
+    if (!ev) return;
+    
+    // Use raw allMatches to get the actual eventoPartidos.
+    const eventMatches = allMatches.filter(m => String(m.col || "") === "eventoPartidos" && getEventIdFromMatch(m) === ev.id);
+    const teams = Array.isArray(ev.teams) ? ev.teams : [];
+    const getTeamName = (id) => teams.find(t => t.id === id)?.nombre || "Por definir";
+
+    const played = eventMatches.filter(isFinishedMatch).map(m => ({
+        teamAName: getTeamName(m.teamAId),
+        teamBName: getTeamName(m.teamBId),
+        resultado: getResultSetsString(m) || 'Finalizado'
+    }));
+    
+    const scheduled = eventMatches.filter(m => !isFinishedMatch(m) && !isTbdMatch(m)).map(m => {
+        const d = toDateSafe(m.fecha);
+        return {
+            teamAName: getTeamName(m.teamAId),
+            teamBName: getTeamName(m.teamBId),
+            fechaStr: d ? d.toLocaleString("es-ES", { weekday: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : 'Fijado'
+        };
+    });
+    
+    const pending = eventMatches.filter(m => !isFinishedMatch(m) && isTbdMatch(m)).map(m => ({
+        teamAName: getTeamName(m.teamAId),
+        teamBName: getTeamName(m.teamBId)
+    }));
+
+    const isKnockout = ev.faseActual === 'knockout' || ev.formato === 'knockout';
+    const standings = [];
+    const groupDraw = [];
+    
+    const cfg = { win: ev.puntosVictoria||3, draw: ev.puntosEmpate||1, loss: ev.puntosDerrota||0 };
+
+    if (isKnockout) {
+        // En eliminatorias, dibujamos el cuadro en los grupos para que el cartel lo visualice
+        const ko = eventMatches.filter(m => String(m.phase || "").toLowerCase() === 'knockout' || String(m.fase || "").toLowerCase() === 'knockout');
+        const rows = ko.map(m => `${getTeamName(m.teamAId)} vs ${getTeamName(m.teamBId)}`);
+        groupDraw.push({ title: 'CUADRO FINAL', teams: rows });
+    } else if (ev.formato === 'league') {
+        const computed = computeGroupTable(eventMatches.filter(m => m.phase === 'league' || !m.phase), teams, cfg);
+        computed.sort((a,b) => ((b.pts??b.puntos??0) - (a.pts??a.puntos??0)) || ((b.dif??b.diferencia??0) - (a.dif??a.diferencia??0)));
+        standings.push({
+            title: 'GENERAL',
+            rows: computed.map(r => ({ teamName: r.nombre||r.name||r.teamName||'Equipo', pj: r.pj||0, pts: r.pts||r.puntos||0 }))
+        });
+    } else {
+        const groups = ev.groups || {};
+        Object.keys(groups).sort().forEach(g => {
+            const memberIds = groups[g];
+            if (!memberIds.length) return;
+            const gTeams = memberIds.map(id => teams.find(t=>t.id===id)).filter(Boolean);
+            const computed = computeGroupTable(eventMatches.filter(m => m.group === g), gTeams, cfg);
+            computed.sort((a,b) => ((b.pts??b.puntos??0) - (a.pts??a.puntos??0)) || ((b.dif??b.diferencia??0) - (a.dif??a.diferencia??0)));
+            standings.push({
+                title: g,
+                rows: computed.map(r => ({ teamName: r.nombre||r.name||r.teamName||'Equipo', pj: r.pj||0, pts: r.pts||r.puntos||0 }))
+            });
+        });
+    }
+    
+    const { generateEventStatusPoster } = await import('./utils/share-utils.js');
+    await generateEventStatusPoster({
+        eventName: ev.nombre,
+        organizer: 'JAFS PADEL CLUB',
+        eventFormat: ev.formato || ev.faseActual || 'TORNEO',
+        teamCount: (ev.teams||[]).length,
+        registeredCount: (ev.inscritos||[]).length,
+        played,
+        scheduled,
+        pending,
+        standings,
+        groupDraw
+    });
+};
 
 function renderStandingsRows(rowsIn, eventDoc, myTeamId, myGroup, slot) {
   let rows = Array.isArray(rowsIn) ? rowsIn.slice() : [];
@@ -2293,11 +2623,14 @@ async function mergeMatches(col, list) {
     const eventIds = [...new Set(list.map((m) => m.eventoId || m.eventId).filter(Boolean))];
     await Promise.allSettled(
       eventIds.map(async (eid) => {
-        if (eventDocCache.has(eid)) return;
+        // Always fetch fresh data (not cached) to get latest standings, teams, etc.
         const ev = await getDocument("eventos", eid);
         if (ev) {
           eventDocCache.set(eid, ev);
           indexEventUserNames(ev);
+          // Also keep myEvents in sync
+          const idx = myEvents.findIndex(e => e.id === eid);
+          if (idx >= 0) myEvents[idx] = ev;
         }
       }),
     );
@@ -2389,11 +2722,15 @@ function beginHomeEntryOverlay(name = "Jugador") {
   fill.style.width = "0%";
   pct.textContent = "0%";
   if (homeEntryOverlayInterval) clearInterval(homeEntryOverlayInterval);
+  if (homeEntryFailSafeTimer) clearTimeout(homeEntryFailSafeTimer);
   homeEntryOverlayInterval = setInterval(() => {
     homeEntryOverlayValue = Math.min(90, homeEntryOverlayValue + Math.max(1, Math.floor(Math.random() * 6)));
     fill.style.width = `${homeEntryOverlayValue}%`;
     pct.textContent = `${homeEntryOverlayValue}%`;
   }, 90);
+  homeEntryFailSafeTimer = setTimeout(() => {
+    if (!overlay.classList.contains("hidden")) completeHomeEntryOverlay();
+  }, 9000);
 }
 
 function completeHomeEntryOverlay() {
@@ -2402,6 +2739,8 @@ function completeHomeEntryOverlay() {
   const pct = document.getElementById("home-entry-pct");
   if (!overlay || !fill || !pct) return;
   if (homeEntryOverlayInterval) clearInterval(homeEntryOverlayInterval);
+  if (homeEntryFailSafeTimer) clearTimeout(homeEntryFailSafeTimer);
+  homeEntryFailSafeTimer = null;
   homeEntryOverlayInterval = null;
   homeEntryOverlayValue = 100;
   fill.style.width = "100%";
@@ -2428,7 +2767,7 @@ function bindTabs() {
 }
 
 /* Next match - sports scoreboard */
-function renderNextMatch() {
+function OLD_renderNextMatch() {
   const box = document.getElementById("next-match-box");
   if (!box) return;
   const now = Date.now();
@@ -2756,6 +3095,42 @@ function renderMatchCard(match, idx = 0) {
 
 /* Nexus online - connected users */
 let unsubNexus = null;
+let nexusRefreshTimer = null;
+
+function parseLastSeenDate(value) {
+  if (!value) return null;
+  if (value?.toDate) return value.toDate();
+  if (value.seconds) return new Date(value.seconds * 1000);
+  const parsed = new Date(value);
+  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function formatLastSeenLabel(value) {
+  const date = parseLastSeenDate(value);
+  if (!date) return { relative: "sin registro", absolute: "Sin fecha registrada" };
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.max(0, Math.floor(diffMs / 60000));
+  let relative = "justo ahora";
+  if (diffMin >= 1 && diffMin < 60) relative = `hace ${diffMin} min`;
+  else if (diffMin >= 60 && diffMin < 1440) relative = `hace ${Math.floor(diffMin / 60)} h`;
+  else if (diffMin >= 1440) relative = `hace ${Math.floor(diffMin / 1440)} d`;
+  const absolute = date.toLocaleString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return { relative, absolute };
+}
+
+function stopNexusRefreshTimer() {
+  if (nexusRefreshTimer) {
+    clearInterval(nexusRefreshTimer);
+    nexusRefreshTimer = null;
+  }
+}
 async function initNexus() {
   const container = document.getElementById("nexus-container");
   if (!container) return;
@@ -2765,7 +3140,10 @@ async function initNexus() {
   if (nexusModal && !nexusModal.dataset.bound) {
     nexusModal.dataset.bound = "1";
     nexusModal.addEventListener("click", (e) => {
-      if (e.target === nexusModal) nexusModal.classList.remove("active");
+      if (e.target === nexusModal) {
+        nexusModal.classList.remove("active");
+        stopNexusRefreshTimer();
+      }
     });
   }
 
@@ -2825,10 +3203,7 @@ window.openNexusModal = () => {
       const name = u.nombreUsuario || u.nombre || "Jugador";
       const photo = u.fotoPerfil || u.fotoURL || u.photoURL || "";
       const initials = getInitials(name);
-      const last = u.ultimoAcceso?.toDate ? u.ultimoAcceso.toDate() : new Date(u.ultimoAcceso || 0);
-      const lastTxt = Number.isNaN(last.getTime())
-        ? "Sin fecha"
-        : last.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const seen = formatLastSeenLabel(u.ultimoAcceso);
       return `
         <div class="nexus-modal-row" onclick="window.location.href='perfil.html?uid=${u.id}'">
           <div class="nexus-modal-avatar">
@@ -2836,7 +3211,7 @@ window.openNexusModal = () => {
           </div>
           <div class="nexus-modal-info">
             <span class="nexus-modal-name">${isMe ? "Tú" : name}</span>
-            <span class="nexus-modal-meta">Conectado ahora</span>
+            <span class="nexus-modal-meta">Conectado ahora · ${seen.absolute}</span>
           </div>
         </div>
       `;
@@ -2853,10 +3228,7 @@ window.openNexusModal = () => {
               const name = u.nombreUsuario || u.nombre || "Jugador";
               const photo = u.fotoPerfil || u.fotoURL || u.photoURL || "";
               const initials = getInitials(name);
-              const last = u.ultimoAcceso?.toDate ? u.ultimoAcceso.toDate() : new Date(u.ultimoAcceso || 0);
-              const lastTxt = Number.isNaN(last.getTime())
-                ? "Sin registro"
-                : last.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+              const seen = formatLastSeenLabel(u.ultimoAcceso);
               return `
                 <div class="nexus-modal-row is-offline" onclick="window.location.href='perfil.html?uid=${u.id}'">
                   <div class="nexus-modal-avatar">
@@ -2864,7 +3236,7 @@ window.openNexusModal = () => {
                   </div>
                   <div class="nexus-modal-info">
                     <span class="nexus-modal-name">${name}</span>
-                    <span class="nexus-modal-meta">último acceso: ${lastTxt}</span>
+                    <span class="nexus-modal-meta">Último acceso: ${seen.relative} · ${seen.absolute}</span>
                   </div>
                 </div>
               `;
@@ -2877,6 +3249,14 @@ window.openNexusModal = () => {
   list.innerHTML = '<div class="nexus-modal-section-title">Conectados ahora (' + nexusOnlineUsers.length + ')</div>' + onlineHtml + offlineHtml;
 
   modal.classList.add("active");
+  stopNexusRefreshTimer();
+  nexusRefreshTimer = setInterval(() => {
+    if (!modal.classList.contains("active")) {
+      stopNexusRefreshTimer();
+      return;
+    }
+    window.openNexusModal();
+  }, 60000);
 };
 window.openMatch = async (id, col) => {
   const modal = document.getElementById("modal-match");
@@ -3156,801 +3536,52 @@ cleanup = () => {
   unsubNexus = null;
 };
 
-function initProposeMatch() {
-    // Prepare proposal modal on load
-    ensureProposalModal();
-}
-
-window.openProposeMatchChat = () => {
-    openProposalModal();
-};
-
-function ensureProposalModal() {
-    if (document.getElementById("proposal-view-list")) return;
-    const inline = document.getElementById("proposal-inline-section");
-    proposalInlineMode = !!inline;
-    const wrapper = document.createElement("div");
-    if (proposalInlineMode) {
-        wrapper.className = "hv2-proposal-panel";
-        wrapper.innerHTML = `
-            <div class="flex-col gap-3">
-                <div class="text-[10px] uppercase tracking-widest font-black text-primary">Propuestas</div>
-                <div id="proposal-view-list" class="flex-col gap-3"></div>
-                <div id="proposal-view-create" class="flex-col gap-3 hidden"></div>
-                <div id="proposal-view-chat" class="flex-col gap-3 hidden"></div>
-            </div>
-        `;
-        inline.appendChild(wrapper);
-    } else {
-        wrapper.id = "proposal-modal";
-        wrapper.className = "modal-overlay";
-        wrapper.innerHTML = `
-            <div class="modal-card glass-strong" style="max-width:680px; width:min(92vw,680px);">
-                <div class="modal-header">
-                    <h3 class="modal-title">Propuesta de Partido</h3>
-                    <button class="close-btn" id="proposal-close-btn">&times;</button>
-                </div>
-                <div class="modal-body scroll-y" style="max-height: 72vh;">
-                    <div id="proposal-view-list" class="flex-col gap-3"></div>
-                    <div id="proposal-view-create" class="flex-col gap-3 hidden"></div>
-                    <div id="proposal-view-chat" class="flex-col gap-3 hidden"></div>
-                </div>
-            </div>
-        `;
-        wrapper.addEventListener("click", (e) => {
-            if (e.target === wrapper) wrapper.classList.remove("active");
-        });
-        document.body.appendChild(wrapper);
-        wrapper.querySelector("#proposal-close-btn")?.addEventListener("click", () => {
-            wrapper.classList.remove("active");
-            cleanupProposalChat();
-        });
-    }
-}
-
-function openProposalModal() {
-    console.log('[Proposal] open modal');
-    ensureProposalModal();
-    if (!proposalInlineMode) {
-        const modal = document.getElementById("proposal-modal");
-        if (!modal) return;
-        modal.classList.add("active");
-    } else {
-        const inline = document.getElementById("proposal-inline-section");
-        if (inline) {
-            inline.classList.remove("hidden");
-            inline.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-    }
-    if (!currentUser?.uid) {
-        showToast("Cargando usuario", "Espera un segundo y vuelve a abrir la propuesta.", "info");
-        setTimeout(() => {
-            if (proposalInlineMode || document.getElementById("proposal-modal")?.classList.contains("active")) {
-                renderProposalList();
-            }
-        }, 600);
-        return;
-    }
-    renderProposalList();
-}
-
-function setProposalView(view) {
-    ["proposal-view-list", "proposal-view-create", "proposal-view-chat"].forEach((id) => {
+// residue start 
+/*
         const el = document.getElementById(id);
         if (!el) return;
-        el.classList.toggle("hidden", id !== view);
-    });
-}
-
-async function renderProposalList() {
-    console.log('[Proposal] render list', { uid: currentUser?.uid });
-    const listEl = document.getElementById("proposal-view-list");
-    if (!listEl) return;
-    if (!currentUser?.uid) {
-        listEl.innerHTML = `<div class="text-xs opacity-60">Esperando usuario...</div>`;
-        return;
-    }
-    setProposalView("proposal-view-list");
-    listEl.innerHTML = `<div class="text-xs opacity-60">Cargando propuestas...</div>`;
-
-    if (typeof proposalListUnsub === "function") proposalListUnsub();
-    proposalListUnsub = onSnapshot(
-        query(
-            collection(db, "propuestasPartido"),
-            where("participantUids", "array-contains", currentUser.uid),
-        ),
-        (snap) => {
-            const rows = snap.docs
-                .map((d) => ({ id: d.id, ...d.data() }))
-                .filter((p) => p.status !== "closed")
-                .sort((a, b) => {
-                    const ta = a?.createdAt?.toMillis?.() || 0;
-                    const tb = b?.createdAt?.toMillis?.() || 0;
-                    return tb - ta;
-                });
-            updateProposalBadges(rows);
-            const inline = document.getElementById("proposal-inline-section");
-            if (inline && !rows.length) {
-                inline.classList.add("hidden");
-            } else if (inline) {
-                inline.classList.remove("hidden");
-            }
-            listEl.innerHTML = rows.length ? rows.map((p) => proposalCardHtml(p)).join("") : `
-                <div class="p-4 rounded-xl border border-white/10 bg-white/5 text-center text-[10px] opacity-70">
-                    No tienes propuestas activas.
-                </div>
-            `;
-            listEl.querySelectorAll("[data-prop-id]").forEach((btn) => {
-                btn.addEventListener("click", () => {
-                    const pid = btn.getAttribute("data-prop-id");
-                    if (pid) openProposalChat(pid);
-                });
-            });
-        },
-        (err) => {
-            console.warn("[Proposal] snapshot error", err);
-            listEl.innerHTML = `<div class="p-4 rounded-xl border border-white/10 bg-white/5 text-center text-[10px] opacity-70">
-                No se pudieron cargar las propuestas. Reintenta en unos segundos.
-            </div>`;
+        const isTarget = id === view;
+        if (isTarget) {
+            el.classList.remove("hidden");
+            // Chat view needs flex, others use flex-col
+            el.style.display = id === "proposal-view-chat" ? "flex" : "flex";
+        } else {
+            el.classList.add("hidden");
+            el.style.display = "none";
         }
-    );
-}
+*/
+// end residue
 
-function proposalCardHtml(p) {
-    const names = Array.isArray(p.participantNames) ? p.participantNames.join(", ") : "";
-    const statusLabel = p.status === "rejected" ? "RECHAZADA" : "ABIERTA";
-    const voteSummary = summarizeProposalVotes(p);
-    return `
-        <div class="p-3 rounded-xl border border-white/10 bg-white/5 flex-col gap-2">
-            <div class="flex-row between items-center">
-                <span class="text-[10px] font-black uppercase tracking-widest">${statusLabel}</span>
-                <button class="btn-ghost" data-prop-id="${p.id}">Abrir chat</button>
-            </div>
-            <div class="text-[11px] font-bold">${p.title || "Propuesta de partido"}</div>
-            <div class="text-[10px] opacity-60">Participantes: ${names || "Sin datos"}</div>
-            <div class="text-[10px] proposal-vote-summary">${escapeHtml(voteSummary)}</div>
-        </div>
-    `;
-}
-
-function buildProposalVoteOptions() {
-    const today = new Date();
-    return Array.from({ length: 5 }, (_, idx) => {
-        const d = new Date(today);
-        d.setDate(today.getDate() + idx);
-        return {
-            iso: d.toISOString().slice(0, 10),
-            label: d.toLocaleDateString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit" }),
-        };
-    });
-}
-
-function getProposalVoteMap(prop = {}) {
-    const raw = prop?.availabilityVotes;
-    return raw && typeof raw === "object" ? raw : {};
-}
-
-function summarizeProposalVotes(prop = {}) {
-    const votes = Object.values(getProposalVoteMap(prop)).filter(Boolean);
-    if (!votes.length) return "Sin votos aun";
-    const grouped = new Map();
-    votes.forEach((iso) => grouped.set(iso, Number(grouped.get(iso) || 0) + 1));
-    const [bestIso, count] = Array.from(grouped.entries()).sort((a, b) => b[1] - a[1])[0] || [];
-    if (!bestIso) return "Sin votos aun";
-    const label = new Date(`${bestIso}T12:00:00`).toLocaleDateString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit" });
-    return `Fecha favorita: ${label} · ${count} voto${count === 1 ? "" : "s"}`;
-}
-
-function renderProposalVotePanel(prop = {}) {
-    const panel = document.getElementById("proposal-vote-panel");
-    if (!panel || !currentUser?.uid) return;
-    const voteMap = getProposalVoteMap(prop);
-    const myVote = voteMap[currentUser.uid] || "";
-    const options = buildProposalVoteOptions().map((opt) => ({
-        ...opt,
-        count: Object.values(voteMap).filter((iso) => iso === opt.iso).length,
-    }));
-    panel.innerHTML = `
-        <div class="proposal-vote-card">
-            <div class="proposal-vote-head">
-                <div>
-                    <div class="proposal-vote-eyebrow">Disponibilidad rapida</div>
-                    <div class="proposal-vote-title">Elegid el dia con mas apoyo antes de concretar</div>
-                </div>
-                <div class="proposal-vote-meta">${escapeHtml(summarizeProposalVotes(prop))}</div>
-            </div>
-            <div class="proposal-vote-grid">
-                ${options.map((opt) => `
-                    <button type="button" class="proposal-vote-chip ${myVote === opt.iso ? "is-selected" : ""}" data-proposal-vote="${opt.iso}">
-                        <span>${escapeHtml(opt.label)}</span>
-                        <strong>${opt.count}</strong>
-                    </button>
-                `).join("")}
-            </div>
-        </div>
-    `;
-    panel.querySelectorAll("[data-proposal-vote]").forEach((btn) => {
-        btn.addEventListener("click", () => submitProposalAvailabilityVote(prop.id, btn.getAttribute("data-proposal-vote")));
-    });
-}
-
-async function submitProposalAvailabilityVote(proposalId, isoDate) {
-    if (!proposalId || !currentUser?.uid || !isoDate) return;
+function updateProposalBadges(rows) {
     try {
-        await setDoc(doc(db, "propuestasPartido", proposalId), {
-            availabilityVotes: {
-                ...getProposalVoteMap(activeProposalMeta),
-                [currentUser.uid]: isoDate,
-            },
-            updatedAt: serverTimestamp(),
-        }, { merge: true });
-        activeProposalMeta = {
-            ...(activeProposalMeta || {}),
-            id: proposalId,
-            availabilityVotes: {
-                ...getProposalVoteMap(activeProposalMeta),
-                [currentUser.uid]: isoDate,
-            },
-        };
-        renderProposalVotePanel(activeProposalMeta);
-        const meta = activeProposalMeta || (await getDocument("propuestasPartido", proposalId));
-        const targets = (meta?.participantUids || []).filter((uid) => uid && uid !== currentUser.uid);
-        if (targets.length) {
-            await createNotification(
-                targets,
-                "Disponibilidad actualizada",
-                `${currentUserData?.nombreUsuario || currentUserData?.nombre || "Un jugador"} ha marcado un dia en ${meta?.title || "la propuesta"}.`,
-                "proposal_vote",
-                "home.html",
-                { type: "proposal_vote", proposalId, isoDate, dedupId: `proposal_vote_${proposalId}_${currentUser.uid}_${isoDate}` },
-            );
+        const proposals = Array.isArray(rows) ? rows : [];
+        const activeCount = proposals.length;
+
+        const quickBadge = document.querySelector("[data-proposal-badge]");
+        if (quickBadge) {
+            quickBadge.textContent = activeCount > 0 ? activeCount : "";
+            quickBadge.style.display = activeCount > 0 ? "flex" : "none";
         }
-    } catch (e) {
-        console.warn("[Proposal] vote failed", e);
-        showToast("Error", "No se pudo guardar tu voto.", "error");
-    }
-}
 
-async function renderProposalCreate() {
-    const createEl = document.getElementById("proposal-view-create");
-    if (!createEl || !currentUser?.uid) return;
-    setProposalView("proposal-view-create");
-    createEl.innerHTML = `<div class="text-xs opacity-60">Cargando usuarios...</div>`;
+        const heroBadge = document.querySelector(".hv2-propose-badge");
+        if (!heroBadge) return;
 
-    if (!proposalUsersCache.length) {
-        try {
-            const snap = await getDocs(query(collection(db, "usuarios"), orderBy("nombreUsuario"), limit(200)));
-            proposalUsersCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        } catch (_) {
-            proposalUsersCache = [];
-        }
-    }
-
-    const userOptions = proposalUsersCache
-        .filter((u) => u.id !== currentUser.uid)
-        .map((u) => `
-            <label class="flex-row items-center gap-2 text-[11px]">
-                <input type="checkbox" class="proposal-user-check" value="${u.id}">
-                <span>${u.nombreUsuario || u.nombre || u.email || u.id}</span>
-            </label>
-        `)
-        .join("");
-
-    createEl.innerHTML = `
-        <div class="text-[10px] uppercase tracking-widest font-black text-primary">Nueva propuesta</div>
-        <div class="p-3 rounded-xl border border-white/10 bg-white/5 flex-col gap-2">
-            <label class="text-[10px] font-black uppercase opacity-60">Título</label>
-            <input id="proposal-title" class="input" placeholder="Partido de la semana">
-        </div>
-        <div class="p-3 rounded-xl border border-white/10 bg-white/5 flex-col gap-2">
-            <label class="text-[10px] font-black uppercase opacity-60">Invitar jugadores</label>
-            <div class="flex-col gap-2 max-h-48 scroll-y">
-                ${userOptions || '<div class="text-[10px] opacity-60">No hay usuarios cargados.</div>'}
-            </div>
-        </div>
-        <div class="flex-row gap-2">
-            <button class="btn-ghost w-full" id="proposal-back-btn">Volver</button>
-            <button class="btn-confirm-v7 w-full" id="proposal-create-btn">Crear chat</button>
-        </div>
-    `;
-
-    createEl.querySelector("#proposal-back-btn")?.addEventListener("click", renderProposalList);
-    createEl.querySelector("#proposal-create-btn")?.addEventListener("click", createProposalChat);
-}
-
-async function createProposalChat() {
-    const title = document.getElementById("proposal-title")?.value?.trim() || "Propuesta de partido";
-    const checks = Array.from(document.querySelectorAll(".proposal-user-check:checked"));
-    const uids = checks.map((c) => c.value);
-    if (!uids.length) {
-        showToast("Faltan jugadores", "Selecciona al menos un usuario para invitar.", "warning");
-        return;
-    }
-    const participantUids = Array.from(new Set([currentUser.uid, ...uids]));
-    const participantNames = participantUids.map((uid) => {
-        if (uid === currentUser.uid) return currentUserData?.nombreUsuario || currentUserData?.nombre || "Tú";
-        const u = proposalUsersCache.find((x) => x.id === uid);
-        return u?.nombreUsuario || u?.nombre || u?.email || uid;
-    });
-
-    try {
-        const ref = await addDoc(collection(db, "propuestasPartido"), {
-            title,
-            createdBy: currentUser.uid,
-            participantUids,
-            participantNames,
-            availabilityVotes: {
-                [currentUser.uid]: new Date().toISOString().slice(0, 10),
-            },
-            status: "open",
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        });
-        const targets = participantUids.filter((uid) => uid && uid !== currentUser.uid);
-        if (targets.length) {
-            await createNotification(
-                targets,
-                "Nueva propuesta de partido",
-                `${currentUserData?.nombreUsuario || currentUserData?.nombre || "Un jugador"} te ha invitado a ${title}.`,
-                "proposal_created",
-                "home.html",
-                { type: "proposal_created", proposalId: ref.id, dedupId: `proposal_created_${ref.id}` },
-            );
-        }
-        showToast("Chat creado", "Propuesta abierta con los usuarios seleccionados.", "success");
-        openProposalChat(ref.id);
-    } catch (e) {
-        showToast("Error", "No se pudo crear la propuesta.", "error");
-    }
-}
-
-function cleanupProposalChat() {
-    if (typeof proposalChatUnsub === "function") proposalChatUnsub();
-    if (typeof proposalMetaUnsub === "function") proposalMetaUnsub();
-    proposalChatUnsub = null;
-    proposalMetaUnsub = null;
-    activeProposalId = null;
-    activeProposalMeta = null;
-}
-
-async function openProposalChat(proposalId) {
-    console.log("[Proposal] open chat", { proposalId });
-    if (!proposalUsersCache.length) {
-        try {
-            const snap = await getDocs(query(collection(db, "usuarios"), orderBy("nombreUsuario"), limit(200)));
-            proposalUsersCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        } catch (e) {
-            console.warn("[Proposal] user cache load failed", e);
-        }
-    }
-    const chatEl = document.getElementById("proposal-view-chat");
-    if (!chatEl || !proposalId) return;
-    setProposalView("proposal-view-chat");
-    activeProposalId = proposalId;
-
-    const propSnap = await getDocument("propuestasPartido", proposalId);
-    if (!propSnap) {
-        showToast("No disponible", "La propuesta ya no existe.", "warning");
-        renderProposalList();
-        return;
-    }
-
-    activeProposalMeta = { id: proposalId, ...propSnap };
-    chatEl.innerHTML = `
-        <div class="flex-row between items-center">
-            <div>
-                <div class="text-[10px] uppercase tracking-widest font-black text-primary">Chat de propuesta</div>
-                <div class="text-[11px] font-bold" id="proposal-chat-title">${propSnap.title || "Propuesta de partido"}</div>
-                <div class="text-[10px] opacity-60" id="proposal-chat-participants">Participantes: ${(propSnap.participantNames || []).join(", ")}</div>
-            </div>
-            <button class="btn-ghost" id="proposal-back-list">Volver</button>
-        </div>
-        <div id="proposal-vote-panel"></div>
-        <div id="proposal-chat-list" class="proposal-chat-list whatsapp"></div>
-        <div class="proposal-chat-input whatsapp">
-            <input id="proposal-chat-text" class="input" placeholder="Escribe un mensaje...">
-            <button class="btn-confirm-v7" id="proposal-send-btn">Enviar</button>
-        </div>
-        <div class="proposal-actions">
-            <button class="btn-ghost" id="proposal-leave-btn">Abandonar propuesta</button>
-            <button class="btn-ghost" id="proposal-confirm-btn">Concretar propuesta</button>
-        </div>
-        <div id="proposal-confirm-area" class="proposal-confirm-area hidden"></div>
-    `;
-
-    chatEl.querySelector("#proposal-back-list")?.addEventListener("click", () => {
-        cleanupProposalChat();
-        renderProposalList();
-    });
-    chatEl.querySelector("#proposal-send-btn")?.addEventListener("click", () => sendProposalMessage(proposalId));
-    chatEl.querySelector("#proposal-chat-text")?.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") sendProposalMessage(proposalId);
-    });
-    chatEl.querySelector("#proposal-leave-btn")?.addEventListener("click", () => leaveProposal(proposalId));
-    chatEl.querySelector("#proposal-confirm-btn")?.addEventListener("click", () => toggleProposalConfirm(activeProposalMeta || propSnap));
-    renderProposalVotePanel(activeProposalMeta);
-
-    if (typeof proposalMetaUnsub === "function") proposalMetaUnsub();
-    proposalMetaUnsub = onSnapshot(doc(db, "propuestasPartido", proposalId), (snap) => {
-        if (!snap.exists()) return;
-        activeProposalMeta = { id: snap.id, ...snap.data() };
-        const titleEl = chatEl.querySelector("#proposal-chat-title");
-        const participantsEl = chatEl.querySelector("#proposal-chat-participants");
-        if (titleEl) titleEl.textContent = activeProposalMeta.title || "Propuesta de partido";
-        if (participantsEl) participantsEl.textContent = `Participantes: ${(activeProposalMeta.participantNames || []).join(", ")}`;
-        renderProposalVotePanel(activeProposalMeta);
-    });
-
-    const chatList = chatEl.querySelector("#proposal-chat-list");
-    if (typeof proposalChatUnsub === "function") proposalChatUnsub();
-    proposalChatUnsub = onSnapshot(
-        query(collection(db, "propuestasPartido", proposalId, "chat"), orderBy("createdAt", "asc")),
-        (snap) => {
-            if (!chatList) return;
-            chatList.innerHTML = snap.docs.map((d) => {
-                const m = d.data() || {};
-                const isMe = m.uid === currentUser?.uid;
-                return `
-                    <div class="proposal-msg ${isMe ? "me" : ""}">
-                        <div class="proposal-msg-meta">${m.name || "Jugador"} · ${formatChatTime(m.createdAt)}</div>
-                        <div class="proposal-msg-text">${escapeHtml(m.text || "")}</div>
-                    </div>
-                `;
-            }).join("") || `<div class="text-[10px] opacity-50">Sin mensajes todavía.</div>`;
-            chatList.scrollTop = chatList.scrollHeight;
-        },
-    );
-}
-
-function formatChatTime(ts) {
-    if (!ts) return "";
-    const d = ts?.toDate ? ts.toDate() : new Date(ts);
-    if (Number.isNaN(d.getTime())) return "";
-    return d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-}
-
-async function sendProposalMessage(proposalId) {
-    const input = document.getElementById("proposal-chat-text");
-    const text = input?.value?.trim();
-    if (!text) return;
-    input.value = "";
-    try {
-        const name = currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador";
-        await addDoc(collection(db, "propuestasPartido", proposalId, "chat"), {
-            uid: currentUser.uid,
-            name,
-            text,
-            createdAt: serverTimestamp(),
-        });
-        const meta = activeProposalMeta || (await getDocument("propuestasPartido", proposalId));
-        const targets = (meta?.participantUids || []).filter((uid) => uid && uid !== currentUser.uid);
-        if (targets.length) {
-            await createNotification(
-                targets,
-                "Mensaje de propuesta",
-                `Tienes un mensaje en: ${meta?.title || "Propuesta de partido"}`,
-                "proposal_message",
-                "home.html",
-                { type: "proposal_message", proposalId, dedupId: `proposal_msg_${proposalId}_${Date.now()}` },
-            );
-        }
-    } catch (e) {
-        showToast("Error", "No se pudo enviar el mensaje.", "error");
-    }
-}
-
-async function rejectProposal(proposalId) {
-    if (!(await confirmHomeAction({
-        title: "Rechazar propuesta",
-        message: "La propuesta se cerrara para el resto de participantes.",
-        confirmLabel: "Rechazar",
-        danger: true,
-    }))) return;
-    try {
-        await setDoc(doc(db, "propuestasPartido", proposalId), { status: "rejected", updatedAt: serverTimestamp() }, { merge: true });
-        showToast("Propuesta rechazada", "El chat se cerrará para el resto.", "info");
-        cleanupProposalChat();
-        renderProposalList();
-    } catch (e) {
-        showToast("Error", "No se pudo rechazar la propuesta.", "error");
-    }
-}
-
-async function leaveProposal(proposalId) {
-    if (!(await confirmHomeAction({
-        title: "Cerrar propuesta",
-        message: "La propuesta se eliminara para todos los participantes.",
-        confirmLabel: "Cerrar",
-        danger: true,
-    }))) return;
-    try {
-        await deleteProposalChat(proposalId);
-        showToast("Propuesta eliminada", "La propuesta se ha cerrado.", "info");
-        cleanupProposalChat();
-        renderProposalList();
-    } catch (e) {
-        showToast("Error", "No se pudo cerrar la propuesta.", "error");
-    }
-}
-
-function toggleProposalConfirm(propSnap) {
-    const area = document.getElementById("proposal-confirm-area");
-    if (!area) return;
-    area.classList.toggle("hidden");
-    if (!area.classList.contains("hidden")) {
-        renderProposalConfirmForm(propSnap);
-    }
-}
-
-function renderProposalConfirmForm(propSnap) {
-    console.log('[Proposal] render confirm', { proposalId: propSnap?.id, participants: propSnap?.participantUids });
-    const area = document.getElementById("proposal-confirm-area");
-    if (!area) return;
-    const participants = Array.isArray(propSnap.participantUids) ? propSnap.participantUids : [];
-    const options = participants.map((uid) => {
-        const u = proposalUsersCache.find((x) => x.id === uid);
-        const name = uid === currentUser.uid
-            ? (currentUserData?.nombreUsuario || currentUserData?.nombre || "Tú")
-            : (u?.nombreUsuario || u?.nombre || u?.email || uid);
-        return `<option value="${uid}">${name}</option>`;
-    }).join("");
-    const slotOptions = `<option value="">-- Libre --</option>${options}<option value="guest">Invitado</option>`;
-    area.innerHTML = `
-        <div class="p-3 rounded-xl border border-white/10 bg-white/5 flex-col gap-3">
-            <div class="text-[10px] uppercase tracking-widest font-black text-primary">Concretar propuesta</div>
-            <div class="grid grid-cols-2 gap-2">
-                <input id="proposal-date" type="date" class="input">
-                <input id="proposal-time" type="time" class="input" value="19:00">
-                <select id="proposal-surface" class="input">
-                    <option value="indoor">Indoor</option>
-                    <option value="outdoor">Outdoor</option>
-                </select>
-                <select id="proposal-court" class="input">
-                    <option value="normal">Pista normal</option>
-                    <option value="central">Pista central</option>
-                </select>
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-                ${[1,2,3,4].map(i => `
-                    <div class="flex-col gap-1">
-                        <label class="text-[9px] uppercase opacity-60">Jugador ${i}</label>
-                        <select class="input proposal-slot" data-slot="${i}">${slotOptions}</select>
-                        <input class="input proposal-guest hidden" data-guest="${i}" placeholder="Nombre invitado">
-                    </div>
-                `).join("")}
-            </div>
-            <div id="proposal-preview" class="p-2 rounded-xl border border-white/10 bg-white/5 text-[10px]"></div>
-            <div class="flex-row gap-2">
-                <button class="btn-ghost w-full" id="proposal-cancel-confirm">Cancelar</button>
-                <button class="btn-ghost w-full" id="proposal-assign-calendar">Asignar en calendario</button>
-            </div>
-            <button class="btn-confirm-v7 w-full" id="proposal-finalize">Crear partido ahora</button>
-        </div>
-    `;
-    area.querySelectorAll(".proposal-slot").forEach((sel) => {
-        sel.addEventListener("change", () => {
-            const idx = sel.getAttribute("data-slot");
-            const guestInput = area.querySelector(`.proposal-guest[data-guest="${idx}"]`);
-            if (!guestInput) return;
-            if (sel.value === "guest") guestInput.classList.remove("hidden");
-            else guestInput.classList.add("hidden");
-            updateProposalPreview(propSnap);
-        });
-    });
-    area.querySelectorAll(".proposal-guest").forEach((inp) => {
-        inp.addEventListener("input", () => updateProposalPreview(propSnap));
-    });
-    area.querySelector("#proposal-cancel-confirm")?.addEventListener("click", () => area.classList.add("hidden"));
-    area.querySelector("#proposal-assign-calendar")?.addEventListener("click", () => assignProposalToCalendar(propSnap));
-    area.querySelector("#proposal-finalize")?.addEventListener("click", () => finalizeProposal(propSnap));
-    updateProposalPreview(propSnap);
-}
-
-function buildGuestId(name) {
-    return buildStableGuestId(name || "Invitado");
-}
-
-function updateProposalPreview(propSnap) {
-    const preview = document.getElementById("proposal-preview");
-    if (!preview) return;
-    const names = [];
-    document.querySelectorAll(".proposal-slot").forEach((sel) => {
-        if (!sel.value) return;
-        if (sel.value === "guest") {
-            const idx = sel.getAttribute("data-slot");
-            const g = document.querySelector(`.proposal-guest[data-guest="${idx}"]`)?.value?.trim() || "Invitado";
-            names.push(g);
+        heroBadge.classList.remove("has-messages", "has-proposals");
+        if (activeCount === 0) {
+            heroBadge.innerHTML = '<i class="fas fa-plus"></i>';
             return;
         }
-        const u = proposalUsersCache.find((x) => x.id === sel.value);
-        names.push(u?.nombreUsuario || u?.nombre || u?.email || sel.value);
-    });
-    const teamA = names.slice(0, 2).join(" / ") || "Por definir";
-    const teamB = names.slice(2, 4).join(" / ") || "Por definir";
-    preview.innerHTML = `
-        <div class="text-[9px] uppercase opacity-60 mb-1">Vista previa parejas</div>
-        <div><strong>Pareja 1:</strong> ${escapeHtml(teamA)}</div>
-        <div><strong>Pareja 2:</strong> ${escapeHtml(teamB)}</div>
-    `;
-}
 
-function collectProposalFormData(propSnap) {
-    const date = document.getElementById("proposal-date")?.value || "";
-    const time = document.getElementById("proposal-time")?.value || "19:00";
-    const surface = document.getElementById("proposal-surface")?.value || "indoor";
-    const courtType = document.getElementById("proposal-court")?.value || "normal";
-    const players = [];
-    document.querySelectorAll(".proposal-slot").forEach((sel) => {
-        const val = sel.value;
-        if (!val) { players.push(null); return; }
-        if (val === "guest") {
-            const idx = sel.getAttribute("data-slot");
-            const g = document.querySelector(`.proposal-guest[data-guest="${idx}"]`)?.value?.trim();
-            players.push(g ? buildGuestId(g) : buildGuestId("Invitado"));
-            return;
-        }
-        players.push(val);
-    });
-    while (players.length < 4) players.push(null);
-    const invitedUsers = (propSnap.participantUids || []).filter((uid) => uid && !String(uid).startsWith("GUEST_"));
-    return { date, time, surface, courtType, players, invitedUsers };
-}
-
-async function assignProposalToCalendar(propSnap) {
-    const data = collectProposalFormData(propSnap);
-    if (data.players.filter(Boolean).length < 2) {
-        return showToast("Faltan jugadores", "Selecciona al menos 2 jugadores.", "warning");
-    }
-    try {
-        const payload = {
-            proposalId: propSnap?.id || null,
-            createdBy: currentUser?.uid || null,
-            players: data.players,
-            invitedUsers: data.invitedUsers,
-            surface: data.surface,
-            courtType: data.courtType,
-            title: propSnap?.title || "Propuesta de partido",
-            createdAt: Date.now(),
-        };
-        localStorage.setItem("proposal:draft:v1", JSON.stringify(payload));
-        showToast("Selecciona franja", "Elige una hora en el calendario para crear el partido.", "info");
-        window.location.href = `calendario.html?proposalId=${propSnap?.id || ""}`;
-    } catch (e) {
-        console.error("[Proposal] assign calendar failed", e);
-        showToast("Error", "No se pudo preparar el calendario.", "error");
-    }
-}
-
-async function finalizeProposal(propSnap) {
-    console.log('[Proposal] finalize', { proposalId: propSnap?.id });
-    const data = collectProposalFormData(propSnap);
-    if (!data.date) return showToast("Fecha requerida", "Indica el día del partido.", "warning");
-    if (data.players.filter(Boolean).length < 2) {
-        return showToast("Faltan jugadores", "Selecciona al menos 2 jugadores.", "warning");
-    }
-
-    try {
-        const matchDate = new Date(`${data.date}T${data.time}`);
-
-        await addDoc(collection(db, "partidosAmistosos"), {
-            creador: currentUser.uid,
-            organizerId: currentUser.uid,
-            fecha: matchDate,
-            jugadores: data.players,
-            restriccionNivel: { min: 1.0, max: 7.0 },
-            estado: "abierto",
-            visibility: "private",
-            invitedUsers: data.invitedUsers,
-            equipoA: [data.players[0], data.players[1]],
-            equipoB: [data.players[2], data.players[3]],
-            surface: data.surface,
-            courtType: data.courtType,
-            proposalId: propSnap.id,
-            createdAt: serverTimestamp(),
-            timestamp: serverTimestamp(),
+        const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+        const recentlyUpdated = proposals.some((p) => {
+            const updatedAt = p?.updatedAt?.toMillis?.() || 0;
+            return updatedAt > dayAgo;
         });
 
-        await deleteProposalChat(propSnap.id);
-        showToast("Partido creado", "El partido ya está en calendario.", "success");
-        cleanupProposalChat();
-        renderProposalList();
-    } catch (e) {
-        showToast("Error", "No se pudo crear el partido desde la propuesta.", "error");
-    }
+        heroBadge.classList.add(recentlyUpdated ? "has-messages" : "has-proposals");
+        heroBadge.innerHTML = `<span>${activeCount}</span>`;
+    } catch (_) {}
 }
-
-async function deleteProposalChat(proposalId) {
-    try {
-        const chatSnap = await getDocs(collection(db, "propuestasPartido", proposalId, "chat"));
-        await Promise.all(chatSnap.docs.map((d) => deleteDoc(d.ref)));
-        await deleteDoc(doc(db, "propuestasPartido", proposalId));
-    } catch (e) {
-        console.warn("deleteProposalChat failed", e);
-    }
-}
-
-function escapeHtml(raw = "") {
-    const div = document.createElement("div");
-    div.textContent = String(raw || "");
-    return div.innerHTML;
-}
-
-function confirmHomeAction({
-    title = "Confirmar",
-    message = "¿Quieres continuar?",
-    confirmLabel = "Continuar",
-    danger = false,
-} = {}) {
-    return new Promise((resolve) => {
-        const overlay = document.createElement("div");
-        overlay.className = "modal-overlay active modal-stack-front";
-        overlay.innerHTML = `
-            <div class="modal-card glass-strong" style="max-width:380px;">
-                <div class="modal-header">
-                    <h3 class="modal-title">${escapeHtml(title)}</h3>
-                    <button class="close-btn" type="button">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-[11px] text-white/75 leading-relaxed">${escapeHtml(message)}</p>
-                    <div class="flex-row gap-2 mt-4">
-                        <button type="button" class="btn btn-ghost w-full" data-home-confirm-cancel>Cancelar</button>
-                        <button type="button" class="btn w-full ${danger ? "btn-danger" : "btn-primary"}" data-home-confirm-ok>${escapeHtml(confirmLabel)}</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        const close = (accepted = false) => {
-            overlay.remove();
-            resolve(Boolean(accepted));
-        };
-        overlay.querySelector(".close-btn")?.addEventListener("click", () => close(false));
-        overlay.querySelector("[data-home-confirm-cancel]")?.addEventListener("click", () => close(false));
-        overlay.querySelector("[data-home-confirm-ok]")?.addEventListener("click", () => close(true));
-        overlay.addEventListener("click", (event) => {
-            if (event.target === overlay) close(false);
-        });
-        document.body.appendChild(overlay);
-    });
-}
-
-
-
-
-
-
-
-
-async function updateProposalBadges(proposals) {
-    const badgeEl = document.querySelector(".hv2-propose-badge");
-    if (!badgeEl) return;
-
-    const activeCount = proposals.length;
-    if (activeCount === 0) {
-        badgeEl.innerHTML = '<i class="fas fa-plus"></i>';
-        badgeEl.classList.remove("has-messages", "has-proposals");
-        return;
-    }
-
-    // Check for messages in the last 24h
-    let totalMessages = 0;
-    const now = Date.now();
-    const dayAgo = now - 24 * 60 * 60 * 1000;
-
-    // We only check if any proposal has been updated recently to avoid too many fetches
-    const recentlyUpdated = proposals.some(p => {
-        const up = p.updatedAt?.toMillis?.() || 0;
-        return up > dayAgo;
-    });
-
-    if (recentlyUpdated) {
-        badgeEl.classList.add("has-messages");
-        badgeEl.innerHTML = `<span>${activeCount}</span>`;
-    } else {
-        badgeEl.classList.add("has-proposals");
-        badgeEl.innerHTML = `<span>${activeCount}</span>`;
-    }
-}
-
 window.shareMatch = async (matchId, col) => {
     const match = allMatches.find(m => m.id === matchId) || {};
     const d = toDateSafe(match.fecha);
@@ -4013,4 +3644,1127 @@ window.shareMatch = async (matchId, col) => {
             console.error("Clipboard fail", err);
         }
     }
+};
+
+
+
+
+// === POSTER HUB ===
+window.openPosterHub = () => {
+    const modalId = "modal-poster-hub";
+    let modal = document.getElementById(modalId);
+    if (!modal) {
+        modal = document.createElement("div");
+        modal.id = modalId;
+        modal.className = "modal-overlay";
+        modal.innerHTML = `
+            <div class="modal-card glass-strong animate-up" style="max-width:480px;">
+                <div class="modal-header">
+                    <h3 class="modal-title" style="font-size:14px;"><i class="fas fa-file-image text-primary mr-2"></i>HUB DE CARTELES</h3>
+                    <button class="close-btn" onclick="document.getElementById('${modalId}').classList.remove('active')">&times;</button>
+                </div>
+                <div class="modal-body flex-col gap-4 p-5">
+                    <p class="text-[10px] opacity-60 uppercase font-black tracking-widest text-center mb-2">Generación de carteles premium</p>
+                    <div class="text-[10px] text-white/60 text-center">Descarga directa en PNG para compartir en WhatsApp o redes.</div>
+                    
+                    <button class="btn-promo-hub" onclick="window.generatePoster('week')">
+                        <i class="fas fa-calendar-week"></i>
+                        <div class="flex-col items-start">
+                            <span class="hub-t">TODA LA SEMANA</span>
+                            <span class="hub-s">Resumen de próximos 7 días</span>
+                        </div>
+                    </button>
+
+                    <button class="btn-promo-hub" onclick="window.generatePoster('today')">
+                        <i class="fas fa-calendar-day"></i>
+                        <div class="flex-col items-start">
+                            <span class="hub-t">PARTIDOS DE HOY</span>
+                            <span class="hub-s">Cartel para las partidas de hoy</span>
+                        </div>
+                    </button>
+
+                    <button class="btn-promo-hub" onclick="window.generatePoster('match')">
+                        <i class="fas fa-table-tennis-paddle-ball"></i>
+                        <div class="flex-col items-start">
+                            <span class="hub-t">PARTIDO CONCRETO</span>
+                            <span class="hub-s">Elige un partido para cartel individual</span>
+                        </div>
+                    </button>
+
+                    <button class="btn-promo-hub" onclick="window.generatePoster('weekday')">
+                        <i class="fas fa-calendar-alt"></i>
+                        <div class="flex-col items-start">
+                            <span class="hub-t">DÍA DE LA SEMANA</span>
+                            <span class="hub-s">Filtra por lunes, martes, etc.</span>
+                        </div>
+                    </button>
+
+                    <button class="btn-promo-hub" onclick="window.generatePoster('event')">
+                        <i class="fas fa-trophy"></i>
+                        <div class="flex-col items-start">
+                            <span class="hub-t">EVENTO ESPECÍFICO</span>
+                            <span class="hub-s">Genera estado visual del evento elegido</span>
+                        </div>
+                    </button>
+                    
+                    <div id="poster-match-selector" class="hidden mt-2 p-3 bg-black/40 rounded-xl border border-white/10 max-h-48 overflow-y-auto custom-scroll">
+                        <div class="text-[10px] opacity-40 text-center py-4">Cargando partidas...</div>
+                    </div>
+                    <div id="poster-weekday-selector" class="hidden mt-2 p-3 bg-black/40 rounded-xl border border-white/10">
+                      <div class="poster-weekdays-grid">
+                        <button type="button" class="poster-day-btn" onclick="window.generatePosterByWeekday(1)">Lunes</button>
+                        <button type="button" class="poster-day-btn" onclick="window.generatePosterByWeekday(2)">Martes</button>
+                        <button type="button" class="poster-day-btn" onclick="window.generatePosterByWeekday(3)">Miércoles</button>
+                        <button type="button" class="poster-day-btn" onclick="window.generatePosterByWeekday(4)">Jueves</button>
+                        <button type="button" class="poster-day-btn" onclick="window.generatePosterByWeekday(5)">Viernes</button>
+                        <button type="button" class="poster-day-btn" onclick="window.generatePosterByWeekday(6)">Sábado</button>
+                        <button type="button" class="poster-day-btn" onclick="window.generatePosterByWeekday(0)">Domingo</button>
+                      </div>
+                    </div>
+                    <div id="poster-event-selector" class="hidden mt-2 p-3 bg-black/40 rounded-xl border border-white/10 max-h-48 overflow-y-auto custom-scroll">
+                      <div class="text-[10px] opacity-40 text-center py-4">Cargando eventos...</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        if (!document.getElementById("poster-hub-styles")) {
+            const style = document.createElement("style");
+            style.id = "poster-hub-styles";
+            style.textContent = `
+                .btn-promo-hub {
+                    display: flex; align-items: center; gap: 16px; padding: 16px; 
+                    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+                    border-radius: 18px; color: #fff; text-align: left; cursor: pointer; transition: all 0.2s ease;
+                    width:100%; box-sizing:border-box;
+                }
+                .btn-promo-hub:hover { border-color: var(--primary); background: rgba(0,212,255,0.08); transform: scale(1.02); }
+                .btn-promo-hub i { font-size: 20px; color: var(--primary); width: 24px; text-align: center; }
+                .hub-t { font-size: 13px; font-weight: 900; letter-spacing: 0.5px; }
+                .hub-s { font-size: 10px; opacity: 0.5; font-weight: 600; }
+                .poster-sel-item { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor:pointer; transition:background 0.2s; }
+                .poster-sel-item:hover { background: rgba(255,255,255,0.05); }
+                .poster-sel-item:last-child { border-bottom:none; }
+                .poster-weekdays-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+                .poster-day-btn {
+                  border:1px solid rgba(255,255,255,0.1);
+                  background:rgba(255,255,255,0.04);
+                  color:#fff;
+                  border-radius:12px;
+                  min-height:36px;
+                  font-size:11px;
+                  font-weight:800;
+                  cursor:pointer;
+                }
+                .poster-day-btn:hover { border-color: rgba(0,212,255,0.35); background: rgba(0,212,255,0.12); }
+            `;
+            document.head.appendChild(style);
+        }
+    }
+    modal.classList.add("active");
+};
+
+function closePosterHubSelectors() {
+  ["poster-match-selector", "poster-weekday-selector", "poster-event-selector"].forEach((id) => {
+    document.getElementById(id)?.classList.add("hidden");
+  });
+}
+
+function getPosterMatchesByType(type) {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (type === "today") {
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    return allMatches.filter((m) => {
+      const d = toDateSafe(m.fecha);
+      return d && d >= startOfToday && d <= endOfToday && !isFinishedMatch(m);
+    });
+  }
+  if (type === "week") {
+    const endOfWeek = new Date(startOfToday.getTime() + 7 * 24 * 60 * 60 * 1000);
+    return allMatches.filter((m) => {
+      const d = toDateSafe(m.fecha);
+      return d && d >= startOfToday && d <= endOfWeek && !isFinishedMatch(m);
+    });
+  }
+  return [];
+}
+
+async function buildSchedulePosterDataUrl(title, matches = []) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const gradient = ctx.createLinearGradient(0, 0, 1080, 1350);
+  gradient.addColorStop(0, "#020617");
+  gradient.addColorStop(0.35, "#0a1630");
+  gradient.addColorStop(0.8, "#081b24");
+  gradient.addColorStop(1, "#020617");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  for (let y = 0; y < canvas.height; y += 56) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "#b8ff00";
+  ctx.font = "900 52px Rajdhani";
+  ctx.textAlign = "left";
+  ctx.fillText(String(title).toUpperCase(), 72, 100);
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
+  ctx.font = "700 24px Rajdhani";
+  ctx.fillText(new Date().toLocaleString("es-ES", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }), 72, 138);
+
+  const rows = matches.slice(0, 12);
+  let y = 190;
+  if (!rows.length) {
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.font = "800 34px Rajdhani";
+    ctx.fillText("SIN PARTIDOS DISPONIBLES", 72, y + 60);
+    return canvas.toDataURL("image/png", 0.95);
+  }
+
+  rows.forEach((match, idx) => {
+    const d = toDateSafe(match.fecha);
+    const time = d ? d.toLocaleString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "Fecha pendiente";
+    const players = getNormalizedPlayers(match);
+    while (players.length < 4) players.push(null);
+    const p0 = players[0] ? getPlayerDisplayName(players[0]) : "Libre";
+    const p1 = players[1] ? getPlayerDisplayName(players[1]) : "Libre";
+    const p2 = players[2] ? getPlayerDisplayName(players[2]) : "Libre";
+    const p3 = players[3] ? getPlayerDisplayName(players[3]) : "Libre";
+    const teamA = `${p0} / ${p1}`;
+    const teamB = `${p2} / ${p3}`;
+    const cardY = y + idx * 88;
+
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    ctx.strokeStyle = "rgba(0,212,255,0.28)";
+    ctx.lineWidth = 2;
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(68, cardY, 944, 74, 18);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#00d4ff";
+    ctx.font = "800 18px Rajdhani";
+    ctx.fillText(time.toUpperCase(), 90, cardY + 24);
+    ctx.fillStyle = "#fff";
+    ctx.font = "900 24px Rajdhani";
+    ctx.fillText(`${teamA}  VS  ${teamB}`.toUpperCase(), 90, cardY + 54);
+  });
+
+  ctx.fillStyle = "rgba(255,255,255,0.4)";
+  ctx.font = "700 18px Rajdhani";
+  ctx.textAlign = "center";
+  ctx.fillText("PADELUMINATIS · DESCARGA DIRECTA", canvas.width / 2, canvas.height - 32);
+  return canvas.toDataURL("image/png", 0.95);
+}
+
+async function downloadSchedulePoster(title, matches) {
+  const dataUrl = await buildSchedulePosterDataUrl(title, matches);
+  await downloadDataUrl(dataUrl, `cartel_${String(title).toLowerCase().replace(/\s+/g, "_")}.png`);
+  showToast("Cartel listo", "Se ha descargado el cartel en PNG.", "success");
+}
+
+window.generatePoster = async (type) => {
+    closePosterHubSelectors();
+    if (type === 'match') {
+        const selector = document.getElementById('poster-match-selector');
+        if (selector) {
+            selector.classList.remove('hidden');
+            renderPosterMatchList();
+        }
+        return;
+    }
+    if (type === "weekday") {
+      document.getElementById("poster-weekday-selector")?.classList.remove("hidden");
+      return;
+    }
+    if (type === "event") {
+      const selector = document.getElementById("poster-event-selector");
+      if (selector) {
+        selector.classList.remove("hidden");
+        renderPosterEventList();
+      }
+      return;
+    }
+    
+    showToast("Generando...", "Preparando cartel del club...", "info");
+    try {
+        const matchesToPrint = getPosterMatchesByType(type);
+        if (!matchesToPrint.length) {
+          showToast("Aviso", type === "today" ? "No hay partidos para hoy" : "No hay partidos esta semana", "warning");
+          return;
+        }
+        const title = type === "today" ? "Partidos de hoy" : "Proximos partidos";
+        await downloadSchedulePoster(title, matchesToPrint);
+    } catch (e) {
+        console.error(e);
+        showToast("Error", "No se pudo generar el cartel", "error");
+    }
+};
+
+function renderPosterMatchList() {
+    const container = document.getElementById("poster-match-selector");
+    if (!container) return;
+    const upcoming = allMatches.filter(m => !isFinishedMatch(m)).sort((a,b) => toDateSafe(a.fecha) - toDateSafe(b.fecha));
+    if (!upcoming.length) {
+        container.innerHTML = `<div class="text-[10px] opacity-40 text-center py-4">No hay partidos próximos</div>`;
+        return;
+    }
+    container.innerHTML = upcoming.map(m => {
+        const d = toDateSafe(m.fecha);
+        const time = d ? d.toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : 'N/D';
+        const mPlayers = getNormalizedPlayers(m);
+        while (mPlayers.length < 4) mPlayers.push(null);
+        const pNamesStr = mPlayers.map(uid => uid ? getPlayerDisplayName(uid) : 'Libre').join(', ');
+        return `
+            <div class="poster-sel-item" onclick="window.generateIndividualPoster('${m.id}')">
+                <div class="text-[11px] font-bold text-white">${time}</div>
+                <div class="text-[9px] opacity-60 truncate">${escapeHtml(pNamesStr)}</div>
+            </div>
+        `;
+    }).join("");
+}
+
+window.generatePosterByWeekday = async (weekday) => {
+  closePosterHubSelectors();
+  const selector = document.getElementById("poster-weekday-selector");
+  if (selector) selector.classList.remove("hidden");
+  const matches = allMatches
+    .filter((m) => !isFinishedMatch(m))
+    .filter((m) => {
+      const d = toDateSafe(m.fecha);
+      return d && d.getDay() === Number(weekday);
+    })
+    .sort((a, b) => toDateSafe(a.fecha) - toDateSafe(b.fecha));
+  if (!matches.length) {
+    showToast("Aviso", "No hay partidos para ese dia.", "warning");
+    return;
+  }
+  const dayNames = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado"];
+  await downloadSchedulePoster(`Partidos ${dayNames[Number(weekday)] || ""}`, matches);
+};
+
+function renderPosterEventList() {
+  const container = document.getElementById("poster-event-selector");
+  if (!container) return;
+  const rows = (myEvents || []).slice(0, 20);
+  if (!rows.length) {
+    container.innerHTML = `<div class="text-[10px] opacity-40 text-center py-4">No tienes eventos activos</div>`;
+    return;
+  }
+  container.innerHTML = rows
+    .map((ev) => {
+      const title = escapeHtml(ev?.nombre || ev?.titulo || "Evento");
+      const state = escapeHtml(ev?.estado || "activo");
+      return `
+        <div class="poster-sel-item" onclick="window.generatePosterFromEvent('${ev.id}')">
+          <div class="text-[11px] font-bold text-white">${title}</div>
+          <div class="text-[9px] opacity-60 truncate">Estado: ${state}</div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+window.generatePosterFromEvent = async (eventId) => {
+  try {
+    const eventRow = (myEvents || []).find((ev) => ev.id === eventId);
+    if (!eventRow) {
+      showToast("Aviso", "No hemos encontrado ese evento.", "warning");
+      return;
+    }
+    const relatedMatches = allMatches.filter((m) => String(m.eventoId || m.eventId || "") === String(eventId));
+    const played = relatedMatches.filter((m) => isFinishedMatch(m)).slice(0, 10).map((m) => {
+      const mPlayers = getNormalizedPlayers(m);
+      while (mPlayers.length < 4) mPlayers.push(null);
+      const n0 = mPlayers[0] ? getPlayerDisplayName(mPlayers[0]) : 'Libre';
+      const n1 = mPlayers[1] ? getPlayerDisplayName(mPlayers[1]) : 'Libre';
+      const n2 = mPlayers[2] ? getPlayerDisplayName(mPlayers[2]) : 'Libre';
+      const n3 = mPlayers[3] ? getPlayerDisplayName(mPlayers[3]) : 'Libre';
+      return {
+        teamAName: `${n0} / ${n1}`,
+        teamBName: `${n2} / ${n3}`,
+        resultado: getResultSetsString(m) || m.resultado || "-",
+      };
+    });
+    const scheduled = relatedMatches.filter((m) => !isFinishedMatch(m)).slice(0, 10).map((m) => {
+      const mPlayers = getNormalizedPlayers(m);
+      while (mPlayers.length < 4) mPlayers.push(null);
+      const n0 = mPlayers[0] ? getPlayerDisplayName(mPlayers[0]) : 'Libre';
+      const n1 = mPlayers[1] ? getPlayerDisplayName(mPlayers[1]) : 'Libre';
+      const n2 = mPlayers[2] ? getPlayerDisplayName(mPlayers[2]) : 'Libre';
+      const n3 = mPlayers[3] ? getPlayerDisplayName(mPlayers[3]) : 'Libre';
+      return {
+        teamAName: `${n0} / ${n1}`,
+        teamBName: `${n2} / ${n3}`,
+        fechaStr: toDateSafe(m.fecha)?.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) || "Pendiente",
+      };
+    });
+
+    await generateEventStatusPoster({
+      eventName: eventRow?.nombre || eventRow?.titulo || "Evento",
+      organizer: currentUserData?.club || "JAFS PADEL CLUB",
+      eventFormat: eventRow?.tipo || eventRow?.formato || "Evento",
+      registeredCount: Array.isArray(eventRow?.inscritos) ? eventRow.inscritos.length : 0,
+      teamCount: Array.isArray(eventRow?.teams) ? eventRow.teams.length : 0,
+      played,
+      scheduled,
+      pending: [],
+      standings: [],
+    });
+    showToast("Cartel listo", "Estado del evento descargado.", "success");
+    document.getElementById("modal-poster-hub")?.classList.remove("active");
+  } catch (e) {
+    console.error("Event poster fail", e);
+    showToast("Error", "No se pudo generar el cartel del evento.", "error");
+  }
+};
+
+window.generateIndividualPoster = async (matchId) => {
+    const match = allMatches.find(m => m.id === matchId);
+    if (!match) return;
+    showToast("Generando...", "Preparando cartel individual", "info");
+    const d = toDateSafe(match.fecha);
+    const isFinished = isFinishedMatch(match);
+    const sets = isFinished ? (getResultSetsString(match) || "FINALIZADO") : null;
+    const winner = isFinished ? resolveWinnerTeam(match) : null;
+    const players = getNormalizedPlayers(match);
+    while (players.length < 4) players.push(null);
+    const pNames = players.map(uid => uid ? getPlayerDisplayName(uid) : 'Libre');
+    const pLevels = players.map(uid => {
+        if (!uid) return null;
+        if (uid === currentUser?.uid) return Number(currentUserData?.nivel || 2.5);
+        const guest = parseGuestMeta(uid);
+        if (guest) return Number(guest.level || 2.5);
+        // Try playerDataCache first
+        const cached = playerDataCache.get(uid);
+        if (cached?.nivel) return Number(cached.nivel);
+        // Fall back to proposalUsersCache
+        const pUser = proposalUsersCache.find(u => u.id === uid);
+        if (pUser?.nivel) return Number(pUser.nivel);
+        return null; // null = unknown, poster will show '?'
+    });
+    const matchType = String(match.col || '').includes('Reto') ? 'LIGA RETO' :
+        String(match.col || '').includes('evento') ? 'EVENTO' : 'AMISTOSO';
+    const data = {
+        title: isFinished ? 'RESULTADO DEL PARTIDO' : 'PARTIDO PROGRAMADO',
+        matchType,
+        when: d ? d.toLocaleString('es-ES', { weekday:'long', day:'2-digit', month:'long', hour:'2-digit', minute:'2-digit' }) : 'Próximamente',
+        teamA: [pNames[0], pNames[1]],
+        teamB: [pNames[2], pNames[3]],
+        levelsA: [pLevels[0], pLevels[1]],
+        levelsB: [pLevels[2], pLevels[3]],
+        winner,
+        sets,
+        club: 'JAFS PADEL CLUB',
+        logoUrl: 'imagenes/Logojafs.png'
+    };
+    await shareMatchPoster(data);
+    document.getElementById("modal-poster-hub")?.classList.remove("active");
+};
+
+/* Legacy proposal block disabled: replaced by richer modal flow below.
+// === REMAINING PROPOSAL LOGIC ===
+function timeAgo(date) {
+    if (!date) return "N/D";
+    const seconds = Math.floor((new Date() - date) / 1000);
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + " años";
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + " meses";
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + " d";
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + " h";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + " m";
+    return "ahora";
+}
+
+window.renderProposalList = async () => {
+    navigateProposalView("proposal-view-list");
+    const container = document.getElementById("proposal-view-list");
+    if (!container) return;
+    container.innerHTML = `<div class="text-[10px] opacity-40 text-center py-20 uppercase font-black tracking-widest animate-pulse">Sincronizando...</div>`;
+
+    if (proposalListUnsub) { try { proposalListUnsub(); } catch(e) {} }
+    proposalListUnsub = subscribeCol("propuestasPartido", (list) => {
+        const open = list.filter(p => (p.status || 'open') === 'open').sort((a,b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        if (!open.length) {
+            container.innerHTML = `
+                <div class="flex-col items-center justify-center p-12 opacity-30 text-center">
+                    <i class="fas fa-comments text-4xl mb-4"></i>
+                    <span class="text-[11px] font-black tracking-widest">NADA POR AQUÍ...</span>
+                </div>
+            `;
+            return;
+        }
+        container.innerHTML = `
+            <div class="flex-col gap-3">
+                ${open.map(p => {
+                    const count = (p.participantIds || []).length;
+                    const date = p.createdAt?.toDate?.() || new Date();
+                    return `
+                        <div class="proposal-card-v2" onclick="window.openProposalDetail('${p.id}')">
+                            <div class="flex-col flex-1">
+                                <span class="p-title">${escapeHtml(p.title || 'Propuesta de partido')}</span>
+                                <div class="p-meta">
+                                    <span class="p-badge">${count}/4</span>
+                                    <span class="p-ago">${timeAgo(date)}</span>
+                                </div>
+                            </div>
+                            <i class="fas fa-chevron-right opacity-30"></i>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    });
+};
+
+window.openProposalDetail = async (pid) => {
+    activeProposalId = pid;
+    navigateProposalView("proposal-view-chat");
+    const chatEl = document.getElementById("proposal-view-chat");
+    if (!chatEl) return;
+    chatEl.innerHTML = `
+        <div class="flex-row items-center gap-3 p-3 bg-white/5 rounded-2xl mb-4 border border-white/10">
+            <button class="btn btn-ghost sm" onclick="window.renderProposalList()"><i class="fas fa-arrow-left"></i></button>
+            <div class="flex-col flex-1 truncate">
+                <span id="proposal-chat-title" class="text-[12px] font-black uppercase truncate">...</span>
+                <span id="proposal-chat-status" class="text-[9px] opacity-40 font-bold">...</span>
+            </div>
+        </div>
+        <div id="proposal-messages" class="flex-1 overflow-y-auto pr-1 custom-scroll mb-4" style="min-height:300px; display:flex; flex-direction:column; gap:12px;"></div>
+        <div class="flex-row gap-2 items-end bg-black/40 p-2 rounded-2xl border border-white/5">
+            <textarea id="proposal-input" class="input flex-1" style="min-height:44px; max-height:120px; font-size:12px; padding:12px 16px; border:none; background:transparent;" placeholder="Escribe al grupo..."></textarea>
+            <button class="btn btn-primary" id="btn-send-proposal" style="height:44px; width:44px; border-radius:18px; flex-shrink:0;">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    `;
+
+    document.getElementById("btn-send-proposal").addEventListener("click", () => window.sendProposalMessage());
+    document.getElementById("proposal-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); window.sendProposalMessage(); }
+    });
+
+    if (proposalChatUnsub) { try { proposalChatUnsub(); } catch(e) {} }
+    if (proposalMetaUnsub) { try { proposalMetaUnsub(); } catch(e) {} }
+
+    proposalMetaUnsub = onSnapshot(doc(db, "propuestasPartido", pid), (d) => {
+        if (!d.exists()) return;
+        const data = d.data();
+        activeProposalMeta = data;
+        const titleEl = document.getElementById("proposal-chat-title");
+        const statusEl = document.getElementById("proposal-chat-status");
+        if (titleEl) titleEl.textContent = data.title || "Propuesta";
+        if (statusEl) statusEl.textContent = `${(data.participantIds || []).length}/4 JUGADORES · ${(data.status || 'abierta').toUpperCase()}`;
+    });
+
+    const q = query(collection(db, "propuestasPartido", pid, "chat"), orderBy("createdAt", "asc"), limit(100));
+    proposalChatUnsub = onSnapshot(q, (snap) => {
+        const msgsEl = document.getElementById("proposal-messages");
+        if (!msgsEl) return;
+        const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        msgsEl.innerHTML = msgs.map(m => {
+            const isMe = m.senderUid === currentUser?.uid;
+            const time = m.createdAt?.toDate ? m.createdAt.toDate().toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' }) : '';
+            return `
+                <div class="msg-bubble-wrap ${isMe ? 'is-me' : ''}">
+                    ${!isMe ? `<span class="msg-sender">${escapeHtml(m.senderName || 'Anónimo')}</span>` : ''}
+                    <div class="msg-bubble"><p>${escapeHtml(m.text || '')}</p><span class="msg-time">${time}</span></div>
+                </div>
+            `;
+        }).join('') || `<div class="text-[10px] opacity-20 text-center py-20 italic">No hay mensajes.</div>`;
+        msgsEl.scrollTop = msgsEl.scrollHeight;
+    });
+};
+
+window.sendProposalMessage = async () => {
+    const input = document.getElementById("proposal-input");
+    const text = input?.value?.trim();
+    if (!text || !activeProposalId || !currentUser?.uid) return;
+    input.value = "";
+    try {
+        await addDoc(collection(db, "propuestasPartido", activeProposalId, "chat"), {
+            text,
+            senderUid: currentUser.uid,
+            senderName: currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador",
+            createdAt: serverTimestamp()
+        });
+        await setDoc(doc(db, "propuestasPartido", activeProposalId), { updatedAt: serverTimestamp() }, { merge: true });
+    } catch (e) {
+        showToast("Error", "No se pudo enviar", "error");
+    }
+};
+
+function navigateProposalView(view) {
+    const ids = ["proposal-view-list", "proposal-view-chat"];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (id === view) {
+            el.style.display = "flex";
+            el.classList.remove("hidden");
+        } else {
+            el.style.display = "none";
+            el.classList.add("hidden");
+        }
+    });
+}
+
+*/
+function getProposalUserName(uid) {
+  if (!uid) return "Libre";
+  if (uid === currentUser?.uid) return currentUserData?.nombreUsuario || currentUserData?.nombre || "Tu";
+  const cached = proposalUsersCache.find((row) => row.id === uid);
+  return cached?.nombreUsuario || cached?.nombre || getPlayerDisplayName(uid) || "Jugador";
+}
+
+function getProposalUserPhoto(uid) {
+  if (!uid) return "";
+  if (uid === currentUser?.uid) return currentUserData?.fotoPerfil || currentUserData?.fotoURL || currentUserData?.photoURL || "";
+  const cached = proposalUsersCache.find((row) => row.id === uid);
+  return cached?.fotoPerfil || cached?.fotoURL || cached?.photoURL || "";
+}
+
+function canCurrentUserJoinProposal(meta = {}) {
+  const ids = Array.isArray(meta?.participantIds) ? meta.participantIds.filter(Boolean) : [];
+  if (!currentUser?.uid) return false;
+  if (ids.includes(currentUser.uid)) return false;
+  return ids.length < 4 && String(meta?.status || "open").toLowerCase() === "open";
+}
+
+function getProposalReservedPlayers(meta = {}) {
+  const ids = Array.isArray(meta?.participantIds) ? meta.participantIds.filter(Boolean).slice(0, 4) : [];
+  while (ids.length < 4) ids.push(null);
+  return ids;
+}
+
+function renderProposalMembers(meta = {}) {
+  const ids = getProposalReservedPlayers(meta);
+  return ids.map((uid) => {
+    const name = getProposalUserName(uid);
+    const photo = getProposalUserPhoto(uid);
+    const initials = getInitials(name);
+    return `
+      <div class="proposal-member-chip ${uid ? "" : "empty"}">
+        <div class="proposal-member-avatar">
+          ${uid ? (photo ? `<img src="${photo}" alt="${escapeHtml(name)}" onerror="this.outerHTML='<span>${initials}</span>'">` : `<span>${initials}</span>`) : `<i class="fas fa-user-plus"></i>`}
+        </div>
+        <span>${escapeHtml(uid ? name : "Libre")}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderProposalCreateView() {
+  navigateProposalView("proposal-view-create");
+  const container = document.getElementById("proposal-view-create");
+  if (!container) return;
+  const users = proposalUsersCache.slice(0, 24);
+  container.innerHTML = `
+    <div class="proposal-create-shell">
+      <div class="proposal-create-head">
+        <button type="button" class="btn btn-ghost sm" onclick="window.renderProposalList()"><i class="fas fa-arrow-left"></i></button>
+        <div>
+          <strong>Nueva propuesta</strong>
+          <span>Selecciona jugadores y luego fija el dia desde calendario.</span>
+        </div>
+      </div>
+      <label class="proposal-field">
+        <span>Titulo</span>
+        <input id="proposal-create-title" class="input" maxlength="64" placeholder="Ej. Martes tarde en Padel Mistral">
+      </label>
+      <label class="proposal-field">
+        <span>Mensaje inicial</span>
+        <textarea id="proposal-create-message" class="input" rows="3" placeholder="Propuesta de partido, nivel y franja ideal"></textarea>
+      </label>
+      <div class="proposal-field">
+        <span>Invitar jugadores</span>
+        <div class="proposal-invite-grid">
+          ${users.length ? users.map((user) => `
+            <button type="button" class="proposal-invite-chip" data-invite-user="${user.id}" onclick="window.toggleProposalInvite('${user.id}')">
+              <strong>${escapeHtml(user.nombreUsuario || user.nombre || "Jugador")}</strong>
+              <small>${Number(user.nivel || 2.5).toFixed(1)} nivel</small>
+            </button>
+          `).join("") : `<div class="proposal-empty-copy">Cargando usuarios disponibles...</div>`}
+        </div>
+      </div>
+      <div class="proposal-create-actions">
+        <button type="button" class="hv2-inline-btn primary" onclick="window.createProposalFromHome()">
+          <i class="fas fa-paper-plane"></i> Crear propuesta
+        </button>
+        <button type="button" class="hv2-inline-btn" onclick="window.renderProposalList()">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  `;
+}
+window.renderProposalCreateView = renderProposalCreateView;
+
+window.toggleProposalInvite = (uid) => {
+  const btn = document.querySelector(`[data-invite-user="${uid}"]`);
+  if (!btn) return;
+  const selected = btn.dataset.selected === "1";
+  btn.dataset.selected = selected ? "0" : "1";
+  btn.classList.toggle("is-selected", !selected);
+};
+
+window.createProposalFromHome = async () => {
+  if (!currentUser?.uid) return;
+  const titleInput = document.getElementById("proposal-create-title");
+  const messageInput = document.getElementById("proposal-create-message");
+  const selectedUsers = Array.from(document.querySelectorAll("[data-invite-user][data-selected='1']")).map((node) => node.getAttribute("data-invite-user")).filter(Boolean);
+  const title = String(titleInput?.value || "").trim() || `Partido con ${currentUserData?.nombreUsuario || currentUserData?.nombre || "jugadores"}`;
+  const message = String(messageInput?.value || "").trim();
+  const participantIds = [currentUser.uid, ...selectedUsers].slice(0, 4);
+  try {
+    const proposalRef = await addDoc(collection(db, "propuestasPartido"), {
+      title,
+      description: message,
+      createdBy: currentUser.uid,
+      createdByName: currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador",
+      participantIds,
+      invitedUserIds: selectedUsers,
+      status: participantIds.length >= 4 ? "full" : "open",
+      surface: "indoor",
+      courtType: "normal",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await addDoc(collection(db, "propuestasPartido", proposalRef.id, "chat"), {
+      text: message || "Propuesta creada. Podemos completar jugadores y reservar dia desde calendario.",
+      senderUid: currentUser.uid,
+      senderName: currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador",
+      createdAt: serverTimestamp(),
+      system: false,
+    });
+    await Promise.allSettled(selectedUsers.map((uid) =>
+      createNotification(uid, "Nueva propuesta", `${currentUserData?.nombreUsuario || currentUserData?.nombre || "Un jugador"} te ha invitado a una propuesta de partido.`, "info", "home.html", { type: "proposal_invite", proposalId: proposalRef.id }),
+    ));
+    showToast("Propuesta creada", "Ya puedes abrirla, hablar con el grupo y reservar el dia.", "success");
+    window.openProposalDetail(proposalRef.id);
+  } catch (e) {
+    console.error(e);
+    showToast("Error", "No se pudo crear la propuesta.", "error");
+  }
+};
+
+window.renderProposalList = async () => {
+  preloadProposalUsers();
+  navigateProposalView("proposal-view-list");
+  const container = document.getElementById("proposal-view-list");
+  if (!container) return;
+  container.innerHTML = `<div class="text-[10px] opacity-40 text-center py-20 uppercase font-black tracking-widest animate-pulse">Sincronizando...</div>`;
+  if (proposalListUnsub) {
+    try { proposalListUnsub(); } catch {}
+  }
+  proposalListUnsub = subscribeCol("propuestasPartido", (list) => {
+    const openRows = (list || [])
+      .filter((row) => String(row?.status || "open").toLowerCase() !== "closed")
+      .sort((a, b) => (b?.updatedAt?.toMillis?.() || b?.createdAt?.toMillis?.() || 0) - (a?.updatedAt?.toMillis?.() || a?.createdAt?.toMillis?.() || 0));
+    container.innerHTML = `
+      <div class="proposal-list-shell">
+        <div class="proposal-list-top">
+          <div>
+            <strong>Propuestas activas</strong>
+            <span>Chat, jugadores y salto directo a calendario.</span>
+          </div>
+          <button type="button" class="hv2-inline-btn primary" onclick="window.renderProposalCreateView()">
+            <i class="fas fa-plus"></i> Nueva
+          </button>
+        </div>
+        ${openRows.length ? openRows.map((proposal) => {
+          const ids = Array.isArray(proposal?.participantIds) ? proposal.participantIds.filter(Boolean) : [];
+          const isMine = ids.includes(currentUser?.uid);
+          const summary = proposal?.description || "Sin mensaje inicial.";
+          return `
+            <button type="button" class="proposal-card-v2 ${isMine ? "is-mine" : ""}" onclick="window.openProposalDetail('${proposal.id}')">
+              <div class="proposal-card-head">
+                <span class="p-title">${escapeHtml(proposal.title || "Propuesta de partido")}</span>
+                <span class="p-badge">${ids.length}/4</span>
+              </div>
+              <div class="proposal-member-row">${renderProposalMembers(proposal)}</div>
+              <p class="proposal-card-copy">${escapeHtml(summary)}</p>
+              <div class="p-meta">
+                <span>${timeAgo(proposal?.updatedAt?.toDate?.() || proposal?.createdAt?.toDate?.() || new Date())}</span>
+                <span>${isMine ? "Estas dentro" : "Abierta"}</span>
+              </div>
+            </button>
+          `;
+        }).join("") : `<div class="proposal-empty-copy">Todavia no hay propuestas abiertas. Crea la primera y fijad el partido desde calendario.</div>`}
+      </div>
+    `;
+  });
+};
+
+async function persistProposalMeta(proposalId, nextMeta) {
+  await setDoc(doc(db, "propuestasPartido", proposalId), {
+    ...nextMeta,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+window.joinProposalFromHome = async () => {
+  if (!activeProposalId || !currentUser?.uid || !activeProposalMeta) return;
+  const ids = Array.isArray(activeProposalMeta.participantIds) ? activeProposalMeta.participantIds.filter(Boolean) : [];
+  if (ids.includes(currentUser.uid) || ids.length >= 4) return;
+  const nextIds = [...ids, currentUser.uid].slice(0, 4);
+  try {
+    await persistProposalMeta(activeProposalId, {
+      participantIds: nextIds,
+      status: nextIds.length >= 4 ? "full" : "open",
+    });
+    await addDoc(collection(db, "propuestasPartido", activeProposalId, "chat"), {
+      text: `${currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador"} se ha unido a la propuesta.`,
+      senderUid: currentUser.uid,
+      senderName: currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador",
+      createdAt: serverTimestamp(),
+      system: true,
+    });
+    showToast("Dentro", "Ya formas parte de la propuesta.", "success");
+  } catch (e) {
+    showToast("Error", "No se pudo unir a la propuesta.", "error");
+  }
+};
+
+window.leaveProposalFromHome = async () => {
+  if (!activeProposalId || !currentUser?.uid || !activeProposalMeta) return;
+  if (activeProposalMeta.createdBy === currentUser.uid) {
+    showToast("Bloqueado", "El creador debe mantener la propuesta o cerrarla desde calendario.", "warning");
+    return;
+  }
+  const ids = Array.isArray(activeProposalMeta.participantIds) ? activeProposalMeta.participantIds.filter(Boolean) : [];
+  const nextIds = ids.filter((uid) => uid !== currentUser.uid);
+  try {
+    await persistProposalMeta(activeProposalId, {
+      participantIds: nextIds,
+      status: "open",
+    });
+    await addDoc(collection(db, "propuestasPartido", activeProposalId, "chat"), {
+      text: `${currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador"} ha salido de la propuesta.`,
+      senderUid: currentUser.uid,
+      senderName: currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador",
+      createdAt: serverTimestamp(),
+      system: true,
+    });
+    showToast("Actualizado", "Has salido de la propuesta.", "success");
+  } catch (e) {
+    showToast("Error", "No se pudo salir.", "error");
+  }
+};
+
+window.reserveProposalFromHome = async () => {
+  if (!activeProposalId || !activeProposalMeta) return;
+  const draft = buildProposalDraftFromMeta(activeProposalMeta, activeProposalId);
+  if (!saveProposalDraft(draft)) {
+    showToast("Error", "No se pudo preparar la reserva.", "error");
+    return;
+  }
+  closeProposalModal();
+  window.location.href = `calendario.html?proposalId=${activeProposalId}`;
+};
+
+function renderProposalActionBar(meta = {}) {
+  const host = document.getElementById("proposal-chat-actions");
+  if (!host) return;
+  const ids = Array.isArray(meta?.participantIds) ? meta.participantIds.filter(Boolean) : [];
+  const isMine = ids.includes(currentUser?.uid);
+  const canJoin = canCurrentUserJoinProposal(meta);
+  host.innerHTML = `
+    <div class="proposal-action-grid">
+      ${canJoin ? `<button type="button" class="hv2-inline-btn primary" onclick="window.joinProposalFromHome()"><i class="fas fa-user-plus"></i> Unirme</button>` : ""}
+      ${isMine ? `<button type="button" class="hv2-inline-btn" onclick="window.reserveProposalFromHome()"><i class="fas fa-calendar-plus"></i> Fijar dia</button>` : ""}
+      ${isMine && meta?.createdBy !== currentUser?.uid ? `<button type="button" class="hv2-inline-btn" onclick="window.leaveProposalFromHome()"><i class="fas fa-right-from-bracket"></i> Salir</button>` : ""}
+      <button type="button" class="hv2-inline-btn" onclick="window.location.href='calendario.html'"><i class="fas fa-calendar-days"></i> Calendario</button>
+    </div>
+    <div class="proposal-member-row">${renderProposalMembers(meta)}</div>
+  `;
+}
+
+window.openProposalDetail = async (pid) => {
+  activeProposalId = pid;
+  navigateProposalView("proposal-view-chat");
+  const chatEl = document.getElementById("proposal-view-chat");
+  if (!chatEl) return;
+  chatEl.innerHTML = `
+    <div class="flex-row items-center gap-3 p-3 bg-white/5 rounded-2xl mb-4 border border-white/10">
+      <button class="btn btn-ghost sm" onclick="window.renderProposalList()"><i class="fas fa-arrow-left"></i></button>
+      <div class="flex-col flex-1 truncate">
+        <span id="proposal-chat-title" class="text-[12px] font-black uppercase truncate">...</span>
+        <span id="proposal-chat-status" class="text-[9px] opacity-40 font-bold">...</span>
+      </div>
+    </div>
+    <div id="proposal-chat-actions" class="proposal-chat-actions"></div>
+    <div id="proposal-messages" class="flex-1 overflow-y-auto pr-1 custom-scroll mb-4" style="min-height:280px; display:flex; flex-direction:column; gap:12px;"></div>
+    <div class="flex-row gap-2 items-end bg-black/40 p-2 rounded-2xl border border-white/5">
+      <textarea id="proposal-input" class="input flex-1" style="min-height:44px; max-height:120px; font-size:12px; padding:12px 16px; border:none; background:transparent;" placeholder="Escribe al grupo..."></textarea>
+      <button class="btn btn-primary" id="btn-send-proposal" style="height:44px; width:44px; border-radius:18px; flex-shrink:0;">
+        <i class="fas fa-paper-plane"></i>
+      </button>
+    </div>
+  `;
+  document.getElementById("btn-send-proposal")?.addEventListener("click", () => window.sendProposalMessage());
+  document.getElementById("proposal-input")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      window.sendProposalMessage();
+    }
+  });
+  cleanupProposalChat();
+  activeProposalId = pid;
+  proposalMetaUnsub = onSnapshot(doc(db, "propuestasPartido", pid), (snap) => {
+    if (!snap.exists()) return;
+    activeProposalMeta = { id: snap.id, ...snap.data() };
+    const titleEl = document.getElementById("proposal-chat-title");
+    const statusEl = document.getElementById("proposal-chat-status");
+    if (titleEl) titleEl.textContent = activeProposalMeta.title || "Propuesta";
+    if (statusEl) statusEl.textContent = `${(activeProposalMeta.participantIds || []).filter(Boolean).length}/4 JUGADORES · ${(activeProposalMeta.status || "abierta").toUpperCase()}`;
+    renderProposalActionBar(activeProposalMeta);
+  });
+  proposalChatUnsub = onSnapshot(
+    query(collection(db, "propuestasPartido", pid, "chat"), orderBy("createdAt", "asc"), limit(120)),
+    (snap) => {
+      const msgsEl = document.getElementById("proposal-messages");
+      if (!msgsEl) return;
+      const msgs = snap.docs.map((row) => ({ id: row.id, ...row.data() }));
+      msgsEl.innerHTML = msgs.map((m) => {
+        const isMe = m.senderUid === currentUser?.uid;
+        const time = m.createdAt?.toDate ? m.createdAt.toDate().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "";
+        return `
+          <div class="msg-bubble-wrap ${isMe ? "is-me" : ""} ${m.system ? "is-system" : ""}">
+            ${!isMe ? `<span class="msg-sender">${escapeHtml(m.senderName || "Jugador")}</span>` : ""}
+            <div class="msg-bubble"><p>${escapeHtml(m.text || "")}</p><span class="msg-time">${time}</span></div>
+          </div>
+        `;
+      }).join("") || `<div class="proposal-empty-copy">Todavia no hay mensajes.</div>`;
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    },
+  );
+};
+
+window.sendProposalMessage = async () => {
+  const input = document.getElementById("proposal-input");
+  const text = String(input?.value || "").trim();
+  if (!text || !activeProposalId || !currentUser?.uid) return;
+  input.value = "";
+  try {
+    await addDoc(collection(db, "propuestasPartido", activeProposalId, "chat"), {
+      text,
+      senderUid: currentUser.uid,
+      senderName: currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador",
+      createdAt: serverTimestamp(),
+    });
+    await setDoc(doc(db, "propuestasPartido", activeProposalId), { updatedAt: serverTimestamp() }, { merge: true });
+  } catch (e) {
+    showToast("Error", "No se pudo enviar el mensaje.", "error");
+  }
+};
+
+function ensureProposalModal() {
+  if (document.getElementById("proposal-modal")) return;
+  proposalInlineMode = false;
+  const wrapper = document.createElement("div");
+  wrapper.id = "proposal-modal";
+  wrapper.className = "modal-overlay";
+  wrapper.innerHTML = `
+    <div class="modal-card glass-strong" style="max-width:min(94vw,720px); display:flex; flex-direction:column; height:min(90dvh,720px);">
+      <div class="modal-header" style="flex-shrink:0;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <h3 class="modal-title" style="font-size:13px;"><i class="fas fa-comments" style="color:var(--primary);margin-right:6px;"></i>Propuestas de partido</h3>
+          <span style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;">Invita, chatea y reserva el dia del partido</span>
+        </div>
+        <button class="close-btn" id="proposal-close-btn" style="flex-shrink:0;">&times;</button>
+      </div>
+      <div class="modal-body" id="proposal-modal-body" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:14px;display:flex;flex-direction:column;gap:10px;">
+        <div id="proposal-view-list" class="flex-col gap-3"></div>
+        <div id="proposal-view-create" class="flex-col gap-3 hidden"></div>
+        <div id="proposal-view-chat" style="flex:1;display:flex;flex-direction:column;gap:8px;" class="hidden"></div>
+      </div>
+    </div>
+  `;
+  wrapper.addEventListener("click", (e) => {
+    if (e.target === wrapper) {
+      closeProposalModal();
+      cleanupProposalChat();
+    }
+  });
+  document.body.appendChild(wrapper);
+  wrapper.querySelector("#proposal-close-btn")?.addEventListener("click", () => {
+    closeProposalModal();
+    cleanupProposalChat();
+  });
+}
+
+function initProposeMatch() {
+  preloadProposalUsers();
+  ensureProposalModal();
+}
+
+window.openProposeMatchChat = () => {
+  ensureProposalModal();
+  preloadProposalUsers();
+  document.getElementById("proposal-modal")?.classList.add("active");
+  window.renderProposalList();
+};
+
+function navigateProposalView(view) {
+  const ids = ["proposal-view-list", "proposal-view-create", "proposal-view-chat"];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (id === view) {
+      el.style.display = "flex";
+      el.classList.remove("hidden");
+    } else {
+      el.style.display = "none";
+      el.classList.add("hidden");
+    }
+  });
+}
+
+function renderNextMatch() {
+  const box = document.getElementById("next-match-box");
+  if (!box) return;
+  const now = Date.now();
+  const pendingResult = getPendingResultMatches();
+  const mine = allMatches
+    .filter((m) => isMatchRelevantToMe(m))
+    .filter((m) => !isEventKnockoutLocked(m))
+    .filter((m) => !isCancelledMatch(m) && !isFinishedMatch(m))
+    .filter((m) => {
+      const d = toDateSafe(m.fecha);
+      return d && d.getTime() >= now - 10 * 60 * 1000;
+    })
+    .sort((a, b) => (toDateSafe(a.fecha)?.getTime() || 0) - (toDateSafe(b.fecha)?.getTime() || 0));
+  const next = mine[0];
+  if (!next) {
+    box.innerHTML = `
+      <div class="hv2-no-match hv2-no-match-rich premium-v2">
+        <div class="hv2-no-match-main flex-col items-center justify-center p-4">
+          <div class="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-3">
+             <i class="fas fa-calendar-xmark text-3xl text-primary drop-shadow-[0_0_8px_rgba(184,255,0,0.5)]"></i>
+          </div>
+          <div class="text-center w-full">
+            <strong class="block text-white text-lg font-black tracking-wide mb-1">Cancha libre</strong>
+            <span class="block text-white/60 text-xs px-4 mb-4">Aún no tienes ningún partido en tu agenda. Proponlo rápido a la comunidad.</span>
+          </div>
+          
+          <div class="w-full flex-col gap-2">
+            <button type="button" class="btn-premium-v7 shadow w-full flex items-center justify-center gap-2 py-3 drop-shadow-[0_5px_15px_rgba(184,255,0,0.2)]" onclick="window.openProposeMatchChat()">
+              <i class="fas fa-bolt text-lg"></i> <span class="font-black tracking-widest text-[13px]">PROPONER PARTIDO RÁPIDO</span>
+            </button>
+            <div class="flex-row gap-2 mt-1 w-full">
+               <button type="button" class="flex-1 text-center bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest px-2 py-3 border border-white/20 transition-all duration-300" onclick="window.location.href='calendario.html'">
+                 <i class="fas fa-calendar-plus text-primary mr-1"></i> CALENDARIO
+               </button>
+               ${pendingResult.length ? `
+                 <button type="button" class="flex-1 text-center bg-red-500/20 hover:bg-red-500/40 text-white rounded-xl text-[10px] font-black uppercase tracking-widest px-2 py-3 border border-red-500/30 transition-all duration-300" onclick="window.location.href='calendario.html'">
+                  <i class="fas fa-pen text-red-400 mr-1"></i> ANOTAR PTS
+                 </button>
+               ` : `
+                 <button type="button" class="flex-1 text-center bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest px-2 py-3 border border-white/20 transition-all duration-300" onclick="window.openPosterHub()">
+                  <i class="fas fa-image text-white mr-1"></i> POSTERS
+                 </button>
+               `}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  const date = toDateSafe(next.fecha);
+  const players = [...getNormalizedPlayers(next)];
+  while (players.length < 4) players.push(null);
+  const isEvent = isEventMatch(next);
+  const isReto = String(next.col || "").includes("Reto");
+  const freeSlots = isEvent ? 0 : players.filter((p) => !p).length;
+  const tempVal = weather?.current ? Math.round(weather.current.temperature_2m || 0) : null;
+  const temp = tempVal !== null ? `${tempVal}°` : "--";
+  let wIcon = "fa-sun";
+  let wColor = "#fbbf24";
+  const wCode = weather?.current?.weather_code || 0;
+  if (wCode > 3 && wCode <= 48) {
+    wIcon = "fa-cloud";
+    wColor = "#94a3b8";
+  } else if (wCode > 48 && wCode <= 67) {
+    wIcon = "fa-cloud-rain";
+    wColor = "#60a5fa";
+  } else if (wCode > 67) {
+    wIcon = "fa-bolt";
+    wColor = "#a78bfa";
+  }
+  const diffMs = date.getTime() - Date.now();
+  const diffH = Math.floor(diffMs / 3600000);
+  const diffD = Math.floor(diffH / 24);
+  const countdown = diffH < 1 ? "AHORA" : diffH < 24 ? `EN ${diffH}H` : `EN ${diffD}D`;
+  const pName = (uid, team) => {
+    const name = getPlayerDisplayName(uid);
+    const short = name.split(" ")[0] || "Tu";
+    const cls = !uid ? "empty" : uid === currentUser?.uid ? "is-me" : team === "a" ? "is-team-a" : "is-team-b";
+    return `<span class="hv2-sb-player-name ${cls}">${uid ? short : "LIBRE"}</span>`;
+  };
+  box.innerHTML = `
+    <div class="hv2-scoreboard" onclick="window.openMatch('${next.id}','${next.col}')">
+      <div class="hv2-court-bg"></div>
+      <div class="hv2-sb-header">
+        <span class="hv2-sb-type">${isEvent ? "EVENTO" : isReto ? "LIGA RETO" : "AMISTOSO"}</span>
+        <span class="hv2-sb-countdown">${countdown}</span>
+        <div class="hv2-sb-meta">
+          <span class="hv2-sb-meta-item"><i class="fas fa-clock"></i> ${date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
+          <span class="hv2-sb-meta-item"><i class="fas fa-calendar"></i> ${date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" }).toUpperCase()}</span>
+          <span class="hv2-sb-meta-item"><i class="fas fa-thermometer-half"></i> ${temp}</span>
+          <span class="hv2-sb-meta-item" style="color:${wColor}"><i class="fas ${wIcon}"></i></span>
+        </div>
+      </div>
+      <div class="hv2-sb-court">
+        <div class="hv2-sb-team team-a">
+          <div class="hv2-sb-player">${pName(players[0], "a")}</div>
+          <div class="hv2-sb-player">${pName(players[1], "a")}</div>
+        </div>
+        <div class="hv2-sb-vs">
+          <span class="hv2-sb-vs-line"></span>
+          <span class="hv2-sb-vs-text">VS</span>
+          <span class="hv2-sb-vs-line"></span>
+        </div>
+        <div class="hv2-sb-team team-b">
+          <div class="hv2-sb-player">${pName(players[2], "b")}</div>
+          <div class="hv2-sb-player">${pName(players[3], "b")}</div>
+        </div>
+      </div>
+      ${pendingResult.length ? `<div class="hv2-sb-alert"><i class="fas fa-circle-exclamation"></i><span>No has incluido el resultado aun de ${pendingResult.length} partido${pendingResult.length === 1 ? "" : "s"} anterior${pendingResult.length === 1 ? "" : "es"}.</span><button type="button" class="hv2-inline-btn compact" onclick="event.stopPropagation(); window.location.href='calendario.html'">Anadir resultado</button></div>` : ""}
+      <div class="hv2-sb-footer">
+        <span class="hv2-sb-slots ${freeSlots > 0 ? "has-slots" : "full"}">${isEvent ? (next.phase ? String(next.phase).toUpperCase() : "EVENTO") : (freeSlots > 0 ? `${freeSlots} plaza${freeSlots === 1 ? "" : "s"} libre${freeSlots === 1 ? "" : "s"}` : "COMPLETO")}</span>
+        <div class="hv2-sb-footer-actions">
+          <button type="button" class="hv2-inline-btn compact" onclick="event.stopPropagation(); window.openPosterHub()"><i class="fas fa-download"></i> Cartel</button>
+          <span class="hv2-sb-action">VER PARTIDO <i class="fas fa-chevron-right"></i></span>
+        </div>
+      </div>
+    </div>
+  `;
+  maybeCreateEventDayNotice();
+}
+
+window.openFeaturedEventDetail = () => {
+  const preferredEvent =
+    (myEvents || []).find((eventRow) => eventRow?.id) ||
+    dedupeEventLinkedMatches(allMatches).find((match) => match?.eventoId)?.eventoId ||
+    null;
+  const eventId = typeof preferredEvent === "string" ? preferredEvent : preferredEvent?.id || null;
+  if (eventId) {
+    window.location.href = `evento-detalle.html?id=${encodeURIComponent(eventId)}`;
+    return;
+  }
+  window.location.href = "eventos.html";
 };

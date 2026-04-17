@@ -672,12 +672,10 @@ async function showSoftPrompt() {
     div.id = 'notif-soft-prompt';
     div.className = 'soft-prompt-card animate-up';
     div.style.position = 'fixed';
-    div.style.left = '50%';
-    div.style.right = 'auto';
-    div.style.transform = 'translateX(-50%)';
-    div.style.bottom = window.innerWidth <= 640
-        ? 'calc(88px + env(safe-area-inset-bottom, 0px))'
-        : 'calc(112px + env(safe-area-inset-bottom, 0px))';
+    div.style.left = '0';
+    div.style.right = '0';
+    div.style.margin = '0 auto';
+    // Position now handled by CSS !important in fixes-patch
     div.style.width = window.innerWidth <= 640 ? 'calc(100vw - 28px)' : 'min(92vw, 430px)';
     div.style.maxWidth = '430px';
     div.style.zIndex = '999999';
@@ -1413,5 +1411,11 @@ export async function runPushDiagnostics() {
     
     console.groupEnd();
     return status;
+}
+
+
+if (typeof window !== 'undefined') {
+  window.runPushDiagnostics = runPushDiagnostics;
+  window.checkNotificationStatus = checkNotificationStatus;
 }
 

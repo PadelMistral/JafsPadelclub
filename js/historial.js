@@ -159,12 +159,27 @@ function sortAndRender() {
     renderMatchesFiltered(list);
 }
 
+const FIREBASE_UID_RE = /^[A-Za-z0-9_-]{20,}$/;
+function looksLikeUid(str) {
+    if (!str || typeof str !== 'string') return false;
+    const trimmed = str.trim();
+    return FIREBASE_UID_RE.test(trimmed);
+}
+
 function getPlayerName(uid) {
     if (!uid) return 'Libre';
+    // Never return a raw UID as a display name
+    if (looksLikeUid(uid) || (uid.includes(',') && uid.split(',').some(looksLikeUid))) {
+        const guest = parseGuestMeta(uid);
+        if (guest) return guest.name || 'Invitado';
+        const cached = getCachedIdentity(uid);
+        if (cached?.name && !looksLikeUid(cached.name)) return cached.name;
+        return userMap[uid]?.name || 'Jugador';
+    }
+    if (parseGuestMeta(uid)) return parseGuestMeta(uid)?.name || 'Invitado';
     const cached = getCachedIdentity(uid);
     if (cached?.name) return cached.name;
-    if (parseGuestMeta(uid)) return parseGuestMeta(uid)?.name || 'Invitado';
-    return userMap[uid]?.name || 'Jugador';
+    return userMap[uid]?.name || uid; // return uid only as last resort but getFriendlyTeamName will sanitize
 }
 
 async function renderMatchesFiltered(filtered) {
@@ -191,13 +206,23 @@ async function renderMatchesFiltered(filtered) {
         const teamBIds = getMatchTeamPlayerIds(m, 'B');
         const teamA = getFriendlyTeamName({
             teamName: m.teamAName || m.equipoA,
-            playerNames: teamAIds.map(getPlayerName),
+            playerNames: teamAIds.map(getPlayerName).filter(n => !looksLikeUid(n)),
+            playerUids: teamAIds,
+            resolvePlayerName: (uid) => {
+                if (looksLikeUid(uid)) return userMap[uid]?.name || getCachedIdentity(uid)?.name || null;
+                return null;
+            },
             side: 'A',
             fallback: 'Pareja A'
         });
         const teamB = getFriendlyTeamName({
             teamName: m.teamBName || m.equipoB,
-            playerNames: teamBIds.map(getPlayerName),
+            playerNames: teamBIds.map(getPlayerName).filter(n => !looksLikeUid(n)),
+            playerUids: teamBIds,
+            resolvePlayerName: (uid) => {
+                if (looksLikeUid(uid)) return userMap[uid]?.name || getCachedIdentity(uid)?.name || null;
+                return null;
+            },
             side: 'B',
             fallback: 'Pareja B'
         });
@@ -477,7 +502,17 @@ async function showMatchDetail(m) {
             const levelsB = [players[2]?.level, players[3]?.level].filter((v) => Number.isFinite(Number(v)));
             const when = date.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
             try {
-                await shareMatchPoster({ title: 'CARTEL DEL PARTIDO', teamA, teamB, levelsA, levelsB, when, club: 'JAFS PADEL CLUB' });
+                const logsA = Number((logs[players[0]?.id]?.diff || 0) + (logs[players[1]?.id]?.diff || 0));
+                const logsB = Number((logs[players[2]?.id]?.diff || 0) + (logs[players[3]?.id]?.diff || 0));
+                const validSetsList = m.validSets?.length ? m.validSets : getResultSetsString(m).trim().split(/\s+/).filter(s => s !== '0-0' && s.includes('-'));
+                const rsets = validSetsList.join(' ');
+                await shareMatchPoster({ 
+                    title: 'CARTEL DEL PARTIDO', teamA, teamB, levelsA, levelsB, when, club: 'JAFS PADEL CLUB',
+                    winner: rsets ? (logsA >= logsB ? 'A' : 'B') : null,
+                    eloDiffA: logsA, eloDiffB: logsB,
+                    summary: chronicle ? String(chronicle).replace(/<[^>]*>?/gm, '') : '',
+                    sets: rsets
+                });
             } catch (e) {
                 console.error('share history poster failed', e);
                 showToast('Cartel', 'No se pudo generar el cartel.', 'error');
@@ -492,7 +527,15 @@ async function showMatchDetail(m) {
             try {
                 const logsA = Number((logs[players[0]?.id]?.diff || 0) + (logs[players[1]?.id]?.diff || 0));
                 const logsB = Number((logs[players[2]?.id]?.diff || 0) + (logs[players[3]?.id]?.diff || 0));
-                await shareMatchPoster({ title: 'RESULTADO FINAL', teamA, teamB, levelsA, levelsB, when, club: 'JAFS PADEL CLUB', winner: logsA >= logsB ? 'A' : 'B' });
+                const validSetsList = m.validSets?.length ? m.validSets : getResultSetsString(m).trim().split(/\s+/).filter(s => s !== '0-0' && s.includes('-'));
+                const rsets = validSetsList.join(' ');
+                await shareMatchPoster({ 
+                    title: 'RESULTADO FINAL', teamA, teamB, levelsA, levelsB, when, club: 'JAFS PADEL CLUB', 
+                    winner: rsets ? (logsA >= logsB ? 'A' : 'B') : null,
+                    eloDiffA: logsA, eloDiffB: logsB,
+                    summary: chronicle ? String(chronicle).replace(/<[^>]*>?/gm, '') : '',
+                    sets: rsets
+                });
             } catch (e) {
                 console.error('download history poster failed', e);
                 showToast('Cartel', 'No se pudo descargar el cartel.', 'error');

@@ -2852,7 +2852,7 @@ export const openResultForm = async (id, col) => {
                     <div class="text-4xl font-black italic text-white mt-3 tracking-tighter relative z-10">${resultRead}</div>
                 </div>
 
-                <button class="btn-confirm-v7" onclick="window.closeHomeMatchModal()">
+                <button class="btn-confirm-v7 mb-2" style="background:rgba(20,184,166,0.1); border:1px solid rgba(20,184,166,0.3)" onclick="window.shareMatch('${id}', '${col}')"> <span class="t-main" style="color:var(--primary)">COMPARTIR PÓSTER</span> <i class="fas fa-share-nodes" style="color:var(--primary)"></i> </button> <br><button class="btn-confirm-v7" onclick="window.closeHomeMatchModal()">
                     <span class="t-main">CERRAR PROTOCOLO</span>
                     <i class="fas fa-check"></i>
                 </button>

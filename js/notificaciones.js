@@ -192,6 +192,7 @@ observeCoreSession({
     currentUserDoc = userDoc;
     try {
       applyNotificationPageCopy();
+      await initPushNotifications(user.uid).catch(() => false);
       await injectHeader(userDoc);
       injectNavbar("notificaciones");
       loadNotificationsSafeV2(user.uid);
@@ -425,7 +426,7 @@ function setupFilterTabs() {
 }
 
 function setupGlobalActions() {
-  btnReadAll.onclick = async () => {
+  if (btnReadAll) btnReadAll.onclick = async () => {
     const unread = notifications.filter((n) => !n.leido && !n.read);
     if (!unread.length) return;
     try {
@@ -445,7 +446,7 @@ function setupGlobalActions() {
     }
   };
 
-  btnClearAll.onclick = async () => {
+  if (btnClearAll) btnClearAll.onclick = async () => {
     if (!notifications.length) return;
     if (!(await confirmNotificationsAction({
       title: "Vaciar bandeja",
@@ -647,7 +648,7 @@ async function updatePushStatusUI() {
     tagText("push-sdk-pill", `SDK: ${status.oneSignalInitialized ? "nativo activo" : status.oneSignalAvailable ? "cargando" : "no listo"}`);
     tagText("push-action-pill", `Siguiente paso: ${getRecommendedActionLabel(status)}`);
 
-    btnRequestPush.onclick = async () => {
+    if (btnRequestPush) btnRequestPush.onclick = async () => {
       if (status.permission === "denied" || status.recommendedAction === "review_browser_settings") {
         showNotificationHelpModal();
         document.getElementById("notif-denied-guide")?.classList.remove("hidden");

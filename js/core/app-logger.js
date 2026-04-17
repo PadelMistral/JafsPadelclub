@@ -1,4 +1,4 @@
-﻿const LOG_KEY = "app_diag_log_v1";
+const LOG_KEY = "app_diag_log_v1";
 const MAX_LOG_ITEMS = 200;
 
 function nowIso() {
@@ -28,16 +28,19 @@ function sanitizeMeta(meta = {}) {
 export function logInfo(event, meta = {}) {
   const entry = { ts: nowIso(), level: "info", event, meta: sanitizeMeta(meta) };
   safeStore(entry);
+  try { console.log("[APP][INFO]", event, entry.meta); } catch (_) {}
 }
 
 export function logWarn(event, meta = {}) {
   const entry = { ts: nowIso(), level: "warn", event, meta: sanitizeMeta(meta) };
   safeStore(entry);
+  try { console.warn("[APP][WARN]", event, entry.meta); } catch (_) {}
 }
 
 export function logError(event, meta = {}) {
   const entry = { ts: nowIso(), level: "error", event, meta: sanitizeMeta(meta) };
   safeStore(entry);
+  try { console.error("[APP][ERROR]", event, entry.meta); } catch (_) {}
   try {
     import("./analytics.js").then((m) => m?.analyticsCount?.("errors.critical", 1)).catch(() => {});
   } catch (_) {}
@@ -50,3 +53,8 @@ export function getLogs() {
     return [];
   }
 }
+
+if (typeof window !== 'undefined') {
+  window.getAppLogs = getLogs;
+}
+
