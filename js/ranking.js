@@ -1,4 +1,4 @@
-﻿import { db, getDocsSafe, getDocument, auth, observerAuth } from "./firebase-service.js";
+import { db, getDocsSafe, getDocument, auth, observerAuth } from "./firebase-service.js";
 import {
   collection,
   query,
@@ -149,9 +149,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   injectNavbar("ranking");
   await loadRanking();
 
+  let searchDebounceTimer = null;
   document.getElementById("rank-search")?.addEventListener("input", (e) => {
-    currentSearch = String(e.target.value || "").toLowerCase().trim();
-    renderTable();
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      currentSearch = String(e.target.value || "").toLowerCase().trim();
+      renderTable();
+    }, 250);
   });
   document.getElementById("rank-filter")?.addEventListener("change", (e) => {
     currentFilter = String(e.target.value || "all");
@@ -247,43 +251,49 @@ function renderTable() {
       const tierLabel = getTierLabel(rank);
       const streak = Number(u.computedStreak ?? u.rachaActual ?? 0);
       const streakLabel = streak > 0 ? `+${streak}` : `${streak}`;
+      const played = Number(u.partidosJugados || 0);
+      const won = Number(u.victorias || 0);
+      const wr = played > 0 ? Math.round((won / played) * 100) : 0;
       const progress = getCoreLevelProgressState({
         rating: Number(u.puntosRanking || 1000),
         levelOverride: Number(u.nivel || levelFromRating(u.puntosRanking)),
       });
-      const visibleProgressPct = buildCenteredProgress(progress.pointsToDown, progress.pointsToUp);
       const progressHint = progress.pointsToUp <= progress.pointsToDown
         ? `Subida ${progress.pointsToUp}`
         : `Bajada ${progress.pointsToDown}`;
       return `
-        <div class="ranking-card ${rankClass} ${tierClass} ${isMe ? "me" : ""} animate-up"
-             style="animation-delay: ${i * 20}ms; ${tierStyle}"
+        <div class="ranking-card-v8 ${rankClass} ${tierClass} ${isMe ? "me" : ""} animate-up"
+             style="animation-delay: ${i * 20}ms;"
              onclick="window.openRankUserModal('${u.id}')"
              role="button"
-             tabindex="0"
-             aria-label="Abrir perfil competitivo de ${u.nombreUsuario || u.nombre || "Jugador"}"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.openRankUserModal('${u.id}');}">
-          <div class="lb-rank-wrap">
-            <span class="rank-number-v7">${rank}</span>
-            <span class="lb-tier-chip">${tierLabel}</span>
+             tabindex="0">
+          <div class="rc8-left">
+            <span class="rc8-rank">${rank}</span>
           </div>
-          ${renderAvatarMarkup(u, "lb-avatar")}
-          <div class="lb-info">
-            <div class="lb-name-row">
-              <span class="lb-name">${u.nombreUsuario || u.nombre || "Jugador"} ${isMe ? '<i class="fas fa-user-circle text-[8px] text-primary ml-1"></i>' : ""}</span>
-              <span class="lb-level-chip">N ${lvl}</span>
+          <div class="rc8-avatar-wrap">
+            ${renderAvatarMarkup(u, "rc8-avatar")}
+          </div>
+          <div class="rc8-body">
+            <div class="rc8-name-row">
+              <span class="rc8-name">${u.nombreUsuario || u.nombre || "Jugador"}</span>
+              <span class="rc8-level">Nivel ${lvl}</span>
+              ${isMe ? '<span class="rc8-badge-me">TÚ</span>' : ''}
             </div>
-            <div class="lb-meta-row lb-meta-row-tight">
-              <span class="lb-meta-pill">PJ ${Number(u.partidosJugados || 0)}</span>
-              <span class="lb-meta-pill">W ${Number(u.victorias || 0)}</span>
-              <span class="lb-meta-pill ${streak > 0 ? "is-positive" : streak < 0 ? "is-negative" : ""}">Racha ${streakLabel}</span>
-              <span class="lb-meta-pill">${progressHint}</span>
+            <div class="rc8-stats">
+              <span><i class="fas fa-trophy"></i> ${won} / ${played}</span>
+              <span class="rc8-vr"></span>
+              <span>${wr}% WR</span>
+              <span class="rc8-vr"></span>
+              <span class="${streak > 0 ? 'text-green-400' : streak < 0 ? 'text-red-400' : ''}"><i class="fas fa-fire"></i> ${streakLabel}</span>
+            </div>
+            <div class="rc8-tier-row">
+              <span class="rc8-tier-chip">${getTierLabel(rank)}</span>
+              <span class="rc8-state-hint state-${progress.stateClass}">${progress.stateLabel} ${progressHint}</span>
             </div>
           </div>
-          <div class="lb-score-col">
-            <span class="lb-pts">${pts}</span>
-            <span class="lb-pts-sub">${visibleProgressPct.toFixed(0)}%</span>
-            <span class="lb-state-chip state-${progress.stateClass}">${progress.stateLabel}</span>
+          <div class="rc8-right">
+            <span class="rc8-pts">${pts}</span>
+            <span class="rc8-pts-label">PTS</span>
           </div>
         </div>
       `;
@@ -351,23 +361,29 @@ async function renderSeasonTable() {
     }
 
     list.innerHTML = rows.map((u, i) => `
-      <div class="ranking-card animate-up"
+      <div class="ranking-card-v8 animate-up"
            style="animation-delay:${i * 20}ms"
-           onclick="window.openRankUserModal('${u.id}')">
-        <span class="rank-number-v7">${i + 1}</span>
-        ${renderAvatarMarkup(u, "lb-avatar")}
-        <div class="lb-info">
-          <div class="lb-name-row">
-            <span class="lb-name">${u.nombreUsuario || u.nombre || "Jugador"}</span>
-            <span class="lb-level-chip ${isCurrentMonth ? '' : 'bg-white/10 text-white/50'}">MES</span>
+           onclick="window.openRankUserModal('${u.id}')"
+           role="button"
+           tabindex="0">
+        <div class="rc8-left">
+          <span class="rc8-rank">${i + 1}</span>
+        </div>
+        <div class="rc8-avatar-wrap">
+          ${renderAvatarMarkup(u, "rc8-avatar")}
+        </div>
+        <div class="rc8-body">
+          <div class="rc8-name-row">
+            <span class="rc8-name">${u.nombreUsuario || u.nombre || "Jugador"}</span>
+            <span class="rc8-level ${isCurrentMonth ? '' : 'text-white/50'}">MES</span>
           </div>
-          <div class="lb-meta-row lb-meta-row-tight">
-            <span class="lb-meta-pill">${season.label}</span>
+          <div class="rc8-tier-row">
+            <span class="rc8-tier-chip">${season.label}</span>
           </div>
         </div>
-        <div class="lb-score-col">
-          <span class="lb-pts ${u.seasonPoints > 0 ? 'text-sport-green' : 'text-sport-red'}">${u.seasonPoints >= 0 ? "+" : ""}${u.seasonPoints.toFixed(1)}</span>
-          <span class="lb-pts-sub uppercase">PUNTOS</span>
+        <div class="rc8-right">
+          <span class="rc8-pts ${u.seasonPoints > 0 ? 'text-green-400' : 'text-red-400'}">${u.seasonPoints >= 0 ? "+" : ""}${u.seasonPoints.toFixed(1)}</span>
+          <span class="rc8-pts-label">PTS</span>
         </div>
       </div>
     `).join("");
@@ -390,7 +406,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
-
 async function renderRankUserModal(uid) {
   const modal = document.getElementById("modal-rank-user");
   const body = document.getElementById("rank-user-body");
@@ -410,7 +425,7 @@ async function renderRankUserModal(uid) {
     const rank = users.findIndex((x) => x.id === uid) + 1;
     const name = u.nombreUsuario || u.nombre || "Jugador";
     const centeredPct = buildCenteredProgress(state.pointsToDown, state.pointsToUp);
-    if (title) title.textContent = `PERFIL COMPETITIVO Â· ${name.toUpperCase()}`;
+    if (title) title.textContent = `PERFIL COMPETITIVO · ${name.toUpperCase()}`;
 
     // Try ordered query, fallback to unordered if index is missing
     let logs = [];
@@ -454,7 +469,7 @@ async function renderRankUserModal(uid) {
             if (myIdx !== -1 && arr.length >= 4) {
               const rivalUids = myIdx < 2 ? arr.slice(2, 4) : arr.slice(0, 2);
               const rivalNames = await Promise.all(rivalUids.map(async r => {
-                if (!r) return "VacÃ­o";
+                if (!r) return "Vacío";
                 const identity = await resolveIdentity(r, {
                   currentUserId: currentUser?.uid,
                   currentUserData,
@@ -501,7 +516,7 @@ async function renderRankUserModal(uid) {
           ${renderAvatarMarkup(u, "rank-user-avatar")}
           <div class="rank-user-main">
             <span class="rank-user-name">${name}</span>
-            <span class="rank-user-meta">#${rank > 0 ? rank : "--"} Â· ${Math.round(points)} pts Â· Nivel ${level.toFixed(2)}</span>
+            <span class="rank-user-meta">#${rank > 0 ? rank : "--"} · ${Math.round(points)} pts · Nivel ${level.toFixed(2)}</span>
           </div>
         </div>
         <div class="rank-break-grid" style="margin-top:14px;">
@@ -520,7 +535,7 @@ async function renderRankUserModal(uid) {
           </div>
           <div class="rank-progress-foot">
             <span>-${state.pointsToDown} pts</span>
-            <span class="text-primary">Nivel ${state.currentLevel.toFixed(2)} Â· ${Math.round(points)} pts</span>
+            <span class="text-primary">Nivel ${state.currentLevel.toFixed(2)} · ${Math.round(points)} pts</span>
             <span>+${state.pointsToUp} pts</span>
           </div>
         </div>
@@ -535,223 +550,414 @@ async function renderRankUserModal(uid) {
 }
 
 
-window.openRankUserModal = (uid) => {
+// openRankUserModal definida más abajo (versión completa con H2H y desglose competitivo)
+
+async function buildHeadToHeadSummary(uid) {
+  const collections = ["partidosAmistosos", "partidosReto", "eventoPartidos"];
+  const matches = [];
+  for (const col of collections) {
+    const snap = await getDocsSafe(query(collection(db, col), where("jugadores", "array-contains", uid), limit(80)));
+    (snap?.docs || []).forEach((docSnap) => matches.push({ id: docSnap.id, col, ...docSnap.data() }));
+  }
+  const rivals = new Map();
+  for (const match of matches) {
+    const players = getNormalizedPlayers(match);
+    const idx = players.findIndex((item) => item === uid);
+    if (idx === -1) continue;
+    const rivalIds = idx < 2 ? players.slice(2, 4) : players.slice(0, 2);
+    const mySide = idx < 2 ? "A" : "B";
+    const winner = String(match?.resultado?.ganador || resolveFriendlyWinner(match) || "");
+    rivalIds.filter(Boolean).forEach((rivalId) => {
+      if (!rivals.has(rivalId)) rivals.set(rivalId, { wins: 0, losses: 0, matches: [] });
+      const row = rivals.get(rivalId);
+      if (winner) {
+        if (winner === mySide) row.wins += 1;
+        else row.losses += 1;
+      }
+      row.matches.push(match);
+    });
+  }
+  const entries = await Promise.all([...rivals.entries()].map(async ([rivalId, stats]) => {
+    const identity = await resolveIdentity(rivalId, { currentUserId: currentUser?.uid, currentUserData }).catch(() => null);
+    return {
+      rivalId,
+      name: identity?.name || "Jugador",
+      wins: stats.wins,
+      losses: stats.losses,
+      total: stats.wins + stats.losses,
+      matches: stats.matches.sort((a, b) => (b.fecha?.seconds || 0) - (a.fecha?.seconds || 0)).slice(0, 3),
+    };
+  }));
+  return entries.sort((a, b) => b.total - a.total).slice(0, 6);
+}
+
+function resolveFriendlyWinner(match) {
+  const raw = String(match?.resultado?.sets || match?.resultado || "").trim();
+  if (!raw) return "";
+  let a = 0;
+  let b = 0;
+  raw.split(/\s+/).forEach((setScore) => {
+    const parts = setScore.split("-").map(Number);
+    if (parts.length !== 2) return;
+    if (parts[0] > parts[1]) a += 1;
+    if (parts[1] > parts[0]) b += 1;
+  });
+  if (a === b) return "";
+  return a > b ? "A" : "B";
+}
+
+function resolveUserOutcomeAgainstMatch(match, uid) {
+  const teamA = getMatchTeamPlayerIds(match, "A");
+  const teamB = getMatchTeamPlayerIds(match, "B");
+  const winner = String(match?.resultado?.ganador || resolveFriendlyWinner(match) || "");
+  if (!winner) return "neutral";
+  if (teamA.includes(uid)) return winner === "A" ? "win" : "loss";
+  if (teamB.includes(uid)) return winner === "B" ? "win" : "loss";
+  return "neutral";
+}
+
+function getRankingFactorRows(detail = {}) {
+  if (!detail || typeof detail !== "object") return [];
+  if (detail.factoresAdicionales) {
+    const rows = [
+      ["Elo dinámico", detail.cambioElo],
+      ["Compañero", detail.factoresAdicionales?.companero],
+      ["Racha", detail.factoresAdicionales?.racha],
+      ["Sets", detail.factoresAdicionales?.margenSets],
+      ["Balance", detail.ajusteBalance],
+    ];
+    if (detail.sumaTotal && detail.limiteAplicado && Math.abs(detail.sumaTotal) > Math.abs(detail.limiteAplicado)) {
+      rows.push(["Tope", Number((detail.limiteAplicado - detail.sumaTotal).toFixed(2))]);
+    }
+    return rows.filter(([, value]) => value !== undefined && value !== null && !Number.isNaN(Number(value)));
+  }
+  return [
+    ["Base", detail.base],
+    ["Racha", detail.racha || detail.streak],
+    ["Sorpresa", detail.sorpresa || detail.surprise],
+    ["Sets", detail.clutch || detail.sets],
+    ["Nivel", detail.habilidad || detail.skill],
+    ["Balance", detail.ajusteBalance],
+  ].filter(([, value]) => value !== undefined && value !== null && !Number.isNaN(Number(value)));
+}
+
+async function resolveCompetitiveMatchSummary(uid, log) {
+  const diff = Number(log?.diff || 0);
+  const col = log?.matchCollection || log?.matchCol || "partidosAmistosos";
+  const typeLabel = log?.type || (col === "eventoPartidos" ? "TORNEO" : col === "partidosReto" ? "RETO" : "AMISTOSO");
+  const detail = log?.details?.breakdown || log?.details?.puntosDetalle || {};
+  const pointsBefore = Number(log?.details?.pointsBefore);
+  const pointsAfter = Number(log?.details?.pointsAfter ?? log?.newTotal);
+  const levelBefore = Number(log?.details?.levelBefore || 0);
+  const levelAfter = Number(log?.details?.levelAfter || 0);
+  const factorRows = getRankingFactorRows(detail);
+  const visibleRows = factorRows.slice(0, 5);
+  const subtotal = Number(detail.subtotalVariables ?? detail.totalCalculado ?? diff);
+  const finalDelta = Number(detail.finalDelta ?? diff);
+  const when = fmtDate(log?.timestamp || log?.details?.timestamp);
+  const won = log?.won ?? diff >= 0;
+  const matchId = String(log?.matchId || "");
+  const match = matchId ? await getMatchById(matchId).catch(() => null) : null;
+
+  const summary = {
+    typeLabel,
+    diff,
+    when,
+    won,
+    sets: String(log?.sets || log?.details?.sets || match?.resultado?.sets || match?.resultado || "Sin marcador"),
+    factorRows: visibleRows,
+    subtotal,
+    finalDelta,
+    pointsBefore,
+    pointsAfter,
+    levelBefore,
+    levelAfter,
+    beforeProgress: Number.isFinite(pointsBefore) ? getCoreLevelProgressState({ rating: pointsBefore, levelOverride: levelBefore || undefined }) : null,
+    afterProgress: Number.isFinite(pointsAfter) ? getCoreLevelProgressState({ rating: pointsAfter, levelOverride: levelAfter || undefined }) : null,
+    rivalNames: [],
+    partnerNames: [],
+    match,
+    col,
+    logId: log?.id || "",
+    matchId,
+  };
+
+  if (!match) return summary;
+
+  const arr = getNormalizedPlayers(match);
+  const myIdx = arr.findIndex((item) => item === uid);
+  if (myIdx === -1) return summary;
+  const myTeamIds = myIdx < 2 ? arr.slice(0, 2) : arr.slice(2, 4);
+  const rivalIds = myIdx < 2 ? arr.slice(2, 4) : arr.slice(0, 2);
+  const partnerIds = myTeamIds.filter((playerUid) => playerUid && playerUid !== uid);
+
+  const resolveName = async (playerUid) => {
+    if (!playerUid) return "Vacío";
+    const identity = await resolveIdentity(playerUid, {
+      currentUserId: currentUser?.uid,
+      currentUserData,
+      userMap: Object.fromEntries(users.map((user) => [user.id, user])),
+    }).catch(() => null);
+    if (identity?.name) return identity.name;
+    const guest = parseGuestMeta(playerUid);
+    if (guest?.name) return guest.name;
+    const userDoc = users.find((item) => item.id === playerUid) || await getDocument("usuarios", playerUid).catch(() => null);
+    return userDoc?.nombreUsuario || userDoc?.nombre || "Jugador";
+  };
+
+  summary.rivalNames = await Promise.all(rivalIds.filter(Boolean).map(resolveName));
+  summary.partnerNames = await Promise.all(partnerIds.filter(Boolean).map(resolveName));
+  return summary;
+}
+
+window.openRankUserModal = async (uid) => {
   if (!uid) return;
-  renderRankUserModal(uid);
+  const modal = document.getElementById("modal-rank-user");
+  const body = document.getElementById("rank-user-body");
+  const title = document.getElementById("rank-user-title");
+  if (!modal || !body) return;
+  modal.classList.add("active");
+  body.innerHTML = '<div class="center py-16"><i class="fas fa-spinner fa-spin opacity-30"></i></div>';
+
+  try {
+    const u = users.find((it) => it.id === uid) || (await getDocument("usuarios", uid));
+    if (!u) throw new Error("Usuario no encontrado");
+    const points = Number(u.puntosRanking || 1000);
+    const level = Number(u.nivel || levelFromRating(points));
+    const rank = users.findIndex((x) => x.id === uid) + 1;
+    const played = Number(u.partidosJugados || 0);
+    const won = Number(u.victorias || 0);
+    const losses = Math.max(0, played - won);
+    const streak = Number(u.computedStreak ?? u.rachaActual ?? 0);
+    const winRate = played ? Math.round((won / played) * 100) : 0;
+    const state = getCoreLevelProgressState({ rating: points, levelOverride: level });
+    const name = u.nombreUsuario || u.nombre || "Jugador";
+    const centeredPct = buildCenteredProgress(state.pointsToDown, state.pointsToUp);
+    const h2h = await buildHeadToHeadSummary(uid);
+    let logs = [];
+    try {
+      const logsSnap = await getDocsSafe(
+        query(collection(db, "rankingLogs"), where("uid", "==", uid), orderBy("timestamp", "desc"), limit(24)),
+      );
+      logs = (logsSnap?.docs || []).map((d) => ({ id: d.id, ...d.data() }));
+    } catch (_) {
+      const logsSnap = await getDocsSafe(
+        query(collection(db, "rankingLogs"), where("uid", "==", uid), limit(24)),
+      );
+      logs = (logsSnap?.docs || []).map((d) => ({ id: d.id, ...d.data() }));
+      logs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+    }
+    const recentMatches = await Promise.all(logs.map((log) => resolveCompetitiveMatchSummary(uid, log)));
+    if (title) title.textContent = `PERFIL COMPETITIVO · ${name.toUpperCase()}`;
+
+    body.innerHTML = `
+      <div class="rank-user-head-card rank-user-head-card--premium">
+        <div class="rank-user-topline">
+          ${renderAvatarMarkup(u, "rank-user-avatar")}
+          <div class="rank-user-main">
+            <span class="rank-user-name">${name}</span>
+            <span class="rank-user-meta">#${rank > 0 ? rank : "--"} · ${Math.round(points)} pts · Nivel ${level.toFixed(2)}</span>
+          </div>
+        </div>
+        <div class="rank-user-pro-grid">
+          <div class="rank-user-pro-card"><span>Récord</span><strong>${won}V · ${losses}D</strong></div>
+          <div class="rank-user-pro-card"><span>Win rate</span><strong>${winRate}%</strong></div>
+          <div class="rank-user-pro-card"><span>Racha</span><strong>${streak > 0 ? "+" : ""}${streak}</strong></div>
+        </div>
+        <div class="rank-progress-wrap">
+          <div class="rank-progress-info">
+            <span>Progreso de nivel</span>
+            <b>${centeredPct.toFixed(1)}%</b>
+          </div>
+          <div class="level-bar"><div class="level-fill" style="width:${centeredPct}%"></div></div>
+          <div class="rank-progress-foot">
+            <span>Baja con ${state.pointsToDown} pts</span>
+            <span class="text-primary">Nivel ${state.currentLevel.toFixed(2)} · ${Math.round(points)} pts</span>
+            <span>Sube con ${state.pointsToUp} pts</span>
+          </div>
+        </div>
+      </div>
+      <div class="rank-user-section-title">Desglose vs rivales</div>
+      <div class="rank-rival-list">
+        ${h2h.length ? h2h.map((row) => `
+          <div class="rank-rival-row">
+            <div>
+              <strong>${row.name}</strong>
+              <div class="text-[10px] text-white/56 mt-1">Historial: ${row.total} enfrentamientos</div>
+            </div>
+            <div class="text-right">
+              <strong class="${row.wins >= row.losses ? "text-sport-green" : "text-sport-red"}">${row.wins}V · ${row.losses}D</strong>
+              <div class="text-[10px] text-white/56 mt-1">${row.total ? Math.round((row.wins / row.total) * 100) : 0}% win</div>
+            </div>
+          </div>
+        `).join("") : `<div class="center py-10 opacity-40">Todavía no hay historial suficiente frente a rivales.</div>`}
+      </div>
+      <div class="rank-user-section-title">Partidos y puntos (${recentMatches.length})</div>
+      <div class="rank-competitive-timeline">
+        ${recentMatches.length ? recentMatches.map((entry) => `
+          <article class="rank-competitive-card compact ${entry.won ? "win" : "loss"}" onclick="window.openRankMatchBreakdown('${entry.logId}','${entry.matchId}','${entry.col}')" style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; margin-bottom:8px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); cursor:pointer;">
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <div style="font-size:13px; font-weight:700; color:#fff; text-transform:uppercase;">
+                VS ${entry.rivalNames.length ? entry.rivalNames.join(" / ") : "Rivales"}
+              </div>
+              <div style="font-size:10px; color:rgba(255,255,255,0.5);">
+                ${entry.when} · ${entry.sets || "Sin resultado"}
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:15px; font-weight:900; font-family:'Rajdhani', sans-serif; color: ${entry.diff >= 0 ? 'var(--sport-green)' : 'var(--sport-red)'};">
+                ${entry.diff >= 0 ? "+" : ""}${Math.round(entry.diff)}
+              </span>
+              <i class="fas fa-chevron-right" style="font-size:10px; color:rgba(255,255,255,0.3);"></i>
+            </div>
+          </article>
+        `).join("") : `<div class="center py-10 opacity-40">Todavía no hay partidos con desglose competitivo suficiente.</div>`}
+      </div>
+      <div class="rank-user-section-title">Últimos cara a cara</div>
+      <div class="rank-rival-list">
+        ${h2h.length ? h2h.flatMap((row) => (row.matches || []).map((match) => ({
+            rivalName: row.name,
+            match,
+            outcome: resolveUserOutcomeAgainstMatch(match, uid),
+          }))).sort((a, b) => (b.match?.fecha?.seconds || 0) - (a.match?.fecha?.seconds || 0)).slice(0, 4).map((entry) => `
+          <div class="rank-recent-duel ${entry.outcome}">
+            <div>
+              <strong>${entry.rivalName}</strong>
+              <div class="text-[10px] text-white/56 mt-1">${fmtDate(entry.match?.fecha)} · ${entry.match?.resultado?.sets || entry.match?.resultado || "Sin resultado"}</div>
+            </div>
+            <span class="rank-duel-badge ${entry.outcome}">${entry.outcome === "win" ? "Victoria" : entry.outcome === "loss" ? "Derrota" : "Pendiente"}</span>
+          </div>`).join("") : `<div class="center py-10 opacity-40">Aún no hay enfrentamientos recientes para mostrar.</div>`}
+      </div>
+    `;
+  } catch (error) {
+    console.error("Enhanced rank user modal error:", error);
+    body.innerHTML = `<div class="center py-16 text-sport-red">No se pudo cargar el jugador.<br><span class="text-xs opacity-60">${error.message}</span></div>`;
+  }
 };
+
+// Cerrar modales con ESC
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const stackFront = document.querySelector(".modal-overlay.modal-stack-front.active");
+  if (stackFront) {
+    stackFront.classList.remove("active", "modal-stack-front");
+    return;
+  }
+  const anyModal = document.querySelector(".modal-overlay.active");
+  if (anyModal) anyModal.classList.remove("active");
+});
 
 window.openRankMatchBreakdown = async (logId, matchId, col) => {
   const mainModal = document.getElementById("modal-match");
   const area = document.getElementById("match-detail-area");
   const titleEl = document.getElementById("modal-titulo");
   if (!mainModal || !area) return;
-  area.innerHTML = '<div class="center py-20"><i class="fas fa-spinner fa-spin opacity-20"></i></div>';
-  mainModal.classList.add("active");
-  mainModal.classList.add("modal-stack-front");
-  if (titleEl) titleEl.textContent = "Desglose de puntuaciÃ³n";
-
+  area.innerHTML = '<div class="center py-20"><i class="fas fa-spinner fa-spin opacity-30"></i></div>';
+  mainModal.classList.add("active", "modal-stack-front");
+  if (titleEl) titleEl.textContent = "Desglose de puntuación";
   try {
     const logDoc = logId ? await getDocument("rankingLogs", logId) : null;
     const match = matchId ? await getMatchById(matchId) : null;
     const detail = logDoc?.details?.breakdown || logDoc?.details?.puntosDetalle || {};
-    const systemVersion = String(logDoc?.details?.systemVersion || "");
-    const real = detail?.desgloseReal || {};
-    let factors = [];
-    let diagnostics = [];
-    let transparentRows = [];
-    if (detail.factoresAdicionales) {
-        // v8 Advanced Scoring
-        factors = [
-            ["Elo DinÃ¡mico", detail.cambioElo],
-            ["Ajuste Equipo", detail.factoresAdicionales?.companero],
-            ["Racha / Bonus", detail.factoresAdicionales?.racha],
-            ["Set Margin", detail.factoresAdicionales?.margenSets],
-            ["Equilibrio final", detail.ajusteBalance]
-        ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
-        
-        if (detail.sumaTotal && detail.limiteAplicado && Math.abs(detail.sumaTotal) > Math.abs(detail.limiteAplicado)) {
-            factors.push(["Ajuste Tope RÃ­gido", Number((detail.limiteAplicado - detail.sumaTotal).toFixed(2))]);
-        }
-        transparentRows = [
-            ["Elo base esperado", detail.cambioElo],
-            ["Puntos por compaÃ±ero", detail.factoresAdicionales?.companero],
-            ["Puntos por racha", detail.factoresAdicionales?.racha],
-            ["Puntos por sets", detail.factoresAdicionales?.margenSets],
-            ["Balance final del sistema", detail.ajusteBalance],
-        ].filter(([, v]) => v !== undefined && v !== null && !Number.isNaN(Number(v)));
-    } else {
-        // Legacy
-        factors = [
-        ["Puntos Base", detail.base],
-        ["BonificaciÃ³n Racha", detail.racha || detail.streak],
-        ["Factor Sorpresa", detail.sorpresa || detail.surprise],
-        ["Por Sets/Juegos", detail.clutch || detail.sets],
-        ["Ajuste Nivel", detail.habilidad || detail.skill],
-        ["Equilibrio final", detail.ajusteBalance],
-        ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
-        transparentRows = [
-          ["Base del partido", detail.base],
-          ["Racha", detail.racha || detail.streak],
-          ["Sorpresa", detail.sorpresa || detail.surprise],
-          ["Sets / clutch", detail.clutch || detail.sets],
-          ["Habilidad / skill", detail.habilidad || detail.skill],
-          ["Balance final del sistema", detail.ajusteBalance]
-        ].filter(([, v]) => v !== undefined && v !== null && !Number.isNaN(Number(v)));
-    }
-
-    if (systemVersion.includes("atp")) {
-      diagnostics = [
-        ["Expectativa", real.esperado],
-        ["K Factor", real.K],
-        ["Seed Individual", real.seedIndividual],
-        ["Gap Compa", real.diferenciaConCompanero],
-        ["Reparto", real.repartoPareja],
-        ["Dominancia", real.dominance],
-        ["Rating Pareja", real.teamRating],
-        ["Rating Rival", real.rivalRating],
-      ].filter(([, v]) => v !== undefined && v !== null && v !== 0);
-    }
-
     const diff = Number(logDoc?.diff || 0);
+    const won = logDoc?.won ?? diff >= 0;
+    const pointsBefore = Number(logDoc?.details?.pointsBefore);
+    const pointsAfter = Number(logDoc?.details?.pointsAfter ?? logDoc?.newTotal);
     const levelBefore = Number(logDoc?.details?.levelBefore || 0);
     const levelAfter = Number(logDoc?.details?.levelAfter || 0);
-    const pointsBefore = Number(logDoc?.details?.pointsBefore);
-    const pointsAfter = Number(logDoc?.details?.pointsAfter);
-    
+    const factorRows = getRankingFactorRows(detail);
+    const transparentRows = detail.factoresAdicionales
+      ? [
+          ["Elo base esperado", detail.cambioElo],
+          ["Puntos por compañero", detail.factoresAdicionales?.companero],
+          ["Puntos por racha", detail.factoresAdicionales?.racha],
+          ["Puntos por sets", detail.factoresAdicionales?.margenSets],
+          ["Balance final", detail.ajusteBalance],
+        ].filter(([, v]) => v !== undefined && v !== null && !Number.isNaN(Number(v)))
+      : factorRows;
     const beforeProgress = Number.isFinite(pointsBefore)
-      ? getCoreLevelProgressState({
-          rating: pointsBefore,
-          levelOverride: levelBefore || undefined,
-        })
-      : null;
+      ? getCoreLevelProgressState({ rating: pointsBefore, levelOverride: levelBefore || undefined }) : null;
     const afterProgress = Number.isFinite(pointsAfter)
-      ? getCoreLevelProgressState({
-          rating: pointsAfter,
-          levelOverride: levelAfter || undefined,
-        })
-      : null;
+      ? getCoreLevelProgressState({ rating: pointsAfter, levelOverride: levelAfter || undefined }) : null;
 
     let matchInfoHtml = "";
     if (match) {
-        const matchPlayers = Array.isArray(match.jugadores) ? match.jugadores : (Array.isArray(match.playerUids) ? match.playerUids : []);
-        
-        async function getFriendlyName(uid) {
-            if (!uid) return "VacÃ­o";
-            const identity = await resolveIdentity(uid, {
-              userMap: Object.fromEntries(users.map((user) => [user.id, user])),
-            }).catch(() => null);
-            if (identity?.name) return identity.name;
-            const guest = parseGuestMeta(uid);
-            if (guest?.name) return guest.name;
-            const u = users.find(x => x.id === uid) || await getDocument("usuarios", uid);
-            return u?.nombreUsuario || u?.nombre || "Jugador";
-        }
-
-        const pNames = await Promise.all(matchPlayers.map(getFriendlyName));
-        const teamAIds = getMatchTeamPlayerIds(match, "A");
-        const teamBIds = getMatchTeamPlayerIds(match, "B");
-        const t1Names = getFriendlyTeamName({
-            teamName: match.teamAName || match.equipoA,
-            playerNames: teamAIds.map((uid) => pNames[matchPlayers.indexOf(uid)]).filter(Boolean),
-            fallback: "Pareja 1",
-            side: "A"
-        });
-        const t2Names = getFriendlyTeamName({
-            teamName: match.teamBName || match.equipoB,
-            playerNames: teamBIds.map((uid) => pNames[matchPlayers.indexOf(uid)]).filter(Boolean),
-            fallback: "Pareja 2",
-            side: "B"
-        });
-        const renderRosterPills = (ids = []) => ids.map((uid) => {
-            const idx = matchPlayers.indexOf(uid);
-            const label = pNames[idx] || "Jugador";
-            return `<span class="rank-player-pill">${label}</span>`;
-        }).join("");
-
-        matchInfoHtml = `
-            <div class="rank-break-match premium">
-                <div class="rank-break-versus">
-                    <div class="rank-break-team-block">
-                    <span class="text-[10px] font-black text-white/90 uppercase tracking-widest">${t1Names}</span>
-                    <div class="rank-player-pill-row">${renderRosterPills(teamAIds)}</div>
-                    </div>
-                    <span class="text-[8px] font-bold text-primary opacity-60">VERSUS</span>
-                    <div class="rank-break-team-block">
-                    <span class="text-[10px] font-black text-white/90 uppercase tracking-widest">${t2Names}</span>
-                    <div class="rank-player-pill-row">${renderRosterPills(teamBIds)}</div>
-                    </div>
-                </div>
-                <span class="match-sub">${fmtDate(match.fecha)} Ã‚Â· ${match.resultado?.sets || match.resultado || 'Sin resultado'}</span>
+      const arr = getNormalizedPlayers(match);
+      const pNames = await Promise.all(arr.map(async (uid) => {
+        if (!uid) return "Vacío";
+        const identity = await resolveIdentity(uid, {
+          currentUserId: currentUser?.uid, currentUserData,
+          userMap: Object.fromEntries(users.map(u => [u.id, u])),
+        }).catch(() => null);
+        if (identity?.name) return identity.name;
+        const guest = parseGuestMeta(uid);
+        if (guest?.name) return guest.name;
+        const u = users.find(x => x.id === uid) || await getDocument("usuarios", uid).catch(() => null);
+        return u?.nombreUsuario || u?.nombre || "Jugador";
+      }));
+      const teamAIds = getMatchTeamPlayerIds(match, "A");
+      const teamBIds = getMatchTeamPlayerIds(match, "B");
+      const t1 = getFriendlyTeamName({ teamName: match.teamAName || match.equipoA, playerNames: teamAIds.map(uid => pNames[arr.indexOf(uid)]).filter(Boolean), fallback: "Pareja 1", side: "A" });
+      const t2 = getFriendlyTeamName({ teamName: match.teamBName || match.equipoB, playerNames: teamBIds.map(uid => pNames[arr.indexOf(uid)]).filter(Boolean), fallback: "Pareja 2", side: "B" });
+      const pillRow = (ids) => ids.map(uid => `<span class="rank-player-pill">${pNames[arr.indexOf(uid)] || "Jugador"}</span>`).join("");
+      const sets = match?.resultado?.sets || match?.resultado || "Sin resultado";
+      matchInfoHtml = `
+        <div class="rank-break-match premium">
+          <div class="rank-break-versus">
+            <div class="rank-break-team-block">
+              <span class="rank-break-team-name">${t1}</span>
+              <div class="rank-player-pill-row">${pillRow(teamAIds)}</div>
             </div>
-        `;
+            <span class="rank-break-versus-badge">VS</span>
+            <div class="rank-break-team-block">
+              <span class="rank-break-team-name">${t2}</span>
+              <div class="rank-player-pill-row">${pillRow(teamBIds)}</div>
+            </div>
+          </div>
+          <div class="match-sub">${fmtDate(match.fecha)} · ${sets}</div>
+        </div>`;
     }
+
+    const rowHtml = (rows, emphasis = false) => rows.map(([k, v]) => {
+      const val = Number(v);
+      const cls = val > 0 ? "text-sport-green" : val < 0 ? "text-sport-red" : "";
+      return `<div class="rank-break-row${emphasis ? " emphasis" : ""}"><span>${k}</span><b class="${cls}">${val > 0 ? "+" : ""}${num(v, 2)}</b></div>`;
+    }).join("");
 
     area.innerHTML = `
       <div class="rank-breakdown-card">
         ${matchInfoHtml}
-        <div class="rank-break-title">Desglose de puntuaciÃ³n</div>
         ${transparentRows.length ? `
-        <div class="rank-break-subtitle">Suma visible del cÃ¡lculo</div>
-        <div class="rank-break-grid rank-break-grid-strong">
-          ${transparentRows.map(([k, v]) => {
-            const val = Number(v);
-            const colorCls = val > 0 ? "text-sport-green" : val < 0 ? "text-sport-red" : "text-white/40";
-            return `<div class="rank-break-row emphasis"><span>${k}</span><b class="${colorCls}">${val > 0 ? "+" : ""}${num(v, 2)}</b></div>`;
-          }).join("")}
-        </div>` : ""}
-        <div class="rank-break-level">Subtotal visible ${num(detail.subtotalVariables ?? detail.totalCalculado ?? diff, 2)} Ã‚Â· Ajuste final ${num(detail.ajusteBalance || 0, 2)} Ã‚Â· Delta ${num(detail.finalDelta || diff, 2)}</div>
-        <div class="rank-break-subtitle">Variables complementarias</div>
-        <div class="rank-break-grid">
-          ${factors.map(([k, v]) => {
-            const val = Number(v);
-            const colorCls = val > 0 ? "text-sport-green" : val < 0 ? "text-sport-red" : "text-white/40";
-            return `<div class="rank-break-row"><span>${k}</span><b class="${colorCls}">${val > 0 ? "+" : ""}${num(v, 2)}</b></div>`;
-          }).join("")}
-        </div>
-        ${diagnostics.length ? `
-        <div class="rank-break-title" style="margin-top:14px;">MÃ©tricas del cÃ¡lculo</div>
-        <div class="rank-break-grid">
-          ${diagnostics.map(([k, v]) => `<div class="rank-break-row"><span>${k}</span><b class="text-primary">${num(v, 2)}</b></div>`).join("")}
-        </div>` : ""}
-        
+        <div class="rank-break-title">Desglose de puntuación</div>
+        <div class="rank-break-subtitle">Suma visible del cálculo</div>
+        <div class="rank-break-grid">${rowHtml(transparentRows, true)}</div>
+        <div class="rank-break-level">Subtotal ${num(detail.subtotalVariables ?? detail.totalCalculado ?? diff, 2)} · Balance ${num(detail.ajusteBalance || 0, 2)} · Delta ${num(detail.finalDelta || diff, 2)}</div>
+        ` : ""}
         <div class="rank-break-total">
           <div class="total-main">
-             <span>Total partido</span>
-             <b class="${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${diff >= 0 ? "+" : ""}${num(diff, 2)}</b>
+            <span>Total partido</span>
+            <b class="${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${diff >= 0 ? "+" : ""}${num(diff, 2)}</b>
           </div>
           <div class="total-calc">
-             ${Math.round(pointsBefore)} <span class="mx-1 opacity-40">+</span> 
-             <span class="${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${num(diff, 2)}</span>
-             <span class="mx-1 opacity-40">=</span> 
-             <span class="text-white">${Math.round(pointsAfter)} PTS</span>
+            ${Number.isFinite(pointsBefore) ? Math.round(pointsBefore) : "??"}
+            <span style="opacity:0.4;margin:0 4px">+</span>
+            <span class="${diff >= 0 ? "text-sport-green" : "text-sport-red"}">${num(diff, 2)}</span>
+            <span style="opacity:0.4;margin:0 4px">=</span>
+            <span style="color:#fff">${Number.isFinite(pointsAfter) ? Math.round(pointsAfter) : "??"} PTS</span>
           </div>
         </div>
-
-        <div class="rank-break-level">Nivel ${levelBefore ? levelBefore.toFixed(2) : "--"} Ã¢â€ â€™ ${levelAfter ? levelAfter.toFixed(2) : "--"}</div>
-        <div class="rank-break-level">Variables ${num(detail.totalCalculado || diff, 2)} = Delta final ${num(detail.finalDelta || diff, 2)}</div>
-        ${
-          beforeProgress && afterProgress
-            ? `
+        <div class="rank-break-level">Nivel ${levelBefore ? levelBefore.toFixed(2) : "--"} → ${levelAfter ? levelAfter.toFixed(2) : "--"}</div>
+        ${beforeProgress && afterProgress ? `
         <div class="rank-break-prog-wrap">
-          <div class="rank-break-prog-row">
-            <span>Antes (${Math.round(pointsBefore)} pts)</span>
-            <b>${beforeProgress.progressPct.toFixed(2)}%</b>
-          </div>
+          <div class="rank-break-prog-row"><span>Antes (${Number.isFinite(pointsBefore) ? Math.round(pointsBefore) : "--"} pts)</span><b>${beforeProgress.progressPct.toFixed(2)}%</b></div>
           <div class="level-bar"><div class="level-fill" style="width:${beforeProgress.progressPct}%"></div></div>
-          <div class="rank-break-prog-row mt-1">
-            <span>DespuÃ©s (${Math.round(pointsAfter)} pts)</span>
-            <b>${afterProgress.progressPct.toFixed(2)}%</b>
-          </div>
+          <div class="rank-break-prog-row" style="margin-top:6px"><span>Después (${Number.isFinite(pointsAfter) ? Math.round(pointsAfter) : "--"} pts)</span><b>${afterProgress.progressPct.toFixed(2)}%</b></div>
           <div class="level-bar"><div class="level-fill" style="width:${afterProgress.progressPct}%"></div></div>
-        </div>
-        `
-            : ""
-        }
-      </div>
-    `;
+        </div>` : ""}
+      </div>`;
   } catch (e) {
     console.error("openRankMatchBreakdown error:", e);
-    area.innerHTML = `<div class="center py-16 text-sport-red">No se pudo abrir el desglose.</div>`;
+    area.innerHTML = `<div class="center py-16 text-sport-red">No se pudo abrir el desglose.<br><span style="font-size:11px;opacity:0.6">${e.message}</span></div>`;
   }
 };
 
@@ -767,5 +973,9 @@ window.openRankMatch = async (id, col) => {
   await renderMatchDetail(area, id, col, sessionUser, userDoc);
 };
 
-
-
+window.closeRankingMatchModal = () => {
+  const modal = document.getElementById("modal-match");
+  if (modal) {
+    modal.classList.remove("active", "modal-stack-front");
+  }
+};

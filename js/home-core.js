@@ -13,6 +13,8 @@ import {
   onSnapshot,
   setDoc,
   serverTimestamp,
+  updateDoc,
+  increment,
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 import { initAppUI, showToast } from "./ui-core.js";
 import { injectHeader, injectNavbar } from "./modules/ui-loader.js";
@@ -32,7 +34,7 @@ import {
 import { RESULT_LOCK_MS } from "./config/match-constants.js";
 import { getDetailedWeather } from "./external-data.js";
 import { analyticsTiming } from "./core/analytics.js";
-import { APP_APK_URL, resolveApkDownloadUrl } from "./app-config.js";
+import { APP_APK_DOWNLOAD_ENABLED, APP_APK_URL, resolveApkDownloadUrl } from "./app-config.js";
 import {
   requestNotificationPermission,
   showNotificationHelpModal,
@@ -53,6 +55,7 @@ import { scoreMatchForUser } from "./services/matchmaking-service.js";
 import { buildStableGuestId } from "./services/guest-player-service.js";
 import { resolveIdentity, seedIdentityCache } from "./services/identity-service.js";
 import { syncComputedStreakForUser } from "./services/streak-service.js";
+import { animateCountUp } from "./modules/count-up.js";
 
 
 
@@ -90,6 +93,8 @@ let activeProposalId = null;
 let activeProposalMeta = null;
 let proposalInlineMode = false;
 let clubFeedItems = [];
+const HOME_GUIDE_DISMISSED_KEY = "home:guide:dismissed:v1";
+const MIN_BET_COINS = 20;
 
 // Limpieza de overlays heredados "event-day-alert"
 function purgeEventDayAlerts() {
@@ -148,6 +153,21 @@ let apoingLastSyncAt = 0;
 const APOING_SYNC_TTL_MS = 300000; // 5 min
 const APOING_PROXY_URL = `${window.location.origin}/api/apoing-ics?url=`;
 const APOING_PROXY_JINA = "https://r.jina.ai/http://";
+
+function getHomeApoingStorageKey(uid) {
+  return `apoingCalendarUrl:${uid || "anon"}`;
+}
+
+function getHomeApoingIcsUrl() {
+  const byUser = normalizeApoingCalendarUrl(currentUserData?.apoingCalendarUrl || currentUserData?.icsUrl || "");
+  if (byUser) return byUser;
+  try {
+    const uid = String(currentUser?.uid || "");
+    return normalizeApoingCalendarUrl(localStorage.getItem(getHomeApoingStorageKey(uid)) || "");
+  } catch (_) {
+    return "";
+  }
+}
 
 /* Player cache (names + photos) */
 const playerNameCache = new Map();
@@ -247,6 +267,9 @@ function applyHomeMatchCache({ complete = false } = {}) {
   renderHomeCompactBrief();
   renderEventSpotlight();
   renderCompetitivePulse();
+  renderHomeGuidedPanel();
+  renderHomeDailyChallenge();
+  renderHomeAchievements();
   maybeCreateEventDayNotice();
   renderMatchesByFilter(activeTab);
   matchLoadFallbackFired = true;
@@ -259,6 +282,22 @@ function applyHomeMatchCache({ complete = false } = {}) {
   }
   return true;
 }
+
+function isHomeGuideDismissed() {
+  try {
+    return localStorage.getItem(HOME_GUIDE_DISMISSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function dismissHomeGuide() {
+  try {
+    localStorage.setItem(HOME_GUIDE_DISMISSED_KEY, "1");
+  } catch {}
+  renderHomeGuidedPanel();
+}
+window.dismissHomeGuide = dismissHomeGuide;
 
 async function resolvePlayerName(uid) {
   if (!uid) return null;
@@ -353,6 +392,24 @@ function getInitials(name = "") {
     .join("")
     .slice(0, 2)
     .toUpperCase() || "?";
+}
+
+function normalizeBracketRounds(rawBracket = null) {
+  if (!rawBracket || !Array.isArray(rawBracket) || !rawBracket.length) return [];
+  if (Array.isArray(rawBracket[0])) return rawBracket;
+  const grouped = new Map();
+  rawBracket
+    .filter((match) => match && typeof match === "object")
+    .forEach((match) => {
+      const round = Number(match.round || 1);
+      const slot = Number(match.slot || 1);
+      const next = { ...match, round, slot };
+      if (!grouped.has(round)) grouped.set(round, []);
+      grouped.get(round).push(next);
+    });
+  return Array.from(grouped.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([, matches]) => matches.sort((a, b) => Number(a.slot || 0) - Number(b.slot || 0)));
 }
 /* Init */
 document.addEventListener("DOMContentLoaded", async () => {
@@ -550,10 +607,12 @@ function renderWelcome() {
 
   const el = (id) => document.getElementById(id);
   if (el("user-name")) el("user-name").textContent = name.toUpperCase();
-  if (el("welcome-points")) el("welcome-points").textContent = Number(pts).toFixed(1);
-  if (el("welcome-level")) el("welcome-level").textContent = lvl;
-  if (el("stat-streak"))
-    el("stat-streak").textContent = (streak > 0 ? "+" : "") + streak;
+  if (el("welcome-points")) animateCountUp(el("welcome-points"), Number(pts).toFixed(1), 1400);
+  if (el("welcome-level")) animateCountUp(el("welcome-level"), lvl, 1200);
+  if (el("stat-streak")) {
+    const streakVal = (streak > 0 ? "+" : "") + streak;
+    el("stat-streak").textContent = streakVal;
+  }
 
   // Tactical stats (Nemesis, Victim, Partner) are now calculated by refreshTacticalStats()
   refreshTacticalStats().catch(err => console.error("Error refreshing tactical stats:", err));
@@ -775,7 +834,7 @@ async function checkHomeNotices() {
 
     const notices = [];
     const now = new Date();
-    const hasIcs = Boolean(String(d.apoingCalendarUrl || "").trim());
+    const hasIcs = Boolean(getHomeApoingIcsUrl());
     const myMatches = allMatches.filter((m) => {
         const players = getNormalizedPlayers(m);
         return players.includes(currentUser.uid) && !isCancelledMatch(m);
@@ -825,6 +884,25 @@ async function checkHomeNotices() {
         });
     }
 
+    const nextApoingMine = [...apoingEvents]
+      .filter((ev) => String(ev?.sourceUid || "") === String(currentUser.uid))
+      .filter((ev) => ev?.dtStart && ev.dtStart.getTime() >= now.getTime() - 10 * 60 * 1000)
+      .sort((a, b) => a.dtStart - b.dtStart)[0] || null;
+    if (hasIcs && nextApoingMine) {
+        const nearMatch = myMatches.find((m) => {
+            const date = toDateSafe(m?.fecha);
+            return date && Math.abs(date.getTime() - nextApoingMine.dtStart.getTime()) <= 90 * 60 * 1000;
+        });
+        notices.unshift({
+            type: 'apoing',
+            title: 'RESERVA APOING DETECTADA',
+            message: nearMatch
+                ? `Tu reserva del ${nextApoingMine.dtStart.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" })} a las ${nextApoingMine.dtStart.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })} ya coincide con tu partido.`
+                : `Tienes una reserva el ${nextApoingMine.dtStart.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" })} a las ${nextApoingMine.dtStart.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}. Puedes mantenerla privada o publicarla desde Calendario.`,
+            action: () => window.location.href = 'calendario.html'
+        });
+    }
+
     // 3. Pending Diary
     const diaryEntries = d.diario || [];
     const finishedWithResult = myMatches.filter((m) => {
@@ -844,7 +922,7 @@ async function checkHomeNotices() {
             type: 'apoing',
             title: 'Conecta tu Apoing (.ics)',
             message: "Ve a tu perfil de Apoing, copia el enlace .ics y pégalo en Perfil o Calendario para sincronizar.",
-            action: () => window.location.href = 'perfil.html#apoing'
+            action: () => window.location.href = 'perfil.html?focus=apoing#profile-apoing-settings'
         });
     }
 
@@ -883,10 +961,45 @@ function showHomeAlertModal(notice) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
+const __showHomeAlertModalBase = showHomeAlertModal;
+showHomeAlertModal = function showHomeAlertModalEnhanced(notice) {
+  if (notice?.type !== "apoing") return __showHomeAlertModalBase(notice);
+  const upcomingWithoutReserve = getUpcomingRelevantMatchWithoutApoing();
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay active";
+  overlay.style.zIndex = "14000";
+  overlay.innerHTML = `
+    <div class="modal-card glass-strong animate-scale-in home-apoing-notice-card">
+      <div class="flex-col items-center text-center gap-4">
+        <div class="home-apoing-notice-icon"><i class="fas fa-calendar-check"></i></div>
+        <div class="flex-col gap-1">
+          <h3 class="home-apoing-notice-title">${escapeHtml(notice.title || "Reserva detectada")}</h3>
+          <p class="home-apoing-notice-copy">${escapeHtml(notice.message || "")}</p>
+        </div>
+        ${upcomingWithoutReserve ? `<div class="home-apoing-warning">Tienes partido en calendario, pero no vemos reserva de Apoing asociada a ningún participante.</div>` : ""}
+        <div class="flex-row gap-2 justify-center flex-wrap">
+          <button class="btn-premium-v7 py-3 uppercase text-[10px] font-black" id="notice-btn-go">Abrir calendario</button>
+          ${upcomingWithoutReserve ? `<a class="hv2-inline-link" href="https://www.apoing.com" target="_blank" rel="noopener">Ir a apoing.com <i class="fas fa-arrow-up-right-from-square"></i></a>` : ""}
+          <button class="text-[9px] font-black text-white/30 uppercase tracking-widest" id="notice-btn-close">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#notice-btn-go")?.addEventListener("click", () => {
+    notice.action?.();
+    overlay.remove();
+  });
+  overlay.querySelector("#notice-btn-close")?.addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) overlay.remove();
+  });
+};
+
 function renderHomeIcsSetup() {
   const section = document.getElementById("home-ics-section");
   if (!section) return;
-  const hasIcs = Boolean(String(currentUserData?.apoingCalendarUrl || "").trim());
+  const hasIcs = Boolean(getHomeApoingIcsUrl());
   section.classList.toggle("hidden", hasIcs);
 }
 
@@ -905,7 +1018,7 @@ async function renderHomeAppInstallNotice() {
     } catch (_) { return false; }
   })();
 
-  if (isNative) {
+  if (isNative || !APP_APK_DOWNLOAD_ENABLED) {
     host.classList.add("hidden");
     host.innerHTML = "";
     return;
@@ -924,6 +1037,11 @@ async function renderHomeAppInstallNotice() {
   try {
     apkUrl = await resolveApkDownloadUrl();
   } catch (_) {}
+  if (!apkUrl) {
+    host.classList.add("hidden");
+    host.innerHTML = "";
+    return;
+  }
   const apkAbsoluteUrl = new URL(apkUrl, window.location.href).toString();
 
   host.classList.remove("hidden");
@@ -1486,6 +1604,196 @@ function renderCompetitivePulse() {
   }).join("");
 }
 
+function renderHomeGuidedPanel() {
+  const container = document.getElementById("home-guided-panel");
+  if (!container) return;
+  if (isHomeGuideDismissed()) {
+    container.classList.add("hidden");
+    container.innerHTML = "";
+    return;
+  }
+
+  const myMatches = getMyRelevantMatches();
+  const hasFuture = myMatches.some((m) => !isFinishedMatch(m) && toDateSafe(m?.fecha));
+  const hasEvent = Array.isArray(myEvents) && myEvents.length > 0;
+  const hasHistory = myMatches.some((m) => isFinishedMatch(m));
+  const finishedCount = [hasFuture, hasEvent, hasHistory].filter(Boolean).length;
+  const progressPct = Math.round((finishedCount / 3) * 100);
+
+  container.classList.remove("hidden");
+  container.innerHTML = `
+    <div class="hv2-guide-card">
+      <div class="hv2-guide-head">
+        <span class="hv2-guide-title"><i class="fas fa-compass"></i> Empieza aquí</span>
+        <button type="button" class="hv2-guide-close" onclick="window.dismissHomeGuide()">Ocultar</button>
+      </div>
+      <div class="hv2-guide-sub">Haz estos 3 pasos para entender la app en 2 minutos.</div>
+      <div class="hv2-guide-progress">
+        <span style="width:${progressPct}%"></span>
+      </div>
+      <div class="hv2-guide-list">
+        <a class="hv2-guide-step ${hasFuture ? "done" : ""}" href="calendario.html">
+          <i class="fas ${hasFuture ? "fa-circle-check" : "fa-circle"}"></i>
+          <span>Reserva o únete a tu primer partido</span>
+        </a>
+        <a class="hv2-guide-step ${hasEvent ? "done" : ""}" href="eventos.html">
+          <i class="fas ${hasEvent ? "fa-circle-check" : "fa-circle"}"></i>
+          <span>Entra en un evento y revisa cruces</span>
+        </a>
+        <a class="hv2-guide-step ${hasHistory ? "done" : ""}" href="historial.html">
+          <i class="fas ${hasHistory ? "fa-circle-check" : "fa-circle"}"></i>
+          <span>Mira resultados y evolución personal</span>
+        </a>
+      </div>
+    </div>
+  `;
+}
+
+function renderHomeDailyChallenge() {
+  const container = document.getElementById("home-daily-challenge");
+  if (!container) return;
+  const myMatches = getMyRelevantMatches();
+  const openSlots = dedupeEventLinkedMatches(allMatches)
+    .filter((m) => !isCancelledMatch(m))
+    .filter((m) => !isFinishedMatch(m))
+    .filter((m) => !isMatchRelevantToMe(m))
+    .filter((m) => getNormalizedPlayers(m).filter(Boolean).length < 4).length;
+  const streak = Number.isFinite(Number(currentUserData?.computedStreak))
+    ? Number(currentUserData.computedStreak)
+    : Number(currentUserData?.rachaActual || 0);
+  const today = new Date();
+  const recentWins = myMatches
+    .filter((m) => isFinishedMatch(m))
+    .filter((m) => {
+      const d = toDateSafe(m?.fecha);
+      if (!d) return false;
+      return (today.getTime() - d.getTime()) <= (1000 * 60 * 60 * 24 * 10);
+    })
+    .filter((m) => resolveWinnerTeam(m) === getTeamSide(m, currentUser?.uid))
+    .length;
+  const challengeReady = openSlots > 0 || !myMatches.some((m) => !isFinishedMatch(m));
+  container.innerHTML = `
+    <div class="hv2-challenge-card ${challengeReady ? "ready" : ""}">
+      <div class="hv2-challenge-top">
+        <span class="hv2-challenge-kicker"><i class="fas fa-bolt"></i> Reto diario</span>
+        <span class="hv2-challenge-pill">${challengeReady ? "Activo" : "En curso"}</span>
+      </div>
+      <div class="hv2-challenge-title">Juega hoy para subir tu momentum competitivo</div>
+      <div class="hv2-challenge-copy">
+        ${challengeReady
+          ? `Tienes ${openSlots} partido${openSlots === 1 ? "" : "s"} abierto${openSlots === 1 ? "" : "s"} para entrar ahora mismo.`
+          : "Ya tienes actividad pendiente. Ciérrala con resultado para mantener tu ritmo."}
+      </div>
+      <div class="hv2-challenge-metrics">
+        <div><b>${streak}</b><span>racha</span></div>
+        <div><b>${recentWins}</b><span>victorias (10d)</span></div>
+        <div><b>${openSlots}</b><span>huecos libres</span></div>
+      </div>
+      <div class="hv2-challenge-actions">
+        <button type="button" class="hv2-challenge-btn" onclick="window.location.href='calendario.html'">Jugar hoy</button>
+        <button type="button" class="hv2-challenge-btn ghost" onclick="window.location.href='eventos.html'">Ir a eventos</button>
+      </div>
+    </div>
+  `;
+}
+
+function getWeekRange() {
+  const now = new Date();
+  const day = now.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() + mondayOffset);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  return { start, end };
+}
+
+function renderHomeAchievements() {
+  const container = document.getElementById("home-achievements");
+  if (!container) return;
+  const myMatches = getMyRelevantMatches().filter((m) => isFinishedMatch(m));
+  const streak = Number.isFinite(Number(currentUserData?.computedStreak))
+    ? Number(currentUserData.computedStreak)
+    : Number(currentUserData?.rachaActual || 0);
+  const totalWins = myMatches.filter((m) => resolveWinnerTeam(m) === getTeamSide(m, currentUser?.uid)).length;
+  const totalPlayed = myMatches.length;
+  const winRate = totalPlayed ? Math.round((totalWins / totalPlayed) * 100) : 0;
+  const badges = [
+    {
+      label: "En racha",
+      icon: "fa-fire",
+      unlocked: streak >= 3,
+      hint: "Gana 3 partidos seguidos",
+    },
+    {
+      label: "Competidor",
+      icon: "fa-trophy",
+      unlocked: totalWins >= 10,
+      hint: "Llega a 10 victorias",
+    },
+    {
+      label: "Sólido",
+      icon: "fa-shield-halved",
+      unlocked: totalPlayed >= 8 && winRate >= 55,
+      hint: "8 partidos y 55% de winrate",
+    },
+  ];
+  const unlocked = badges.filter((b) => b.unlocked).length;
+
+  const { start, end } = getWeekRange();
+  const weekMatches = getMyRelevantMatches().filter((m) => {
+    const d = toDateSafe(m?.fecha);
+    return d && d >= start && d < end;
+  });
+  const weekPlayed = weekMatches.filter((m) => isFinishedMatch(m)).length;
+  const weeklyTarget = 3;
+  const weeklyPct = Math.min(100, Math.round((weekPlayed / weeklyTarget) * 100));
+
+  const rivalCount = new Map();
+  myMatches.forEach((m) => {
+    const players = getNormalizedPlayers(m).filter(Boolean).map((uid) => String(uid));
+    players.forEach((uid) => {
+      if (!currentUser?.uid || uid === String(currentUser.uid)) return;
+      rivalCount.set(uid, Number(rivalCount.get(uid) || 0) + 1);
+    });
+  });
+  const topRival = [...rivalCount.entries()].sort((a, b) => b[1] - a[1])[0];
+  const rivalName = topRival ? getPlayerDisplayName(topRival[0]) : "Aún por descubrir";
+  const rivalGames = topRival ? topRival[1] : 0;
+
+  container.innerHTML = `
+    <div class="hv2-achv-card">
+      <div class="hv2-achv-head">
+        <span class="hv2-achv-title"><i class="fas fa-medal"></i> Logros y competitividad</span>
+        <span class="hv2-achv-chip">${unlocked}/${badges.length} desbloqueados</span>
+      </div>
+      <div class="hv2-achv-grid">
+        ${badges.map((b) => `
+          <div class="hv2-achv-badge ${b.unlocked ? "on" : "off"}">
+            <i class="fas ${b.icon}"></i>
+            <strong>${b.label}</strong>
+            <span>${b.unlocked ? "Conseguido" : b.hint}</span>
+          </div>
+        `).join("")}
+      </div>
+      <div class="hv2-weekly-card">
+        <div class="hv2-weekly-top">
+          <span><i class="fas fa-bullseye"></i> Misión semanal</span>
+          <b>${weekPlayed}/${weeklyTarget}</b>
+        </div>
+        <div class="hv2-weekly-bar"><span style="width:${weeklyPct}%"></span></div>
+        <div class="hv2-weekly-copy">Juega ${weeklyTarget} partidos esta semana para mantener ritmo competitivo.</div>
+      </div>
+      <div class="hv2-rival-card">
+        <div class="hv2-rival-top"><i class="fas fa-crosshairs"></i> Rival más frecuente</div>
+        <div class="hv2-rival-name">${escapeHtml(rivalName)}</div>
+        <div class="hv2-rival-copy">${rivalGames ? `${rivalGames} enfrentamientos registrados` : "Aún no hay histórico suficiente"}</div>
+      </div>
+    </div>
+  `;
+}
+
 function renderHomeCompactBrief() {
   const container = document.getElementById("home-compact-brief");
   if (!container) return;
@@ -1530,6 +1838,9 @@ function renderHomeCompactBrief() {
       <p>${item.copy}</p>
     </article>
   `).join("");
+  renderHomeGuidedPanel();
+  renderHomeDailyChallenge();
+  renderHomeAchievements();
 }
 
 function renderClubFeedLegacy() {
@@ -1693,6 +2004,17 @@ function buildRecentResultUsersVs(match) {
   return `<span style="color:${colorA}">${left}</span> <span style="opacity:0.3">vs</span> <span style="color:${colorB}">${right}</span>`;
 }
 
+function getHomeHistoryAvatar(uid) {
+  if (!uid) return `<div class="p-avatar-mini empty"><i class="fas fa-plus"></i></div>`;
+  const photo = playerPhotoCache.get(String(uid)) || "";
+  const name = getPlayerDisplayName(uid);
+  if (parseGuestMeta(uid)) return `<div class="p-avatar-mini guest" title="${escapeHtml(name)}"><i class="fas fa-user-secret"></i></div>`;
+  if (photo) {
+    return `<div class="p-avatar-mini" title="${escapeHtml(name)}"><img src="${escapeHtml(photo)}" alt="${escapeHtml(name)}"></div>`;
+  }
+  return `<div class="p-avatar-mini" title="${escapeHtml(name)}"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff" alt="${escapeHtml(name)}"></div>`;
+}
+
 function renderHomeRecentResults() {
   const section = document.getElementById("home-recent-results-section");
   const listEl = document.getElementById("home-recent-results-list");
@@ -1723,17 +2045,52 @@ function renderHomeRecentResults() {
     
     const winner = resolveWinnerTeam(match);
     const scoreColor = winner === 'A' ? 'var(--sport-green)' : (winner === 'B' ? 'var(--sport-gold)' : 'var(--primary)');
+    const logs = Array.isArray(match?.rankingDiffs) ? match.rankingDiffs : (Array.isArray(match?.eloDiffs) ? match.eloDiffs : []);
+    const pointDelta = logs.find((row) => String(row?.uid || row?.playerId || "") === String(currentUser?.uid || ""));
+    const deltaValue = Number(pointDelta?.diff || pointDelta?.delta || 0);
+    const deltaText = Number.isFinite(deltaValue) && deltaValue !== 0 ? `${deltaValue > 0 ? "+" : ""}${deltaValue.toFixed(1)} pts` : "Puntos en detalle";
+    const aiSummary = match?.resumenIA || match?.aiSummary || match?.resultado?.resumenIA || match?.analisisIA || "";
+    const safeDate = toDateSafe(match.fecha);
+    const players = getNormalizedPlayers(match);
+    const avatars = players.slice(0, 4).map((uid) => getHomeHistoryAvatar(uid)).join("");
+    const stateClass = winner === "A" || winner === "B"
+      ? ((players.includes(currentUser?.uid) && ((players.indexOf(currentUser.uid) < 2 && winner === "A") || (players.indexOf(currentUser.uid) >= 2 && winner === "B"))) ? "won" : "lost")
+      : "neutral";
 
     return `
-      <article class="hv2-club-card hv2-result-card is-compact" onclick="window.openMatch('${match.id}','${match.col}')">
-        <div class="hv2-club-icon match compact"><i class="fas fa-table-tennis-paddle-ball"></i></div>
-        <div class="hv2-club-main">
-          <div class="flex-row between items-center">
-            <span class="hv2-club-eyebrow">${type}</span>
-            <span class="hv2-club-date">${escapeHtml(when)}</span>
+      <article class="history-card-premium ${stateClass} animate-up home-history-card home-history-card-pro" onclick="window.openMatch('${match.id}','${match.col}')">
+        <div class="h-card-inner">
+          <div class="h-card-date">
+            <span class="day">${safeDate ? safeDate.getDate() : "--"}</span>
+            <span class="month">${safeDate ? safeDate.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase() : "---"}</span>
           </div>
-          <div class="hv2-club-title" style="font-size:11px;">${buildRecentResultUsersVs(match)}</div>
-          <div class="hv2-club-text" style="font-size:10px; color:${scoreColor}; font-weight:900;">${escapeHtml(result)}</div>
+          <div class="h-card-content">
+            <div class="h-card-top">
+              <span class="h-type-badge ${String(match.col || "") === "partidosReto" ? "reto" : String(match.col || "") === "eventoPartidos" ? "reto" : "friendly"}">${type}</span>
+              <span class="h-host">${escapeHtml(when)}</span>
+            </div>
+            <div class="h-card-main">
+              <div class="home-history-scoreline">
+                <div class="h-score" style="color:${scoreColor};">${escapeHtml(result)}</div>
+                <div class="home-history-result-pill ${stateClass}">${stateClass === "won" ? "Victoria" : stateClass === "lost" ? "Derrota" : "Cerrado"}</div>
+              </div>
+              <div class="h-card-matchup">${buildRecentResultUsersVs(match)}</div>
+              <div class="h-players-row">${avatars}</div>
+              <div class="home-history-bottom">
+                <div class="home-history-points-card">
+                  <span>Puntos</span>
+                  <strong>${escapeHtml(deltaText)}</strong>
+                </div>
+                ${aiSummary ? `<div class="home-history-ai">${escapeHtml(String(aiSummary).slice(0, 140))}</div>` : `<div class="home-history-ai muted">Pulsa para abrir el partido y revisar su resumen completo.</div>`}
+              </div>
+            </div>
+          </div>
+          <div class="h-card-action">
+            <div class="home-history-open">
+              <span>Ver</span>
+              <i class="fas fa-chevron-right"></i>
+            </div>
+          </div>
         </div>
       </article>
     `;
@@ -1940,6 +2297,81 @@ function getMineUpcomingEventMatches() {
     .sort((a, b) => toDateMs(a.fecha) - toDateMs(b.fecha));
 }
 
+function formatCompactMatchDate(dateIn) {
+  const d = toDateSafe(dateIn);
+  if (!d) return { day: "--", month: "--", weekday: "--", time: "--:--" };
+  return {
+    day: d.toLocaleDateString("es-ES", { day: "2-digit" }),
+    month: d.toLocaleDateString("es-ES", { month: "short" }).replace(".", "").toUpperCase(),
+    weekday: d.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", "").toUpperCase(),
+    time: d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+function getAverageLevelFromPlayers(players = []) {
+  const levels = players
+    .map((uid) => Number(playerDataCache.get(String(uid))?.nivel || 0))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (!levels.length) return null;
+  return levels.reduce((acc, value) => acc + value, 0) / levels.length;
+}
+
+function getWeatherBadgeForDate(dateIn) {
+  const d = toDateSafe(dateIn);
+  if (!d || !Array.isArray(weather?.daily?.time)) {
+    return { icon: "fa-cloud", temp: "--", label: "Clima pendiente", note: "Sin previsión" };
+  }
+  const idx = weather.daily.time.findIndex((item) => String(item) === d.toLocaleDateString("sv-SE"));
+  if (idx < 0) {
+    return { icon: "fa-cloud", temp: "--", label: "Clima pendiente", note: "Sin previsión" };
+  }
+  const code = Number(weather.daily.weather_code?.[idx] || 0);
+  let icon = "fa-sun";
+  let label = "Despejado";
+  if (code >= 45 && code <= 48) {
+    icon = "fa-smog";
+    label = "Bruma";
+  } else if (code >= 51 && code <= 67) {
+    icon = "fa-cloud-rain";
+    label = "Lluvia";
+  } else if (code >= 80) {
+    icon = "fa-cloud-showers-heavy";
+    label = "Inestable";
+  } else if (code >= 2) {
+    icon = "fa-cloud";
+    label = "Nubes";
+  }
+  const max = Math.round(Number(weather.daily.temperature_2m_max?.[idx] || 0));
+  const min = Math.round(Number(weather.daily.temperature_2m_min?.[idx] || 0));
+  const rain = Math.round(Number(weather.daily.precipitation_probability_max?.[idx] || 0));
+  return {
+    icon,
+    temp: `${max}°/${min}°`,
+    label,
+    note: rain ? `${rain}% lluvia` : "Pista favorable",
+  };
+}
+
+function getUpcomingRelevantMatchWithoutApoing() {
+  const now = Date.now();
+  return allMatches
+    .filter((m) => isMatchRelevantToMe(m))
+    .filter((m) => !isCancelledMatch(m) && !isFinishedMatch(m))
+    .filter((m) => {
+      const d = toDateSafe(m?.fecha);
+      return d && d.getTime() >= now - 10 * 60 * 1000;
+    })
+    .sort((a, b) => (toDateSafe(a.fecha)?.getTime() || 0) - (toDateSafe(b.fecha)?.getTime() || 0))
+    .find((match) => {
+      const matchDate = toDateSafe(match?.fecha);
+      if (!matchDate) return false;
+      return !apoingEvents.some((ev) => {
+        if (String(ev?.sourceUid || "") !== String(currentUser?.uid || "")) return false;
+        return Math.abs((ev.dtStart?.getTime?.() || 0) - matchDate.getTime()) <= 90 * 60 * 1000;
+      });
+    }) || null;
+}
+
 function renderEventSpotlight() {
   const wrap = document.getElementById("event-spotlight");
   const body = document.getElementById("event-spotlight-body");
@@ -2119,6 +2551,119 @@ function renderEventSpotlight() {
   }
 }
 
+renderEventSpotlight = function renderEventSpotlightRefined() {
+  const wrap = document.getElementById("event-spotlight");
+  const body = document.getElementById("event-spotlight-body");
+  const link = document.getElementById("event-spotlight-link");
+  if (!wrap || !body) return;
+
+  const upcoming = getMineUpcomingEventMatches();
+  const nextEvent = myEvents[0] || null;
+  const featuredMatch = upcoming[0] || null;
+
+  wrap.classList.remove("hidden");
+
+  if (!nextEvent) {
+    if (link) link.href = "eventos.html";
+    body.innerHTML = `
+      <article class="hv2-event-hero-card empty-event-state" onclick="window.location.href='eventos.html'">
+        <div class="hv2-event-hero-top">
+           <div>
+             <span class="hv2-event-kicker">Sin evento activo</span>
+             <h3 class="hv2-event-title-main">¡Únete a la competición!</h3>
+           </div>
+           <i class="fas fa-trophy text-primary opacity-50 text-2xl"></i>
+        </div>
+        <div class="hv2-event-next-mini empty mt-4" style="background: rgba(198,255,0,0.05); border: 1px solid rgba(198,255,0,0.2);">
+           <div class="hv2-event-mini-body">
+             <span class="hv2-event-mini-label text-primary">Inscripción abierta</span>
+             <strong style="color: #fff;">Explora torneos y ligas disponibles</strong>
+             <span>Crea tu propio evento o únete a uno existente para medir tu nivel.</span>
+           </div>
+           <button class="btn-premium-v7 sm mt-2 px-4" style="align-self: flex-start;">VER EVENTOS <i class="fas fa-chevron-right ml-1"></i></button>
+        </div>
+      </article>
+    `;
+    const slot = document.getElementById("event-standings-slot");
+    if (slot) slot.innerHTML = "";
+    return;
+  }
+
+  if (link) link.href = `evento-detalle.html?id=${nextEvent.id}`;
+
+  const inscritos = Array.isArray(nextEvent.inscritos) ? nextEvent.inscritos.length : 0;
+  const myTeam = getMyTeamFromEvent(nextEvent);
+  const myGroup = myTeam
+    ? Object.entries(nextEvent.groups || {}).find(([, ids]) => ids?.includes(myTeam.id))?.[0]
+    : null;
+  const eventMatches = allMatches.filter(
+    (m) => String(m.col || "") === "eventoPartidos" && getEventIdFromMatch(m) === nextEvent.id,
+  );
+  const myEventMatches = eventMatches.filter((m) => isMatchRelevantToMe(m));
+  const playedMatches = myEventMatches.filter((m) => isFinishedMatch(m)).length;
+  const pendingMatches = Math.max(0, myEventMatches.length - playedMatches);
+  const dateBits = formatCompactMatchDate(featuredMatch?.fecha || nextEvent?.fechaInicio || nextEvent?.fecha || null);
+  const featuredTeams = featuredMatch ? {
+    a: getFriendlyTeamName({
+      teamName: featuredMatch.teamAName,
+      teamId: featuredMatch.teamAId,
+      playerNames: getMatchTeamPlayerIds(featuredMatch, "A").map((id) => getPlayerDisplayName(id)),
+      fallback: "Pareja A",
+      side: "A",
+    }),
+    b: getFriendlyTeamName({
+      teamName: featuredMatch.teamBName,
+      teamId: featuredMatch.teamBId,
+      playerNames: getMatchTeamPlayerIds(featuredMatch, "B").map((id) => getPlayerDisplayName(id)),
+      fallback: "Pareja B",
+      side: "B",
+    }),
+  } : null;
+
+  body.innerHTML = `
+    <article class="hv2-event-hero-card" onclick="window.location.href='evento-detalle.html?id=${nextEvent.id}'">
+      <div class="hv2-event-hero-top">
+        <div>
+          <span class="hv2-event-kicker">Mi evento</span>
+          <h3 class="hv2-event-title-main">${escapeHtml(nextEvent.nombre || "Evento")}</h3>
+        </div>
+        <span class="hv2-event-status">${escapeHtml(String(nextEvent.estado || "activo").toUpperCase())}</span>
+      </div>
+      <div class="hv2-event-hero-grid">
+        <div class="hv2-event-stat"><span>Inscritos</span><strong>${inscritos}/${Number(nextEvent.plazasMax || 16)}</strong></div>
+        <div class="hv2-event-stat"><span>Grupo</span><strong>${myGroup ? `Grupo ${myGroup}` : "Pendiente"}</strong></div>
+        <div class="hv2-event-stat"><span>Jugados</span><strong>${playedMatches}</strong></div>
+        <div class="hv2-event-stat"><span>Por jugar</span><strong>${pendingMatches}</strong></div>
+      </div>
+      ${featuredMatch ? `
+        <div class="hv2-event-next-mini">
+          <div class="hv2-event-mini-date">
+            <span>${dateBits.weekday}</span>
+            <strong>${dateBits.day}</strong>
+            <small>${dateBits.month}</small>
+          </div>
+          <div class="hv2-event-mini-body">
+            <span class="hv2-event-mini-label">Siguiente cruce</span>
+            <strong>${escapeHtml(featuredTeams?.a || "Pareja A")} vs ${escapeHtml(featuredTeams?.b || "Pareja B")}</strong>
+            <span>${dateBits.time}</span>
+          </div>
+        </div>
+      ` : `
+        <div class="hv2-event-next-mini empty">
+          <div class="hv2-event-mini-body">
+            <span class="hv2-event-mini-label">Siguiente cruce</span>
+            <strong>Aún no hay partido asignado</strong>
+            <span>Entra al panel para revisar fase, clasificación y próximos partidos.</span>
+          </div>
+        </div>
+      `}
+    </article>
+    <div id="event-standings-slot" class="hv2-event-standings-container"></div>
+  `;
+
+  renderEventStandings(nextEvent);
+};
+
 function getMyTeamFromEvent(eventDoc) {
   if (!eventDoc || !currentUser?.uid) return null;
   const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
@@ -2232,7 +2777,10 @@ async function renderEventStandings(eventDoc) {
 
 function renderKnockoutBracket(eventDoc, eventMatches, myTeamId, slot) {
     const teams = Array.isArray(eventDoc.teams) ? eventDoc.teams : [];
-    const getTeamName = (id) => teams.find(t => t.id === id)?.nombre || "Por definir";
+    const getTeamName = (id) => {
+      const team = teams.find(t => t.id === id);
+      return team?.name || team?.nombre || "Por definir";
+    };
     
     // Deduplicate matches just in case
     const uniqueMatches = new Map();
@@ -2246,13 +2794,12 @@ function renderKnockoutBracket(eventDoc, eventMatches, myTeamId, slot) {
       <div class="hv2-standings-table-mini bg-black/40 rounded-xl border border-white/5" style="overflow-x:auto; padding:12px;">
     `;
     
-    if (!eventDoc.bracket || !eventDoc.bracket.length) {
+    const rounds = normalizeBracketRounds(eventDoc.bracket || eventDoc.bracketRounds || []);
+    if (!rounds.length) {
         html += `<div class="hv2-event-standings-empty" style="text-align:center; padding:20px; font-size:11px; opacity:0.6;"><i class="fas fa-clock-rotate-left"></i> El cuadro se dibujará al finalizar la fase de grupos.</div></div>`;
         if (slot) slot.innerHTML = html;
         return html;
     }
-
-    const rounds = eventDoc.bracket;
     html += `<div class="bracket-container" style="transform: scale(0.85); transform-origin: left top; padding-bottom: 20px;"><div class="bracket">`;
 
     rounds.forEach((round, rIdx) => {
@@ -2275,7 +2822,7 @@ function renderKnockoutBracket(eventDoc, eventMatches, myTeamId, slot) {
             const winnerB = matchData.ganadorTeamId === m.teamBId;
 
             html += `
-            <div class="bracket-match ${!played ? 'pending' : ''}" style="min-width:180px;">
+            <div class="bracket-match ${!played ? 'pending' : ''}" style="min-width:180px; cursor:pointer;" onclick="window.openMatch('${matchData.id}', 'eventoPartidos')">
                 <div class="b-team-v9 ${winnerA && played ? 'winner' : ''} ${isMineA ? 'my-row-highlight' : ''}" style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between;">
                     <span class="b-name-v9" style="font-size:12px; font-weight:800; ${winnerA ? 'color:var(--sport-gold)' : 'color:#fff'};">${tA.substring(0, 16).toUpperCase()}</span>
                     <span class="b-score-v9" style="font-size:12px; font-weight:900; color:var(--primary);">${winnerA ? 'W' : (played ? '-' : '')}</span>
@@ -2290,7 +2837,29 @@ function renderKnockoutBracket(eventDoc, eventMatches, myTeamId, slot) {
         html += `</div>`;
     });
     
-    html += `</div></div></div>`;
+    html += `</div></div>`;
+    const thirdPlace = cleanMatches.find((m) => String(m.phase || "").toLowerCase() === "third_place");
+    if (thirdPlace) {
+      const thirdPlayed = thirdPlace.estado === "jugado" || !!getResultSetsString(thirdPlace);
+      const thirdWinnerA = thirdPlace.ganadorTeamId === thirdPlace.teamAId;
+      const thirdWinnerB = thirdPlace.ganadorTeamId === thirdPlace.teamBId;
+      html += `
+        <div style="margin-top:12px;">
+          <div class="bracket-round-label" style="font-size:12px; color:#facc15; font-weight:900;">3º / 4º PUESTO</div>
+          <div class="bracket-match ${!thirdPlayed ? 'pending' : ''}" style="min-width:180px; cursor:pointer;" onclick="window.openMatch('${thirdPlace.id}', 'eventoPartidos')">
+              <div class="b-team-v9 ${thirdWinnerA && thirdPlayed ? 'winner' : ''}" style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between;">
+                  <span class="b-name-v9" style="font-size:12px; font-weight:800; ${thirdWinnerA ? 'color:var(--sport-gold)' : 'color:#fff'};">${getTeamName(thirdPlace.teamAId).substring(0, 16).toUpperCase()}</span>
+                  <span class="b-score-v9" style="font-size:12px; font-weight:900; color:var(--primary);">${thirdWinnerA ? '3º' : (thirdPlayed ? '4º' : '-')}</span>
+              </div>
+              <div class="b-team-v9 ${thirdWinnerB && thirdPlayed ? 'winner' : ''}" style="padding:8px; display:flex; justify-content:space-between;">
+                  <span class="b-name-v9" style="font-size:12px; font-weight:800; ${thirdWinnerB ? 'color:var(--sport-gold)' : 'color:#fff'};">${getTeamName(thirdPlace.teamBId).substring(0, 16).toUpperCase()}</span>
+                  <span class="b-score-v9" style="font-size:12px; font-weight:900; color:var(--primary);">${thirdWinnerB ? '3º' : (thirdPlayed ? '4º' : '-')}</span>
+              </div>
+          </div>
+        </div>
+      `;
+    }
+    html += `</div>`;
     if (slot) slot.innerHTML = html;
     return html;
 }
@@ -2755,10 +3324,10 @@ function completeHomeEntryOverlay() {
 function bindTabs() {
   if (tabsBound) return;
   tabsBound = true;
-  document.querySelectorAll(".hv2-tab").forEach((btn) => {
+  document.querySelectorAll(".hv2-tab-pill, .hv2-tab").forEach((btn) => {
     btn.addEventListener("click", () => {
       document
-        .querySelectorAll(".hv2-tab")
+        .querySelectorAll(".hv2-tab-pill, .hv2-tab")
         .forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       renderMatchesByFilter(btn.dataset.filter || "open");
@@ -2907,18 +3476,24 @@ function renderMatchesByFilter(filter) {
     });
 
     return !overlaps;
-  }).map(ev => ({
-
-    id: `apoing_${ev.uid || Math.random()}`,
-    col: "apoing",
-    fecha: ev.dtStart,
-    jugadores: [ev.sourceUid, null, null, null],
-    summary: ev.summary,
-    isApoing: true,
-    sourceUid: ev.sourceUid,
-    sourceName: ev.sourceName || "Jugador Apoing",
-    owner: ev.owner || "Jugador"
-  }));
+  }).map(ev => {
+    // Inject into cache so it shows the owner instead of "Jugador"
+    const ownerName = ev.owner || ev.sourceName || "Jugador Apoing";
+    if (ev.sourceUid && !playerNameCache.has(ev.sourceUid)) {
+       playerNameCache.set(ev.sourceUid, ownerName);
+    }
+    return {
+      id: `apoing_${ev.uid || Math.random()}`,
+      col: "apoing",
+      fecha: ev.dtStart,
+      jugadores: [ev.sourceUid, null, null, null],
+      summary: ev.summary,
+      isApoing: true,
+      sourceUid: ev.sourceUid,
+      sourceName: ev.sourceName || "Jugador Apoing",
+      owner: ownerName
+    };
+  });
 
 
   let list = dedupeEventLinkedMatches([...allMatches, ...apoingMatches])
@@ -2931,6 +3506,7 @@ function renderMatchesByFilter(filter) {
 
   if (filter === "open") {
     list = list
+      .filter((m) => !m.isApoing)
       .filter((m) => !isFinishedMatch(m))
       .filter((m) => getNormalizedPlayers(m).filter(Boolean).length < 4)
       .filter((m) => !isTbdMatch(m))
@@ -2956,6 +3532,12 @@ function renderMatchesByFilter(filter) {
         const d = toDateSafe(m.fecha);
         return d && d.getTime() >= now - 5 * 60 * 1000;
       });
+  } else if (filter === "apoing") {
+    list = apoingMatches.length ? apoingMatches : list.filter(m => m.isApoing);
+    list = list.filter(m => {
+      const d = toDateSafe(m.fecha);
+      return d && d.getTime() >= now - 5 * 60 * 1000;
+    }).sort((a, b) => (toDateSafe(a.fecha)?.getTime() || 0) - (toDateSafe(b.fecha)?.getTime() || 0));
   } else if (filter === "closed") {
     list = list
       .filter((m) => !isFinishedMatch(m))
@@ -2968,7 +3550,22 @@ function renderMatchesByFilter(filter) {
   }
 
   if (!list.length) {
-    listEl.innerHTML = `<div class="hv2-empty-state"><i class="fas fa-inbox"></i>No hay partidos para este filtro.</div>`;
+    const emptyMsg = filter === "mine"
+      ? `<div class="hv2-no-match-rich mt-2">
+           <div class="hv2-no-match-main">
+             <i class="fas fa-calendar-xmark text-3xl"></i>
+             <div>
+               <strong>SIN PARTIDOS CONFIRMADOS</strong>
+               <span>No tienes ninguna cita inminente en tu agenda.</span>
+             </div>
+           </div>
+           <div class="hv2-no-match-actions mt-1">
+             <a href="calendario.html" class="hv2-inline-btn primary flex-1"><i class="fas fa-calendar-plus"></i> RESERVAR AHORA</a>
+           </div>
+         </div>`
+      : `<div class="hv2-empty-state"><i class="fas fa-inbox"></i>No hay partidos para este filtro.</div>`;
+      
+    listEl.innerHTML = emptyMsg;
     renderHomeRecentResults();
     return;
   }
@@ -3044,10 +3641,10 @@ function renderMatchCard(match, idx = 0) {
           : freeSlots > 0
             ? `<span class="hv2-mc-badge open-badge">${freeSlots} LIBRE</span>`
             : `<span class="hv2-mc-badge full-badge">COMPLETO</span>`;
-  const smartBadge = fit && !isMine && !finished
+  const smartBadge = fit && !isMine && !finished && !match.isApoing
     ? `<span class="hv2-mc-smart-badge is-${fit.tone || "soft"}"><strong>${Math.round(fit.total)}% match</strong><small>${fit.headline || "encaje moderado"}</small></span>`
     : "";
-  const smartDetail = fit && !isMine && !finished && Array.isArray(fit.reasons) && fit.reasons.length
+  const smartDetail = fit && !isMine && !finished && !match.isApoing && Array.isArray(fit.reasons) && fit.reasons.length
     ? `<div class="hv2-mc-smart-detail">${fit.reasons.slice(0, 3).map((reason) => `<span>${reason}</span>`).join("")}</div>`
     : "";
 
@@ -3062,6 +3659,20 @@ function renderMatchCard(match, idx = 0) {
       winnerBadge = `<span class="hv2-mc-winner-badge">Ganador: ${escapeHtml(winner === "A" ? teamALabel : teamBLabel)}</span>`;
   }
 
+  // Weather micro info
+  const tempVal = weather?.current ? Math.round(weather.current.temperature_2m || 0) : null;
+  const wCode = weather?.current?.weather_code || 0;
+  let wIcon = "fa-sun", wColor = "#fbbf24";
+  if (wCode > 3 && wCode <= 48) { wIcon = "fa-cloud"; wColor = "#94a3b8"; }
+  else if (wCode > 48 && wCode <= 67) { wIcon = "fa-cloud-rain"; wColor = "#60a5fa"; }
+  else if (wCode > 67) { wIcon = "fa-bolt"; wColor = "#a78bfa"; }
+
+  // Countdown chip
+  const diffMs = date.getTime() - Date.now();
+  const diffH = Math.floor(diffMs / 3600000);
+  const diffD = Math.floor(diffH / 24);
+  const countdownChip = diffMs <= 0 ? "" : diffH < 1 ? `<span class="hv2-mc-countdown now">AHORA</span>` : diffH < 24 ? `<span class="hv2-mc-countdown">EN ${diffH}H</span>` : diffD < 7 ? `<span class="hv2-mc-countdown">EN ${diffD}D</span>` : "";
+
   return `
     <div class="hv2-match-card ${isMine ? "mine-card" : ""} ${finished ? "finished-card" : ""} ${match.isApoing ? "apoing-card" : ""}" style="animation-delay:${delay}ms" onclick="${cardClick}">
       ${badge}
@@ -3072,9 +3683,10 @@ function renderMatchCard(match, idx = 0) {
         ${pn(players[1])}
       </div>
       <div class="hv2-mc-center">
-        <span class="hv2-mc-vs">${match.isApoing ? "<i class='fas fa-calendar-check text-orange-400'></i>" : "VS"}</span>
+        <span class="hv2-mc-vs">${match.isApoing ? "<i class='fas fa-calendar-check' style='color:#fb923c'></i>" : "VS"}</span>
         <span class="hv2-mc-time">${date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
         <span class="hv2-mc-date">${date.toLocaleDateString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit" })}</span>
+        ${!finished && tempVal !== null ? `<span class="hv2-mc-weather"><i class="fas ${wIcon}" style="color:${wColor}"></i> ${tempVal}°</span>` : ""}
       </div>
       <div class="hv2-mc-team team-right ${teamBClass}">
         <div class="hv2-mc-avatars">${playerAvatar(players[2])}${playerAvatar(players[3])}</div>
@@ -3083,9 +3695,13 @@ function renderMatchCard(match, idx = 0) {
       </div>
       ${smartDetail}
       ${winnerBadge}
-      <button class="hv2-mc-share-btn" onclick="event.stopPropagation(); window.shareMatch('${match.id}', '${match.col}')">
-         <i class="fas fa-share-nodes"></i>
-      </button>
+      ${countdownChip}
+      <div class="hv2-mc-footer-strip">
+        ${orgName ? `<span class="hv2-mc-org"><i class="fas fa-user-tie"></i> ${escapeHtml(orgName.split(" ")[0])}</span>` : ""}
+        <button class="hv2-mc-share-btn" onclick="event.stopPropagation(); window.shareMatch('${match.id}', '${match.col}')">
+           <i class="fas fa-share-nodes"></i>
+        </button>
+      </div>
     </div>
   `;
 
@@ -3300,11 +3916,12 @@ window.openMatch = async (id, col) => {
   }
   if (!resolvedCol) resolvedCol = "partidosAmistosos";
 
-  console.log("[Home] openMatch modal", { id, col, resolvedId, resolvedCol });
   modal.classList.add("active");
 
   try {
     await renderMatchDetail(area, resolvedId, resolvedCol, currentUser, currentUserData || {});
+    const fullMatch = await getDocument(resolvedCol, resolvedId).catch(() => null);
+    injectSmartMatchActions(area, fullMatch || row || {}, resolvedCol, resolvedId);
   } catch (err) {
     console.error("[Home] renderMatchDetail failed", err);
     area.innerHTML = `
@@ -3315,6 +3932,147 @@ window.openMatch = async (id, col) => {
         <button class="btn btn-ghost sm" onclick="window.location.reload()">Recargar</button>
       </div>`;
     if (typeof showToast === "function") showToast("Error", "No se pudo abrir el detalle. Avísanos o recarga.", "error");
+  }
+};
+
+function injectSmartMatchActions(container, match, col, matchId) {
+  if (!container || !matchId || !currentUser?.uid) return;
+  const isEvent = String(col || "").toLowerCase() === "eventopartidos";
+  const isFinished = isFinishedMatch(match);
+  const wrap = document.createElement("div");
+  wrap.className = "home-match-smart-actions";
+  wrap.innerHTML = `
+    <div class="hmsa-title"><i class="fas fa-wand-magic-sparkles"></i> Acciones rápidas</div>
+    <div class="hmsa-grid">
+      ${!isEvent && !isFinished ? `<button type="button" class="hmsa-btn" onclick="window.quickJoinMatch('${matchId}','${col}')"><i class="fas fa-user-plus"></i> Unirme</button>` : ""}
+      ${!isFinished ? `<button type="button" class="hmsa-btn ghost" onclick="window.quickRemindMatch('${matchId}','${col}')"><i class="fas fa-bell"></i> Recordarme</button>` : ""}
+      <button type="button" class="hmsa-btn accent" onclick="window.openBetModal('${matchId}','${col}')"><i class="fas fa-coins"></i> Apostar</button>
+    </div>
+  `;
+  container.appendChild(wrap);
+}
+
+window.quickJoinMatch = async (matchId, col) => {
+  try {
+    const colNorm = String(col || "").toLowerCase().includes("reto") ? "partidosReto" : "partidosAmistosos";
+    const m = await getDocument(colNorm, matchId);
+    if (!m) return showToast("No disponible", "No se encontró el partido.", "warning");
+    if (isFinishedMatch(m)) return showToast("Cerrado", "Este partido ya está cerrado.", "info");
+    const players = [...getNormalizedPlayers(m)];
+    if (players.includes(currentUser.uid)) return showToast("Ya estás dentro", "Este partido ya te incluye.", "info");
+    const openIndex = players.findIndex((p) => !p);
+    if (openIndex === -1 && players.length >= 4) return showToast("Completo", "Ya no quedan plazas libres.", "warning");
+    if (openIndex >= 0) players[openIndex] = currentUser.uid;
+    else players.push(currentUser.uid);
+    const normalized = players.slice(0, 4);
+    while (normalized.length < 4) normalized.push(null);
+    await updateDoc(doc(db, colNorm, matchId), {
+      jugadores: normalized,
+      playerUids: normalized.filter(Boolean),
+      updatedAt: serverTimestamp(),
+    });
+    if (m.creadorId && m.creadorId !== currentUser.uid) {
+      await createNotification(
+        m.creadorId,
+        "Nuevo jugador en tu partido",
+        `${currentUserData?.nombreUsuario || currentUserData?.nombre || "Un jugador"} se ha unido al partido.`,
+        "info",
+        "home.html",
+        { type: "match_join", matchId }
+      );
+    }
+    showToast("¡Dentro!", "Te has unido al partido correctamente.", "success");
+  } catch (e) {
+    console.error("quickJoinMatch error", e);
+    showToast("Error", "No se pudo unir al partido.", "error");
+  }
+};
+
+window.quickRemindMatch = async (matchId, col) => {
+  try {
+    const key = `match_reminder_${matchId}`;
+    await createSelfNoticeOnce(
+      key,
+      "Recordatorio de partido",
+      "Te avisaremos para este partido y su resultado.",
+      `home.html?match=${encodeURIComponent(matchId)}`,
+      { matchId, col },
+    );
+    showToast("Listo", "Recordatorio activado.", "success");
+  } catch (e) {
+    showToast("Error", "No se pudo crear el recordatorio.", "error");
+  }
+};
+
+window.openBetModal = async (matchId, col) => {
+  if (!currentUser?.uid) return;
+  const m = await getDocument(col, matchId).catch(() => null);
+  if (!m) return showToast("Partido", "No se encontró el partido.", "warning");
+  if (isFinishedMatch(m)) return showToast("Apuestas cerradas", "El partido ya finalizó.", "info");
+  const players = getNormalizedPlayers(m).filter(Boolean);
+  if (players.length < 2) return showToast("Aún no", "Faltan jugadores para apostar.", "warning");
+  const wallet = Number(currentUserData?.monedasVirtuales || 1000);
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay active";
+  overlay.innerHTML = `
+    <div class="modal-card glass-strong" style="max-width:430px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Apuesta virtual</h3>
+        <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="hmsa-wallet">Saldo: <b>${wallet}</b> monedas</div>
+        <label class="text-[10px] font-black text-muted uppercase tracking-widest">Equipo ganador</label>
+        <select id="bet-side" class="input mt-2">
+          <option value="A">${escapeHtml(m.teamAName || "Equipo A")}</option>
+          <option value="B">${escapeHtml(m.teamBName || "Equipo B")}</option>
+        </select>
+        <label class="text-[10px] font-black text-muted uppercase tracking-widest mt-3">Cantidad</label>
+        <input id="bet-amount" type="number" min="${MIN_BET_COINS}" step="10" value="${Math.max(MIN_BET_COINS, Math.min(200, wallet))}" class="input mt-2">
+        <button class="btn btn-primary w-full mt-4" onclick="window.placeMatchBet('${matchId}','${col}')">Confirmar apuesta</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
+
+window.placeMatchBet = async (matchId, col) => {
+  try {
+    const amount = Number(document.getElementById("bet-amount")?.value || 0);
+    const side = String(document.getElementById("bet-side")?.value || "A");
+    const wallet = Number(currentUserData?.monedasVirtuales || 1000);
+    if (!Number.isFinite(amount) || amount < MIN_BET_COINS) return showToast("Cantidad inválida", `Mínimo ${MIN_BET_COINS} monedas.`, "warning");
+    if (amount > wallet) return showToast("Saldo insuficiente", "No tienes suficientes monedas virtuales.", "warning");
+    const existing = await getDocs(query(
+      collection(db, "matchBets"),
+      where("matchId", "==", matchId),
+      where("uid", "==", currentUser.uid),
+      limit(1),
+    ));
+    if (!existing.empty) return showToast("Ya apostaste", "Solo se permite una apuesta por partido.", "info");
+    await addDoc(collection(db, "matchBets"), {
+      matchId,
+      col,
+      uid: currentUser.uid,
+      userName: currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador",
+      side,
+      amount,
+      status: "open",
+      createdAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, "usuarios", currentUser.uid), {
+      monedasVirtuales: increment(-amount),
+      updatedAt: serverTimestamp(),
+    });
+    currentUserData.monedasVirtuales = wallet - amount;
+    document.querySelectorAll(".modal-overlay.active").forEach((m) => {
+      const title = m.querySelector(".modal-title")?.textContent || "";
+      if (title.toLowerCase().includes("apuesta")) m.remove();
+    });
+    showToast("Apuesta registrada", `Has apostado ${amount} monedas.`, "success");
+  } catch (e) {
+    console.error("placeMatchBet error", e);
+    showToast("Error", "No se pudo registrar la apuesta.", "error");
   }
 };
 
@@ -3342,7 +4100,7 @@ window.clearAppCache = async () => {
 // Override: desactivar alertas de diario y pedir ICS de Apoing si falta
 window.checkSystemAlerts = (userData = currentUserData) => {
   purgeEventDayAlerts();
-  const hasApoing = Boolean(String(userData?.apoingCalendarUrl || "").trim());
+  const hasApoing = Boolean(String(userData?.apoingCalendarUrl || "").trim() || getHomeApoingIcsUrl());
   if (!hasApoing) {
     try {
       const modal = document.getElementById("modal-match");
@@ -3354,7 +4112,7 @@ window.checkSystemAlerts = (userData = currentUserData) => {
             <p class="text-sm opacity-80">Ve a tu perfil de Apoing, copia el enlace que termina en .ics y pégalo en Perfil o Calendario para sincronizar tus partidos.</p>
             <div class="text-xs opacity-60">Perfil → sección Apoing → pegar .ics y Guardar.</div>
             <div class="flex gap-2 justify-center mt-2">
-              <button class="btn" onclick="window.location.href='perfil.html#apoing'">Ir a Perfil</button>
+              <button class="btn" onclick="window.location.href='perfil.html?focus=apoing#profile-apoing-settings'">Ir a Perfil</button>
               <button class="btn btn-ghost" onclick="document.getElementById('modal-match')?.classList.remove('active')">Cerrar</button>
             </div>
           </div>`;
@@ -3369,7 +4127,7 @@ async function syncApoingReservations() {
   const now = Date.now();
   if (now - apoingLastSyncAt < APOING_SYNC_TTL_MS) return;
   
-  const sources = await getApoingSources();
+  const sources = await getUnifiedApoingSources();
   if (!sources.length) return;
 
   try {
@@ -3391,14 +4149,14 @@ async function syncApoingReservations() {
           ...e,
           sourceUid: source.uid,
           sourceName: source.name,
-          owner: extractOwnerFromApoingEvent(e) || source.name
+          owner: normalizeApoingOwnerName(extractOwnerFromApoingEvent({ ...e, sourceName: source.name }), source.name)
         }));
         allEvents.push(...expanded);
       } catch (err) {
         console.warn("Source sync error", source.uid, err);
       }
     }
-    apoingEvents = allEvents.sort((a,b) => a.dtStart - b.dtStart);
+    apoingEvents = dedupeApoingEventsByReservation(allEvents);
     apoingLastSyncAt = now;
     const activeTab = document.querySelector(".hv2-tab.active")?.dataset.filter || "open";
     renderMatchesByFilter(activeTab);
@@ -3407,40 +4165,199 @@ async function syncApoingReservations() {
   }
 }
 
-async function getApoingSources() {
+async function getUnifiedApoingSources() {
   const sources = [];
+  const currentUid = String(currentUser?.uid || "");
+  const pushUnique = (row) => {
+    const uid = String(row?.uid || "").trim();
+    const icsUrl = normalizeApoingCalendarUrl(row?.icsUrl || row?.apoingCalendarUrl || row?.url || row?.calendarUrl || "");
+    if (!uid || !icsUrl) return;
+    if (!isValidApoingCalendarUrl(icsUrl)) return;
+    const safeName = normalizeApoingOwnerName(
+      row?.name || row?.nickname || row?.nombreUsuario || row?.nombre || row?.email || "",
+      row?.nickname || row?.nombreUsuario || (row?.email ? String(row.email).split("@")[0] : "Jugador"),
+    );
+    const nextEntry = {
+      uid,
+      name: safeName || "Jugador",
+      email: row?.email || "",
+      icsUrl,
+    };
+    if (uid !== currentUid && isSuspiciousApoingSourceName(nextEntry.name, nextEntry.email)) {
+      return;
+    }
+    const existingIndex = sources.findIndex((s) => s.uid === uid);
+    if (existingIndex >= 0) {
+      const current = sources[existingIndex];
+      sources[existingIndex] = {
+        ...current,
+        ...(scoreApoingOwnerName(nextEntry.name) > scoreApoingOwnerName(current.name) ? { name: nextEntry.name } : {}),
+        email: nextEntry.email || current.email || "",
+        icsUrl: nextEntry.icsUrl || current.icsUrl,
+      };
+      return;
+    }
+    sources.push(nextEntry);
+  };
+
+  try {
+    const publicSnap = await getDocs(collection(db, "apoingCalendars"));
+    publicSnap.forEach((d) => {
+      const data = d.data() || {};
+      if (data.active === false) return;
+      pushUnique({
+        uid: d.id,
+        name: data.name || data.nickname || data.nombre || data.nombreUsuario || "Jugador",
+        nickname: data.nickname || data.nombreUsuario || "",
+        nombre: data.nombre || "",
+        nombreUsuario: data.nombreUsuario || "",
+        email: data.email || "",
+        icsUrl: data.icsUrl || "",
+      });
+    });
+  } catch (_) {}
+
+  try {
+    const usersSnap = await getDocs(collection(db, "usuarios"));
+    usersSnap.forEach((d) => {
+      const data = d.data() || {};
+      const url = data.apoingCalendarUrl || data.icsUrl || "";
+      if (!url) return;
+      pushUnique({
+        uid: d.id,
+        name: data.nombreUsuario || data.nombre || "Jugador",
+        nickname: data.nombreUsuario || "",
+        nombre: data.nombre || "",
+        nombreUsuario: data.nombreUsuario || "",
+        email: data.email || "",
+        icsUrl: url,
+      });
+    });
+  } catch (_) {}
+
+  const myUrl = getHomeApoingIcsUrl();
+  const hasMe = currentUser?.uid && sources.some((s) => s.uid === currentUser.uid);
+  if (currentUser?.uid && myUrl && !hasMe) {
+    pushUnique({
+      uid: currentUser.uid,
+      name: currentUserData?.nombreUsuario || currentUserData?.nombre || "TÃº",
+      nickname: currentUserData?.nombreUsuario || "",
+      nombre: currentUserData?.nombre || "",
+      nombreUsuario: currentUserData?.nombreUsuario || "",
+      email: currentUser.email || "",
+      icsUrl: myUrl,
+    });
+  }
+
+  const byUrl = new Map();
+  sources.forEach((source) => {
+    const key = String(source.icsUrl || "").trim().toLowerCase();
+    if (!key) return;
+    const list = byUrl.get(key) || [];
+    list.push(source);
+    byUrl.set(key, list);
+  });
+
+  const deduped = [];
+  byUrl.forEach((list) => {
+    if (list.length === 1) return deduped.push(list[0]);
+    const preferred =
+      list.find((row) => String(row.uid) === currentUid) ||
+      [...list].sort((a, b) => scoreApoingOwnerName(b.name) - scoreApoingOwnerName(a.name))[0];
+    if (preferred) deduped.push(preferred);
+  });
+  return deduped;
+}
+
+async function getApoingSources() {
+  return getUnifiedApoingSources();
+  const sources = [];
+  const currentUid = String(currentUser?.uid || "");
   const pushUnique = (row) => {
     const uid = String(row?.uid || "").trim();
     const icsUrl = String(row?.icsUrl || "").trim();
     if (!uid || !icsUrl) return;
-    if (sources.some((s) => s.uid === uid)) return;
-    sources.push({ uid, name: row?.name || "Jugador", icsUrl });
+    if (!/^https:\/\/www\.apoing\.com\/calendars\/.+\.ics$/i.test(icsUrl)) return;
+    const safeName = normalizeApoingOwnerName(
+      row?.name || row?.nickname || row?.nombreUsuario || row?.nombre || row?.email || "",
+      row?.nickname || row?.nombreUsuario || (row?.email ? String(row.email).split("@")[0] : "Jugador"),
+    );
+    const nextEntry = {
+      uid,
+      name: safeName || "Jugador",
+      email: row?.email || "",
+      icsUrl,
+    };
+    const existingIndex = sources.findIndex((s) => s.uid === uid);
+    if (existingIndex >= 0) {
+      const current = sources[existingIndex];
+      sources[existingIndex] = {
+        ...current,
+        ...(scoreApoingOwnerName(nextEntry.name) > scoreApoingOwnerName(current.name) ? { name: nextEntry.name } : {}),
+        email: nextEntry.email || current.email || "",
+        icsUrl: nextEntry.icsUrl || current.icsUrl,
+      };
+      return;
+    }
+    sources.push(nextEntry);
   };
   try {
     const publicSnap = await getDocs(collection(db, "apoingCalendars"));
     publicSnap.forEach((d) => pushUnique({ uid: d.id, ...d.data() }));
   } catch (_) {}
-  const myUrl = String(currentUserData?.apoingCalendarUrl || "").trim();
+  const myUrl = normalizeApoingCalendarUrl(currentUserData?.apoingCalendarUrl || currentUserData?.icsUrl || "");
   if (currentUser?.uid && myUrl) pushUnique({ uid: currentUser.uid, name: currentUserData?.nombreUsuario || "Tú", icsUrl: myUrl });
-  return sources;
+  const byUrl = new Map();
+  sources.forEach((source) => {
+    const key = String(source.icsUrl || "").trim().toLowerCase();
+    if (!key) return;
+    const list = byUrl.get(key) || [];
+    list.push(source);
+    byUrl.set(key, list);
+  });
+  const deduped = [];
+  byUrl.forEach((list) => {
+    if (list.length === 1) return deduped.push(list[0]);
+    const preferred =
+      list.find((row) => String(row.uid) === currentUid) ||
+      [...list].sort((a, b) => scoreApoingOwnerName(b.name) - scoreApoingOwnerName(a.name))[0];
+    if (preferred) deduped.push(preferred);
+  });
+  return deduped;
 }
 
+/**
+ * Fetch an ICS feed from Apoing URL.
+ * Strategy:
+ *  1. Try direct fetch (works if no CORS restriction)
+ *  2. Try the local Cloudflare worker proxy (/api/apoing-ics)
+ *  3. Try corsproxy.io as fallback
+ */
 async function fetchRawApoingByUrl(url) {
-  try {
-    console.log("Cargando calendario Apoing...");
-    const jinaTarget = `${APOING_PROXY_JINA}${url.replace(/^https?:\/\//i, "")}`;
-    const jinaResp = await fetch(jinaTarget);
-    if (jinaResp.ok) return await jinaResp.text();
-
-    const target = `${APOING_PROXY_URL}${encodeURIComponent(url)}`;
-    const resp = await fetch(target);
-    if (resp.ok) return await resp.text();
-
-    throw new Error(`Apoing fetch failed: ${resp.status}`);
-  } catch (err) {
-    console.warn("Apoing proxy warning:", err);
-    return "";
+  const encodedUrl = encodeURIComponent(url);
+  const strategies = [
+    () => fetch(`https://api.codetabs.com/v1/proxy?quest=${encodedUrl}`, { cache: "no-store" }),
+    () => fetch(`https://corsproxy.io/?${encodedUrl}`, { cache: "no-store" }),
+    () => fetch(`https://api.allorigins.win/raw?url=${encodedUrl}`, { cache: "no-store" }),
+    () => fetch(String(url), { cache: "no-store" })
+  ];
+  for (const strategy of strategies) {
+    try {
+      const resp = await Promise.race([
+        strategy(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 10000)),
+      ]);
+      if (!resp.ok) continue;
+      const text = await resp.text();
+      if (String(text || "").includes("BEGIN:VCALENDAR")) {
+        return text;
+      }
+    } catch (err) {
+      console.warn("home-core: Apoing fetch strategy fail", err?.message);
+    }
   }
+  console.warn("home-core: All fetch strategies failed for Apoing URL:", url.slice(0, 60));
+  return "";
 }
 
 function parseIcsEvents(icsText = "") {
@@ -3499,33 +4416,107 @@ function expandRecurringEvents(events) {
 
 function isRelevantApoingEvent(ev) {
   const txt = normalizeName(`${ev.summary || ""} ${ev.description || ""}`);
-  // Loosen condition: if it mentions padel/padle OR common terms like reserve/match/court
-  // but definitely ignore club social.
-  const isPadel = txt.includes("padel") || txt.includes("padle");
-  const isGeneric = txt.includes("reserva") || txt.includes("pista") || txt.includes("match") || txt.includes("partida");
-  const isClub = txt.includes("club social") || txt.includes("club");
-  if (isClub && !isPadel) return false;
-  return (isPadel || isGeneric) && !txt.includes("club social");
+  const mentionsMistralHomes = txt.includes("mistral homes");
+  const mentionsPadel = txt.includes("padel mistral homes") || txt.includes("mistral homes padel") || txt.includes("padel") || txt.includes("pista padel") || txt.includes("court padel") || txt.includes("reserva padel");
+  const mentionsClub = txt.includes("club social") || txt.includes("mistral homes club") || txt.includes("club mistral homes");
+  if (mentionsClub && !mentionsPadel) return false;
+  if (mentionsMistralHomes) return mentionsPadel && !mentionsClub;
+  return mentionsPadel;
 }
 
 function normalizeName(t) { return String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim(); }
+
+function normalizeApoingOwnerName(raw = "", fallback = "") {
+  const value = String(raw || fallback || "").trim();
+  if (!value) return "";
+  const normalized = normalizeName(value);
+  if (!normalized) return "";
+  if (["jugador", "usuario", "cliente", "player", "ricardo"].includes(normalized)) return String(fallback || "").trim();
+  if (/\b(?:pista|court|cancha)\s*[a-z]?\d{1,2}\b/i.test(value) || /^[a-z]{3,}\s+[a-z]\d{1,2}$/i.test(value)) return String(fallback || "").trim();
+  if (/^(mistral|club|padel|reserva|apoing)/i.test(value)) return String(fallback || "").trim();
+  return value.replace(/\b\w/g, (m) => m.toUpperCase()).replace(/\s+/g, " ").trim();
+}
+
+function normalizeApoingCalendarUrl(raw = "") {
+  const clean = String(raw || "")
+    .replace(/[\s"'`<>]/g, "")
+    .replace(/&amp;/gi, "&")
+    .trim();
+  if (!clean) return "";
+  const normalizedProtocol = clean.replace(/^http:\/\//i, "https://");
+  if (/^https:\/\/apoing\.com\/calendars\/.+\.ics(?:\?.*)?$/i.test(normalizedProtocol)) {
+    return normalizedProtocol.replace(/^https:\/\/apoing\.com\//i, "https://www.apoing.com/");
+  }
+  return normalizedProtocol;
+}
+
+function isValidApoingCalendarUrl(url = "") {
+  return /^https:\/\/www\.apoing\.com\/calendars\/.+\.ics(?:\?.*)?$/i.test(String(url || "").trim());
+}
+
+function scoreApoingOwnerName(name = "") {
+  const safe = normalizeApoingOwnerName(name, "");
+  if (!safe) return 0;
+  const normalized = normalizeName(safe);
+  if (!normalized) return 0;
+  if (/@/.test(safe)) return 1;
+  if (/jugador|usuario|cliente|player|ricardo/.test(normalized)) return 1;
+  if (/\b(?:pista|court|cancha)\s*[a-z]?\d{1,2}\b/i.test(safe) || /^[a-z]{3,}\s+[a-z]\d{1,2}$/i.test(normalized)) return 1;
+  return safe.split(/\s+/).length >= 2 ? 5 : 3;
+}
+
+function isSuspiciousApoingSourceName(name = "", email = "") {
+  const normalized = normalizeName(name);
+  if (!normalized) return false;
+  if (normalized === "ricardo a1") return true;
+  const looksLikeAlias = /^[a-z]{3,}\s+[a-z]\d{1,2}$/.test(normalized);
+  const weakScore = scoreApoingOwnerName(name) <= 1;
+  const hasEmail = /@/.test(String(email || "").trim());
+  return looksLikeAlias && weakScore && !hasEmail;
+}
+
+function dedupeApoingEventsByReservation(events = []) {
+  const keyed = new Map();
+  events.forEach((event) => {
+    const start = event?.dtStart?.getTime?.() || 0;
+    const end = event?.dtEnd?.getTime?.() || 0;
+    const summary = normalizeName(event?.summary || "");
+    const key = [start, end, summary].join("|");
+    const current = keyed.get(key);
+    if (!current) {
+      keyed.set(key, event);
+      return;
+    }
+    const currentScore = Math.max(scoreApoingOwnerName(current?.owner || ""), scoreApoingOwnerName(current?.sourceName || ""));
+    const nextScore = Math.max(scoreApoingOwnerName(event?.owner || ""), scoreApoingOwnerName(event?.sourceName || ""));
+    if (nextScore > currentScore) keyed.set(key, event);
+  });
+  return [...keyed.values()].sort((a, b) => (a.dtStart?.getTime?.() || 0) - (b.dtStart?.getTime?.() || 0));
+}
 
 function extractOwnerFromApoingEvent(ev) {
   const raw = `${ev.summary || ""} ${ev.description || ""}`;
   const patterns = [
     /(?:reservad[oa]\s+por|usuario|cliente|player|jugador)\s*[:\-]\s*([^\n,(]+)/i,
-    /\(([A-Za-z\u00C0-\u024F'`.\- ]{3,})\)/,
-    /[-|]\s*([A-Za-z\u00C0-\u024F ]{3,})/
+    /(?:titular|owner)\s*[:\-]\s*([^\n,(]+)/i
   ];
   for (const p of patterns) {
     const m = raw.match(p);
-    if (m?.[1]?.trim()) return m[1].trim();
+    if (m?.[1]?.trim()) return normalizeApoingOwnerName(m[1], ev.sourceName || "");
   }
-  return "";
+  return normalizeApoingOwnerName("", ev.sourceName || "");
 }
 
 window.openApoingMatch = (id) => {
-  window.location.href = "calendario.html";
+  const ev = (typeof apoingEvents !== 'undefined' ? apoingEvents : []).find(e => `apoing_${e.uid || ''}` === id || id.includes(e.uid));
+  if (ev && ev.dtStart) {
+    showToast("Reserva", "Redirigiendo a tu reserva para montar partido...", "info");
+    setTimeout(() => {
+      window.location.href = `calendario.html?jumpDate=${ev.dtStart.toISOString()}`;
+    }, 1200);
+  } else {
+    window.location.href = "calendario.html";
+  }
 };
 
 // Ensure cleanup includes Nexus
@@ -3634,7 +4625,7 @@ window.shareMatch = async (matchId, col) => {
                 url: window.location.origin
             });
         } catch (err) {
-            console.log('Share failed', err);
+            // console.log('Share failed', err);
         }
     } else {
         try {
@@ -4440,27 +5431,38 @@ window.joinProposalFromHome = async () => {
 
 window.leaveProposalFromHome = async () => {
   if (!activeProposalId || !currentUser?.uid || !activeProposalMeta) return;
-  if (activeProposalMeta.createdBy === currentUser.uid) {
-    showToast("Bloqueado", "El creador debe mantener la propuesta o cerrarla desde calendario.", "warning");
-    return;
-  }
+  const isOwner = activeProposalMeta.createdBy === currentUser.uid;
   const ids = Array.isArray(activeProposalMeta.participantIds) ? activeProposalMeta.participantIds.filter(Boolean) : [];
-  const nextIds = ids.filter((uid) => uid !== currentUser.uid);
   try {
-    await persistProposalMeta(activeProposalId, {
-      participantIds: nextIds,
-      status: "open",
-    });
-    await addDoc(collection(db, "propuestasPartido", activeProposalId, "chat"), {
-      text: `${currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador"} ha salido de la propuesta.`,
-      senderUid: currentUser.uid,
-      senderName: currentUserData?.nombreUsuario || currentUserData?.nombre || "Jugador",
-      createdAt: serverTimestamp(),
-      system: true,
-    });
-    showToast("Actualizado", "Has salido de la propuesta.", "success");
+    if (isOwner) {
+      // Owner closes the proposal entirely
+      await persistProposalMeta(activeProposalId, { status: 'closed' });
+      await addDoc(collection(db, 'propuestasPartido', activeProposalId, 'chat'), {
+        text: `${currentUserData?.nombreUsuario || 'El organizador'} ha cerrado esta propuesta.`,
+        senderUid: currentUser.uid,
+        senderName: currentUserData?.nombreUsuario || 'Jugador',
+        createdAt: serverTimestamp(),
+        system: true,
+      });
+      showToast('Propuesta cerrada', 'Se ha archivado la propuesta.', 'info');
+      closeProposalModal();
+      cleanupProposalChat();
+    } else {
+      // Participant leaves the chat
+      const nextIds = ids.filter(uid => uid !== currentUser.uid);
+      await persistProposalMeta(activeProposalId, { participantIds: nextIds, status: 'open' });
+      await addDoc(collection(db, 'propuestasPartido', activeProposalId, 'chat'), {
+        text: `${currentUserData?.nombreUsuario || 'Jugador'} ha salido de la propuesta.`,
+        senderUid: currentUser.uid,
+        senderName: currentUserData?.nombreUsuario || 'Jugador',
+        createdAt: serverTimestamp(),
+        system: true,
+      });
+      showToast('Actualizado', 'Has salido de la propuesta.', 'success');
+      window.renderProposalList();
+    }
   } catch (e) {
-    showToast("Error", "No se pudo salir.", "error");
+    showToast('Error', 'No se pudo completar la acción.', 'error');
   }
 };
 
@@ -4481,13 +5483,20 @@ function renderProposalActionBar(meta = {}) {
   const ids = Array.isArray(meta?.participantIds) ? meta.participantIds.filter(Boolean) : [];
   const isMine = ids.includes(currentUser?.uid);
   const canJoin = canCurrentUserJoinProposal(meta);
+
+  // Auto-detect: if all participants already have a linked real match → suggest closing
+  const linkedMatchExists = ids.length >= 2 && ids.every(uid =>
+    allMatches.some(m => !isCancelledMatch(m) && !isFinishedMatch(m) && getNormalizedPlayers(m).includes(uid))
+  );
+
   host.innerHTML = `
     <div class="proposal-action-grid">
       ${canJoin ? `<button type="button" class="hv2-inline-btn primary" onclick="window.joinProposalFromHome()"><i class="fas fa-user-plus"></i> Unirme</button>` : ""}
       ${isMine ? `<button type="button" class="hv2-inline-btn" onclick="window.reserveProposalFromHome()"><i class="fas fa-calendar-plus"></i> Fijar dia</button>` : ""}
-      ${isMine && meta?.createdBy !== currentUser?.uid ? `<button type="button" class="hv2-inline-btn" onclick="window.leaveProposalFromHome()"><i class="fas fa-right-from-bracket"></i> Salir</button>` : ""}
       <button type="button" class="hv2-inline-btn" onclick="window.location.href='calendario.html'"><i class="fas fa-calendar-days"></i> Calendario</button>
+      ${isMine ? `<button type="button" class="hv2-inline-btn danger" onclick="window.leaveProposalFromHome()" title="${meta?.createdBy === currentUser?.uid ? 'Cerrar propuesta' : 'Salir del chat'}"><i class="fas fa-door-open"></i> ${meta?.createdBy === currentUser?.uid ? 'Cerrar' : 'Salir'}</button>` : ""}
     </div>
+    ${linkedMatchExists ? `<div style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:12px;padding:8px 12px;font-size:10px;font-weight:800;color:#00d4ff;text-align:center;margin-bottom:6px;"><i class="fas fa-circle-check"></i> ¡Los jugadores ya tienen partido vinculado! Puedes cerrar esta propuesta.</div>` : ''}
     <div class="proposal-member-row">${renderProposalMembers(meta)}</div>
   `;
 }
@@ -4499,14 +5508,17 @@ window.openProposalDetail = async (pid) => {
   if (!chatEl) return;
   chatEl.innerHTML = `
     <div class="flex-row items-center gap-3 p-3 bg-white/5 rounded-2xl mb-4 border border-white/10">
-      <button class="btn btn-ghost sm" onclick="window.renderProposalList()"><i class="fas fa-arrow-left"></i></button>
+      <button class="btn btn-ghost sm" onclick="window.renderProposalList()" title="Volver a la lista"><i class="fas fa-arrow-left"></i></button>
       <div class="flex-col flex-1 truncate">
         <span id="proposal-chat-title" class="text-[12px] font-black uppercase truncate">...</span>
         <span id="proposal-chat-status" class="text-[9px] opacity-40 font-bold">...</span>
       </div>
+      <button class="btn btn-ghost sm" onclick="window.leaveProposalFromHome ? window.leaveProposalFromHome() : (closeProposalModal && closeProposalModal())" title="Salir / Cerrar propuesta" style="color:#ef4444; border-color:rgba(239,68,68,0.3);">
+        <i class="fas fa-xmark"></i>
+      </button>
     </div>
     <div id="proposal-chat-actions" class="proposal-chat-actions"></div>
-    <div id="proposal-messages" class="flex-1 overflow-y-auto pr-1 custom-scroll mb-4" style="min-height:280px; display:flex; flex-direction:column; gap:12px;"></div>
+    <div id="proposal-messages" class="flex-1 overflow-y-auto pr-1 custom-scroll mb-4" style="min-height:260px; display:flex; flex-direction:column; gap:12px;"></div>
     <div class="flex-row gap-2 items-end bg-black/40 p-2 rounded-2xl border border-white/5">
       <textarea id="proposal-input" class="input flex-1" style="min-height:44px; max-height:120px; font-size:12px; padding:12px 16px; border:none; background:transparent;" placeholder="Escribe al grupo..."></textarea>
       <button class="btn btn-primary" id="btn-send-proposal" style="height:44px; width:44px; border-radius:18px; flex-shrink:0;">
@@ -4649,6 +5661,37 @@ function renderNextMatch() {
     .sort((a, b) => (toDateSafe(a.fecha)?.getTime() || 0) - (toDateSafe(b.fecha)?.getTime() || 0));
   const next = mine[0];
   if (!next) {
+    // Collect Apoing-style bookings (my upcoming calendar matches that are not yet confirmed/real)
+    const apoingBookings = allMatches
+      .filter(m => isMatchRelevantToMe(m) && !isFinishedMatch(m) && !isCancelledMatch(m))
+      .filter(m => {
+        const d = toDateSafe(m.fecha);
+        return d && d.getTime() >= Date.now();
+      })
+      .sort((a, b) => (toDateSafe(a.fecha)?.getTime() || 0) - (toDateSafe(b.fecha)?.getTime() || 0))
+      .slice(0, 3);
+
+    const apoingHTML = apoingBookings.length ? `
+      <div style="margin-top:14px; width:100%;">
+        <div style="font-size:9px; font-weight:900; letter-spacing:2px; color:rgba(255,255,255,0.4); text-transform:uppercase; margin-bottom:8px; text-align:left;"><i class="fas fa-bookmark" style="color:var(--primary);"></i> RESERVAS APOING</div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          ${apoingBookings.map(m => {
+            const d = toDateSafe(m.fecha);
+            const players = getNormalizedPlayers(m).filter(Boolean);
+            const dateStr = d ? d.toLocaleDateString('es-ES', { weekday:'short', day:'numeric', month:'short' }).toUpperCase() : '??';
+            const timeStr = d ? d.toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' }) : '';
+            const pStr = players.map(uid => getPlayerDisplayName(uid).split(' ')[0]).join(' · ') || 'Sin jugadores';
+            return `<div style="display:flex; align-items:center; justify-content:space-between; background:rgba(0,212,255,0.06); border:1px solid rgba(0,212,255,0.15); border-radius:12px; padding:8px 12px;">
+              <div style="display:flex; flex-direction:column; gap:1px;">
+                <span style="font-size:10px; font-weight:900; color:#fff;">${dateStr} · ${timeStr}</span>
+                <span style="font-size:9px; color:rgba(255,255,255,0.5); font-weight:700;">${pStr}</span>
+              </div>
+              <i class="fas fa-chevron-right" style="font-size:10px; color:var(--primary); opacity:0.5;"></i>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : '';
+
     box.innerHTML = `
       <div class="hv2-no-match hv2-no-match-rich premium-v2">
         <div class="hv2-no-match-main flex-col items-center justify-center p-4">
@@ -4657,27 +5700,33 @@ function renderNextMatch() {
           </div>
           <div class="text-center w-full">
             <strong class="block text-white text-lg font-black tracking-wide mb-1">Cancha libre</strong>
-            <span class="block text-white/60 text-xs px-4 mb-4">Aún no tienes ningún partido en tu agenda. Proponlo rápido a la comunidad.</span>
+            <span class="block text-white/60 text-xs px-4 mb-4">Sin partido inmediato. Propón uno rápido o crea uno en el calendario.</span>
           </div>
           
           <div class="w-full flex-col gap-2">
-            <button type="button" class="btn-premium-v7 shadow w-full flex items-center justify-center gap-2 py-3 drop-shadow-[0_5px_15px_rgba(184,255,0,0.2)]" onclick="window.openProposeMatchChat()">
-              <i class="fas fa-bolt text-lg"></i> <span class="font-black tracking-widest text-[13px]">PROPONER PARTIDO RÁPIDO</span>
-            </button>
+            <div class="flex-row gap-2 w-full">
+              <button type="button" class="flex-1 btn-premium-v7 shadow flex items-center justify-center gap-2 py-3 drop-shadow-[0_5px_15px_rgba(184,255,0,0.2)]" onclick="window.openProposeMatchChat()">
+                <i class="fas fa-comments text-base"></i> <span class="font-black tracking-widest text-[11px]">PROPONER</span>
+              </button>
+              <button type="button" class="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest border-2 border-primary/40 text-primary bg-primary/10 hover:bg-primary/20 transition-all" onclick="window.location.href='calendario.html'" style="border-radius:16px;">
+                <i class="fas fa-plus-circle text-base"></i> CREAR
+              </button>
+            </div>
             <div class="flex-row gap-2 mt-1 w-full">
-               <button type="button" class="flex-1 text-center bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest px-2 py-3 border border-white/20 transition-all duration-300" onclick="window.location.href='calendario.html'">
-                 <i class="fas fa-calendar-plus text-primary mr-1"></i> CALENDARIO
+               <button type="button" class="flex-1 text-center bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest px-2 py-2 border border-white/20 transition-all duration-300" onclick="window.location.href='calendario.html'">
+                 <i class="fas fa-calendar-days text-primary mr-1"></i> CALENDARIO
                </button>
                ${pendingResult.length ? `
-                 <button type="button" class="flex-1 text-center bg-red-500/20 hover:bg-red-500/40 text-white rounded-xl text-[10px] font-black uppercase tracking-widest px-2 py-3 border border-red-500/30 transition-all duration-300" onclick="window.location.href='calendario.html'">
+                 <button type="button" class="flex-1 text-center bg-red-500/20 hover:bg-red-500/40 text-white rounded-xl text-[10px] font-black uppercase tracking-widest px-2 py-2 border border-red-500/30 transition-all duration-300" onclick="window.location.href='calendario.html'">
                   <i class="fas fa-pen text-red-400 mr-1"></i> ANOTAR PTS
                  </button>
                ` : `
-                 <button type="button" class="flex-1 text-center bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest px-2 py-3 border border-white/20 transition-all duration-300" onclick="window.openPosterHub()">
+                 <button type="button" class="flex-1 text-center bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest px-2 py-2 border border-white/20 transition-all duration-300" onclick="window.openPosterHub()">
                   <i class="fas fa-image text-white mr-1"></i> POSTERS
                  </button>
                `}
             </div>
+            ${apoingHTML}
           </div>
         </div>
       </div>
@@ -4755,6 +5804,121 @@ function renderNextMatch() {
   `;
   maybeCreateEventDayNotice();
 }
+
+renderNextMatch = function renderNextMatchRefined() {
+  const box = document.getElementById("next-match-box");
+  if (!box) return;
+  const now = Date.now();
+  const pendingResult = getPendingResultMatches();
+  const mine = allMatches
+    .filter((m) => isMatchRelevantToMe(m))
+    .filter((m) => !isEventKnockoutLocked(m))
+    .filter((m) => !isCancelledMatch(m) && !isFinishedMatch(m))
+    .filter((m) => {
+      const d = toDateSafe(m.fecha);
+      return d && d.getTime() >= now - 10 * 60 * 1000;
+    })
+    .sort((a, b) => (toDateSafe(a.fecha)?.getTime() || 0) - (toDateSafe(b.fecha)?.getTime() || 0));
+  const next = mine[0];
+  if (!next) {
+    box.innerHTML = `
+      <div class="hv2-scoreboard compact-poster hv2-scoreboard-empty">
+        <div class="hv2-court-bg"></div>
+        <div class="hv2-sb-header">
+          <span class="hv2-sb-type">SIN PARTIDO</span>
+          <span class="hv2-sb-countdown">LISTO</span>
+        </div>
+        <div class="hv2-scoreboard-empty-body">
+          <div class="hv2-scoreboard-empty-copy">
+            <strong>Tu próximo cartel aún está vacío</strong>
+            <span>Ve al calendario para revisar huecos, reservas de Apoing o montar un partido rápido 2vs2.</span>
+          </div>
+          <div class="hv2-scoreboard-empty-actions">
+            <button type="button" class="hv2-inline-btn compact" onclick="window.location.href='calendario.html'">
+              <i class="fas fa-calendar-days"></i> Calendario
+            </button>
+            <button type="button" class="hv2-inline-btn compact" onclick="window.location.href='calendario.html'">
+              <i class="fas fa-plus"></i> Crear rápido
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const date = toDateSafe(next.fecha);
+  const players = [...getNormalizedPlayers(next)];
+  while (players.length < 4) players.push(null);
+  const isEvent = isEventMatch(next);
+  const isReto = String(next.col || "").includes("Reto");
+  const freeSlots = isEvent ? 0 : players.filter((p) => !p).length;
+  const avgLevel = getAverageLevelFromPlayers(players.filter(Boolean));
+  const weatherBadge = getWeatherBadgeForDate(next.fecha);
+  const apoingReservation = apoingEvents
+    .filter((ev) => String(ev?.sourceUid || "") === String(currentUser?.uid || ""))
+    .filter((ev) => ev?.dtStart && Math.abs(ev.dtStart.getTime() - date.getTime()) <= 90 * 60 * 1000)
+    .sort((a, b) => a.dtStart - b.dtStart)[0] || null;
+  const diffMs = date.getTime() - Date.now();
+  const diffH = Math.floor(diffMs / 3600000);
+  const diffD = Math.floor(diffH / 24);
+  const countdown = diffH < 1 ? "AHORA" : diffH < 24 ? `EN ${diffH}H` : `EN ${diffD}D`;
+  const dateBits = formatCompactMatchDate(next.fecha);
+  const pName = (uid, team) => {
+    const name = getPlayerDisplayName(uid);
+    const short = name.split(" ")[0] || "Tu";
+    const cls = !uid ? "empty" : uid === currentUser?.uid ? "is-me" : team === "a" ? "is-team-a" : "is-team-b";
+    return `<span class="hv2-sb-player-name ${cls}">${uid ? short : "LIBRE"}</span>`;
+  };
+
+  box.innerHTML = `
+    <div class="hv2-scoreboard compact-poster" onclick="window.openMatch('${next.id}','${next.col}')">
+      <div class="hv2-court-bg"></div>
+      <div class="hv2-sb-header">
+        <span class="hv2-sb-type">${isEvent ? "EVENTO" : isReto ? "LIGA RETO" : "AMISTOSO"}</span>
+        <span class="hv2-sb-countdown">${countdown}</span>
+        <div class="hv2-sb-meta">
+          <span class="hv2-sb-meta-item"><i class="fas fa-clock"></i> ${dateBits.time}</span>
+          <span class="hv2-sb-meta-item"><i class="fas fa-calendar"></i> ${dateBits.weekday} ${dateBits.day} ${dateBits.month}</span>
+          <span class="hv2-sb-meta-item"><i class="fas ${weatherBadge.icon}"></i> ${weatherBadge.temp}</span>
+        </div>
+      </div>
+      <div class="hv2-sb-mini-calendar">
+        <span>${dateBits.weekday}</span>
+        <strong>${dateBits.day}</strong>
+        <small>${dateBits.month}</small>
+      </div>
+      <div class="hv2-sb-court">
+        <div class="hv2-sb-team team-a">
+          <div class="hv2-sb-player">${pName(players[0], "a")}</div>
+          <div class="hv2-sb-player">${pName(players[1], "a")}</div>
+        </div>
+        <div class="hv2-sb-vs">
+          <span class="hv2-sb-vs-line"></span>
+          <span class="hv2-sb-vs-text">VS</span>
+          <span class="hv2-sb-vs-line"></span>
+        </div>
+        <div class="hv2-sb-team team-b">
+          <div class="hv2-sb-player">${pName(players[2], "b")}</div>
+          <div class="hv2-sb-player">${pName(players[3], "b")}</div>
+        </div>
+      </div>
+      <div class="hv2-sb-insights">
+        <span><i class="fas fa-layer-group"></i> Nivel medio ${avgLevel ? avgLevel.toFixed(2) : "--"}</span>
+        <span><i class="fas fa-user-plus"></i> ${freeSlots > 0 ? `${freeSlots} pendiente${freeSlots > 1 ? "s" : ""}` : "Cuadro completo"}</span>
+        <span><i class="fas ${weatherBadge.icon}"></i> ${weatherBadge.label} · ${weatherBadge.note}</span>
+      </div>
+      ${pendingResult.length ? `<div class="hv2-sb-alert"><i class="fas fa-circle-exclamation"></i><span>Tienes ${pendingResult.length} partido${pendingResult.length === 1 ? "" : "s"} anterior${pendingResult.length === 1 ? "" : "es"} pendiente${pendingResult.length === 1 ? "" : "s"} de cerrar.</span><button type="button" class="hv2-inline-btn compact" onclick="event.stopPropagation(); window.location.href='calendario.html'">Añadir resultado</button></div>` : ""}
+      <div class="hv2-sb-footer">
+        <span class="hv2-sb-slots ${freeSlots > 0 ? "has-slots" : "full"}">${isEvent ? (next.phase ? String(next.phase).toUpperCase() : "EVENTO") : (freeSlots > 0 ? `${freeSlots} plaza${freeSlots === 1 ? "" : "s"} libre${freeSlots === 1 ? "" : "s"}` : "COMPLETO")}</span>
+        <div class="hv2-sb-footer-actions">
+          <button type="button" class="hv2-inline-btn compact" onclick="event.stopPropagation(); window.openPosterHub()"><i class="fas fa-download"></i> Cartel</button>
+          <span class="hv2-sb-action">VER PARTIDO <i class="fas fa-chevron-right"></i></span>
+        </div>
+      </div>
+    </div>
+  `;
+};
 
 window.openFeaturedEventDetail = () => {
   const preferredEvent =

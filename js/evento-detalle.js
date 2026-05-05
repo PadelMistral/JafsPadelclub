@@ -25,6 +25,51 @@ let myTeam = null;
 let registeredUsers = [];
 let registeredUsersById = new Map();
 let userLevelUnsubs = new Map();
+let autoGeneratingKnockout = false;
+let knockoutSyncInProgress = false;
+
+function repairSpanishText(value = '') {
+    return String(value || '')
+        .replaceAll('\u00C3\u00A1', '\u00E1')
+        .replaceAll('\u00C3\u00A9', '\u00E9')
+        .replaceAll('\u00C3\u00AD', '\u00ED')
+        .replaceAll('\u00C3\u00B3', '\u00F3')
+        .replaceAll('\u00C3\u00BA', '\u00FA')
+        .replaceAll('\u00C3\u00B1', '\u00F1')
+        .replaceAll('\u00C3\u2030', '\u00C9')
+        .replaceAll('\u00C3\u201C', '\u00D3')
+        .replaceAll('\u00C3\u2018', '\u00D1')
+        .replaceAll('\u00C2\u00BF', '\u00BF')
+        .replaceAll('\u00C2\u00A1', '\u00A1')
+        .replaceAll('\u00C2\u00B7', '\u00B7')
+        .replaceAll('\u00C2', '');
+}
+
+function repairNodeText(root) {
+    if (!root) return;
+    try {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+        nodes.forEach((node) => {
+            node.textContent = repairSpanishText(node.textContent);
+        });
+        root.querySelectorAll?.('[title],[placeholder],[aria-label]').forEach((el) => {
+            ['title', 'placeholder', 'aria-label'].forEach((attr) => {
+                if (el.hasAttribute(attr)) el.setAttribute(attr, repairSpanishText(el.getAttribute(attr)));
+            });
+        });
+    } catch (_) {}
+}
+
+function scrollActiveTabIntoView(tabButton) {
+    if (!tabButton?.scrollIntoView) return;
+    try {
+        tabButton.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    } catch (_) {}
+}
+
+setTimeout(() => repairNodeText(document.body), 0);
 
 // Mapa de formatos para mostrar etiquetas amigables
 const formatLabels = {
@@ -35,7 +80,7 @@ const formatLabels = {
 
 function isKnockoutPhaseMatch(match) {
     const phase = String(match?.phase || "").toLowerCase();
-    return ["knockout", "semi", "semis", "semifinal", "final", "cuartos", "quarter"].includes(phase);
+    return ["knockout", "semi", "semis", "semifinal", "final", "cuartos", "quarter", "third_place"].includes(phase);
 }
 
 function isGroupLeaguePhaseMatch(match, ev = currentEvent) {
@@ -43,6 +88,101 @@ function isGroupLeaguePhaseMatch(match, ev = currentEvent) {
     if (["group", "liga", "league", "grupos"].includes(phase)) return true;
     if (!phase && (ev?.formato === "league" || ev?.formato === "league_knockout")) return true;
     return false;
+}
+
+function getEventLeagueMatches(matches = eventMatches, ev = currentEvent) {
+    return (matches || []).filter((match) => isGroupLeaguePhaseMatch(match, ev));
+}
+
+function getMatchesForGroup(groupKey, matches = eventMatches, ev = currentEvent) {
+    return getEventLeagueMatches(matches, ev).filter((match) => {
+        if (!groupKey) return true;
+        return String(match.group || "").toUpperCase() === String(groupKey).toUpperCase();
+    });
+}
+
+function getKnockoutMatches(matches = eventMatches) {
+    return (matches || []).filter((match) => {
+        const phase = String(match?.phase || "").toLowerCase();
+        return phase === "knockout" || phase === "third_place";
+    });
+}
+
+function getStandingsConfig(ev = currentEvent) {
+    return {
+        win: ev?.puntosVictoria || 3,
+        draw: ev?.puntosEmpate || 1,
+        loss: ev?.puntosDerrota || 0,
+    };
+}
+
+function normalizeBracketRounds(rawBracket = null) {
+    if (!rawBracket) return [];
+    if (!Array.isArray(rawBracket) || !rawBracket.length) return [];
+    if (Array.isArray(rawBracket[0])) return rawBracket;
+
+    const flatMatches = rawBracket
+        .filter((match) => match && typeof match === 'object')
+        .map((match) => ({
+            ...match,
+            round: Number(match.round || 1),
+            slot: Number(match.slot || 1),
+        }));
+
+    const grouped = new Map();
+    flatMatches.forEach((match) => {
+        const key = Number(match.round || 1);
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(match);
+    });
+
+    return Array.from(grouped.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([, matches]) => matches.sort((a, b) => Number(a.slot || 0) - Number(b.slot || 0)));
+}
+
+function flattenBracketRounds(rounds = []) {
+    if (!Array.isArray(rounds)) return [];
+    return rounds.flatMap((round, roundIndex) =>
+        (Array.isArray(round) ? round : []).map((match, matchIndex) => ({
+            ...match,
+            round: Number(match?.round || roundIndex + 1),
+            slot: Number(match?.slot || matchIndex + 1),
+        }))
+    );
+}
+
+function getLeagueKnockoutQualification(ev = currentEvent, matches = eventMatches, manualIds = null, nPasan = null) {
+    const teamMap = new Map((ev?.teams || []).map((team) => [team.id, team]));
+    const safePassCount = Number.isFinite(Number(nPasan)) ? Math.max(1, parseInt(nPasan, 10)) : Number(ev?.equiposPorGrupo || 2);
+    const groupsKeys = Object.keys(ev?.groups || {});
+    let clasificados = [];
+    let eliminados = [];
+
+    if (Array.isArray(manualIds) && manualIds.length) {
+        clasificados = manualIds.map((id) => teamMap.get(id)).filter(Boolean);
+        eliminados = (ev?.teams || []).filter((team) => !manualIds.includes(team.id));
+        return { clasificados, eliminados, groupsKeys, nPasan: safePassCount };
+    }
+
+    if (groupsKeys.length) {
+        groupsKeys.forEach((groupKey) => {
+            const groupTeams = (ev.groups[groupKey] || []).map((id) => teamMap.get(id)).filter(Boolean);
+            const table = computeGroupTable(getMatchesForGroup(groupKey, matches, ev), groupTeams, getStandingsConfig(ev));
+            table.forEach((row, idx) => {
+                const team = teamMap.get(row.teamId);
+                if (!team) return;
+                if (idx < safePassCount) clasificados.push(team);
+                else eliminados.push(team);
+            });
+        });
+        return { clasificados, eliminados, groupsKeys, nPasan: safePassCount };
+    }
+
+    const globalTable = computeGroupTable(getEventLeagueMatches(matches, ev), ev?.teams || [], getStandingsConfig(ev));
+    clasificados = globalTable.slice(0, safePassCount).map((row) => teamMap.get(row.teamId)).filter(Boolean);
+    eliminados = globalTable.slice(safePassCount).map((row) => teamMap.get(row.teamId)).filter(Boolean);
+    return { clasificados, eliminados, groupsKeys, nPasan: safePassCount };
 }
 
 const getInitials = (name) => {
@@ -455,6 +595,7 @@ window.openAddTeamModalED = () => {
         </div>
     `;
     document.body.appendChild(overlay);
+    repairNodeText(overlay);
 };
 
 window.saveNewTeamED = async () => {
@@ -494,7 +635,12 @@ function isPending() {
 function subscribeEvent() {
     onSnapshot(doc(db, 'eventos', eventId), (s) => {
         if (!s.exists()) return window.location.replace('eventos.html');
-        currentEvent = { id: s.id, ...s.data() };
+        const data = s.data() || {};
+        currentEvent = {
+            id: s.id,
+            ...data,
+            bracket: normalizeBracketRounds(data.bracket || data.bracketRounds || []),
+        };
         indexEventUserNames(currentEvent);
         syncParticipantUserListeners(currentEvent?.inscritos || []);
         if (isInscribed()) {
@@ -528,8 +674,26 @@ function subscribeMatches() {
     if (unsubMatches) unsubMatches();
     unsubMatches = onSnapshot(query(collection(db, 'eventoPartidos'), where('eventoId', '==', eventId)), (s) => {
         eventMatches = s.docs.map(d => ({ id: d.id, ...d.data() }));
+        maybeAutoGenerateKnockout();
+        syncKnockoutProgress();
         renderPane(document.querySelector('.ed-tab.active')?.dataset.tab || 'info');
     });
+}
+
+async function maybeAutoGenerateKnockout() {
+    if (autoGeneratingKnockout) return;
+    const ev = currentEvent;
+    if (!ev || ev.formato !== 'league_knockout') return;
+    if (Array.isArray(ev.bracket) && ev.bracket.length && getKnockoutMatches().length) return;
+    if (!areGroupsComplete(ev, eventMatches)) return;
+    autoGeneratingKnockout = true;
+    try {
+        await window.generarFaseEliminatoria({ auto: true });
+    } catch (e) {
+        console.error('Auto knockout failed:', e);
+    } finally {
+        autoGeneratingKnockout = false;
+    }
 }
 
 function bindTabs() {
@@ -537,14 +701,22 @@ function bindTabs() {
         b.onclick = () => {
             const tab = b.dataset.tab;
             if (tab === 'organizador' && !canOrganizar()) return;
+            if (b.classList.contains('active')) return;
             document.querySelectorAll('.ed-tab').forEach(x => x.classList.remove('active'));
             document.querySelectorAll('.ed-pane').forEach(x => x.classList.add('hidden'));
             b.classList.add('active');
             document.getElementById(`pane-${tab}`)?.classList.remove('hidden');
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('tab', tab);
+                window.history.replaceState({}, '', url.toString());
+            } catch {}
             renderPane(tab);
+            scrollActiveTabIntoView(b);
         };
     });
     if (canOrganizar()) document.getElementById('organizador-tab').style.display = 'block';
+    scrollActiveTabIntoView(document.querySelector('.ed-tab.active'));
 }
 
 function renderPage() {
@@ -578,7 +750,11 @@ function renderPage() {
         <div class="ed-stat-box"><span class="ed-stat-val">${String(ev.estado || 'draft').toUpperCase()}</span><span class="ed-stat-lbl">Estado</span></div>
     `;
 
+    const organizerTab = document.getElementById('organizador-tab');
+    if (organizerTab) organizerTab.style.display = canOrganizar() ? 'inline-flex' : 'none';
+
     renderActionBar();
+    repairNodeText(document.getElementById('eventDetailPage'));
     renderPane(document.querySelector('.ed-tab.active')?.dataset.tab || 'info');
 
     // Action button for downloading status
@@ -626,7 +802,7 @@ async function downloadEventStatus() {
 
     // Standings
     const standings = [];
-    const cfg = { win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0 };
+    const cfg = getStandingsConfig(ev);
     const teamMap = new Map((ev.teams || []).map(t => [t.id, t]));
 
     if (ev.formato === 'league' || ev.formato === 'league_knockout') {
@@ -689,8 +865,10 @@ function renderPane(tab) {
         else if (tab === 'partidos') renderMatches(pane);
         else if (tab === 'bracket') renderBracket(pane);
         else if (tab === 'organizador') renderOrganizador(pane);
+        repairNodeText(pane);
     } catch (e) {
         console.error(`Evento detalle pane "${tab}" failed:`, e);
+        setTimeout(() => repairNodeText(pane), 0);
         pane.innerHTML = `<div class="empty-state">No se pudo cargar esta sección del evento.</div>`;
     }
 }
@@ -764,6 +942,59 @@ function renderInfo(pane) {
         ? `<a class="btn-ed-primary w-full justify-center mt-4" href="evento-sorteo.html?id=${ev.id}"><i class="fas fa-dice"></i> Ver Cuadro / Sorteo</a>`
         : (ev.estado === 'inscripcion' && isPending() ? `<div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 text-[11px] font-bold text-center mt-4">Inscripción pendiente de aprobación</div>` : '');
 
+    const teamMap = new Map((ev.teams || []).map((t) => [t.id, t]));
+    const relevantMatches = [...eventMatches]
+        .filter((m) => isGroupLeaguePhaseMatch(m, ev) || isKnockoutPhaseMatch(m) || String(m.phase || '').toLowerCase() === 'third_place')
+        .sort((a, b) => {
+            const ad = a.fecha?.toDate ? a.fecha.toDate() : (a.fecha ? new Date(a.fecha) : null);
+            const bd = b.fecha?.toDate ? b.fecha.toDate() : (b.fecha ? new Date(b.fecha) : null);
+            const at = ad?.getTime?.() || Number.MAX_SAFE_INTEGER;
+            const bt = bd?.getTime?.() || Number.MAX_SAFE_INTEGER;
+            if (at !== bt) return at - bt;
+            return Number(a.round || 0) - Number(b.round || 0);
+        });
+    const quickMatches = relevantMatches.slice(0, 6);
+    const quickConfrontationsHtml = quickMatches.length
+        ? quickMatches.map((m) => {
+            const played = m.estado === 'jugado' || !!getResultSetsString(m);
+            const aName = getFriendlyTeamName({ teamName: m.teamAName || teamMap.get(m.teamAId)?.name, teamId: m.teamAId, side: 'A' });
+            const bName = getFriendlyTeamName({ teamName: m.teamBName || teamMap.get(m.teamBId)?.name, teamId: m.teamBId, side: 'B' });
+            const when = m.fecha
+                ? new Date(m.fecha?.toDate ? m.fecha.toDate() : m.fecha).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                : 'Sin fecha';
+            const result = getResultSetsString(m) || 'VS';
+            return `
+                <button type="button" class="ed-duel-row ${played ? 'played' : ''}" onclick="window.verDetallePartido('${m.id}')">
+                    <div class="ed-duel-main">
+                        <span class="ed-duel-phase">${matchPhaseLabel(m)}</span>
+                        <span class="ed-duel-teams">${escapeHtml(aName)} <b>vs</b> ${escapeHtml(bName)}</span>
+                    </div>
+                    <div class="ed-duel-side">
+                        <span class="ed-duel-when">${when}</span>
+                        <span class="ed-duel-result">${escapeHtml(result)}</span>
+                    </div>
+                </button>
+            `;
+        }).join('')
+        : `<div class="empty-state">Todavía no hay enfrentamientos generados.</div>`;
+    const bracketMini = Array.isArray(ev.bracket) && ev.bracket.length
+        ? `
+            <div class="ed-mini-bracket">
+                ${(ev.bracket[0] || []).slice(0, 4).map((m) => {
+                    const md = eventMatches.find((x) => x.matchCode === m.matchCode) || m;
+                    const aName = getFriendlyTeamName({ teamName: md.teamAName || teamMap.get(m.teamAId)?.name, teamId: m.teamAId, side: 'A' });
+                    const bName = getFriendlyTeamName({ teamName: md.teamBName || teamMap.get(m.teamBId)?.name, teamId: m.teamBId, side: 'B' });
+                    return `
+                        <button type="button" class="ed-mini-bracket-match" onclick="window.verDetallePartido('${md.id || md.matchCode || ''}')">
+                            <span>${escapeHtml(aName)}</span>
+                            <span>${escapeHtml(bName)}</span>
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+        `
+        : `<div class="ed-mini-bracket-empty">El cuadro final aparecerá aquí al generarse la eliminatoria.</div>`;
+
     pane.innerHTML = `
         <div class="ed-info-card border-none bg-transparent p-0">
             ${statusCardHtml}
@@ -780,6 +1011,22 @@ function renderInfo(pane) {
                     ${ev.equiposPorGrupo ? `<div class="ed-info-item"><i class="fas fa-arrow-right"></i><div><span class="ed-info-label">Clasifican</span><span class="ed-info-val">${ev.equiposPorGrupo} por grupo</span></div></div>` : ''}
                 </div>
                 ${sorteoLink}
+            </div>
+            <div class="ed-info-card ed-info-premium">
+                <h3 class="ed-info-title"><i class="fas fa-people-arrows"></i> Enfrentamientos del evento</h3>
+                <p class="ed-info-text mb-3 text-[11px] opacity-75">Todo clicable: entra a cada partido para fecha, resultado y acciones.</p>
+                <div class="ed-duel-list">
+                    ${quickConfrontationsHtml}
+                </div>
+            </div>
+            <div class="ed-info-card ed-info-premium">
+                <h3 class="ed-info-title"><i class="fas fa-sitemap"></i> Cuadro rápido de eliminatoria</h3>
+                ${bracketMini}
+                <div class="mt-3">
+                    <button type="button" class="btn-ed-primary w-full justify-center" onclick="document.querySelector('.ed-tab[data-tab=&quot;bracket&quot;]')?.click()">
+                        <i class="fas fa-arrow-right"></i> Ver bracket completo
+                    </button>
+                </div>
             </div>
         </div>`;
 }
@@ -861,16 +1108,40 @@ function renderClasificacion(pane) {
     const teamMap = new Map(teams.map(t => [t.id, t]));
 
     if (ev.formato === 'league') {
-        const table = computeGroupTable(eventMatches.filter(m => isGroupLeaguePhaseMatch(m, ev) && !isKnockoutPhaseMatch(m)), teams, cfg);
+        const table = computeGroupTable(getEventLeagueMatches(eventMatches, ev), teams, cfg);
         pane.innerHTML = tableHtml('Clasificación general', table, teamMap, myTeam);
     } else if (ev.formato === 'league_knockout') {
         const groups = ev.groups || {};
         const groupKeys = Object.keys(groups).sort();
-        let html = '';
-        for (const g of groupKeys) {
-            const gTeams = (groups[g] || []).map(id => teamMap.get(id)).filter(Boolean);
-            const table = computeGroupTable(eventMatches.filter(m => isGroupLeaguePhaseMatch(m, ev) && !isKnockoutPhaseMatch(m) && m.group === g), gTeams, cfg);
-            html += tableHtml(`Grupo ${g}`, table, teamMap, myTeam);
+        const groupsComplete = areGroupsComplete(ev, eventMatches);
+        const hasBracket = Array.isArray(ev.bracket) && ev.bracket.length && getKnockoutMatches().length > 0;
+        let html = `
+            <div class="ed-stage-banner ${hasBracket ? 'is-ready' : groupsComplete ? 'is-pending' : ''}">
+                <div class="ed-stage-copy">
+                    <span class="ed-stage-kicker">Fase actual</span>
+                    <strong>${hasBracket ? 'Eliminatorias activas' : groupsComplete ? 'Clasificación cerrada, falta generar el cuadro' : 'Fase de grupos en juego'}</strong>
+                    <p>${hasBracket ? 'Los cruces finales ya están creados y sincronizados.' : groupsComplete ? 'La clasificación ya está cerrada. Puedes generar el bracket final desde organizador.' : 'La tabla se actualiza automáticamente al registrar resultados.'}</p>
+                </div>
+                ${hasBracket ? `
+                    <button type="button" class="btn-ed-primary" onclick="document.querySelector('.ed-tab[data-tab=&quot;bracket&quot;]')?.click()">
+                        <i class="fas fa-sitemap"></i> Ver bracket
+                    </button>
+                ` : groupsComplete && canOrganizar() ? `
+                    <button type="button" class="btn-ed-primary" onclick="window.generarFaseEliminatoria()">
+                        <i class="fas fa-bolt"></i> Generar eliminatorias
+                    </button>
+                ` : ''}
+            </div>
+        `;
+        if (!groupKeys.length) {
+            const table = computeGroupTable(getEventLeagueMatches(eventMatches, ev), teams, cfg);
+            html += tableHtml('Clasificación general', table, teamMap, myTeam);
+        } else {
+            for (const g of groupKeys) {
+                const gTeams = (groups[g] || []).map(id => teamMap.get(id)).filter(Boolean);
+                const table = computeGroupTable(getMatchesForGroup(g, eventMatches, ev), gTeams, cfg);
+                html += tableHtml(`Grupo ${g}`, table, teamMap, myTeam);
+            }
         }
         pane.innerHTML = html || '<div class="empty-state">No hay grupos definidos.</div>';
     } else {
@@ -1085,12 +1356,13 @@ function matchPhaseLabel(m) {
     if (m.phase === 'knockout') return `ELIMINATORIA R${m.round || 1}`;
     if (m.phase === 'semi') return 'SEMIFINAL';
     if (m.phase === 'final') return 'GRAN FINAL';
+    if (m.phase === 'third_place') return '3º / 4º PUESTO';
     return (m.phase || 'PARTIDO').toUpperCase();
 }
 
 function areGroupsComplete(ev, matches) {
     if (!ev || !Array.isArray(matches)) return false;
-    const groupMatches = matches.filter(m => m.phase === 'group' || m.phase === 'league');
+    const groupMatches = getEventLeagueMatches(matches, ev);
     if (!groupMatches.length) return false;
     return groupMatches.every(m => m.estado === 'jugado' || getResultSetsString(m) || m.ganadorTeamId);
 }
@@ -1104,16 +1376,22 @@ window.openAdvancePhaseModal = () => {
     const nDefault = Number(ev.equiposPorGrupo || 2);
     const groups = ev.groups || {};
     const teamMap = new Map((ev.teams || []).map(t => [t.id, t]));
-    const cfg = { win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0 };
+    const cfg = getStandingsConfig(ev);
     const preSelected = new Set();
+    const groupKeys = Object.keys(groups);
 
-    Object.keys(groups).forEach(g => {
-        const teamIds = groups[g] || [];
-        const groupTeams = teamIds.map(id => teamMap.get(id)).filter(Boolean);
-        const groupMatches = eventMatches.filter(m => (m.phase === 'group' || m.phase === 'league') && m.group === g);
-        const table = computeGroupTable(groupMatches, groupTeams, cfg);
-        table.slice(0, nDefault).forEach(r => preSelected.add(r.teamId));
-    });
+    if (groupKeys.length) {
+        groupKeys.forEach(g => {
+            const teamIds = groups[g] || [];
+            const groupTeams = teamIds.map(id => teamMap.get(id)).filter(Boolean);
+            const groupMatches = getMatchesForGroup(g, eventMatches, ev);
+            const table = computeGroupTable(groupMatches, groupTeams, cfg);
+            table.slice(0, nDefault).forEach(r => preSelected.add(r.teamId));
+        });
+    } else {
+        const table = computeGroupTable(getEventLeagueMatches(eventMatches, ev), ev.teams || [], cfg);
+        table.slice(0, nDefault).forEach((row) => preSelected.add(row.teamId));
+    }
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay active';
@@ -1129,11 +1407,12 @@ window.openAdvancePhaseModal = () => {
                     <input type="number" id="adv-pass-count" class="input w-full mt-2" value="${nDefault}" min="1" max="8">
                 </div>
                 <div class="flex-col gap-3 max-h-[50vh] overflow-y-auto custom-scroll">
-                    ${Object.keys(groups).map(g => {
-                        const teamIds = groups[g] || [];
+                    ${(groupKeys.length ? groupKeys : ['General']).map(g => {
+                        const teamIds = g === 'General' ? (ev.teams || []).map((team) => team.id) : (groups[g] || []);
+                        const title = g === 'General' ? 'Clasificación general' : `Grupo ${g}`;
                         return `
                         <div class="p-3 rounded-xl border border-white/10 bg-white/5">
-                            <div class="text-[10px] font-black text-primary uppercase tracking-widest mb-2">Grupo ${g}</div>
+                            <div class="text-[10px] font-black text-primary uppercase tracking-widest mb-2">${title}</div>
                             <div class="grid grid-cols-2 gap-2">
                                 ${teamIds.map(id => {
                                     const t = teamMap.get(id);
@@ -1181,103 +1460,21 @@ function hasMatchResult(match) {
 
 function renderBracket(pane) {
     if (!currentEvent.bracket || !currentEvent.bracket.length) {
-        // Generar bracket fantasma
-        try {
-            const ev = currentEvent;
-            const nPasan = Number(ev.equiposPorGrupo || 2);
-            const groupsKeys = Object.keys(ev.groups || {});
-            const teamMap = new Map((ev.teams || []).map(t => [t.id, t]));
-            let clasificados = [];
-
-            groupsKeys.forEach(g => {
-                const teamIds = ev.groups[g] || [];
-                const teamsEnGrupo = teamIds.map(id => teamMap.get(id));
-                const groupMatches = eventMatches.filter(m => m.phase === 'group' && m.group === g);
-                const tabla = computeGroupTable(groupMatches, teamsEnGrupo, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
-                tabla.forEach((fila, idx) => {
-                    if (idx < nPasan) clasificados.push(teamMap.get(fila.teamId));
-                });
-            });
-
-            if (clasificados.length < 2) {
-                pane.innerHTML = `<div class="empty-state">Aún no se ha generado el bracket de eliminatorias. Faltan clasificados.</div>`;
-                return;
-            }
-
-            const seedingMode = ev.bracketSeeding || 'random';
-            let seededTeams = clasificados.filter(Boolean);
-            if (seedingMode === 'cross' && groupsKeys.length === 2) {
-                const gA = groupsKeys[0];
-                const gB = groupsKeys[1];
-                const teamsA = (ev.groups[gA] || []).map(id => teamMap.get(id)).filter(Boolean);
-                const teamsB = (ev.groups[gB] || []).map(id => teamMap.get(id)).filter(Boolean);
-                const matchesA = eventMatches.filter(m => m.phase === 'group' && m.group === gA);
-                const matchesB = eventMatches.filter(m => m.phase === 'group' && m.group === gB);
-                const tablaA = computeGroupTable(matchesA, teamsA, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
-                const tablaB = computeGroupTable(matchesB, teamsB, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
-                const aTop = tablaA.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
-                const bTop = tablaB.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
-                const order = [];
-                for (let i = 0; i < nPasan; i++) {
-                    const a = aTop[i];
-                    const b = bTop[nPasan - 1 - i];
-                    if (a && b) order.push(a, b);
-                }
-                for (let i = 0; i < nPasan; i++) {
-                    const b = bTop[i];
-                    const a = aTop[nPasan - 1 - i];
-                    if (a && b) order.push(b, a);
-                }
-                seededTeams = order.filter(Boolean);
-            } else if (seedingMode === 'rank') {
-                const groupMatches = eventMatches.filter(m => m.phase === 'group');
-                const tabla = computeGroupTable(groupMatches, seededTeams, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
-                seededTeams = tabla.map(r => teamMap.get(r.teamId)).filter(Boolean);
-            }
-
-            const rounds = generateKnockoutTree(seededTeams, ev.id + '_preview', { shuffle: seedingMode === 'random' });
-            
-            let html = `
-                <div class="mb-4 p-3 bg-primary/20 border border-primary/40 rounded-xl text-center">
-                    <div class="text-[12px] font-black text-primary uppercase tracking-widest mb-1"><i class="fas fa-eye"></i> Simulación en vivo</div>
-                    <div class="text-[10px] text-white/70">Así quedaría el bracket según la clasificación actual.</div>
-                </div>
-                <div class="bracket-container opacity-80" style="pointer-events:none;"><div class="bracket">`;
-            
-            rounds.forEach((round, rIdx) => {
-                const isLast = (rIdx === rounds.length - 1);
-                const isSemi = (rIdx === rounds.length - 2);
-                const label = isLast ? 'FINAL' : (isSemi ? 'SEMIS' : `RONDA ${rIdx + 1}`);
-
-                html += `<div class="bracket-round"><div class="bracket-round-label">${label}</div>`;
-                
-                round.forEach(m => {
-                    const teamA = currentEvent?.teams?.find(t => t.id === m.teamAId);
-                    const teamB = currentEvent?.teams?.find(t => t.id === m.teamBId);
-                    html += `
-                    <div class="bracket-match pending">
-                        <div class="b-team-v9">
-                            <span class="b-name-v9">${getFriendlyTeamName({ teamName: teamA?.name, teamId: teamA?.id, side: 'A' })}</span>
-                            <span class="b-score-v9">-</span>
-                        </div>
-                        <div class="b-team-v9">
-                            <span class="b-name-v9">${getFriendlyTeamName({ teamName: teamB?.name, teamId: teamB?.id, side: 'B' })}</span>
-                            <span class="b-score-v9">-</span>
-                        </div>
-                    </div>`;
-                });
-                html += `</div>`;
-            });
-            html += `</div></div>`;
-            pane.innerHTML = html;
-        } catch (e) {
-            pane.innerHTML = `<div class="empty-state">Aún no se ha generado el bracket de eliminatorias.</div>`;
-        }
+        pane.innerHTML = `<div class="empty-state">Aún no se ha generado el bracket de eliminatorias.</div>`;
         return;
     }
 
     const groupsComplete = areGroupsComplete(currentEvent, eventMatches);
-    let html = `<div class="bracket-container"><div class="bracket">`;
+    const knockoutReady = groupsComplete || getKnockoutMatches().length > 0;
+    let html = `
+        <div class="ed-bracket-summary ${knockoutReady ? 'is-ready' : ''}">
+            <div>
+                <span class="ed-stage-kicker">Cuadro final</span>
+                <strong>${knockoutReady ? 'Bracket sincronizado' : 'Esperando cierre de grupos'}</strong>
+                <p>${knockoutReady ? 'Los ganadores avanzan automáticamente a la siguiente ronda.' : 'Cuando todos los partidos de grupos tengan resultado, el cuadro podrá activarse.'}</p>
+            </div>
+        </div>
+        <div class="bracket-container"><div class="bracket">`;
     const rounds = currentEvent.bracket;
 
     rounds.forEach((round, rIdx) => {
@@ -1290,29 +1487,49 @@ function renderBracket(pane) {
         
         round.forEach(m => {
             const matchData = eventMatches.find(em => em.matchCode === m.matchCode) || m;
-            const played = matchData.estado === 'jugado';
+            const played = matchData.estado === 'jugado' || !!getResultSetsString(matchData);
             const resultStr = getResultSetsString(matchData);
-            const scoreParts = resultStr.split(' '); // Take the first set or the whole string and try to show it nicely
-            const scoreA = matchData.ganadorTeamId === m.teamAId ? 'Ganador' : (resultStr ? 'Perdedor' : '');
-            const scoreB = matchData.ganadorTeamId === m.teamBId ? 'Ganador' : (resultStr ? 'Perdedor' : '');
-            const pending = isKnockoutPhaseMatch(matchData) && !groupsComplete;
+            const pending = !groupsComplete && (!matchData.teamAId || !matchData.teamBId);
+            const scoreA = resultStr ? (matchData.ganadorTeamId === m.teamAId ? 'WIN' : 'LOSE') : '-';
+            const scoreB = resultStr ? (matchData.ganadorTeamId === m.teamBId ? 'WIN' : 'LOSE') : '-';
 
             html += `
             <div class="bracket-match ${pending ? 'pending' : ''}" ${pending ? '' : `onclick="window.verDetallePartido('${matchData.id || ''}')"`}>
                 <div class="b-team-v9 ${matchData.ganadorTeamId === m.teamAId && played ? 'winner' : ''}">
-                    <span class="b-name-v9">${getFriendlyTeamName({ teamName: m.teamAName, teamId: m.teamAId, side: 'A' })}</span>
+                    <span class="b-name-v9">${getFriendlyTeamName({ teamName: matchData.teamAName || m.teamAName, teamId: m.teamAId, side: 'A' })}</span>
                     <span class="b-score-v9">${scoreA}</span>
                 </div>
                 <div class="b-team-v9 ${matchData.ganadorTeamId === m.teamBId && played ? 'winner' : ''}">
-                    <span class="b-name-v9">${getFriendlyTeamName({ teamName: m.teamBName, teamId: m.teamBId, side: 'B' })}</span>
+                    <span class="b-name-v9">${getFriendlyTeamName({ teamName: matchData.teamBName || m.teamBName, teamId: m.teamBId, side: 'B' })}</span>
                     <span class="b-score-v9">${scoreB}</span>
                 </div>
-                ${pending ? `<span class="bracket-pending-tag">PENDIENTE</span>` : ""}
+                ${pending ? `<span class="bracket-pending-tag">PENDIENTE</span>` : (resultStr ? `<span class="bracket-pending-tag">${escapeHtml(resultStr)}</span>` : "")}
             </div>`;
         });
         html += `</div>`;
     });
+    const thirdPlaceMatch = eventMatches.find((m) => String(m.phase || '').toLowerCase() === 'third_place');
     html += `</div></div>`;
+    if (thirdPlaceMatch) {
+        const played = thirdPlaceMatch.estado === 'jugado';
+        const result = getResultSetsString(thirdPlaceMatch) || '';
+        html += `
+            <div class="mt-4">
+                <div class="bracket-round-label">3º / 4º PUESTO</div>
+                <div class="bracket-match ${played ? '' : 'pending'}" onclick="window.verDetallePartido('${thirdPlaceMatch.id}')">
+                    <div class="b-team-v9 ${thirdPlaceMatch.ganadorTeamId === thirdPlaceMatch.teamAId && played ? 'winner' : ''}">
+                        <span class="b-name-v9">${escapeHtml(thirdPlaceMatch.teamAName || 'Por definir')}</span>
+                        <span class="b-score-v9">${thirdPlaceMatch.ganadorTeamId === thirdPlaceMatch.teamAId ? '3º' : (played ? '4º' : '-')}</span>
+                    </div>
+                    <div class="b-team-v9 ${thirdPlaceMatch.ganadorTeamId === thirdPlaceMatch.teamBId && played ? 'winner' : ''}">
+                        <span class="b-name-v9">${escapeHtml(thirdPlaceMatch.teamBName || 'Por definir')}</span>
+                        <span class="b-score-v9">${thirdPlaceMatch.ganadorTeamId === thirdPlaceMatch.teamBId ? '3º' : (played ? '4º' : '-')}</span>
+                    </div>
+                    ${result ? `<div class="bracket-pending-tag">${escapeHtml(result)}</div>` : ''}
+                </div>
+            </div>
+        `;
+    }
     pane.innerHTML = html;
 }
 
@@ -1897,6 +2114,85 @@ async function advanceBracket(match, winnerTeamId) {
     }
 }
 
+async function syncKnockoutProgress() {
+    if (knockoutSyncInProgress) return;
+    if (!currentEvent?.bracket?.length) return;
+    const knockoutMatches = eventMatches.filter((m) => String(m.phase || '').toLowerCase() === 'knockout');
+    if (!knockoutMatches.length) return;
+    knockoutSyncInProgress = true;
+    try {
+        const teamMap = new Map((currentEvent.teams || []).map((t) => [t.id, t]));
+        const updates = [];
+        const eliminatedNow = new Set();
+        for (const match of knockoutMatches) {
+            const winner = match.ganadorTeamId;
+            if (!winner || !match.matchCode) continue;
+            const loser = [match.teamAId, match.teamBId].find((id) => id && id !== winner);
+            if (loser) eliminatedNow.add(loser);
+            const nextMatch = knockoutMatches.find((m) => m.sourceA === match.matchCode || m.sourceB === match.matchCode);
+            if (!nextMatch) continue;
+            const isSourceA = nextMatch.sourceA === match.matchCode;
+            const team = teamMap.get(winner);
+            if (!team) continue;
+            const patch = {};
+            if (isSourceA && nextMatch.teamAId !== winner) {
+                patch.teamAId = winner;
+                patch.teamAName = getFriendlyTeamName({ teamName: team.name, teamId: winner, side: 'A' });
+            }
+            if (!isSourceA && nextMatch.teamBId !== winner) {
+                patch.teamBId = winner;
+                patch.teamBName = getFriendlyTeamName({ teamName: team.name, teamId: winner, side: 'B' });
+            }
+            if (Object.keys(patch).length) {
+                const other = teamMap.get(isSourceA ? nextMatch.teamBId : nextMatch.teamAId);
+                patch.playerUids = [...(team.playerUids || []), ...(other?.playerUids || [])];
+                patch.updatedAt = serverTimestamp();
+                updates.push(updateDoc(doc(db, 'eventoPartidos', nextMatch.id), patch));
+            }
+        }
+        const maxRound = Math.max(...knockoutMatches.map((m) => Number(m.round || 1)));
+        const semis = knockoutMatches.filter((m) => Number(m.round || 0) === Math.max(1, maxRound - 1));
+        const semisPlayed = semis.length === 2 && semis.every((m) => !!m.ganadorTeamId);
+        const thirdPlaceExists = eventMatches.some((m) => String(m.phase || '').toLowerCase() === 'third_place');
+        if (semisPlayed && !thirdPlaceExists) {
+            const losers = semis.map((m) => [m.teamAId, m.teamBId].find((id) => id && id !== m.ganadorTeamId)).filter(Boolean);
+            if (losers.length === 2) {
+                const teamA = teamMap.get(losers[0]);
+                const teamB = teamMap.get(losers[1]);
+                updates.push(addDoc(collection(db, 'eventoPartidos'), {
+                    eventoId: currentEvent.id,
+                    tipo: 'evento',
+                    phase: 'third_place',
+                    round: maxRound,
+                    slot: 1,
+                    matchCode: `TP_R${maxRound}_M1`,
+                    teamAId: losers[0],
+                    teamBId: losers[1],
+                    teamAName: getFriendlyTeamName({ teamName: teamA?.name, teamId: losers[0], side: 'A' }),
+                    teamBName: getFriendlyTeamName({ teamName: teamB?.name, teamId: losers[1], side: 'B' }),
+                    playerUids: [...(teamA?.playerUids || []), ...(teamB?.playerUids || [])],
+                    ...buildMatchPersistencePatch({ state: 'abierto', resultStr: '' }),
+                    ganadorTeamId: null,
+                    createdAt: serverTimestamp(),
+                }));
+            }
+        }
+        if (eliminatedNow.size && Array.isArray(currentEvent.teams) && currentEvent.teams.length) {
+            const nextTeams = currentEvent.teams.map((team) => {
+                if (team.id === null || team.id === undefined) return team;
+                if (eliminatedNow.has(team.id)) return { ...team, eliminado: true };
+                return team;
+            });
+            updates.push(updateDoc(doc(db, 'eventos', currentEvent.id), { teams: nextTeams, updatedAt: serverTimestamp() }));
+        }
+        if (updates.length) await Promise.all(updates);
+    } catch (e) {
+        console.error('syncKnockoutProgress error:', e);
+    } finally {
+        knockoutSyncInProgress = false;
+    }
+}
+
 window.asignarFechaPartido = async (matchId) => {
     const match = eventMatches.find(m => m.id === matchId);
     if (!match) return;
@@ -1907,6 +2203,7 @@ window.asignarFechaPartido = async (matchId) => {
             fecha: nextDate,
             updatedAt: serverTimestamp()
         });
+        await upsertCalendarLinkForEventMatch(matchId, match, nextDate);
         showToast('Fecha asignada', 'El partido aparece ya en calendario y home', 'success');
     } catch(e) {
         showToast('Error asignando fecha', e.message, 'error');
@@ -2336,42 +2633,8 @@ window.confirmarProgramacionCalendarioED = async (matchId) => {
             updatedAt: serverTimestamp()
         });
         
-        // 2. Add or update calendar (partidosAmistosos) if fully decided
-        if (match.playerUids && match.playerUids.length >= 4) {
-            const col = "partidosAmistosos";
-            const matchData = {
-                ...buildBaseMatchPayload({
-                    creatorId: auth.currentUser.uid,
-                    organizerId: auth.currentUser.uid,
-                    matchDate: combinedDate,
-                    players: match.playerUids,
-                    minLevel: 1,
-                    maxLevel: 7,
-                    visibility: 'public',
-                    state: 'abierto',
-                    extra: {
-                        timestamp: serverTimestamp(),
-                    }
-                }),
-                eventoId: match.eventoId,
-                eventMatchId: match.id,
-                phase: match.phase || '',
-                type: 'evento',
-                eventTeamAId: match.teamAId || null,
-                eventTeamBId: match.teamBId || null,
-                eventTeamAName: match.teamAName || '',
-                eventTeamBName: match.teamBName || ''
-            };
-            if (match.linkedMatchId && match.linkedMatchCollection) {
-                await updateDoc(doc(db, match.linkedMatchCollection, match.linkedMatchId), matchData);
-            } else {
-                const newMatchRef = await addDoc(collection(db, col), matchData);
-                await updateDoc(doc(db, 'eventoPartidos', matchId), {
-                    linkedMatchId: newMatchRef.id,
-                    linkedMatchCollection: col
-                });
-            }
-        }
+        // 2. Ensure calendar match is linked
+        await upsertCalendarLinkForEventMatch(matchId, match, combinedDate);
         
         hideLoading();
         showToast("¡Listo!", "Calendario actualizado y partido programado", "success");
@@ -2381,6 +2644,46 @@ window.confirmarProgramacionCalendarioED = async (matchId) => {
         showToast("Error", e.message, "error");
     }
 };
+
+async function upsertCalendarLinkForEventMatch(matchId, matchSnapshot = null, scheduledDate = null) {
+    const match = matchSnapshot || eventMatches.find((m) => m.id === matchId);
+    if (!match || !(match.playerUids && match.playerUids.length >= 4)) return;
+    const col = "partidosAmistosos";
+    const baseDate = scheduledDate || (match.fecha?.toDate ? match.fecha.toDate() : (match.fecha ? new Date(match.fecha) : null));
+    if (!baseDate) return;
+    const matchData = {
+        ...buildBaseMatchPayload({
+            creatorId: auth.currentUser.uid,
+            organizerId: auth.currentUser.uid,
+            matchDate: baseDate,
+            players: match.playerUids,
+            minLevel: 1,
+            maxLevel: 7,
+            visibility: 'public',
+            state: 'abierto',
+            extra: {
+                timestamp: serverTimestamp(),
+            }
+        }),
+        eventoId: match.eventoId,
+        eventMatchId: match.id,
+        phase: match.phase || '',
+        type: 'evento',
+        eventTeamAId: match.teamAId || null,
+        eventTeamBId: match.teamBId || null,
+        eventTeamAName: match.teamAName || '',
+        eventTeamBName: match.teamBName || ''
+    };
+    if (match.linkedMatchId && match.linkedMatchCollection) {
+        await updateDoc(doc(db, match.linkedMatchCollection, match.linkedMatchId), matchData);
+    } else {
+        const newMatchRef = await addDoc(collection(db, col), matchData);
+        await updateDoc(doc(db, 'eventoPartidos', matchId), {
+            linkedMatchId: newMatchRef.id,
+            linkedMatchCollection: col
+        });
+    }
+}
 
 window.generarFaseEliminatoria = async (opts = {}) => {
     if (!canOrganizar()) return;
@@ -2393,7 +2696,7 @@ window.generarFaseEliminatoria = async (opts = {}) => {
 
     const manualIds = Array.isArray(opts.selectedTeamIds) ? opts.selectedTeamIds.filter(Boolean) : null;
     let nPasan = Number.isFinite(Number(opts.nPasan)) ? parseInt(opts.nPasan) : null;
-    if (!nPasan) {
+    if (!nPasan && !opts.auto) {
         const pasanPorGrupo = await askEventTextInput({
             title: 'Clasificados por grupo',
             label: 'Equipos que avanzan',
@@ -2404,44 +2707,28 @@ window.generarFaseEliminatoria = async (opts = {}) => {
         if (!pasanPorGrupo) return;
         nPasan = parseInt(pasanPorGrupo);
     }
+    if (!nPasan) nPasan = Number(ev.equiposPorGrupo || 2);
 
-    const groupsKeys = Object.keys(ev.groups || {});
-    let clasificados = [];
-    let eliminados = [];
     const teamMap = new Map((ev.teams || []).map(t => [t.id, t]));
-
-    if (manualIds && manualIds.length) {
-        clasificados = manualIds.map(id => teamMap.get(id)).filter(Boolean);
-        const allIds = (ev.teams || []).map(t => t.id);
-        eliminados = allIds.filter(id => !manualIds.includes(id)).map(id => teamMap.get(id)).filter(Boolean);
-    } else {
-        groupsKeys.forEach(g => {
-            const teamIds = ev.groups[g] || [];
-            const teamsEnGrupo = teamIds.map(id => teamMap.get(id));
-            const groupMatches = eventMatches.filter(m => m.phase === 'group' && m.group === g);
-            const tabla = computeGroupTable(groupMatches, teamsEnGrupo, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
-            
-            tabla.forEach((fila, idx) => {
-                if (idx < nPasan) {
-                    clasificados.push(teamMap.get(fila.teamId));
-                } else {
-                    eliminados.push(teamMap.get(fila.teamId));
-                }
-            });
-        });
-    }
+    const qualification = getLeagueKnockoutQualification(ev, eventMatches, manualIds, nPasan);
+    const groupsKeys = qualification.groupsKeys;
+    let clasificados = qualification.clasificados;
+    let eliminados = qualification.eliminados;
+    nPasan = qualification.nPasan;
 
     if (clasificados.length < 2) {
         showToast('Error', 'No hay suficientes equipos clasificados para generar eliminatorias', 'error');
         return;
     }
 
-    if (!(await confirmEventAction({
-        title: 'Generar fase final',
-        message: `Avanzan ${clasificados.length} equipos y ${eliminados.length} quedan fuera del cuadro final.`,
-        confirmLabel: 'Generar cuadro',
-        danger: true
-    }))) return;
+    if (!opts.auto) {
+        if (!(await confirmEventAction({
+            title: 'Generar fase final',
+            message: `Avanzan ${clasificados.length} equipos y ${eliminados.length} quedan fuera del cuadro final.`,
+            confirmLabel: 'Generar cuadro',
+            danger: true
+        }))) return;
+    }
 
     try {
         const updatedTeams = (ev.teams || []).map(t => {
@@ -2449,14 +2736,15 @@ window.generarFaseEliminatoria = async (opts = {}) => {
             return { ...t, eliminado: false };
         });
 
-        const oldMatches = eventMatches.filter(m => m.phase === 'knockout' || m.phase === 'semi' || m.phase === 'final');
+        const oldMatches = eventMatches.filter((m) => ['knockout', 'semi', 'final', 'third_place'].includes(String(m.phase || '').toLowerCase()));
         if (oldMatches.length) {
              const batch = writeBatch(db);
              oldMatches.forEach(m => {
                  batch.delete(doc(db, 'eventoPartidos', m.id));
              });
              await batch.commit();
-        }        const seedingMode = ev.bracketSeeding || 'random';
+        }
+        const seedingMode = ev.bracketSeeding || 'random';
         let seededTeams = clasificados.filter(Boolean);
 
         if (!manualIds || !manualIds.length) {
@@ -2465,8 +2753,8 @@ window.generarFaseEliminatoria = async (opts = {}) => {
                 const gB = groupsKeys[1];
                 const teamsA = (ev.groups[gA] || []).map(id => teamMap.get(id)).filter(Boolean);
                 const teamsB = (ev.groups[gB] || []).map(id => teamMap.get(id)).filter(Boolean);
-                const matchesA = eventMatches.filter(m => m.phase === 'group' && m.group === gA);
-                const matchesB = eventMatches.filter(m => m.phase === 'group' && m.group === gB);
+                const matchesA = getMatchesForGroup(gA, eventMatches, ev);
+                const matchesB = getMatchesForGroup(gB, eventMatches, ev);
                 const tablaA = computeGroupTable(matchesA, teamsA, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
                 const tablaB = computeGroupTable(matchesB, teamsB, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
                 const aTop = tablaA.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
@@ -2484,8 +2772,8 @@ window.generarFaseEliminatoria = async (opts = {}) => {
                 }
                 seededTeams = order.filter(Boolean);
             } else if (seedingMode === 'rank') {
-                const groupMatches = eventMatches.filter(m => m.phase === 'group');
-                const tabla = computeGroupTable(groupMatches, seededTeams, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+                const groupMatches = getEventLeagueMatches(eventMatches, ev);
+                const tabla = computeGroupTable(groupMatches, seededTeams, getStandingsConfig(ev));
                 seededTeams = tabla.map(r => teamMap.get(r.teamId)).filter(Boolean);
             }
         }
@@ -2494,7 +2782,8 @@ window.generarFaseEliminatoria = async (opts = {}) => {
             seededTeams,
             ev.id + '_fase2_new',
             { shuffle: seedingMode === 'random' && !(manualIds && manualIds.length) }
-        );const partidosRef = collection(db, 'eventoPartidos');
+        );
+        const partidosRef = collection(db, 'eventoPartidos');
         for (let r = 0; r < bracketRounds.length; r++) {
             const round = bracketRounds[r];
             for (let s = 0; s < round.length; s++) {
@@ -2526,7 +2815,14 @@ window.generarFaseEliminatoria = async (opts = {}) => {
             }
         }
 
-        await updateDoc(doc(db, 'eventos', ev.id), { teams: updatedTeams, bracket: bracketRounds });
+        await updateDoc(doc(db, 'eventos', ev.id), {
+            teams: updatedTeams,
+            bracket: flattenBracketRounds(bracketRounds),
+            faseActual: 'knockout',
+            equiposPorGrupo: nPasan,
+            bracketSeeding: seedingMode,
+            updatedAt: serverTimestamp()
+        });
         showToast('Fase generada', 'Eliminatorias creadas y perdedores eliminados', 'success');
 
     } catch(e) {
@@ -2544,19 +2840,10 @@ window.simularBracketEvento = async () => {
     }
 
     const nPasan = Number(ev.equiposPorGrupo || 2);
-    const groupsKeys = Object.keys(ev.groups || {});
     const teamMap = new Map((ev.teams || []).map(t => [t.id, t]));
-    let clasificados = [];
-
-    groupsKeys.forEach(g => {
-        const teamIds = ev.groups[g] || [];
-        const teamsEnGrupo = teamIds.map(id => teamMap.get(id));
-        const groupMatches = eventMatches.filter(m => m.phase === 'group' && m.group === g);
-        const tabla = computeGroupTable(groupMatches, teamsEnGrupo, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
-        tabla.forEach((fila, idx) => {
-            if (idx < nPasan) clasificados.push(teamMap.get(fila.teamId));
-        });
-    });
+    const qualification = getLeagueKnockoutQualification(ev, eventMatches, null, nPasan);
+    const groupsKeys = qualification.groupsKeys;
+    const clasificados = qualification.clasificados;
 
     if (clasificados.length < 2) {
         showToast('Error', 'No hay suficientes equipos clasificados para simular', 'error');
@@ -2570,8 +2857,8 @@ window.simularBracketEvento = async () => {
         const gB = groupsKeys[1];
         const teamsA = (ev.groups[gA] || []).map(id => teamMap.get(id)).filter(Boolean);
         const teamsB = (ev.groups[gB] || []).map(id => teamMap.get(id)).filter(Boolean);
-        const matchesA = eventMatches.filter(m => m.phase === 'group' && m.group === gA);
-        const matchesB = eventMatches.filter(m => m.phase === 'group' && m.group === gB);
+        const matchesA = getMatchesForGroup(gA, eventMatches, ev);
+        const matchesB = getMatchesForGroup(gB, eventMatches, ev);
         const tablaA = computeGroupTable(matchesA, teamsA, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
         const tablaB = computeGroupTable(matchesB, teamsB, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
         const aTop = tablaA.slice(0, nPasan).map(r => teamMap.get(r.teamId)).filter(Boolean);
@@ -2589,8 +2876,8 @@ window.simularBracketEvento = async () => {
         }
         seededTeams = order.filter(Boolean);
     } else if (seedingMode === 'rank') {
-        const groupMatches = eventMatches.filter(m => m.phase === 'group');
-        const tabla = computeGroupTable(groupMatches, seededTeams, {win: ev.puntosVictoria || 3, draw: ev.puntosEmpate || 1, loss: ev.puntosDerrota || 0});
+        const groupMatches = getEventLeagueMatches(eventMatches, ev);
+        const tabla = computeGroupTable(groupMatches, seededTeams, getStandingsConfig(ev));
         seededTeams = tabla.map(r => teamMap.get(r.teamId)).filter(Boolean);
     }
 
@@ -3121,6 +3408,3 @@ window.proponerFechaEvento = async (matchId) => {
 window.vincularPartidoCalendario = (matchId) => {
     window.location.href = `calendario.html?vincularMatchId=${matchId}`;
 };
-
-
-

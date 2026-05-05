@@ -264,6 +264,12 @@ function renderEvents() {
     let events = [...allEvents];
     if (currentFilter === 'active') {
         events = events.filter(e => e.estado === 'activo' || e.estado === 'inscripcion');
+    } else if (currentFilter === 'finished') {
+        events = events.filter(e => e.estado === 'finalizado' || e.estado === 'cancelado');
+    } else if (currentFilter === 'mine') {
+        events = events.filter(e =>
+            Array.isArray(e.inscritos) && e.inscritos.some(i => i.uid === currentUser?.uid)
+        );
     } else if (currentFilter !== 'all') {
         events = events.filter(e => e.formato === currentFilter);
     }
@@ -600,9 +606,28 @@ function renderStandingTable(standings) {
       </div>`;
 }
 
+function normalizeBracketRounds(rounds = []) {
+    if (!Array.isArray(rounds) || !rounds.length) return [];
+    if (Array.isArray(rounds[0])) return rounds;
+    const grouped = new Map();
+    rounds
+        .filter((match) => match && typeof match === 'object')
+        .forEach((match) => {
+            const round = Number(match.round || 1);
+            const slot = Number(match.slot || 1);
+            const next = { ...match, round, slot };
+            if (!grouped.has(round)) grouped.set(round, []);
+            grouped.get(round).push(next);
+        });
+    return Array.from(grouped.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([, matches]) => matches.sort((a, b) => Number(a.slot || 0) - Number(b.slot || 0)));
+}
+
 function renderBracket(rounds = []) {
-    if (!rounds.length) return `<p class="text-center text-muted text-[12px] py-8">Bracket no generado.</p>`;
-    return `<div class="bracket-wrap">${rounds.map((round, ri) => `
+    const normalizedRounds = normalizeBracketRounds(rounds);
+    if (!normalizedRounds.length) return `<p class="text-center text-muted text-[12px] py-8">Bracket no generado.</p>`;
+    return `<div class="bracket-wrap">${normalizedRounds.map((round, ri) => `
         <div class="bracket-round">
           <div class="bracket-round-label">Ronda ${ri+1}</div>
           ${round.map(m => `

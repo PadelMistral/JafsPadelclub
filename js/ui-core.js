@@ -37,6 +37,17 @@ function repairMojibakeText(value = "") {
     for (const [broken, fixed] of MOJIBAKE_REPLACEMENTS) {
         output = output.split(broken).join(fixed);
     }
+    output = output
+        .replaceAll("\u00C3\u00A1", "\u00E1")
+        .replaceAll("\u00C3\u00A9", "\u00E9")
+        .replaceAll("\u00C3\u00AD", "\u00ED")
+        .replaceAll("\u00C3\u00B3", "\u00F3")
+        .replaceAll("\u00C3\u00BA", "\u00FA")
+        .replaceAll("\u00C3\u00B1", "\u00F1")
+        .replaceAll("\u00C3\u201C", "\u00D3")
+        .replaceAll("\u00C3\u2030", "\u00C9")
+        .replaceAll("\u00C2\u00BF", "\u00BF")
+        .replaceAll("\u00C2\u00A1", "\u00A1");
     return output;
 }
 
@@ -75,6 +86,13 @@ function normalizeTextNodeTree(root = document.body) {
     while (walker.nextNode()) dirtyNodes.push(walker.currentNode);
     dirtyNodes.forEach((node) => {
         node.nodeValue = repairMojibakeText(node.nodeValue);
+    });
+
+    window.showAppDiagnostics = () => ({
+        path: window.location.pathname,
+        online: navigator.onLine,
+        dataErrors: Array.isArray(window.__dataErrors) ? window.__dataErrors.slice(-20) : [],
+        logs: typeof window.getAppLogs === 'function' ? window.getAppLogs().slice(-20) : [],
     });
 }
 
@@ -329,6 +347,55 @@ function ensureErrorBoundaryLayer() {
     node.querySelector('#app-error-boundary-reload')?.addEventListener('click', () => window.location.reload());
 }
 
+function ensureDataStatusBanner() {
+    if (typeof document === 'undefined' || document.getElementById('app-data-status-banner')) return;
+    const style = document.createElement('style');
+    style.id = 'app-data-status-style';
+    style.textContent = `
+      .app-data-status-banner{position:fixed;left:50%;bottom:calc(var(--app-nav-h,78px) + env(safe-area-inset-bottom,0px) + 12px);transform:translateX(-50%) translateY(18px);z-index:19999;width:min(520px,calc(100vw - 24px));display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:18px;border:1px solid rgba(250,204,21,.26);background:linear-gradient(135deg,rgba(15,23,42,.96),rgba(24,18,8,.94));color:rgba(255,255,255,.86);box-shadow:0 20px 52px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08);backdrop-filter:blur(18px);opacity:0;pointer-events:none;transition:opacity .24s ease,transform .24s ease}
+      .app-data-status-banner.is-visible{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+      .app-data-status-copy{min-width:0;display:grid;gap:2px}
+      .app-data-status-copy strong{font-size:11px;font-weight:950;letter-spacing:1px;text-transform:uppercase;color:#fde68a}
+      .app-data-status-copy span{font-size:11px;line-height:1.35;color:rgba(255,255,255,.7)}
+      .app-data-status-action{flex:0 0 auto;border:1px solid rgba(253,230,138,.35);border-radius:12px;background:rgba(253,230,138,.1);color:#fde68a;padding:8px 10px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer}
+    `;
+    document.head.appendChild(style);
+
+    const banner = document.createElement('div');
+    banner.id = 'app-data-status-banner';
+    banner.className = 'app-data-status-banner';
+    banner.setAttribute('role', 'status');
+    banner.setAttribute('aria-live', 'polite');
+    banner.innerHTML = `
+      <div class="app-data-status-copy">
+        <strong id="app-data-status-title">Sincronizacion pendiente</strong>
+        <span id="app-data-status-text">Los datos se mostraran en cuanto Firebase responda.</span>
+      </div>
+      <button type="button" class="app-data-status-action" id="app-data-status-action">Reintentar</button>
+    `;
+    document.body.appendChild(banner);
+    banner.querySelector('#app-data-status-action')?.addEventListener('click', () => window.location.reload());
+}
+
+function updateDataStatusBanner() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const banner = document.getElementById('app-data-status-banner');
+    if (!banner) return;
+    const errors = Array.isArray(window.__dataErrors) ? window.__dataErrors : [];
+    const hasDataIssue = errors.some((item) => /unavailable|permission-denied|failed-precondition|unknown/i.test(item?.code || ''));
+    const offline = navigator.onLine === false;
+    const shouldShow = offline || hasDataIssue;
+    const title = document.getElementById('app-data-status-title');
+    const text = document.getElementById('app-data-status-text');
+    if (title) title.textContent = offline ? 'Modo sin conexion' : 'Sincronizacion pendiente';
+    if (text) {
+        text.textContent = offline
+            ? 'Estas viendo la app con datos cacheados. Al volver la conexion se actualizara sola.'
+            : 'Algunos datos aun no han llegado. Puedes seguir usando la app o reintentar.';
+    }
+    banner.classList.toggle('is-visible', shouldShow);
+}
+
 function showErrorBoundary() {
     const node = document.getElementById('app-error-boundary');
     if (!node) return;
@@ -368,11 +435,13 @@ function initGlobalFeedbackHooks() {
 
     window.addEventListener('offline', () => {
         AudioManager.play('ERROR', 0.25);
+        updateDataStatusBanner();
         showToast('Sin conexión', 'Verifica internet para sincronizar tus datos.', 'warning');
     });
 
     window.addEventListener('online', () => {
         AudioManager.play('SUCCESS', 0.25);
+        updateDataStatusBanner();
         showToast('Conexión restablecida', 'La sincronización se ha reanudado.', 'success');
     });
 }
@@ -731,11 +800,21 @@ export function initAppUI(activePageName) {
 
     bindCopyNormalizer();
     normalizeVisibleCopy(document.body);
+    
+    // Theme Initialization
+    const savedTheme = localStorage.getItem("appTheme");
+    if (savedTheme) {
+        document.documentElement.setAttribute("data-theme", savedTheme);
+    }
     initGlobalFeedbackHooks();
     ensureRuntimePolishStyles();
     ensureGlobalBackgroundLayer();
     ensureErrorBoundaryLayer();
+    ensureDataStatusBanner();
     ensureBootLoader();
+    if (!window.__dataStatusInterval) {
+        window.__dataStatusInterval = setInterval(updateDataStatusBanner, 2500);
+    }
     const nativePlatform = typeof window !== 'undefined' && window.Capacitor?.getPlatform?.();
     const isNativeApp = typeof window !== 'undefined' && Boolean(window.Capacitor?.isNativePlatform?.() || nativePlatform === 'android' || nativePlatform === 'ios');
     if (typeof document !== 'undefined') {
@@ -757,28 +836,6 @@ export function initAppUI(activePageName) {
         setTimeout(() => hideBootLoader(0), 5000);
     }
 
-    // Keep visual stack deterministic across pages:
-    // master-polish -> ux-enhance -> padel-fusion (last)
-    const ensureStylesheetAsLast = (href, key) => {
-        const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
-        let link = links.find((el) => String(el.getAttribute('href') || '').includes(key));
-        if (!link) {
-            link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = href;
-            link.setAttribute('data-ui-core-style', key);
-            document.head.appendChild(link);
-            return;
-        }
-        if (link.parentNode === document.head) {
-            document.head.appendChild(link);
-        }
-    };
-
-    ensureStylesheetAsLast('./css/master-polish.css', 'master-polish.css');
-    ensureStylesheetAsLast('./css/ux-enhance.css', 'ux-enhance.css');
-    ensureStylesheetAsLast('./css/padel-fusion.css', 'padel-fusion.css');
-
     // Register Service Worker for PWA + automatic updates only on web.
     if (!isNativeApp && 'serviceWorker' in navigator && !window.__swRegisterBound) {
         window.__swRegisterBound = true;
@@ -796,7 +853,10 @@ export function initAppUI(activePageName) {
                 attempt = attempt.catch(() => navigator.serviceWorker.register(cfg.swPath, {
                     scope: cfg.swScope,
                     updateViaCache: 'none'
-                }).then((reg) => ({ reg, cfg })));
+                }).then((reg) => {
+                    if (!reg?.scope) throw new Error('sw_registration_unavailable');
+                    return { reg, cfg };
+                }));
             });
 
             attempt
@@ -827,7 +887,13 @@ export function initAppUI(activePageName) {
                         .then((readyReg) => bindServiceWorkerUpdateFlow(readyReg))
                         .catch(() => {});
                 })
-                .catch((err) => logError('sw_register_failed', { reason: err?.message || 'unknown' }));
+                .catch((err) => {
+                    if (navigator.webdriver || err?.message === 'sw_registration_unavailable') {
+                        logWarn('sw_register_skipped', { reason: err?.message || 'test_environment' });
+                        return;
+                    }
+                    logError('sw_register_failed', { reason: err?.message || 'unknown' });
+                });
         };
 
         if (document.readyState === 'complete') registerSW();
@@ -951,31 +1017,44 @@ function listenToGlobalNotifs(uid) {
 function ensureToastContainerStyles(container) {
     if (!container || typeof window === 'undefined') return;
     const styles = window.getComputedStyle(container);
-    const needsFallback = styles.position === 'static' || Number(styles.zIndex || 0) < 1000;
+    const needsFallback =
+        styles.position === 'static' ||
+        styles.display === 'none' ||
+        styles.visibility === 'hidden' ||
+        Number(styles.opacity || 1) === 0 ||
+        Number(styles.zIndex || 0) < 1000;
     if (!needsFallback) return;
+
+    const headerEl = document.querySelector('.app-header, .premium-header, .site-header, header');
+    const headerHeight = Math.max(Math.round(headerEl?.getBoundingClientRect?.().height || 0), 72);
+    const topOffset = headerHeight + 10;
 
     if (window.innerWidth <= 640) {
         // Mobile positioning: floating top stack
         container.style.position = 'fixed';
-        container.style.top = 'calc(72px + env(safe-area-inset-top, 0px))';
+        container.style.top = `calc(${topOffset}px + env(safe-area-inset-top, 0px))`;
         container.style.bottom = 'auto';
-        container.style.left = '16px';
-        container.style.right = '16px';
+        container.style.left = '12px';
+        container.style.right = '12px';
         container.style.maxWidth = 'none';
         container.style.zIndex = '999999';
     } else {
         // Desktop positioning: Top Right
         container.style.position = 'fixed';
-        container.style.top = 'calc(72px + env(safe-area-inset-top, 0px))';
+        container.style.top = `calc(${topOffset}px + env(safe-area-inset-top, 0px))`;
         container.style.right = '12px';
         container.style.left = 'auto';
-        container.style.maxWidth = '360px';
+        container.style.maxWidth = '380px';
         container.style.zIndex = '999999';
     }
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
     container.style.gap = '10px';
     container.style.pointerEvents = 'none';
+    container.style.visibility = 'visible';
+    container.style.opacity = '1';
+    container.style.maxHeight = `calc(100vh - ${topOffset + 20}px - env(safe-area-inset-top, 0px))`;
+    container.style.overflow = 'visible';
 }
 
 function getOrCreateToastContainer() {
@@ -996,6 +1075,10 @@ function getOrCreateToastContainer() {
         while (node.firstChild) container.appendChild(node.firstChild);
         node.remove();
     });
+
+    if (container.parentNode === document.body) {
+        document.body.appendChild(container);
+    }
 
     ensureToastContainerStyles(container);
     return container;
@@ -1023,6 +1106,13 @@ function ensureToastItemStyles(toast, type) {
     toast.style.border = `1px solid ${borders[type] || borders.info}`;
     toast.style.color = '#e2e8f0';
     toast.style.boxShadow = '0 10px 30px rgba(0,0,0,0.45)';
+    toast.style.position = 'relative';
+    toast.style.width = '100%';
+    toast.style.boxSizing = 'border-box';
+    toast.style.opacity = '1';
+    toast.style.visibility = 'visible';
+    toast.style.transform = 'translateY(0)';
+    toast.style.zIndex = '1000000';
     toast.style.pointerEvents = 'auto';
 }
 
@@ -1192,8 +1282,3 @@ export function showSidePreferenceModal() {
 if (typeof window !== 'undefined') {
     window.showSidePreferenceModal = showSidePreferenceModal;
 }
-
-
-
-
-

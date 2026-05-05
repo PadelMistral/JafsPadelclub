@@ -3,6 +3,7 @@ import { getDocument, updateDocument, auth, db, subscribeCol, getDocsSafe, obser
 import { initThemeSystem } from './theme-manager.js';
 import { logInfo } from '../core/app-logger.js';
 import { AudioManager } from './audio-manager.js';
+import { APP_APK_DOWNLOAD_ENABLED, APP_APK_URL, resolveApkDownloadUrl } from '../app-config.js';
 
 // Initialize theme system immediately  
 initThemeSystem();
@@ -346,6 +347,15 @@ function bindHeaderProfileMenu(userData = null) {
         closeMenu();
         window.location.href = "perfil.html";
     });
+    const themeBtn = document.getElementById("header-toggle-theme");
+    themeBtn?.addEventListener("click", () => {
+        closeMenu();
+        const html = document.documentElement;
+        const isLight = html.getAttribute("data-theme") === "light";
+        const newTheme = isLight ? "galactic" : "light";
+        html.setAttribute("data-theme", newTheme);
+        localStorage.setItem("appTheme", newTheme);
+    });
     historyBtn?.addEventListener("click", () => {
         closeMenu();
         window.location.href = "diario.html";
@@ -355,9 +365,20 @@ function bindHeaderProfileMenu(userData = null) {
         window.location.href = "palas.html";
     });
     const apkBtn = document.getElementById("header-go-apk");
-    apkBtn?.addEventListener("click", () => {
+    if (apkBtn && !APP_APK_DOWNLOAD_ENABLED) {
+        apkBtn.style.display = "none";
+    }
+    apkBtn?.addEventListener("click", async () => {
         closeMenu();
-        window.location.href = "descargar_apk.html";
+        let apkUrl = APP_APK_URL;
+        try {
+            apkUrl = await resolveApkDownloadUrl();
+        } catch (_) {}
+        if (!apkUrl) {
+            emitToast("APK no publicada", "Instala la PWA desde el navegador mientras no haya APK disponible.", "info");
+            return;
+        }
+        window.location.href = new URL(apkUrl, window.location.href).toString();
     });
     adminViewBtn?.addEventListener("click", async () => {
         closeMenu();
@@ -468,6 +489,9 @@ export async function injectHeader(userData = null) {
                 <div class="header-admin" onclick="window.location.href='admin.html'" id="admin-header-link" title="Panel Admin">
                     <i class="fas fa-shield-halved"></i>
                 </div>
+                <div class="header-last-register" onclick="window.location.href='admin.html#users-panel'" id="header-last-register" title="Ultimo registro">
+                    <i class="fas fa-user-plus"></i>
+                </div>
             ` : ''}
             <div class="header-online" onclick="window.showOnlineNexus && window.showOnlineNexus()" title="Usuarios conectados">
                 <span class="header-online-dot"></span>
@@ -491,6 +515,7 @@ export async function injectHeader(userData = null) {
                     <div class="header-menu-grid">
                         <button class="header-menu-action" id="header-go-history"><i class="fas fa-book-open"></i> Diario</button>
                         <button class="header-menu-action" id="header-go-palas"><i class="fas fa-table-tennis-paddle-ball"></i> Palas</button>
+                        <button class="header-menu-action" id="header-toggle-theme"><i class="fas fa-moon"></i> Tema</button>
                         <button class="header-menu-action" id="header-go-apk" style="color:#00d4ff;"><i class="fas fa-download"></i> App Nativa</button>
                     </div>
                     ${isAdmin ? `
@@ -507,8 +532,9 @@ export async function injectHeader(userData = null) {
     `;
     
     document.body.prepend(header);
-    document.documentElement.style.setProperty('--app-header-h', '70px');
+    document.documentElement.style.setProperty('--app-header-h', window.innerWidth <= 520 ? '66px' : '76px');
     bindHeaderProfileMenu(userData);
+    if (isAdmin) updateHeaderLastRegistration();
     
     if (auth.currentUser && !window.__notifBadgeManagedByUICore) {
         Promise.resolve(
@@ -531,6 +557,25 @@ export async function injectHeader(userData = null) {
     if (window.__headerOnlineInterval) clearInterval(window.__headerOnlineInterval);
 }
 
+async function updateHeaderLastRegistration() {
+    const node = document.getElementById("header-last-register");
+    if (!node) return;
+    try {
+        const { collection, query, orderBy, limit } = await import("https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js");
+        const snap = await getDocsSafe(
+            query(collection(db, "usuarios"), orderBy("fechaRegistro", "desc"), limit(1)),
+            "header-last-register",
+        );
+        const latest = snap?.docs?.[0] ? { id: snap.docs[0].id, ...snap.docs[0].data() } : null;
+        if (!latest) return;
+        const name = latest.nombreUsuario || latest.nombre || latest.email || "Nuevo usuario";
+        node.setAttribute("title", `Ultimo registro: ${name}`);
+        node.classList.add("has-data");
+    } catch (_) {
+        node.setAttribute("title", "Ultimo registro");
+    }
+}
+
 /**
  * Updates header with live user data
  */
@@ -544,6 +589,8 @@ export function updateHeader(userData) {
         const isAdmin = isAdminUser(userData);
         if (roleLink) {
             roleLink.style.display = isAdmin ? 'flex' : 'none';
+            const lastRegister = document.getElementById('header-last-register');
+            if (lastRegister) lastRegister.style.display = isAdmin ? 'flex' : 'none';
         } else if (isAdmin) {
             const actions = document.querySelector('.header-actions');
             if (actions) {
@@ -556,6 +603,7 @@ export function updateHeader(userData) {
                 actions.prepend(node);
             }
         }
+        if (isAdmin) updateHeaderLastRegistration();
     }
 }
 
@@ -615,7 +663,7 @@ export async function injectNavbar(activePage) {
     `;
 
     document.body.appendChild(nav);
-    document.documentElement.style.setProperty('--app-nav-h', '80px');
+    document.documentElement.style.setProperty('--app-nav-h', window.innerWidth <= 520 ? '74px' : '84px');
     nav.querySelectorAll('a.nav-item-v8').forEach((a) => {
         a.addEventListener('click', (e) => {
             const href = a.getAttribute('href');

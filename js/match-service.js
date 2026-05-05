@@ -775,8 +775,8 @@ async function loadEventLinkOptions(dateStr, hour, uid) {
 
         const options = window._pendingEventMatches.map((m) => {
             const phase = String(m.phase || 'evento').toUpperCase();
-            const groupTag = m.group ? ` · GRUPO ${String(m.group).toUpperCase()}` : '';
-            const label = `${phase}${groupTag} · ${m.teamAName || 'Equipo A'} VS ${m.teamBName || 'Equipo B'}`;
+            const groupTag = m.group ? ` Â· GRUPO ${String(m.group).toUpperCase()}` : '';
+            const label = `${phase}${groupTag} Â· ${m.teamAName || 'Equipo A'} VS ${m.teamBName || 'Equipo B'}`;
             return `<option value="${m.eventoId}|${m.id}|${m.phase || ''}">${label}</option>`;
         });
 
@@ -868,12 +868,89 @@ export async function syncLinkedEventMatchFromRegularMatch(matchId, col, resultS
             const loserName = loserTeamId === teamAId ? (evMatch?.teamAName || m?.eventTeamAName) : (evMatch?.teamBName || m?.eventTeamBName);
             if (eventId && winnerTeamId && loserTeamId) {
                 await applyEventStandingsUpdate(eventId, teamAId, teamBId, winnerTeamId, loserTeamId, winnerName, loserName, parsed);
+                  if (String(evMatch.phase || "").toLowerCase() === "knockout") {
+                      await applyEventKnockoutUpdate(eventId, evMatch, winnerTeamId, winnerName);
+                  }
             }
         }
     } catch (_) {}
 }
 
+
+async function applyEventKnockoutUpdate(eventId, evMatch, winnerTeamId, winnerName) {
+    if (!evMatch.matchCode) return;
+    try {
+        const evSnap = await getDoc(doc(db, 'eventos', eventId));
+        if (!evSnap.exists()) return;
+        const ev = evSnap.data();
+        let bracketUpdated = false;
+        let bracket = ev.bracket;
+        
+        const q = query(collection(db, 'eventoPartidos'), where('eventoId', '==', eventId));
+        const matchesSnap = await getDocs(q);
+        let nextMatch = null;
+        matchesSnap.forEach(d => {
+            const m = d.data();
+            if (m.sourceA === evMatch.matchCode || m.sourceB === evMatch.matchCode) {
+                nextMatch = { id: d.id, ...m };
+            }
+        });
+        
+        if (nextMatch) {
+            const isSourceA = nextMatch.sourceA === evMatch.matchCode;
+            const updateData = {};
+            if (isSourceA) {
+                updateData.teamAId = winnerTeamId;
+                updateData.teamAName = winnerName;
+            } else {
+                updateData.teamBId = winnerTeamId;
+                updateData.teamBName = winnerName;
+            }
+            const team = (ev.teams || []).find(t => t.id === winnerTeamId);
+            const otherTeamId = isSourceA ? nextMatch.teamBId : nextMatch.teamAId;
+            const otherTeam = (ev.teams || []).find(t => t.id === otherTeamId);
+            updateData.playerUids = [
+                ...(team?.playerUids || []),
+                ...(otherTeam?.playerUids || [])
+            ];
+            await updateDoc(doc(db, 'eventoPartidos', nextMatch.id), updateData);
+            
+            if (Array.isArray(bracket)) {
+                bracket = bracket.map(round => round.map(m => {
+                    if (m.matchCode === nextMatch.matchCode) {
+                        bracketUpdated = true;
+                        if (isSourceA) { m.teamAId = winnerTeamId; m.teamAName = winnerName; }
+                        else { m.teamBId = winnerTeamId; m.teamBName = winnerName; }
+                    }
+                    if (m.matchCode === evMatch.matchCode) {
+                        bracketUpdated = true;
+                        m.winner = m.teamAId === winnerTeamId ? 'A' : 'B';
+                    }
+                    return m;
+                }));
+            }
+        } else {
+            if (Array.isArray(bracket)) {
+                bracket = bracket.map(round => round.map(m => {
+                    if (m.matchCode === evMatch.matchCode) {
+                        bracketUpdated = true;
+                        m.winner = m.teamAId === winnerTeamId ? 'A' : 'B';
+                    }
+                    return m;
+                }));
+            }
+        }
+        
+        if (bracketUpdated) {
+            await updateDoc(doc(db, 'eventos', eventId), { bracket });
+        }
+    } catch(e) {
+        console.error('Error in applyEventKnockoutUpdate:', e);
+    }
+}
+
 // Update event standings (eventoClasificacion) when a linked event match is resolved.
+
 async function applyEventStandingsUpdate(eventId, teamAId, teamBId, winnerTeamId, loserTeamId, winnerName, loserName, parsed = null) {
     try {
         const evSnap = await getDoc(doc(db, 'eventos', eventId));
@@ -939,7 +1016,7 @@ async function applyEventStandingsUpdate(eventId, teamAId, teamBId, winnerTeamId
  * Creates match in Firestore.
  */
 window.executeCreateMatch = async (dateStr, hour) => {
-    if (!auth.currentUser) return triggerFeedback({ title: "ERROR", msg: "Debes iniciar sesión", type: "error" });
+    if (!auth.currentUser) return triggerFeedback({ title: "ERROR", msg: "Debes iniciar sesion", type: "error" });
     const createRl = rateLimitCheck(`match_create:${auth.currentUser.uid}`, { windowMs: 60 * 60 * 1000, max: 10, minIntervalMs: 12000 });
     if (!createRl.ok) return triggerFeedback({ title: "BLOQUEADO", msg: "Demasiadas creaciones en poco tiempo", type: "warning" });
     const minInput = document.getElementById('inp-min-lvl');
@@ -961,7 +1038,7 @@ window.executeCreateMatch = async (dateStr, hour) => {
     const linkedEvent = getEventLinkValue();
 
     if (type === 'evento' && !linkedEvent) {
-        return triggerFeedback({ title: "SELECCIÓN REQUERIDA", msg: "Para crear un partido de evento, debes seleccionar uno de la lista.", type: "warning" });
+        return triggerFeedback({ title: "SELECCION REQUERIDA", msg: "Para crear un partido de evento, debes seleccionar uno de la lista.", type: "warning" });
     }
     
     const createT0 = performance.now();
@@ -986,7 +1063,7 @@ window.executeCreateMatch = async (dateStr, hour) => {
             }
             if (!linkedEventMatch) {
                 hideLoading();
-                return showToast("Evento", "El partido de evento seleccionado ya no está disponible.", "warning");
+                return showToast("Evento", "El partido de evento seleccionado ya no esta disponible.", "warning");
             }
         }
 
@@ -1187,19 +1264,28 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         <i class="fas fa-droplet ${rain > 0 ? 'text-blue-400' : 'text-gray-500'} text-[10px]"></i>
                         <span class="text-[10px] font-black">${rain}</span>
                         <span class="opacity-30">|</span>
-                        <span class="text-[10px] font-black text-white">${Math.round(w.current.temperature_2m)}°C</span>
+                        <span class="text-[10px] font-black text-white">${Math.round(w.current.temperature_2m)}Â°C</span>
                     </div>
                 `;
             }
         } catch(e) {}
 
-        const isFullView = isParticipant || isAdmin;
+        const { levelFromRating } = await import('./config/elo-system.js');
+        let myLvl = viewerData?.nivel || 2.5;
+        if (viewerData && Number.isFinite(viewerData.puntosRanking) && viewerData.puntosRanking > 0 && viewerData.puntosRanking !== 1000) {
+            myLvl = levelFromRating(viewerData.puntosRanking);
+        }
+        const minLvl = m.restriccionNivel?.min || 0;
+        const maxLvl = m.restriccionNivel?.max || 7;
+        const meetsLevel = myLvl >= minLvl && myLvl <= maxLvl;
+        const isClosed = String(m.estado || '').toLowerCase() === 'cerrada';
+        const isFullView = isParticipant || isAdmin || (!isPlayed && !isClosed && meetsLevel);
 
         // --- READ MODE (NON-PARTICIPANTS) ---
         if (!isFullView) {
             const setsStr = (m.resultado?.sets || "").trim();
             const hasResult = setsStr.length > 0;
-            const resultText = hasResult ? setsStr : "FALTA AÑADIR RESULTADO";
+            const resultText = hasResult ? setsStr : "FALTA ANADIR RESULTADO";
             const resultColor = hasResult ? "text-sport-green shadow-glow-green" : "text-sport-red opacity-60";
 
             container.innerHTML = `
@@ -1213,12 +1299,12 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         <div class="scale-90">${weatherHtml}</div>
                     </div>
 
-                    <!-- ALINEACIÓN -->
+                    <!-- ALINEACION -->
                     <div class="read-court-v7 p-4 bg-white/5 rounded-2xl border border-white/10 relative overflow-hidden">
                         <div class="flex-row between items-center mb-5 px-1 relative z-10">
                              <div class="flex-row items-center gap-2">
                                 <div class="w-1 h-3 bg-primary rounded-full"></div>
-                                <span class="text-[10px] font-black uppercase tracking-widest opacity-80">Alineación</span>
+                                <span class="text-[10px] font-black uppercase tracking-widest opacity-80">Alineacion</span>
                              </div>
                              ${isReto ? '<span class="text-[8px] font-black text-sport-gold border border-sport-gold/30 px-2 py-0.5 rounded-full">ES RANKED</span>' : '<span class="text-[8px] font-black opacity-30">AMISTOSO</span>'}
                         </div>
@@ -1384,7 +1470,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                     <span class="hero-time-v7">${date.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})}</span>
                     <div class="hero-date-v7">
                         ${date.toLocaleDateString('es-ES', {weekday:'long', day:'numeric'}).toUpperCase()}
-                        <span class="dash">—"</span>
+                        <span class="dash">â€”"</span>
                         ${date.toLocaleDateString('es-ES', {month:'long'}).toUpperCase()}
                     </div>
                     <div class="mt-4 opacity-80 scale-90">${weatherHtml}</div>
@@ -1456,7 +1542,7 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
 
                     ${isOrganizer ? `
                         <div class="px-2 mb-2">
-                            <span class="text-[8px] font-black text-primary uppercase tracking-widest opacity-60">ACTION CENTER · ${viewerData?.rol === 'Admin' ? 'ADMIN ACCESS' : 'ORGANIZADOR'}</span>
+                            <span class="text-[8px] font-black text-primary uppercase tracking-widest opacity-60">ACTION CENTER Â· ${viewerData?.rol === 'Admin' ? 'ADMIN ACCESS' : 'ORGANIZADOR'}</span>
                         </div>
                     ` : ''}
 
@@ -1561,7 +1647,13 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
                         if (!rawName || rawName.toLowerCase() === 'desconocido') return null;
                         return rawName;
                     };
-                    const getLvl = (p) => Number.isFinite(p?.level) ? Number(p.level) : null;
+                    const { levelFromRating } = await import('./config/elo-system.js');
+                    const getLvl = (p) => {
+                        if (p && Number.isFinite(p.points) && p.points > 0 && p.points !== 1000) {
+                            return levelFromRating(p.points);
+                        }
+                        return Number.isFinite(p?.level) ? Number(p.level) : null;
+                    };
                     let teamA = [formatPosterName(players[0]), formatPosterName(players[1])].filter(Boolean);
                     let teamB = [formatPosterName(players[2]), formatPosterName(players[3])].filter(Boolean);
                     let levelsA = [getLvl(players[0]), getLvl(players[1])].filter(v => v !== null);
@@ -1678,8 +1770,8 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                     </div>
                 </div>
 
-                <!-- Alineación -->
-                <span class="cfg-label-v7">FORMACIÓN TúCTICA</span>
+                <!-- Alineacion -->
+                <span class="cfg-label-v7">FORMACION TACTICA</span>
                 <div class="court-container-v7 mb-4">
                     <div class="court-schema-v7" style="padding: 20px 10px; min-height: 220px;">
                         <div class="court-net"></div>
@@ -1687,7 +1779,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                         
                         <div class="players-row-v7 top mb-8">
                             ${await renderCreationSlot(0, preFillPlayers?.[0], currentUser, userData)}
-                            ${await renderCreationSlot(1, preFillPlayers?.[1], currentUser, userData, 'COMPAÑERO')}
+                            ${await renderCreationSlot(1, preFillPlayers?.[1], currentUser, userData, 'COMPANERO')}
                         </div>
                         
                         <div class="vs-divider-v7">
@@ -1703,7 +1795,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                     </div>
                 </div>
 
-                <!-- Configuración -->
+                <!-- Configuracion -->
                 <span class="cfg-label-v7">DETALLES DE PISTA</span>
                 <div class="flex-row gap-2 mb-4">
                     <div class="l-input-box flex-1 p-2.5 bg-white/5 rounded-xl border border-white/10">
@@ -1714,7 +1806,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                         </select>
                     </div>
                     <div class="l-input-box flex-1 p-2.5 bg-white/5 rounded-xl border border-white/10">
-                        <label class="text-[8px] font-black text-muted uppercase block mb-0.5">UBICACIÓN</label>
+                        <label class="text-[8px] font-black text-muted uppercase block mb-0.5">UBICACION</label>
                         <select id="sel-court" class="bg-transparent border-none text-white font-bold text-[11px] w-full outline-none" onchange="window.toggleCourtInput(this)">
                             <option value="Mistral-Homes">MISTRAL</option>
                             <option value="custom">OTRA...</option>
@@ -1747,7 +1839,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                 <div class="flex-row items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10 mb-5">
                     <div class="flex-col">
                         <span class="text-white font-black text-[10px] tracking-widest">PARTIDA PRIVADA</span>
-                        <span class="text-[8px] text-muted uppercase">SOLO CON INVITACIÓN</span>
+                        <span class="text-[8px] text-muted uppercase">SOLO CON INVITACION</span>
                     </div>
                     <label class="toggle-v7">
                         <input type="checkbox" id="inp-private" onchange="window._creationVisibility = this.checked ? 'private' : 'public'">
@@ -1757,7 +1849,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
 
                 <button class="btn-confirm-v7 mission-btn w-full" onclick="executeCreateMatch('${dateStr}', '${hour}')">
                     <div class="flex-row center gap-3">
-                        <span class="t-main" style="letter-spacing: 2px;">DESPLEGAR MISIÓN</span>
+                        <span class="t-main" style="letter-spacing: 2px;">DESPLEGAR MISION</span>
                         <i class="fas fa-location-arrow"></i>
                     </div>
                 </button>
@@ -1774,7 +1866,7 @@ export async function renderCreationForm(container, dateStr, hour, currentUser, 
                 const box = document.getElementById('creation-weather');
                 if (box) {
                     box.className = 'meta-pill';
-                    box.innerHTML = `<i class="fas fa-cloud-sun text-primary mr-1"></i><span>${Math.round(w.current.temperature_2m)}°C</span>`;
+                    box.innerHTML = `<i class="fas fa-cloud-sun text-primary mr-1"></i><span>${Math.round(w.current.temperature_2m)}Â°C</span>`;
                 }
             }
         } catch(e) {}
@@ -1825,7 +1917,7 @@ async function renderCreationSlot(idx, preUid, currentUser, userData, label = ""
     const teamColor = isTeamA ? 'var(--primary)' : 'var(--secondary)';
     
     if (p) {
-        const name = uid === currentUser.uid ? 'Tú' : p.name;
+        const name = uid === currentUser.uid ? 'Tu' : p.name;
         return `
             <div class="p-slot-v7 active" id="slot-${idx}-wrap">
                 <div class="p-img-box" style="border-color:${teamColor}">
@@ -1839,7 +1931,7 @@ async function renderCreationSlot(idx, preUid, currentUser, userData, label = ""
     return `
         <div class="p-slot-v7 pointer" id="slot-${idx}-wrap" onclick="window.handleCreationSlotClick(${idx})">
             <div class="p-img-box empty" style="border-color:${teamColor}; opacity: 0.4"><i class="fas fa-plus text-muted"></i></div>
-            <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:${teamColor}; opacity:0.5">${label || (idx < 2 ? 'COMPAÑERO' : 'RIVAL')}</span>
+            <span class="text-[8px] font-black uppercase text-muted tracking-widest mt-2" style="color:${teamColor}; opacity:0.5">${label || (idx < 2 ? 'COMPANERO' : 'RIVAL')}</span>
         </div>
     `;
 }
@@ -1849,7 +1941,7 @@ async function renderCreationSlot(idx, preUid, currentUser, userData, label = ""
  * @private
  */
 async function getPlayerData(uid) {
-    const fallback = { name: 'Vacío', photo: `https://ui-avatars.com/api/?name=V&background=random&color=fff`, level: 2.5, id: null, points: 1000 };
+    const fallback = { name: 'Vacio', photo: `https://ui-avatars.com/api/?name=V&background=random&color=fff`, level: 2.5, id: null, points: 1000 };
     if (!uid) return fallback;
     
     // Normalize UID to string just in case
@@ -1930,7 +2022,7 @@ function renderPlayerSlot(p, idx, options = {}) {
             <div class="p-img-box empty" style="border:1.5px dashed ${teamColor}; opacity:0.3">
                 <i class="fas fa-plus text-white opacity-50"></i>
             </div>
-            <span class="text-[8px] font-black uppercase tracking-widest mt-2" style="color:${teamColor}; opacity:0.4">${canSelfJoin ? 'UNIRME' : 'VACÍO'}</span>
+            <span class="text-[8px] font-black uppercase tracking-widest mt-2" style="color:${teamColor}; opacity:0.4">${canEdit ? 'AÑADIR' : (canSelfJoin ? 'UNIRME' : 'VACÍO')}</span>
         </div>
     `;
 }
@@ -1965,7 +2057,6 @@ function getMatchPlayers(match) {
 
 function isUserInMatch(match, uid) {
     if (!uid || !match) return false;
-    if (match.creador === uid || match.organizerId === uid) return true;
     if (getMatchPlayers(match).includes(uid)) return true;
     // Also check playerUids directly (used by eventoPartidos)
     if (Array.isArray(match.playerUids) && match.playerUids.includes(uid)) return true;
@@ -1986,7 +2077,7 @@ function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col
     const isPlayed = hasResult || matchState === 'cancelado' || matchState === 'anulado';
     const canReportNow = canReportResultNow(m);
     if (isPlayed) {
-        if (isAdmin) {
+        if (isAdmin || isParticipant || isOrganizer) {
             return `<button class="btn-confirm-v7" onclick="openResultForm('${id}', '${col}')"><span class="t-main">EDITAR RESULTADO</span><i class="fas fa-pen"></i></button>`;
         }
         return `<button class="btn-confirm-v7 opacity-80" onclick="openResultForm('${id}', '${col}')"><span class="t-main">SOLO LECTURA</span><i class="fas fa-eye"></i></button>`;
@@ -1998,11 +2089,11 @@ function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col
     if (isOrganizer && !isParticipant) {
         actionsHtml = `
             <div class="flex-row gap-2 w-full mb-3">
-                <button class="flex-1 py-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-black text-cyan-400" onclick="window.startSwapMode('${id}', '${col}')">POSICIÓN</button>
+                <button class="flex-1 py-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-black text-cyan-400" onclick="window.startSwapMode('${id}', '${col}')">POSICION</button>
                 <button class="flex-1 py-4 rounded-xl bg-red-500/10 border border-red-500/30 text-[10px] font-black text-red-500" onclick="executeMatchAction('delete', '${id}', '${col}')">BORRAR</button>
             </div>
             ${realPlayerCount === MAX_PLAYERS ? `
-                ${isAdmin ? `
+                ${canReportNow || isAdmin || isOrganizer ? `
                   <button class="btn-confirm-v7" onclick="openResultForm('${id}', '${col}')">
                       <span class="t-main">EDITAR RESULTADO</span>
                       <i class="fas fa-flag-checkered"></i>
@@ -2013,7 +2104,11 @@ function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col
                       <i class="fas fa-eye"></i>
                   </button>
                 `}
-            ` : `<div class="px-6 py-4 rounded-xl bg-white/5 border border-white/5 text-center w-full">
+            ` : `<button class="btn-confirm-v7 w-full shadow-glow-primary hover:scale-[1.02] transition-transform font-black uppercase text-black bg-[#c6ff00] mb-2" style="background:#c6ff00; color:#000; border-color:#c6ff00;" onclick="executeMatchAction('join', '${id}', '${col}')">
+                    <span class="t-main text-black text-center" style="letter-spacing: 1px;">UNIRSE AL SQUAD</span>
+                    <i class="fas fa-fingerprint"></i>
+                 </button>
+                 <div class="px-6 py-4 rounded-xl bg-white/5 border border-white/5 text-center w-full">
                     <span class="text-[10px] font-black text-muted uppercase tracking-widest">ORGANIZANDO (${realPlayerCount}/${MAX_PLAYERS})</span>
                  </div>`}
         `;
@@ -2026,8 +2121,8 @@ function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col
                 <span class="text-[10px] font-black text-muted uppercase tracking-widest">PROTOCOLO COMPLETO (${MAX_PLAYERS}/${MAX_PLAYERS})</span>
             </div>`;
         } else {
-            actionsHtml = `<button class="btn-confirm-v7" onclick="executeMatchAction('join', '${id}', '${col}')">
-                <span class="t-main">UNIRSE AL SQUAD</span>
+            actionsHtml = `<button class="btn-confirm-v7 w-full shadow-glow-primary hover:scale-[1.02] transition-transform font-black uppercase text-black bg-[#c6ff00] mb-2" style="background:#c6ff00; color:#000; border-color:#c6ff00;" onclick="executeMatchAction('join', '${id}', '${col}')">
+                <span class="t-main text-black text-center" style="letter-spacing: 1px;">UNIRSE AL SQUAD</span>
                 <i class="fas fa-fingerprint"></i>
             </button>`;
         }
@@ -2038,7 +2133,7 @@ function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col
                     ABANDONAR
                 </button>
                 <button class="flex-1 py-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-black text-cyan-400 hover:bg-cyan-500/20" onclick="window.startSwapMode('${id}', '${col}')">
-                    POSICIÓN
+                    POSICION
                 </button>
                 ${isOrganizer ? 
                     `<button class="flex-1 py-4 rounded-xl bg-red-500/10 border border-red-500/30 text-[10px] font-black text-red-500 hover:bg-red-500/20" onclick="executeMatchAction('delete', '${id}', '${col}')">CANCELAR</button>` : 
@@ -2075,11 +2170,11 @@ window.startSwapMode = async (mid, col) => {
     const isParticipant = isUserInMatch(match, myUid);
     const isPlayed = hasMatchResult(match) || String(match.estado || '').toLowerCase() === 'cancelado' || String(match.estado || '').toLowerCase() === 'anulado';
     if (isPlayed || canReportResultNow(match)) {
-        showToast("BLOQUEADO", "No se puede cambiar posición en un partido finalizado.", "warning");
+        showToast("BLOQUEADO", "No se puede cambiar posicion en un partido finalizado.", "warning");
         return;
     }
     if (!isOrganizer && !isParticipant) {
-        showToast("SIN PERMISOS", "Solo organizador/admin o participantes pueden cambiar posición.", "error");
+        showToast("SIN PERMISOS", "Solo organizador/admin o participantes pueden cambiar posicion.", "error");
         return;
     }
     
@@ -2088,7 +2183,7 @@ window.startSwapMode = async (mid, col) => {
 
     if (isOrganizer && !isParticipant) {
         let firstPick = null;
-        showToast("MODO POSICIÓN", "Selecciona dos plazas para intercambiar.", "info");
+        showToast("MODO POSICION", "Selecciona dos plazas para intercambiar.", "info");
         slots.forEach((s, idx) => {
             const overlay = document.createElement('div');
             overlay.className = 'swap-overlay absolute inset-0 bg-cyan-400/20 backdrop-blur-sm rounded-2xl flex center z-20 cursor-pointer';
@@ -2097,7 +2192,7 @@ window.startSwapMode = async (mid, col) => {
                 e.stopPropagation();
                 if (firstPick === null) {
                     firstPick = idx;
-                    overlay.innerHTML = `<span class="text-[8px] font-black text-black bg-primary px-2 py-1 rounded">1ª PLAZA</span>`;
+                    overlay.innerHTML = `<span class="text-[8px] font-black text-black bg-primary px-2 py-1 rounded">1Âª PLAZA</span>`;
                     return;
                 }
                 if (firstPick === idx) return;
@@ -2110,7 +2205,7 @@ window.startSwapMode = async (mid, col) => {
         return;
     }
 
-    showToast("MODO POSICIÓN", "Selecciona una nueva plaza para intercambiarte", "info");
+    showToast("MODO POSICION", "Selecciona una nueva plaza para intercambiarte", "info");
     
     slots.forEach((s, idx) => {
         // Check if this slot contains me
@@ -2122,7 +2217,7 @@ window.startSwapMode = async (mid, col) => {
         
         const overlay = document.createElement('div');
         overlay.className = 'swap-overlay absolute inset-0 bg-primary/20 backdrop-blur-sm rounded-2xl flex center z-20 cursor-pointer animate-pulse';
-        overlay.innerHTML = `<span class="text-[8px] font-black text-black bg-primary px-2 py-1 rounded">MOVER AQUÍ</span>`;
+        overlay.innerHTML = `<span class="text-[8px] font-black text-black bg-primary px-2 py-1 rounded">MOVER AQUI</span>`;
         overlay.onclick = (e) => {
             e.stopPropagation();
             window.executeMatchAction('swap', mid, col, {to: idx});
@@ -2154,7 +2249,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             if (!rl.ok) return showToast("BLOQUEADO", "Demasiadas acciones repetidas. Espera unos segundos.", "warning");
         }
         const { showLoading, hideLoading } = await import('./modules/ui-loader.js');
-        const labels = { 'join': 'Uniéndose...', 'leave': 'Abandonando...', 'delete': 'Cancelando...', 'remove': 'Procesando...', 'add': 'Añadiendo...' };
+        const labels = { 'join': 'Uniendose...', 'leave': 'Abandonando...', 'delete': 'Cancelando...', 'remove': 'Procesando...', 'add': 'Anadiendo...' };
         showLoading(labels[action] || "Sincronizando...", true);
 
         const isAdmin = (await getDocument('usuarios', user.uid))?.rol === 'Admin' || user.email === 'Juanan221091@gmail.com';
@@ -2165,7 +2260,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
         const timeLockedActions = ['join', 'add', 'swap'];
         if (isPastKickoff && !isPlayed && timeLockedActions.includes(action)) {
             hideLoading();
-            return showToast("BLOQUEADO", "La franja ya pasó. Solo se permite consulta o reporte de resultado.", "warning");
+            return showToast("BLOQUEADO", "La franja ya paso. Solo se permite consulta o reporte de resultado.", "warning");
         }
         
         if (action === 'join') {
@@ -2209,9 +2304,9 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 if (reason === "already_in") return showToast("INFO", "Ya formas parte de este partido", "info");
                 if (reason === "full") return showToast("COMPLETO", "Sin huecos en este nodo", "warning");
                 if (reason === "level_restricted") return showToast("ACCESO DENEGADO", "Nivel incompatible con el protocolo", "warning");
-                if (reason === "private_denied") return showToast("ACCESO DENEGADO", "Requiere invitación oficial", "error");
-                if (reason === "time_locked") return showToast("BLOQUEADO", "La franja ya pasó. Solo consulta/resultado.", "warning");
-                return showToast("ERROR", "No se pudo unir por conflicto de sincronización.", "error");
+                if (reason === "private_denied") return showToast("ACCESO DENEGADO", "Requiere invitacion oficial", "error");
+                if (reason === "time_locked") return showToast("BLOQUEADO", "La franja ya paso. Solo consulta/resultado.", "warning");
+                return showToast("ERROR", "No se pudo unir por conflicto de sincronizacion.", "error");
             }
             jugs = joinResult.players || jugs;
             analyticsTiming("match.join_ms", performance.now() - joinT0);
@@ -2229,7 +2324,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 await createNotification(
                     others,
                     "Partido completo",
-                    `La partida del ${day} a las ${time} está cerrada: ya sois ${MAX_PLAYERS} jugadores.`,
+                    `La partida del ${day} a las ${time} esta cerrada: ya sois ${MAX_PLAYERS} jugadores.`,
                     'match_full',
                     'home.html',
                     { type: 'match_full', matchId: id, dedupId: `match_full_${id}` }
@@ -2268,7 +2363,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 if (activeJugs.length === 0 && jugs.filter(id => id).length === 0) {
                     await deleteDoc(ref);
                     hideLoading();
-                    triggerFeedback({title: "NODO COLAPSADO", msg: "Partido eliminado por vacío", type: "info"});
+                    triggerFeedback({title: "NODO COLAPSADO", msg: "Partido eliminado por vacio", type: "info"});
                 } else {
                     await updateDoc(ref, { 
                         jugadores: jugs,
@@ -2310,7 +2405,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
         else if (action === 'delete') {
             if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
             
-            if (confirm("¿Abortar misión?")) {
+            if (confirm("¿Abortar mision?")) {
                 const others = jugs.filter(uid => uid && uid !== user.uid && !(typeof uid === 'string' && uid.startsWith('GUEST_')));
                 const adminDoc = await getDocument('usuarios', user.uid);
                 const adminName = adminDoc?.nombreUsuario || adminDoc?.nombre || 'El organizador';
@@ -2397,10 +2492,10 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
              if (!addResult?.ok) {
                 hideLoading();
                 const reason = addResult?.reason || "unknown";
-                if (reason === "already_in") return showToast("INFO", "Ese jugador ya está en el partido", "info");
+                if (reason === "already_in") return showToast("INFO", "Ese jugador ya esta en el partido", "info");
                 if (reason === "full") return triggerFeedback(FEEDBACK.MATCH.FULL);
-                if (reason === "slot_busy") return showToast("BLOQUEADO", "Ese hueco ya está ocupado", "warning");
-                return showToast("ERROR", "No se pudo añadir por conflicto de sincronización.", "error");
+                if (reason === "slot_busy") return showToast("BLOQUEADO", "Ese hueco ya esta ocupado", "warning");
+                return showToast("ERROR", "No se pudo añadir por conflicto de sincronizacion.", "error");
              }
              jugs = addResult.players || jugs;
              
@@ -2409,7 +2504,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 const currentPlayers = jugs.filter(id => id).length;
                 await createNotification(
                     extra.uid,
-                    "¡Convocado!",
+                    "Convocado",
                     `Te han unido a una partida para el ${day}. Ya sois ${currentPlayers}/${MAX_PLAYERS} jugadores.`,
                     'match_join',
                     'calendario.html',
@@ -2417,14 +2512,19 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 );
              }
              hideLoading();
-             triggerFeedback({title: "AÑADIDO", msg: "Agente reclutado", type: "success"});
+             triggerFeedback({title: "ANADIDO", msg: "Agente reclutado", type: "success"});
+             // Update DOM animation closing modal
+             if (window.closePlayerSelectorModal) window.closePlayerSelectorModal();
+             if (window.closeMatchModal) window.closeMatchModal();
+             // Reload view
+             if (window.handleSlot) setTimeout(() => window.handleSlot(null, null, id, col), 300);
         }
         else if (action === 'swap') {
             const state = String(m.estado || '').toLowerCase();
             const played = !!m.resultado?.sets || state === 'cancelado' || state === 'anulado';
             if (played) {
                 hideLoading();
-                return showToast("BLOQUEADO", "No se puede cambiar posición tras finalizar.", "warning");
+                return showToast("BLOQUEADO", "No se puede cambiar posicion tras finalizar.", "warning");
             }
             const fromIdx = extra.from !== undefined ? Number(extra.from) : jugs.indexOf(user.uid);
             const toIdx = extra.to;
@@ -2440,7 +2540,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 equipoB: [jugs[2], jugs[3]]
             });
             hideLoading();
-            triggerFeedback({title: "POSICIÓN ACTUALIZADA", msg: "Alineación reconfigurada", type: "success"});
+            triggerFeedback({title: "POSICION ACTUALIZADA", msg: "Alineacion reconfigurada", type: "success"});
             if(window.closeMatchModal) window.closeMatchModal();
         }
     } catch(e) { 
@@ -2486,7 +2586,7 @@ window.sendMatchChat = async (id, col) => {
     const text = inp.value.trim();
     if (!text || !auth.currentUser) return;
     if (text.length > 500) {
-        return showToast("MENSAJE LARGO", "Máximo 500 caracteres por mensaje.", "warning");
+        return showToast("MENSAJE LARGO", "Maximo 500 caracteres por mensaje.", "warning");
     }
     const msgRef = await addDoc(collection(db, col, id, 'chat'), {
         uid: auth.currentUser.uid,
@@ -2563,7 +2663,7 @@ async function resolveMentionTargets(matchId, col, text, senderUid) {
 }
 
 async function getPlayerName(uid) {
-    if (!uid) return 'Anónimo';
+    if (!uid) return 'Anonimo';
     const eventName = getEventUserName(uid);
     if (eventName) return eventName;
     const identity = await resolveIdentity(uid).catch(() => null);
@@ -2852,7 +2952,7 @@ export const openResultForm = async (id, col) => {
                     <div class="text-4xl font-black italic text-white mt-3 tracking-tighter relative z-10">${resultRead}</div>
                 </div>
 
-                <button class="btn-confirm-v7 mb-2" style="background:rgba(20,184,166,0.1); border:1px solid rgba(20,184,166,0.3)" onclick="window.shareMatch('${id}', '${col}')"> <span class="t-main" style="color:var(--primary)">COMPARTIR P�STER</span> <i class="fas fa-share-nodes" style="color:var(--primary)"></i> </button> <br><button class="btn-confirm-v7" onclick="window.closeHomeMatchModal()">
+                <button class="btn-confirm-v7 mb-2" style="background:rgba(20,184,166,0.1); border:1px solid rgba(20,184,166,0.3)" onclick="window.shareMatch('${id}', '${col}')"> <span class="t-main" style="color:var(--primary)">COMPARTIR PÓSTER</span> <i class="fas fa-share-nodes" style="color:var(--primary)"></i> </button> <br><button class="btn-confirm-v7" onclick="window.closeHomeMatchModal()">
                     <span class="t-main">CERRAR PROTOCOLO</span>
                     <i class="fas fa-check"></i>
                 </button>
@@ -2888,7 +2988,7 @@ export const openResultForm = async (id, col) => {
                 <div class="booking-hub-v7 animate-up p-3 max-w-sm mx-auto">
                     <h3 class="hub-title-v7 text-center mb-4">Resultado bloqueado</h3>
                     <div class="p-4 rounded-2xl border border-white/10 bg-white/5 text-center">
-                        <p class="text-[10px] text-white/65 mt-2">Aún no hay ${MAX_PLAYERS} jugadores confirmados en la partida.</p>
+                        <p class="text-[10px] text-white/65 mt-2">Aun no hay ${MAX_PLAYERS} jugadores confirmados en la partida.</p>
                     </div>
                     <button class="btn-confirm-v7 mt-4" onclick="window.closeMatchModal()">
                         <span class="t-main">ENTENDIDO</span>
@@ -2922,7 +3022,7 @@ export const openResultForm = async (id, col) => {
     // Fetch player names for MVP selection
     const playersResolved = Array.isArray(players) && players.length ? players : [];
     const playerNames = await Promise.all(playersResolved.map(async (uid) => {
-        if (!uid) return { id: null, name: 'Vacío' };
+        if (!uid) return { id: null, name: 'Vacio' };
         const name = await getPlayerName(uid);
         return { id: uid, name };
     }));
@@ -2933,7 +3033,7 @@ export const openResultForm = async (id, col) => {
             <h3 class="hub-title-v7 text-center mb-6">Resultados</h3>
             ${adminEditMode ? `
             <div class="mb-4 p-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 text-[10px] text-amber-300 font-bold uppercase tracking-widest text-center">
-                Modo Admin · Edición de resultado
+                Modo Admin · Edicion de resultado
             </div>` : ''}
             <div class="flex-col gap-4 mb-6">
                 ${[1, 2, 3].map(i => `
@@ -3020,7 +3120,7 @@ export const openResultForm = async (id, col) => {
         
         if (res.length < 2) return showToast("INCOMPLETO", "Se requieren al menos 2 sets", "warning");
         if (res.some(r => String(r) === "0-0")) {
-            return showToast("RESULTADO INVÁLIDO", "No puedes registrar sets 0-0. Introduce marcadores reales.", "warning");
+            return showToast("RESULTADO INVALIDO", "No puedes registrar sets 0-0. Introduce marcadores reales.", "warning");
         }
 
         const resultT0 = performance.now();
@@ -3039,7 +3139,7 @@ export const openResultForm = async (id, col) => {
                 console.log("[ResultForm] admin override", { id, col, resultStr });
                 await adminOverrideMatchResult({ id, ...matchDoc }, col, resultStr);
                 await syncLinkedEventMatchFromRegularMatch(id, col, resultStr);
-                showToast("RESULTADO ACTUALIZADO", "Edición admin aplicada.", "success");
+                showToast("RESULTADO ACTUALIZADO", "Edicion admin aplicada.", "success");
                 window.closeMatchModal();
                 return;
             }
@@ -3069,7 +3169,7 @@ export const openResultForm = async (id, col) => {
                 await createNotification(
                     targetUids,
                     "Resultado subido",
-                    `${meName} subió el resultado: ${resultStr}.`,
+                    `${meName} subio el resultado: ${resultStr}.`,
                     "result_uploaded",
                     "ranking.html",
                     { type: "result_uploaded", matchId: id, dedupId: `result_uploaded_${id}` },
@@ -3083,7 +3183,7 @@ export const openResultForm = async (id, col) => {
             analyticsTiming("match.report_result_ms", performance.now() - resultT0);
             showToast(
                 "DATOS GUARDADOS",
-                rankingSync?.skipped ? `Resultado guardado (${getScoringSystemLabel(scoringSystem)}).` : `Ranking actualizado · ${getScoringSystemLabel(scoringSystem)}`,
+                rankingSync?.skipped ? `Resultado guardado (${getScoringSystemLabel(scoringSystem)}).` : `Ranking actualizado Â· ${getScoringSystemLabel(scoringSystem)}`,
                 "success"
             );
             window.closeMatchModal();
@@ -3130,7 +3230,7 @@ window.openPlayerSelector = async (matchId, col, extra) => {
     overlay.innerHTML = `
         <div class="modal-card animate-up glass-strong" style="max-width:360px">
             <div class="modal-header border-b border-white/10 p-4 flex-row between items-center">
-                <span class="text-xs font-black text-white uppercase tracking-widest">AÑADIR JUGADOR</span>
+                <span class="text-xs font-black text-white uppercase tracking-widest">ANADIR JUGADOR</span>
                 <button class="close-btn w-8 h-8 rounded-full bg-white/5 flex center" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times text-white"></i></button>
             </div>
             
@@ -3160,7 +3260,7 @@ window.openPlayerSelector = async (matchId, col, extra) => {
                 </button>
 
                 <button class="w-full py-4 mt-6 bg-white/10 rounded-xl text-white font-black text-xs tracking-widest border border-white/10 hover:bg-white/20 transition-all" onclick="this.closest('.modal-overlay').remove()">
-                    FINALIZAR SELECCIÓN
+                    FINALIZAR SELECCION
                 </button>
             </div>
         </div>
@@ -3229,14 +3329,14 @@ window.animateSelectionAndAdd = (uid, mid, col, idx, eventOrNull) => {
     if (sourceEl && targetEl) {
         animatePlayerSelection(sourceEl, targetEl, () => {
              window.executeMatchAction('add', mid, col, { uid, idx });
-             showToast('Añadido', 'Jugador reclutado en el squad');
+             showToast('Anadido', 'Jugador reclutado en el squad');
         });
     } else {
         window.executeMatchAction('add', mid, col, { uid, idx });
     }
     
     const modal = document.querySelector('.modal-overlay.active');
-    if (modal && modal.innerHTML.includes('AÑADIR JUGADOR')) modal.remove();
+    if (modal && modal.innerHTML.includes('ANADIR JUGADOR')) modal.remove();
 };
 
 
@@ -3328,7 +3428,7 @@ function finalizeSelection(uid, idx) {
     
     setTimeout(() => {
         const modal = document.querySelector('.modal-overlay.active');
-        if (modal && modal.innerHTML.includes('AÑADIR JUGADOR')) modal.remove();
+        if (modal && modal.innerHTML.includes('ANADIR JUGADOR')) modal.remove();
     }, 300);
 }
 
@@ -3377,7 +3477,7 @@ window.handleCreationSlotClick = (idx) => {
     // If user is not already in formation, fill this slot directly.
     if (meUid && !window._initialJugadores.includes(meUid)) {
         window.selectUserForNew(meUid);
-        showToast("Alineación", "Te has añadido automáticamente al hueco seleccionado", "success");
+        showToast("Alineacion", "Te has anadido automaticamente al hueco seleccionado", "success");
         return;
     }
     // Otherwise open selector only when needed (admin/organizer style flow).
@@ -3402,6 +3502,7 @@ export async function createLinkedMatchFromEvent(eventMatchId, slotDate) {
         estado: 'abierto'
     });
 }
+
 
 
 

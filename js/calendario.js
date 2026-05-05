@@ -399,15 +399,66 @@ function isClubSocialEvent(ev = {}) {
 
 function isPadelMistralEvent(ev = {}) {
     const txt = normalizeName(`${ev.summary || ""} ${ev.description || ""}`);
-    return txt.includes("padel mistral homes") || txt.includes("padel") || txt.includes("pista") || txt.includes("reserva");
+    return txt.includes("padel mistral homes") || txt.includes("padel") || txt.includes("pista padel") || txt.includes("reserva padel") || txt.includes("court padel");
 }
 
 function isRelevantApoingEvent(ev = {}) {
     const txt = normalizeName(`${ev.summary || ""} ${ev.description || ""}`);
-    const looksPadel = isPadelMistralEvent(ev) || txt.includes("partido") || txt.includes("court");
+    const looksPadel = isPadelMistralEvent(ev) || txt.includes("partido padel") || txt.includes("court padel");
     if (isClubSocialEvent(ev)) return false;
     if (txt.includes("club") && !txt.includes("padel")) return false;
+    if (!looksPadel) return false;
     return looksPadel;
+}
+
+function normalizeApoingOwnerName(raw = "", fallback = "") {
+    const value = String(raw || fallback || "").trim();
+    if (!value) return "";
+    const normalized = normalizeName(value);
+    if (!normalized) return "";
+    if (["jugador", "usuario", "cliente", "player", "ricardo"].includes(normalized)) {
+        return String(fallback || "").trim();
+    }
+    if (/\b(?:pista|court|cancha)\s*[a-z]?\d{1,2}\b/i.test(value) || /^[a-z]{3,}\s+[a-z]\d{1,2}$/i.test(value)) {
+        return String(fallback || "").trim();
+    }
+    if (/^(mistral|club|padel|reserva|apoing)/i.test(value)) {
+        return String(fallback || "").trim();
+    }
+    return value
+        .replace(/\b\w/g, (m) => m.toUpperCase())
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function scoreApoingOwnerName(name = "") {
+    const safe = normalizeApoingOwnerName(name, "");
+    if (!safe) return 0;
+    const normalized = normalizeName(safe);
+    if (!normalized) return 0;
+    if (/@/.test(safe)) return 1;
+    if (/jugador|usuario|cliente|player|ricardo/.test(normalized)) return 1;
+    if (/\b(?:pista|court|cancha)\s*[a-z]?\d{1,2}\b/i.test(safe) || /^[a-z]{3,}\s+[a-z]\d{1,2}$/i.test(normalized)) return 1;
+    return safe.split(/\s+/).length >= 2 ? 5 : 3;
+}
+
+function dedupeApoingEventsByReservation(events = []) {
+    const keyed = new Map();
+    events.forEach((event) => {
+        const start = event?.dtStart?.getTime?.() || 0;
+        const end = event?.dtEnd?.getTime?.() || 0;
+        const summary = normalizeName(event?.summary || "");
+        const key = [String(event?.sourceUid || ""), start, end, summary].join("|");
+        const current = keyed.get(key);
+        if (!current) {
+            keyed.set(key, event);
+            return;
+        }
+        const currentScore = Math.max(scoreApoingOwnerName(current?.owner || ""), scoreApoingOwnerName(current?.sourceName || ""));
+        const nextScore = Math.max(scoreApoingOwnerName(event?.owner || ""), scoreApoingOwnerName(event?.sourceName || ""));
+        if (nextScore > currentScore) keyed.set(key, event);
+    });
+    return [...keyed.values()].sort((a, b) => (a.dtStart?.getTime?.() || 0) - (b.dtStart?.getTime?.() || 0));
 }
 
 function readProposalDraft() {
@@ -473,19 +524,36 @@ async function createMatchFromProposalDraft(draft, slotDate) {
 
 async function getApoingSources() {
     const sources = [];
+    const currentUid = String(currentUser?.uid || "");
     const pushUnique = (row) => {
         const uid = String(row?.uid || "").trim();
         const icsUrl = String(row?.icsUrl || "").trim();
         if (!uid || !icsUrl) return;
         if (!/^https:\/\/www\.apoing\.com\/calendars\/.+\.ics$/i.test(icsUrl)) return;
-        if (sources.some((s) => s.uid === uid)) return;
-        sources.push({
+        const safeName = normalizeApoingOwnerName(
+            row?.name || row?.nickname || row?.nombreUsuario || row?.nombre || row?.email || "",
+            row?.nickname || row?.nombreUsuario || (row?.email ? String(row.email).split("@")[0] : "Jugador")
+        );
+        const nextEntry = {
             uid,
-            name: row?.name || "Jugador",
+            name: safeName || "Jugador",
             email: row?.email || "",
             icsUrl,
-        });
-        apoingLog("source.added", { uid, name: row?.name || "Jugador", icsPreview: `${icsUrl.slice(0, 45)}...` });
+        };
+        const existingIndex = sources.findIndex((s) => s.uid === uid);
+        if (existingIndex >= 0) {
+            const current = sources[existingIndex];
+            const shouldReplaceName = scoreApoingOwnerName(nextEntry.name) > scoreApoingOwnerName(current.name);
+            sources[existingIndex] = {
+                ...current,
+                ...(shouldReplaceName ? { name: nextEntry.name } : {}),
+                email: nextEntry.email || current.email || "",
+                icsUrl: nextEntry.icsUrl || current.icsUrl,
+            };
+            return;
+        }
+        sources.push(nextEntry);
+        apoingLog("source.added", { uid, name: safeName || "Jugador", icsPreview: `${icsUrl.slice(0, 45)}...` });
     };
 
     try {
@@ -495,7 +563,8 @@ async function getApoingSources() {
             if (data.active === false) return;
             pushUnique({
                 uid: d.id,
-                name: data.nombre || data.nombreUsuario || "Jugador",
+                name: data.name || data.nickname || data.nombre || data.nombreUsuario || "Jugador",
+                nickname: data.nickname || data.nombreUsuario || "",
                 email: data.email || "",
                 icsUrl: data.icsUrl || "",
             });
@@ -531,7 +600,31 @@ async function getApoingSources() {
         total: sources.length,
         uids: sources.map((s) => s.uid),
     });
-    return sources;
+    const byUrl = new Map();
+    sources.forEach((source) => {
+        const key = String(source.icsUrl || "").trim().toLowerCase();
+        if (!key) return;
+        const list = byUrl.get(key) || [];
+        list.push(source);
+        byUrl.set(key, list);
+    });
+    const deduped = [];
+    byUrl.forEach((list, icsUrl) => {
+        if (list.length === 1) {
+            deduped.push(list[0]);
+            return;
+        }
+        const preferred =
+            list.find((row) => String(row.uid) === currentUid) ||
+            [...list].sort((a, b) => scoreApoingOwnerName(b.name) - scoreApoingOwnerName(a.name))[0];
+        apoingLog("source.duplicate_ics", {
+            icsPreview: `${icsUrl.slice(0, 45)}...`,
+            uids: list.map((row) => row.uid),
+            kept: preferred?.uid || "",
+        });
+        if (preferred) deduped.push(preferred);
+    });
+    return deduped;
 }
 
 async function ensureMyApoingSourceSync() {
@@ -730,14 +823,13 @@ function extractOwnerFromApoingEvent(ev = {}) {
     const raw = `${ev.summary || ""} ${ev.description || ""}`;
     const patterns = [
         /(?:reservad[oa]\s+por|usuario|cliente|player|jugador)\s*[:\-]\s*([^\n,(]+)/i,
-        /\(([A-Za-z\u00C0-\u024F'`.\- ]{3,})\)/,
-        /[-|]\s*([A-Za-z\u00C0-\u024F ]{3,})/ // Match names after a dash or bar
+        /(?:titular|owner)\s*[:\-]\s*([^\n,(]+)/i,
     ];
     for (const p of patterns) {
         const m = raw.match(p);
         if (m?.[1]) {
-            const owner = m[1].trim();
-            if (!/mistral|padel|club|apoing|reserva/i.test(owner)) return owner;
+            const owner = normalizeApoingOwnerName(m[1], ev.sourceName || "");
+            if (owner && !/mistral|padel|club|apoing|reserva/i.test(owner)) return owner;
         }
     }
     return "";
@@ -763,8 +855,8 @@ function overlaps(startA, endA, startB, endB) {
 function indexApoingEvents(events = []) {
     const map = new Map();
     for (const ev of events) {
-        const owner = extractOwnerFromApoingEvent(ev);
-        const enriched = { ...ev, owner: owner || ev.sourceName || "" };
+        const owner = normalizeApoingOwnerName(extractOwnerFromApoingEvent(ev), ev.sourceName || "");
+        const enriched = { ...ev, owner: owner || normalizeApoingOwnerName(ev.sourceName || "", "") || "" };
         const baseDate = new Date(ev.dtStart);
         baseDate.setHours(0, 0, 0, 0);
         for (const hObj of HOURS) {
@@ -870,7 +962,7 @@ async function syncApoingReservations(force = false) {
             }
         }
 
-        const events = allEvents.sort((a, b) => (a.dtStart?.getTime?.() || 0) - (b.dtStart?.getTime?.() || 0));
+        const events = dedupeApoingEventsByReservation(allEvents);
         apoingEvents = events;
         indexApoingEvents(events);
         const byUser = {};
@@ -917,6 +1009,41 @@ async function syncApoingReservations(force = false) {
         apoingNextRetryAt = now + 3 * 60 * 1000;
         updateApoingSyncBadge("Sin datos de reservas de Apoing", "err");
     }
+}
+
+function enhanceApoingCreationExperience(container, options = {}) {
+    const { hasReservation = false } = options;
+    if (!container) return;
+    const privateToggle = container.querySelector('#inp-private');
+    if (privateToggle && !privateToggle.checked) {
+        privateToggle.checked = true;
+        window._creationVisibility = 'private';
+    }
+    if (container.querySelector('.apoing-create-banner')) return;
+
+    const banner = document.createElement('div');
+    banner.className = 'apoing-create-banner mb-4 p-3 rounded-2xl border border-emerald-400/30 bg-emerald-500/10';
+    banner.innerHTML = `
+        <div class="text-[10px] font-black uppercase tracking-widest text-emerald-300 mb-1">Reserva detectada${hasReservation ? " y vinculada" : ""}</div>
+        <p class="text-[10px] text-white/80 leading-relaxed mb-3">La partida nace privada por defecto. Puedes publicarla o mantenerla cerrada y completar jugadores manualmente.</p>
+        <div class="flex flex-wrap gap-2">
+            <button type="button" class="apoing-choice-btn is-private">Mantener privada</button>
+            <button type="button" class="apoing-choice-btn is-public">Publicar</button>
+            <a class="apoing-choice-link" href="https://www.apoing.com" target="_blank" rel="noopener">Abrir apoing.com</a>
+        </div>
+    `;
+    container.prepend(banner);
+
+    banner.querySelector('.is-private')?.addEventListener('click', () => {
+        if (privateToggle) privateToggle.checked = true;
+        window._creationVisibility = 'private';
+        showToast('Privada', 'La partida se mantendrá cerrada hasta que invites jugadores.', 'info');
+    });
+    banner.querySelector('.is-public')?.addEventListener('click', () => {
+        if (privateToggle) privateToggle.checked = false;
+        window._creationVisibility = 'public';
+        showToast('Publicada', 'La partida ya puede aparecer como abierta para el resto del club.', 'success');
+    });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1227,6 +1354,7 @@ window.jumpToApoingReservation = (isoDate) => {
         slot?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
         if (slot) {
             slot.classList.add("ring-2");
+            slot.click();
             setTimeout(() => slot.classList.remove("ring-2"), 1200);
         }
     }, 120);
@@ -1277,6 +1405,14 @@ function renderGrid() {
     if (monthLabel) monthLabel.textContent = `${startOfWeek.toLocaleDateString('es-ES', {month: 'long', year: 'numeric'})}`.toUpperCase();
 
     let html = `
+        <div class="cal-legend-bar">
+            <span class="cal-legend-item"><i class="cal-dot libre"></i>Libre</span>
+            <span class="cal-legend-item"><i class="cal-dot abierta"></i>Abierta</span>
+            <span class="cal-legend-item"><i class="cal-dot propia"></i>Tu partido</span>
+            <span class="cal-legend-item"><i class="cal-dot apoing"></i>Reserva</span>
+            <span class="cal-legend-item"><i class="cal-dot cerrada"></i>Completo</span>
+            <span class="cal-legend-item"><i class="cal-dot jugado"></i>Jugado</span>
+        </div>
         <div class="grid-header-v5">
             <div class="corner-header-v5">GMT</div>
             ${Array.from({length: 7}).map((_, i) => {
@@ -1392,16 +1528,24 @@ function renderSlot(date, hour) {
                 const isFull = count >= 4;
                 const isPlayed = isFinishedMatch(match);
                 const isClosed = isCancelledMatch(match) || isExpiredOpenMatch(match);
-                
+                let vivStr = "";
+                if (match.creatorId && currentUser && match.creatorId === currentUser.uid && typeof userData !== 'undefined' && userData?.vivienda) {
+                    vivStr = ` (${userData.vivienda.bloque||''}${userData.vivienda.piso||''}${userData.vivienda.puerta||''})`;
+                } else if (match.creatorId && window.identityCache && window.identityCache.has(match.creatorId)) {
+                    const cUser = window.identityCache.get(match.creatorId);
+                    if (cUser?.vivienda) vivStr = ` (${cUser.vivienda.bloque||''}${cUser.vivienda.piso||''}${cUser.vivienda.puerta||''})`;
+                }
+
                 if (isClosed) {
                     state = 'cerrada';
                     label = 'CERRADO';
                     sub = 'EXPIRADO';
-                    ownerSub = `REF: ${match.id.substring(0,5).toUpperCase()}`;
+                    ownerSub = `${shortName(match.creatorName || "Jugador")}${vivStr} PARTIDA CERRADA`;
                 } else if (isPlayed) {
                     state = 'jugado';
                     label = match.eventMatchId ? 'EVENTO FINALIZADO' : 'PARTIDO FINALIZADO';
                     sub = getResultSetsString(match) || 'VER SCORE';
+                    ownerSub = `${shortName(match.creatorName || "Jugador")}${vivStr} PARTIDO JUGADO`;
                     if (isMine) {
                         const hasDiary = userData?.diario?.some(e => e.matchId === match.id);
                         if (!hasDiary) {
@@ -1416,25 +1560,21 @@ function renderSlot(date, hour) {
                         state = 'propia';
                         label = match.eventMatchId ? 'TU PARTIDO DE EVENTO' : 'TU PARTIDO';
                         sub = 'LISTO PARA JUGAR';
-                        ownerSub = `ORGANIZA: ${shortName(match.creatorName || "Tú")}`;
+                        ownerSub = `${shortName(match.creatorName || "Tú")}${vivStr} (${count}/4)`;
                     }
                     else if (isFull) {
                         state = 'cerrada';
                         label = match.eventMatchId ? 'EVENTO LLENO' : 'COMPLETO';
                         sub = 'SIN PLAZAS';
-                        ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
+                        ownerSub = `${shortName(match.creatorName)}${vivStr} (4/4)`;
                     }
                     else {
                         const plazas = 4-count;
                         state = 'abierta';
                         label = match.eventMatchId ? 'UNIRSE A EVENTO' : 'PARTIDO ABIERTO';
                         sub = `${plazas} ${plazas === 1 ? 'PLAZA' : 'PLAZAS'}`;
-                        ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
+                        ownerSub = `${shortName(match.creatorName)}${vivStr} (${count}/4)`;
                     }
-                }
-
-                if (!ownerSub && match.creatorName) {
-                    ownerSub = `ORGANIZA: ${shortName(match.creatorName)}`;
                 }
             }
             }
@@ -1443,7 +1583,7 @@ function renderSlot(date, hour) {
             const totalSlotReservations = apoingForSlot.length;
             const isClubSocial = isClubSocialEvent(apoingEvent);
 
-            state = mine ? "apoing-mine" : "apoing-other";
+            state = mine ? "propia apoing-seeded apoing-mine" : "abierta apoing-seeded apoing-other";
             
             const ownerName = shortName(apoingEvent.sourceName || apoingEvent.owner || (mine ? userData?.nombreUsuario || "Tú" : "Jugador"));
 
@@ -1474,6 +1614,46 @@ function renderSlot(date, hour) {
             ownerSub = `${ownerSub ? `${ownerSub} · ` : ""}APOING DETECTADO`;
         }
 
+        if (apoingEvent && !match) {
+            const mineResolved = isApoingMine(apoingEvent);
+            const totalReservationsResolved = apoingForSlot.length;
+            const isClubSocialResolved = isClubSocialEvent(apoingEvent);
+            const ownerNameResolved = shortName(getApoingReservationOwnerName(apoingEvent));
+
+            state = mineResolved ? "propia apoing-seeded apoing-mine" : "abierta apoing-seeded apoing-other";
+            if (isClubSocialResolved) {
+                label = "CLUB SOCIAL";
+                sub = mineResolved ? "Tu reserva de club" : "Reserva de club";
+                ownerSub = `Titular: ${ownerNameResolved}`;
+            } else {
+                label = mineResolved ? "TU RESERVA LISTA" : "RESERVA ABIERTA";
+                sub = mineResolved
+                    ? (totalReservationsResolved > 1 ? `Tuya + ${totalReservationsResolved - 1} reservas en esta franja` : "Puedes montar partido sobre tu reserva")
+                    : (totalReservationsResolved > 1 ? `${totalReservationsResolved} reservas detectadas en esta franja` : "Crear partido sobre reserva Apoing");
+                ownerSub = `Titular: ${ownerNameResolved}`;
+            }
+            const apoingIconColorResolved = mineResolved ? 'text-emerald-300' : 'text-amber-300';
+            extraIcon = `
+                <div class="apoing-slot-mini absolute top-2 right-2 flex items-center gap-1">
+                    ${mineResolved ? `<span class="text-[8px] font-black ${isClubSocialResolved ? "text-blue-300" : "text-emerald-300"}">TUYA</span>` : ""}
+                    <i class="fas ${isClubSocialResolved ? 'fa-house-user' : 'fa-calendar-check'} ${apoingIconColorResolved} text-[10px]"></i>
+                </div>
+            `;
+        }
+
+        if (match && apoingEvent) {
+            ownerSub = `${ownerSub ? `${ownerSub} · ` : ""}Reserva: ${shortName(getApoingReservationOwnerName(apoingEvent))}`;
+        }
+
+        if (match && apoingEvent) {
+            const matchOwnerLabel = String(ownerSub || "")
+                .replace(/APOING DETECTADO/gi, "")
+                .replace(/Â·/g, "·")
+                .replace(/\s+·\s*$/, "")
+                .trim();
+            ownerSub = `${matchOwnerLabel ? `${matchOwnerLabel} · ` : ""}Reserva: ${shortName(getApoingReservationOwnerName(apoingEvent))}`;
+        }
+
         // Weather logic
         let weatherHtml = '';
         if (weeklyWeather && weeklyWeather.daily) {
@@ -1488,19 +1668,20 @@ function renderSlot(date, hour) {
             }
         }
 
+        ownerSub = String(ownerSub || "").replace(/Ã‚Â·/g, "·").replace(/Â·/g, "·").trim();
         const isPastEmpty = !match && !apoingEvent && isPast;
         return `
-            <div class="slot-v5 ${state} ${match?.eventMatchId || match?.col === 'eventoPartidos' ? 'evento' : ''} ${isPast ? 'past' : ''} relative" onclick="handleSlot('${dStr}', '${hour}', '${match?.id || ''}', '${match?.col || ''}', ${isPastEmpty ? 'true' : 'false'})">
+            <div class="slot-v5 ${state} ${match?.eventMatchId || match?.col === 'eventoPartidos' ? 'evento' : ''} ${isPast ? 'past' : ''} relative" style="margin: 2px;" title="${escapeHtml(ownerSub || label)}" onclick="handleSlot('${dStr}', '${hour}', '${match?.id || ''}', '${match?.col || ''}', ${isPastEmpty ? 'true' : 'false'})">
                 ${extraIcon}
                 ${weatherHtml}
                 <span class="slot-chip-v5">${label}</span>
-                <span class="slot-info-v5">${sub}</span>
+                <span class="slot-info-v5 font-bold">${sub}</span>
                 ${ownerSub ? `<span class="slot-owner-v5">${ownerSub}</span>` : ''}
             </div>
         `;
     } catch(e) {
         console.error("Critical error in renderSlot:", e);
-        return `<div class="slot-v5 err"><span class="text-[8px]">ERROR SLOT</span></div>`;
+        return `<div class="slot-v5 err" style="margin: 2px;"><span class="text-[8px]">ERROR SLOT</span></div>`;
     }
 }
 
@@ -1530,6 +1711,34 @@ function resolveTeamDisplayName(match, side) {
 function shortName(name) {
     if (!name) return "Jugador";
     return name.split(" ").slice(0, 2).join(" ");
+}
+
+function getApoingReservationOwnerName(ev = {}) {
+    const rawName = String(
+        ev?.sourceName ||
+        ev?.owner ||
+        ev?.email ||
+        (isApoingMine(ev) ? (userData?.nombreUsuario || userData?.nombre || "Tu reserva") : "")
+    ).trim();
+    const normalized = normalizeApoingOwnerName(rawName, "");
+    if (normalized) return normalized;
+    if (rawName.includes("@")) return rawName.split("@")[0].trim();
+    return isApoingMine(ev) ? (userData?.nombreUsuario || userData?.nombre || "Tu reserva") : "Reserva Apoing";
+}
+
+function buildApoingPrefillPlayers(events = []) {
+    const ordered = Array.isArray(events) ? [...events].sort((a, b) => {
+        const mineDelta = Number(Boolean(isApoingMine(b))) - Number(Boolean(isApoingMine(a)));
+        if (mineDelta) return mineDelta;
+        return (a?.dtStart?.getTime?.() || 0) - (b?.dtStart?.getTime?.() || 0);
+    }) : [];
+    const unique = [];
+    ordered.forEach((ev) => {
+        const uid = String(ev?.sourceUid || "").trim();
+        if (!uid || unique.includes(uid)) return;
+        unique.push(uid);
+    });
+    return unique.slice(0, 4);
 }
 
 function findOpenMatchesNearApoingReservation(events = []) {
@@ -1663,18 +1872,29 @@ window.handleSlot = async (date, hour, id, col, isPastFreeSlot = false) => {
             } else {
                 // If it's my match but no apoing found
                 const isMyMatch = !!currentUser && userData?.partidosJugadosIds?.includes(id); 
-                if (isMyMatch) showToast("Atencion", "No hemos detectado tu reserva en Apoing para este horario.", "warn");
+                if (isMyMatch) {
+                    area.innerHTML = `
+                        <div class="mb-3 p-3 rounded-2xl border border-amber-400/35 bg-amber-500/10">
+                            <div class="text-[10px] font-black uppercase tracking-widest text-amber-300 mb-1">Reserva no detectada</div>
+                            <div class="text-[10px] text-white/80">Este partido figura en calendario, pero no vemos reserva asociada en Apoing para ningún participante de esta franja.</div>
+                            <a class="text-[10px] font-black text-amber-200 underline mt-2 inline-flex" href="https://www.apoing.com" target="_blank" rel="noopener">Ir a apoing.com</a>
+                        </div>
+                    ` + area.innerHTML;
+                    showToast("Atencion", "No hemos detectado tu reserva en Apoing para este horario.", "warn");
+                }
             }
         } else {
             if (apoingForSlot.length) {
                 if (title) title.textContent = 'NUEVO PARTIDO';
-                await withTimeout(renderCreationForm(area, date, hour, currentUser, userData));
+                const preFillPlayers = buildApoingPrefillPlayers(apoingForSlot);
+                await withTimeout(renderCreationForm(area, date, hour, currentUser, userData, preFillPlayers.length ? preFillPlayers : null));
+                enhanceApoingCreationExperience(area, { hasReservation: Boolean(myApoing) });
 
-                const owners = Array.from(new Set(apoingForSlot.map((e) => shortName(e.sourceName || e.owner || "Jugador"))));
+                const owners = Array.from(new Set(apoingForSlot.map((e) => shortName(getApoingReservationOwnerName(e)))));
                 const warningHtml = `
                     <div class="mb-3 p-3 rounded-2xl border border-amber-400/35 bg-amber-500/10">
                         <div class="text-[10px] font-black uppercase tracking-widest text-amber-300 mb-1">Reserva detectada en Apoing</div>
-                        <div class="text-[10px] text-white/80">${myApoing ? "Tienes esta pista reservada en Apoing." : `Reservada por: ${owners.join(", ")}.`}</div>
+                        <div class="text-[10px] text-white/80">${myApoing ? "Tienes esta pista reservada en Apoing y ya sales como titular en la alineacion." : `Titular${owners.length > 1 ? "es" : ""}: ${owners.join(", ")}. Ya ${owners.length > 1 ? "salen" : "sale"} preparado${owners.length > 1 ? "s" : ""} en la alineacion.`}</div>
                     </div>
                 `;
                 area.innerHTML = warningHtml + area.innerHTML;
@@ -1799,7 +2019,7 @@ function renderApoingSlotDetail(date, hour, events = [], myApoing = null) {
         const isClub = isClubSocialEvent(ev);
         const start = ev.dtStart?.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) || "--:--";
         const end = ev.dtEnd?.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) || "--:--";
-        const owner = ev.owner || "Anonizado";
+        const owner = getApoingReservationOwnerName(ev);
         
         return `
             <div class="apoing-card-v7 ${mine ? 'mine' : 'other'} ${isClub ? 'club-social' : 'padel-match'}">
@@ -1811,7 +2031,7 @@ function renderApoingSlotDetail(date, hour, events = [], myApoing = null) {
                     <div class="flex-col overflow-hidden">
                         <span class="card-type">${isClub ? 'RESERVA CLUB SOCIAL' : 'PISTA PADEL ASIGNADA'}</span>
                         <span class="card-title truncate">${ev.summary || 'Reserva Mistral'}</span>
-                        <span class="card-owner">${mine ? "TITULAR: TÚ MISMO" : `POSEEDOR: ${shortName(owner)}`}</span>
+                        <span class="card-owner">${mine ? "TITULAR: TU" : `TITULAR: ${shortName(owner)}`}</span>
                     </div>
                 </div>
                 <div class="card-footer-v7">
@@ -1843,7 +2063,7 @@ function renderApoingSlotDetail(date, hour, events = [], myApoing = null) {
                     <p class="text-[10px] text-white/80 leading-snug">Esta reserva es tuya en Apoing. ¡Juega hoy o monta un partido ahora!</p>
                 </div>
                 <div class="grid grid-cols-2 gap-3 mb-4">
-                    <button class="btn btn-primary" onclick="renderCreationForm(document.getElementById('match-detail-area'), '${date}', '${hour}', currentUser, userData)">
+                    <button class="btn btn-primary" onclick="renderCreationForm(document.getElementById('match-detail-area'), '${date}', '${hour}', currentUser, userData).then(() => enhanceApoingCreationExperience(document.getElementById('match-detail-area'), { hasReservation: true }))">
                         <i class="fas fa-plus-circle"></i> MONTAR PARTIDO
                     </button>
                     <button class="btn btn-confirm-v7" onclick="document.getElementById('modal-match').classList.remove('active'); showToast('VALIDADO','¡Misión reconocida! Prepárate para el juego','success')">
@@ -1935,6 +2155,15 @@ async function handleUrlParams() {
     if (vincularId) {
         showToast("Vincular partido", "Selecciona una franja horaria para este partido de torneo", "info");
         window._vincularMatchId = vincularId;
+    }
+    const jumpDate = params.get('jumpDate');
+    if (jumpDate) {
+        setTimeout(() => {
+            if (typeof window.jumpToApoingReservation === 'function') {
+                window.jumpToApoingReservation(jumpDate);
+                showToast("Apoing", "Selecciona tu reserva para abrir el partido", "success");
+            }
+        }, 1000);
     }
     const proposalId = params.get("proposalId");
     const draft = readProposalDraft();

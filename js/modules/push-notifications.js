@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
 
 import { getAppBase, getFullUrl } from "./path-utils.js";
-import { APP_PUSH_API_URL } from "../app-config.js";
+import { APP_PUSH_API_URL, APP_PUSH_API_CANDIDATES, APP_PUSH_API_BEARER_TOKEN } from "../app-config.js";
 import {
   getNativePushStatus,
   initNativePushNotifications,
@@ -26,6 +26,7 @@ const DEVICE_ID_STORAGE_KEY = "onesignal_device_id";
 const DEFAULT_ONESIGNAL_APP_ID = "0f270864-c893-4c44-95cc-393321937fb2";
 const PUSH_DIAG_LOG_KEY = "push_diag_log_v1";
 const PUSH_DIAG_STATE_KEY = "push_diag_state_v1";
+const PUSH_REMOTE_STATUS_KEY = "push_remote_status_v1";
 const NOTIF_SOFT_PROMPT_COMPLETED_KEY = "notif_soft_prompt_completed";
 const NOTIF_SOFT_PROMPT_SNOOZE_UNTIL_KEY = "notif_soft_prompt_snooze_until";
 const PUSH_DIAG_MAX = 120;
@@ -80,6 +81,26 @@ function persistPushState(state = {}) {
       }),
     );
   } catch (_) {}
+}
+
+function persistRemotePushStatus(state = {}) {
+  try {
+    localStorage.setItem(
+      PUSH_REMOTE_STATUS_KEY,
+      JSON.stringify({
+        ...state,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  } catch (_) {}
+}
+
+function readRemotePushStatus() {
+  try {
+    return JSON.parse(localStorage.getItem(PUSH_REMOTE_STATUS_KEY) || "null");
+  } catch (_) {
+    return null;
+  }
 }
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -1009,12 +1030,67 @@ function getPushApiEndpoint() {
   return fallback;
 }
 
+function getPushApiCandidates() {
+  const configured = Array.isArray(APP_PUSH_API_CANDIDATES) ? APP_PUSH_API_CANDIDATES : [];
+  const fromWindow = typeof window !== "undefined" && Array.isArray(window.__PUSH_API_CANDIDATES)
+    ? window.__PUSH_API_CANDIDATES
+    : [];
+  const fromStorage = (() => {
+    try {
+      const raw = localStorage.getItem("push_api_candidates");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  })();
+  const preferred = getPushApiEndpoint();
+  return [...new Set([preferred, ...fromWindow, ...fromStorage, ...configured].map((v) => String(v || "").trim()).filter(Boolean))];
+}
+
+function getPushApiBearerToken() {
+  const fromConfig = String(APP_PUSH_API_BEARER_TOKEN || "").trim();
+  const fromWindow = typeof window !== "undefined" ? String(window.__PUSH_API_BEARER_TOKEN || "").trim() : "";
+  const fromStorage = typeof localStorage !== "undefined"
+    ? String(localStorage.getItem("push_api_bearer_token") || "").trim()
+    : "";
+  if (fromWindow) return fromWindow;
+  if (fromStorage) return fromStorage;
+  if (fromConfig) return fromConfig;
+  return "";
+}
+
+async function getPushRequestAuthorizationHeader() {
+  const staticBearer = getPushApiBearerToken();
+  if (staticBearer) return `Bearer ${staticBearer}`;
+  try {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser || typeof firebaseUser.getIdToken !== "function") return "";
+    const idToken = await firebaseUser.getIdToken();
+    return idToken ? `Bearer ${idToken}` : "";
+  } catch (e) {
+    pushLog("warn", "push_auth_token_failed", {
+      error: e?.message || String(e),
+    });
+    return "";
+  }
+}
+
 export function setPushApiUrl(url) {
   const clean = String(url || "").trim();
   if (!clean) return;
   window.__PUSH_API_URL = clean;
   try {
     localStorage.setItem("push_api_url", clean);
+  } catch (_) {}
+}
+
+export function setPushApiBearerToken(token) {
+  const clean = String(token || "").trim();
+  window.__PUSH_API_BEARER_TOKEN = clean;
+  try {
+    if (clean) localStorage.setItem("push_api_bearer_token", clean);
+    else localStorage.removeItem("push_api_bearer_token");
   } catch (_) {}
 }
 
@@ -1119,6 +1195,7 @@ export async function checkNotificationStatus() {
   let oneSignalRegistered = false;
   let oneSignalSubscriptionId = null;
   let oneSignalError = null;
+  const remotePush = readRemotePushStatus();
 
   console.log(`🔔 [Push Health] OneSignal Disponible: ${oneSignalAvailable}, Inicializado: ${oneSignalInitialized}`);
 
@@ -1158,6 +1235,7 @@ export async function checkNotificationStatus() {
   if (oneSignalAvailable && oneSignalInitialized && !oneSignalRegistered) issues.push("onesignal_not_subscribed");
   if (oneSignalError) issues.push("onesignal_error");
   if (isIOS && isSafari) issues.push("ios_safari_mode");
+  if (remotePush && remotePush.ok === false && remotePush.error) issues.push("push_bridge_error");
 
   let recommendedAction = "none";
   if (blocked) recommendedAction = "open_browser_settings";
@@ -1165,6 +1243,7 @@ export async function checkNotificationStatus() {
   else if (!swActive) recommendedAction = "reregister_service_worker";
   else if (swConflict) recommendedAction = "resolve_sw_conflict";
   else if (!oneSignalRegistered) recommendedAction = "reconnect_onesignal";
+  else if (remotePush && remotePush.ok === false) recommendedAction = "fix_push_bridge";
 
   if (issues.length > 0) {
     console.warn(`🔍 [Push Health] Problemas encontrados:`, issues);
@@ -1197,6 +1276,7 @@ export async function checkNotificationStatus() {
     recommendedAction,
     workerConfig: window.__pushWorkerConfig || null,
     platform: { isIOS, isSafari },
+    remotePush,
   };
   persistPushState({
     permission,
@@ -1210,6 +1290,8 @@ export async function checkNotificationStatus() {
 }
 
 const HUMAN_MESSAGES = {
+  browser_unsupported: { title: "Navegador no compatible", message: "Este navegador no permite avisos web en segundo plano para esta app.", steps: ["En Android usa Chrome o Edge actualizados.", "En iPhone usa Safari y añade la app a la pantalla de inicio."] },
+  ios_safari_mode: { title: "En iPhone hace falta instalar la app", message: "En iOS los avisos web en segundo plano solo funcionan desde Safari y con la app añadida a la pantalla de inicio.", steps: ["Abre la app en Safari.", "Pulsa Compartir > Añadir a pantalla de inicio.", "Abre la app instalada desde el icono y activa los avisos."] },
   ok: { title: "Todo listo", message: "Recibirás avisos de partidos y retos en tu móvil aunque no tengas la app abierta.", steps: [] },
   permission_default: { title: "Activa los avisos", message: "Para no perderte ningún partido, permite que la app te envíe notificaciones.", steps: ["Pulsa el botón «Activar» debajo.", "En la ventana del navegador, elige «Permitir»."] },
   permission_denied: { title: "Avisos desactivados", message: "Has bloqueado los avisos. Para volver a recibirlos:", steps: ["Abre la configuración de tu navegador (icono de candado o información en la barra de la dirección).", "Busca «Notificaciones» para esta página y cámbialo a «Permitir».", "Vuelve aquí y recarga la app si hace falta."] },
@@ -1219,6 +1301,7 @@ const HUMAN_MESSAGES = {
   onesignal_not_initialized: { title: "Sincronizando...", message: "Conectando con el servidor de avisos en segundo plano.", steps: [] },
   onesignal_not_subscribed: { title: "Activa los avisos", message: "Parece que no tienes los avisos activados para este dispositivo.", steps: ["Pulsa el botón «Reconectar» o «Activar» debajo."] },
   onesignal_error: { title: "Conexión en pausa", message: "Hubo un pequeño corte con nuestro servidor de avisos. Prueba a cerrar y abrir la app de nuevo.", steps: [] },
+  push_bridge_error: { title: "Puente remoto no operativo", message: "El navegador y OneSignal pueden estar bien, pero el servidor que dispara el aviso en segundo plano está devolviendo error.", steps: ["Revisa el worker o API remota de push.", "Comprueba que acepta peticiones desde la app y que tiene la credencial de OneSignal correcta."] },
   default: { title: "Estado de los avisos", message: "Comprueba que tienes la app instalada y que has permitido las notificaciones.", steps: [] },
 };
 
@@ -1304,15 +1387,15 @@ export function showNotificationHelpModal() {
  */
 export async function sendExternalPush({ title, message, uids = [], url = "home.html", data = {} }) {
   try {
-    const endpoint = getPushApiEndpoint();
     if (window.location.protocol === "file:") return;
-    if (!endpoint) {
+    const endpoints = getPushApiCandidates();
+    const authorizationHeader = await getPushRequestAuthorizationHeader();
+    if (!endpoints.length) {
       console.warn("[sendExternalPush] Sin endpoint remoto configurado. Se omite el envio push externo.");
       return { ok: false, skipped: true, reason: "missing_push_endpoint" };
     }
 
     console.group("[sendExternalPush] Inicio");
-    console.log("[sendExternalPush] endpoint:", endpoint);
     const payload = {
       titulo: title,
       mensaje: message,
@@ -1322,21 +1405,66 @@ export async function sendExternalPush({ title, message, uids = [], url = "home.
     };
     console.log("[sendExternalPush] payload:", payload);
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    console.log("[sendExternalPush] status:", res.status, res.statusText);
-    console.log("[sendExternalPush] ok:", res.ok);
-    if (!res.ok) {
-      const responseText = await res.text().catch(() => "");
+    let lastError = null;
+    for (const endpoint of endpoints) {
+      console.log("[sendExternalPush] probando endpoint:", endpoint);
+      const headers = { "Content-Type": "application/json" };
+      if (authorizationHeader) headers.Authorization = authorizationHeader;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      console.log("[sendExternalPush] status:", res.status, res.statusText);
+      console.log("[sendExternalPush] ok:", res.ok);
+      let responseText = "";
+      let responseJson = null;
+      try {
+        responseText = await res.text();
+        responseJson = responseText ? JSON.parse(responseText) : null;
+      } catch (_) {}
+      if (res.ok) {
+        persistRemotePushStatus({
+          ok: true,
+          status: res.status,
+          endpoint,
+          error: null,
+        });
+        console.groupEnd();
+        return true;
+      }
+
       console.warn("[sendExternalPush] response body:", responseText);
+      const remoteError =
+        responseJson?.error ||
+        responseJson?.details?.errors?.[0] ||
+        responseJson?.details?.invalid_aliases?.external_id?.[0] ||
+        responseText ||
+        `http_${res.status}`;
+      lastError = { status: res.status, endpoint, error: remoteError };
+      pushLog("warn", "external_push_failed", lastError);
+      if (/missing_bearer_token/i.test(String(remoteError || ""))) {
+        console.warn("[sendExternalPush] El worker remoto esta pidiendo bearer token. Configura push_api_bearer_token o usa /api/send-push.");
+      }
+      if (res.status !== 404) break;
     }
+
+    persistRemotePushStatus({
+      ok: false,
+      status: lastError?.status || 0,
+      endpoint: lastError?.endpoint || endpoints[0],
+      error: lastError?.error || "push_bridge_unreachable",
+    });
     console.groupEnd();
-    return res.ok;
+    return false;
   } catch (e) {
     console.warn("External push trigger failed:", e);
+    persistRemotePushStatus({
+      ok: false,
+      status: 0,
+      endpoint: getPushApiEndpoint(),
+      error: e?.message || String(e),
+    });
     console.groupEnd();
     return false;
   }

@@ -314,3 +314,35 @@ export function buildLevelProgressState({ rating, levelOverride } = {}) {
     isNearDown,
   };
 }
+
+/* ─────────────────────────────────────────────────────────
+   GAMIFICACIÓN DE FLUJO (PLAY FLOW) - INSIGNIAS CADA 0.25
+   ───────────────────────────────────────────────────────── */
+export function getPlayFlowInsignia(level) {
+  const numLevel = Number(level) || 2.5;
+  // Round to nearest 0.25
+  const step = Math.round(numLevel * 4) / 4;
+  
+  switch(step) {
+    case 1.0: return { label: "Iniciación", icon: "fa-baby", color: "#9ca3af" };
+    case 1.25: return { label: "Principiante", icon: "fa-egg", color: "#a1a1aa" };
+    case 1.50: return { label: "Aprendiz", icon: "fa-seedling", color: "#a3e635" };
+    case 1.75: return { label: "Aficionado", icon: "fa-leaf", color: "#4ade80" };
+    case 2.00: return { label: "Básico", icon: "fa-feather", color: "#34d399" };
+    case 2.25: return { label: "Regular", icon: "fa-paper-plane", color: "#2dd4bf" };
+    case 2.50: return { label: "Intermedio", icon: "fa-bolt", color: "#38bdf8" };
+    case 2.75: return { label: "Competitivo", icon: "fa-fire", color: "#818cf8" };
+    case 3.00: return { label: "Avanzado", icon: "fa-meteor", color: "#a78bfa" };
+    case 3.25: return { label: "Destacado", icon: "fa-star", color: "#c084fc" };
+    case 3.50: return { label: "Experto", icon: "fa-dragon", color: "#e879f9" };
+    case 3.75: return { label: "Élite", icon: "fa-crown", color: "#f472b6" };
+    case 4.00: return { label: "Maestro", icon: "fa-gem", color: "#fb7185" };
+    case 4.25: return { label: "Profesional", icon: "fa-medal", color: "#f87171" };
+    case 4.50: return { label: "Galáctico", icon: "fa-rocket", color: "#fb923c" };
+    case 4.75: return { label: "Leyenda", icon: "fa-sun", color: "#fbbf24" };
+    case 5.00: return { label: "Dios del Pádel", icon: "fa-infinity", color: "#facc15" };
+    default:
+      if (step > 5.00) return { label: "Dios del Pádel", icon: "fa-infinity", color: "#facc15" };
+      return { label: "Jugador", icon: "fa-user", color: "#ffffff" };
+  }
+}

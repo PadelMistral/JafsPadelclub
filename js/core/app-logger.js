@@ -1,6 +1,17 @@
 const LOG_KEY = "app_diag_log_v1";
 const MAX_LOG_ITEMS = 200;
 
+function isDebugEnabled() {
+  try {
+    return (
+      localStorage.getItem("app_debug") === "1" ||
+      new URLSearchParams(window.location.search || "").has("debug")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -28,13 +39,13 @@ function sanitizeMeta(meta = {}) {
 export function logInfo(event, meta = {}) {
   const entry = { ts: nowIso(), level: "info", event, meta: sanitizeMeta(meta) };
   safeStore(entry);
-  try { console.log("[APP][INFO]", event, entry.meta); } catch (_) {}
+  try { if (isDebugEnabled()) console.info("[APP][INFO]", event, entry.meta); } catch (_) {}
 }
 
 export function logWarn(event, meta = {}) {
   const entry = { ts: nowIso(), level: "warn", event, meta: sanitizeMeta(meta) };
   safeStore(entry);
-  try { console.warn("[APP][WARN]", event, entry.meta); } catch (_) {}
+  try { if (isDebugEnabled()) console.warn("[APP][WARN]", event, entry.meta); } catch (_) {}
 }
 
 export function logError(event, meta = {}) {

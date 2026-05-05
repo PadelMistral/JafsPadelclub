@@ -29,9 +29,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('user-search');
     if (searchInput) searchInput.addEventListener('input', sortAndRender);
 
-    document.querySelectorAll('.filter-tab').forEach(tab => {
+    document.querySelectorAll('.filter-tab, .hist-tab').forEach(tab => {
         tab.addEventListener('click', (e) => {
-            document.querySelectorAll('.filter-tab').forEach(t => {
+            document.querySelectorAll('.filter-tab, .hist-tab').forEach(t => {
                 t.classList.remove('active');
                 t.setAttribute('aria-selected', 'false');
             });
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function sortAndRender() {
-    const filter = document.querySelector('.filter-tab.active')?.dataset.filter || 'mine';
+    const filter = document.querySelector('.filter-tab.active, .hist-tab.active')?.dataset.filter || 'mine';
     const sortType = document.getElementById('sort-matches')?.value || 'date-desc';
     const searchQuery = document.getElementById('user-search')?.value.toLowerCase().trim();
 

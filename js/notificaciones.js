@@ -1,4 +1,4 @@
-/* =====================================================
+﻿/* =====================================================
    PADELUMINATIS NOTIFICACIONES JS
    Bandeja + estado simple de avisos
    ===================================================== */
@@ -55,6 +55,7 @@ const btnReregisterSw = document.getElementById("btn-reregister-sw");
 const btnCleanSw = document.getElementById("btn-clean-sw");
 const btnReloadApp = document.getElementById("btn-reload-app");
 const btnOpenGuide = document.getElementById("btn-open-guide");
+const btnCopyPushDiagnostics = document.getElementById("btn-copy-push-diagnostics");
 
 function isNativeApp() {
   try {
@@ -483,10 +484,75 @@ function getRecommendedActionLabel(status = {}) {
       return "Pulsa Reparar";
     case "reconnect_onesignal":
       return "Pulsa Reconectar";
+    case "fix_push_bridge":
+      return "Revisar servidor";
     case "review_browser_settings":
       return "Abre la guia";
     default:
       return status.backgroundReady ? "Todo correcto" : "Revisar estado";
+  }
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(value ?? "---");
+}
+
+function buildDiagnosticsText(status = {}) {
+  const remote = status.remotePush || {};
+  return [
+    `Plataforma: ${isNativeApp() ? "native-app" : `${status.platform?.isIOS ? "ios" : "web"}${status.platform?.isSafari ? " safari" : ""}`}`,
+    `Permiso: ${status.permission || "---"}`,
+    `Background ready: ${status.backgroundReady ? "si" : "no"}`,
+    `Service worker: ${status.swActive ? "activo" : "inactivo"} ${status.swScope || ""}`.trim(),
+    `OneSignal initialized: ${status.oneSignalInitialized ? "si" : "no"}`,
+    `OneSignal registered: ${status.oneSignalRegistered ? "si" : "no"}`,
+    `Subscription ID: ${status.oneSignalSubscriptionId || "---"}`,
+    `Bridge remoto: ${remote.ok === true ? "ok" : remote.ok === false ? `error (${remote.error || "unknown"})` : "sin datos"}`,
+    `Endpoint: ${remote.endpoint || window.__PUSH_API_URL || "config-default"}`,
+    `Siguiente paso: ${status.recommendedAction || "---"}`,
+  ].join("\n");
+}
+
+function renderPushDiagnostics(status = {}) {
+  const platform = isNativeApp()
+    ? "APK / nativa"
+    : status.platform?.isIOS
+      ? (status.platform?.isSafari ? "iPhone Safari" : "iPhone navegador")
+      : "Web / Android";
+  const swLabel = status.swActive ? `Activo` : `Inactivo`;
+  const onesignalLabel = status.oneSignalRegistered
+    ? "Registrado"
+    : status.oneSignalInitialized
+      ? "Pendiente"
+      : "No inicializado";
+  const subLabel = status.oneSignalSubscriptionId
+    ? `${String(status.oneSignalSubscriptionId).slice(0, 10)}...`
+    : "Sin ID";
+  const remote = status.remotePush || null;
+  const bridgeLabel = remote?.ok === true
+    ? "Bridge OK"
+    : remote?.ok === false
+      ? `Error: ${remote.error || "unknown"}`
+      : "Sin prueba reciente";
+  const endpointLabel = remote?.endpoint || window.__PUSH_API_URL || "Configuración por defecto";
+
+  setText("diag-platform", platform);
+  setText("diag-sw", swLabel);
+  setText("diag-onesignal", onesignalLabel);
+  setText("diag-subscription", subLabel);
+  setText("diag-bridge", bridgeLabel);
+  setText("diag-endpoint", endpointLabel);
+
+  if (btnCopyPushDiagnostics) {
+    btnCopyPushDiagnostics.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(buildDiagnosticsText(status));
+        showToast("Diagnóstico copiado", "Ya puedes pegar el estado técnico del canal push.", "success");
+      } catch (_) {
+        showToast("No se pudo copiar", "Tu navegador no permitió copiar el diagnóstico.", "warning");
+      }
+    };
   }
 }
 
@@ -647,6 +713,7 @@ async function updatePushStatusUI() {
     tagText("push-channel-pill", `Canal: ${status.oneSignalRegistered ? "OneSignal listo" : "registro pendiente"}`);
     tagText("push-sdk-pill", `SDK: ${status.oneSignalInitialized ? "nativo activo" : status.oneSignalAvailable ? "cargando" : "no listo"}`);
     tagText("push-action-pill", `Siguiente paso: ${getRecommendedActionLabel(status)}`);
+    renderPushDiagnostics(status);
 
     if (btnRequestPush) btnRequestPush.onclick = async () => {
       if (status.permission === "denied" || status.recommendedAction === "review_browser_settings") {
@@ -669,6 +736,11 @@ async function updatePushStatusUI() {
         await updatePushStatusUI();
         return;
       }
+      if (status.recommendedAction === "fix_push_bridge") {
+        showNotificationHelpModal();
+        showToast("Servidor de push", "El navegador puede estar listo, pero el bridge remoto del aviso en segundo plano está fallando.", "warning");
+        return;
+      }
       const granted = await requestNotificationPermission(true);
       if (granted && currentUser?.uid) await initPushNotifications(currentUser.uid);
       await updatePushStatusUI();
@@ -681,9 +753,9 @@ async function updatePushStatusUI() {
       btnTestPush.style.display = "flex";
       btnTestPush.onclick = async () => {
         console.group("[Push Test] Click en boton de prueba");
-        console.log("[Push Test] currentUser:", currentUser);
-        console.log("[Push Test] currentUserDoc:", currentUserDoc);
-        console.log("[Push Test] isAdmin:", isAdmin);
+        // console.log("[Push Test] currentUser:", currentUser);
+        // console.log("[Push Test] currentUserDoc:", currentUserDoc);
+        // console.log("[Push Test] isAdmin:", isAdmin);
         if (!currentUser?.uid) {
           console.warn("[Push Test] Abortado: currentUser.uid no disponible");
           showToast("Sesión no lista", "Espera un momento e intenta de nuevo.", "warning");
@@ -692,7 +764,7 @@ async function updatePushStatusUI() {
         }
 
         // 1. Prueba Local (App abierta)
-        console.log("[Push Test] Enviando notificacion local...");
+        // console.log("[Push Test] Enviando notificacion local...");
         const localPushResult = await sendPushNotification(
           isAdmin ? "PRUEBA LOCAL (ADMIN)" : "PRUEBA LOCAL",
           isNativeApp()
@@ -700,10 +772,10 @@ async function updatePushStatusUI() {
             : "Esta notificación confirma que el permiso del navegador funciona correctamente.",
           "https://ui-avatars.com/api/?name=P&background=00d4ff&color=fff",
         );
-        console.log("[Push Test] Resultado notificacion local:", localPushResult);
+        // console.log("[Push Test] Resultado notificacion local:", localPushResult);
         
         // 2. Prueba Externa (Segundo Plano / OneSignal)
-        console.log("[Push Test] Programando push externa en 3000ms para UID:", currentUser.uid);
+        // console.log("[Push Test] Programando push externa en 3000ms para UID:", currentUser.uid);
         showToast(
           "Lanzando prueba real...",
           isNativeApp()
@@ -722,9 +794,9 @@ async function updatePushStatusUI() {
                url: "notificaciones.html",
                 data: { type: "test", from: "diag_btn" }
              };
-             console.log("[Push Test] Payload push externa:", payload);
+             // console.log("[Push Test] Payload push externa:", payload);
              const externalPushResult = await sendExternalPush(payload);
-             console.log("[Push Test] Resultado sendExternalPush:", externalPushResult);
+             // console.log("[Push Test] Resultado sendExternalPush:", externalPushResult);
            } catch (e) {
              console.error("External push test failed", e);
            } finally {

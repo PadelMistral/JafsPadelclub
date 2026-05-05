@@ -41,6 +41,7 @@ import {
   getCoreLevelProgressState,
   getDivisionMovement,
   observeCoreSession,
+  getCorePlayFlowInsignia,
 } from "./core/core-engine.js";
 import { isFinishedMatch, isCancelledMatch, resolveWinnerTeam } from "./utils/match-utils.js";
 import { getAIMemory, primeAIMemory } from "./ai/ai-memory.js";
@@ -144,15 +145,20 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   normalizeProfileProductCopy();
 
-  const compactProfileSection = (sectionId, titleHtml) => {
+  const compactProfileSection = (sectionId, titleHtml, options = {}) => {
     const section = document.getElementById(sectionId);
     if (!section || section.dataset.compacted === "1") return;
     section.dataset.compacted = "1";
     const children = Array.from(section.children);
     if (!children.length) return;
+    const {
+      open = false,
+      bodyClassName = "",
+    } = options;
 
     const details = document.createElement("details");
     details.className = "profile-accordion";
+    if (open) details.open = true;
     const summary = document.createElement("summary");
     summary.className = "profile-accordion-trigger";
     summary.innerHTML = `
@@ -160,7 +166,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <i class="fas fa-chevron-down accordion-arrow"></i>
     `;
     const body = document.createElement("div");
-    body.style.marginTop = "12px";
+    body.className = `profile-accordion-body ${bodyClassName}`.trim();
 
     children.forEach((child) => {
       if (child.classList?.contains("section-header")) return;
@@ -172,8 +178,15 @@ document.addEventListener("DOMContentLoaded", () => {
     section.replaceChildren(details);
   };
 
+  const shouldOpenSettings =
+    window.location.search.includes("focus=apoing") ||
+    window.location.hash.includes("apoing");
+
+  compactProfileSection("profile-gallery-section", `<i class="fas fa-images text-primary mr-2"></i>Galeria compartida`);
   compactProfileSection("ai-tactical-report-section", `<i class="fas fa-brain-circuit text-purple-400 mr-2"></i>IA Tactica`);
-  compactProfileSection("profile-settings-section", `<i class="fas fa-cog text-white/30 mr-2"></i>Configuracion`);
+  compactProfileSection("profile-settings-section", `<i class="fas fa-cog text-white/30 mr-2"></i>Configuracion`, {
+    open: shouldOpenSettings,
+  });
 
   const sections = Array.from(document.querySelectorAll(".profile-section"));
   const memorySection = sections.find((section) => section.querySelector("#profile-memory-bank"));
@@ -318,6 +331,26 @@ document.addEventListener("DOMContentLoaded", () => {
     return out.filter((e) => e.dtStart instanceof Date && e.dtEnd instanceof Date);
   }
 
+  function normalizeApoingProfileText(raw = "") {
+    return String(raw || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function isRelevantProfileApoingEvent(ev = {}) {
+    const txt = normalizeApoingProfileText(`${ev.summary || ""} ${ev.description || ""}`);
+    const mentionsMistralHomes = txt.includes("mistral homes");
+    const mentionsPadel = txt.includes("padel mistral homes") || txt.includes("mistral homes padel") || txt.includes("padel") || txt.includes("pista padel") || txt.includes("court padel") || txt.includes("reserva padel");
+    const mentionsClub = txt.includes("club social") || txt.includes("mistral homes club") || txt.includes("club mistral homes");
+    if (mentionsClub && !mentionsPadel) return false;
+    if (mentionsMistralHomes) return mentionsPadel && !mentionsClub;
+    return mentionsPadel;
+  }
+
   async function fetchApoingIcs(url, timeoutMs = 22000) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -336,20 +369,22 @@ document.addEventListener("DOMContentLoaded", () => {
   async function fetchRawApoingByUrl(icsUrl = "") {
     const cleanUrl = String(icsUrl || "").trim();
     if (!cleanUrl) return "";
-    try {
-      apoingProfileLog("ics.fetch.try", { url: cleanUrl });
-      const jinaTarget = `${APOING_PROFILE_PROXY_3}${cleanUrl.replace(/^https?:\/\//i, "")}`;
-      return await fetchApoingIcs(jinaTarget);
-    } catch (e) {
-      apoingProfileLog("ics.fetch.fail", { err: e?.message || String(e) });
+    apoingProfileLog("ics.fetch.try", { url: cleanUrl });
+    const encodedUrl = encodeURIComponent(cleanUrl);
+    const strategies = [
+      () => fetchApoingIcs(`https://api.codetabs.com/v1/proxy?quest=${encodedUrl}`),
+      () => fetchApoingIcs(`https://corsproxy.io/?${encodedUrl}`),
+      () => fetchApoingIcs(`https://api.allorigins.win/raw?url=${encodedUrl}`),
+      () => fetchApoingIcs(cleanUrl)
+    ];
+    for (const strategy of strategies) {
       try {
-        const target = `${APOING_PROFILE_PROXY_URL}${encodeURIComponent(cleanUrl)}`;
-        return await fetchApoingIcs(target);
-      } catch (e2) {
-        apoingProfileLog("ics.fetch.unavailable", { err: e2?.message || String(e2) });
-        return "";
+        return await strategy();
+      } catch (err) {
+        apoingProfileLog("ics.fetch.fail", { err: err?.message || String(err) });
       }
     }
+    return "";
   }
 
   function renderApoingPreviewEmpty(message = "Configura tu calendario Apoing en Ajustes", sub = "Verás aquí un resumen de tus reservas activas") {
@@ -388,24 +423,25 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter((e) => (e.dtStart?.getTime?.() || 0) >= now)
         .filter((e) => /padel|pádel|reserva|pista|court/i.test(`${e.summary || ""} ${e.description || ""}`))
         .sort((a, b) => a.dtStart - b.dtStart)
-        .slice(0, 6);
+        .slice(0, 12);
+      const relevantEvents = events.filter((e) => isRelevantProfileApoingEvent(e)).slice(0, 6);
       apoingProfileLog("preview.events", {
-        count: events.length,
-        first: events[0]
+        count: relevantEvents.length,
+        first: relevantEvents[0]
           ? {
-              summary: events[0].summary || "",
-              start: events[0].dtStart?.toISOString?.() || "",
-              end: events[0].dtEnd?.toISOString?.() || "",
+              summary: relevantEvents[0].summary || "",
+              start: relevantEvents[0].dtStart?.toISOString?.() || "",
+              end: relevantEvents[0].dtEnd?.toISOString?.() || "",
             }
           : null,
       });
 
-      if (!events.length) {
+      if (!relevantEvents.length) {
         renderApoingPreviewEmpty("No se han detectado reservas futuras", "Cuando tengas reservas en Apoing, aparecerán aquí automáticamente");
         return;
       }
 
-      box.innerHTML = events.map((ev) => {
+      box.innerHTML = relevantEvents.map((ev) => {
         const day = ev.dtStart.toLocaleDateString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit" }).toUpperCase();
         const h1 = ev.dtStart.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
         const h2 = ev.dtEnd.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
@@ -580,6 +616,25 @@ document.addEventListener("DOMContentLoaded", () => {
       if (Number.isFinite(lastBefore)) {
         divisionBadgeEl.classList.toggle("up", getDivisionMovement(lastBefore, ptsVal) > 0);
       }
+    }
+
+    const flowBadgeEl = document.getElementById("profile-flow-badge");
+    if (flowBadgeEl) {
+      const flow = getCorePlayFlowInsignia(levelVal);
+      flowBadgeEl.innerHTML = `<i class="fas ${flow.icon}"></i> ${flow.label}`;
+      flowBadgeEl.style.color = flow.color;
+      flowBadgeEl.style.fontSize = "0.75rem";
+      flowBadgeEl.style.fontWeight = "800";
+      flowBadgeEl.style.textTransform = "uppercase";
+      flowBadgeEl.style.letterSpacing = "1px";
+      flowBadgeEl.style.padding = "4px 12px";
+      flowBadgeEl.style.borderRadius = "20px";
+      flowBadgeEl.style.border = `1px solid ${flow.color}40`;
+      flowBadgeEl.style.background = `${flow.color}10`;
+      flowBadgeEl.style.display = "inline-flex";
+      flowBadgeEl.style.alignItems = "center";
+      flowBadgeEl.style.gap = "6px";
+      flowBadgeEl.style.marginTop = "8px";
     }
 
     // Grid Metrics (Detailed)
@@ -1965,7 +2020,10 @@ document.addEventListener("DOMContentLoaded", () => {
       apoingProfileLog("save.userDoc.ok", { uid: currentUser.uid });
       await setDoc(doc(db, "apoingCalendars", currentUser.uid), {
         uid: currentUser.uid,
+        name: userData?.nombreUsuario || userData?.nombre || currentUser.email || "Jugador",
+        nickname: userData?.nombreUsuario || userData?.nombre || "",
         nombre: userData?.nombreUsuario || userData?.nombre || currentUser.email || "Jugador",
+        nombreUsuario: userData?.nombreUsuario || "",
         email: currentUser.email || "",
         icsUrl: safe,
         active: true,

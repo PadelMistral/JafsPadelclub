@@ -3,6 +3,7 @@ import { showToast } from './ui-core.js';
 import { AudioManager } from './modules/audio-manager.js';
 import { initPushNotifications } from './modules/push-notifications.js';
 import { getAppBase } from './modules/path-utils.js';
+import { APP_APK_DOWNLOAD_ENABLED, resolveApkDownloadUrl } from './app-config.js';
 
 const LOGIN_BOOT_FLAG = '__padelLoginBooted';
 const LOGIN_SW_RELOAD_FLAG = '__padelLoginSwReloaded';
@@ -18,8 +19,12 @@ function initAuthPageServiceWorker() {
         scope: base,
         updateViaCache: 'none' 
     }).then((reg) => {
-        reg.update().catch(() => {});
-    }).catch((err) => console.error('SW auth register error:', err));
+        if (reg?.update) reg.update().catch(() => {});
+    }).catch((err) => {
+        if (localStorage.getItem('app_debug') === '1') {
+            console.warn('SW auth register skipped:', err?.message || err);
+        }
+    });
 }
 
 function withTimeout(promise, ms = 15000) {
@@ -305,6 +310,36 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
     }
+
+    // APK Banner Setup
+    setTimeout(async () => {
+        const banner = document.querySelector('.apk-banner');
+        if (!banner) return;
+        
+        if (!APP_APK_DOWNLOAD_ENABLED || localStorage.getItem('hide_apk_banner') === '1') {
+            banner.style.display = 'none';
+            return;
+        }
+        
+        const apkUrl = await resolveApkDownloadUrl();
+        if (!apkUrl) {
+            banner.style.display = 'none';
+            return;
+        }
+        
+        const btnLink = document.getElementById('apk-banner-link');
+        if (btnLink) btnLink.href = apkUrl;
+        
+        const dismissBtn = document.getElementById('apk-banner-dismiss');
+        if (dismissBtn) {
+            dismissBtn.onclick = () => {
+                banner.style.opacity = '0';
+                banner.style.transform = 'translateY(20px)';
+                setTimeout(() => banner.style.display = 'none', 300);
+                localStorage.setItem('hide_apk_banner', '1');
+            };
+        }
+    }, 800);
 });
 
 function startSpectacularLoading(userName) {

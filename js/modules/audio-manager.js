@@ -16,22 +16,23 @@ const SOUNDS = {
 };
 
 const audioCache = new Map();
+let unlockedByUser = false;
+
+function canUseRemoteAudio() {
+    if (typeof window === 'undefined') return false;
+    if (localStorage.getItem(AUDIO_ENABLED_KEY) === '0') return false;
+    if (navigator.webdriver) return false;
+    return unlockedByUser;
+}
 
 export const AudioManager = {
     init() {
         if (typeof window === 'undefined') return;
         this.enabled = localStorage.getItem(AUDIO_ENABLED_KEY) !== '0';
-        
-        // Preload sounds
-        Object.values(SOUNDS).forEach(url => {
-            const audio = new Audio(url);
-            audio.load();
-            audioCache.set(url, audio);
-        });
     },
 
     play(soundName, volume = DEFAULT_VOLUME) {
-        if (!this.enabled) return;
+        if (!this.enabled || !canUseRemoteAudio()) return;
         const url = SOUNDS[soundName];
         if (!url) return;
 
@@ -68,6 +69,13 @@ export const AudioManager = {
 // Initialize on import if in browser
 if (typeof window !== 'undefined') {
     AudioManager.init();
+    const unlockAudio = () => {
+        unlockedByUser = true;
+        window.removeEventListener('pointerdown', unlockAudio);
+        window.removeEventListener('keydown', unlockAudio);
+    };
+    window.addEventListener('pointerdown', unlockAudio, { once: true, passive: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
     
     // Add global click listener for tick sound
     document.addEventListener('click', (e) => {

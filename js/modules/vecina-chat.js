@@ -1245,6 +1245,7 @@ function switchAiPersonality() {
 
 window.aiQuickCmd = (cmd, label) => {
     const input = document.getElementById("ai-input-field");
+    if (typeof window.toggleAiCommandSheet === "function") window.toggleAiCommandSheet(false);
     input.value = cmd;
     input.dataset.displayLabel = label || cmd;
     sendMessage();
@@ -1608,10 +1609,81 @@ export function initVecinaChat() {
                 .ai-quick-btn-v7 i { font-size: 11px; }
                 .ai-quick-btn-v7 span { font-size: 6px; letter-spacing: 0.1px; }
             }
+            .ai-input-whatsapp-row { display:flex; align-items:center; gap:10px; }
+            .ai-emoji-toggle {
+                width: 42px; height: 42px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.1);
+                background: rgba(255,255,255,0.06); color: #d9f99d; flex: 0 0 42px;
+            }
+            .ai-hidden-command-sheet {
+                margin-bottom: 12px; padding: 12px; border-radius: 18px;
+                border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04);
+            }
+            .ai-hidden-command-sheet.hidden { display: none; }
+            .ai-hidden-sheet-head, .ai-hidden-sheet-compare {
+                display:flex; align-items:center; gap:10px; justify-content:space-between;
+            }
+            .ai-hidden-sheet-head span {
+                font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.18em; color: rgba(255,255,255,0.72);
+            }
+            .ai-hidden-sheet-close {
+                background: transparent; border: none; color: rgba(255,255,255,0.6); font-size: 14px;
+            }
+            .ai-hidden-sheet-grid {
+                display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0;
+            }
+            .ai-hidden-chip {
+                border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; padding: 8px 10px;
+                background: rgba(255,255,255,0.05); color: #fff; font-size: 10px; font-weight: 800;
+            }
+            .ai-hidden-chip.compact { padding-inline: 12px; white-space: nowrap; }
         </style>
     `;
   document.body.insertAdjacentHTML("beforeend", chatHTML);
   const panel = document.getElementById("vecina-chat-panel");
+  const footer = document.querySelector("#vecina-chat-panel .ai-chat-footer");
+  const quickWrap = document.getElementById("ai-command-wrap");
+  const detailsWrap = document.querySelector("#vecina-chat-panel .ai-cmd-details");
+  const compareWrap = document.getElementById("ai-compare-select")?.closest("div");
+  const inputRow = document.querySelector("#vecina-chat-panel .ai-input-container-v7");
+
+  if (quickWrap) quickWrap.classList.add("hidden");
+  if (detailsWrap) detailsWrap.classList.add("hidden");
+  if (compareWrap) compareWrap.classList.add("hidden");
+  if (inputRow && !document.getElementById("ai-command-toggle")) {
+    inputRow.classList.add("ai-input-whatsapp-row");
+    inputRow.insertAdjacentHTML("afterbegin", `
+      <button id="ai-command-toggle" type="button" class="ai-emoji-toggle" title="Abrir comandos">
+        <i class="far fa-face-smile"></i>
+      </button>
+    `);
+  }
+  if (footer && !document.getElementById("ai-hidden-command-sheet")) {
+    footer.insertAdjacentHTML("afterbegin", `
+      <div id="ai-hidden-command-sheet" class="ai-hidden-command-sheet hidden">
+        <div class="ai-hidden-sheet-head">
+          <span>Accesos</span>
+          <button type="button" class="ai-hidden-sheet-close" onclick="window.toggleAiCommandSheet(false)"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="ai-hidden-sheet-grid">
+          <button class="ai-hidden-chip" onclick="window.aiQuickCmd('CMD_COMPARE','Comparar')">Comparar</button>
+          <button class="ai-hidden-chip" onclick="window.aiQuickCmd('CMD_NEXT_MATCH','Cuando juego')">Cuando juego</button>
+          <button class="ai-hidden-chip" onclick="window.aiQuickCmd('CMD_WEATHER_TOMORROW','Clima mañana')">Clima mañana</button>
+          <button class="ai-hidden-chip" onclick="window.aiQuickCmd('CMD_STATS_READ','Mis stats')">Mis stats</button>
+          <button class="ai-hidden-chip" onclick="window.aiQuickCmd('CMD_HISTORY','Historial')">Historial</button>
+          <button class="ai-hidden-chip" onclick="window.aiQuickCmd('CMD_RIVAL_INTEL','Vs rival')">Vs rival</button>
+          <button class="ai-hidden-chip" onclick="window.aiQuickCmd('CMD_APOING_NEXT','Mi reserva')">Mi reserva</button>
+          <button class="ai-hidden-chip" onclick="window.aiQuickCmd('CMD_OPEN_MATCHES','Abiertos')">Abiertos</button>
+        </div>
+        <div class="ai-hidden-sheet-compare">
+          <i class="fas fa-users text-[10px] text-primary"></i>
+          <select id="ai-compare-select-sheet" class="bg-transparent border-none text-[10px] text-white/70 font-black uppercase outline-none flex-1">
+            <option value="">Selecciona rival...</option>
+          </select>
+          <button type="button" class="ai-hidden-chip compact" onclick="window.compareWithSelected()">VS</button>
+        </div>
+      </div>
+    `);
+  }
 
   // Hard-lock geometry to avoid any stylesheet/caching conflict that can push body height.
   const applyChatGeometry = () => {
@@ -1654,6 +1726,13 @@ export function initVecinaChat() {
   document.getElementById("ai-input-field").onkeypress = (e) => {
     if (e.key === "Enter") sendMessage();
   };
+  window.toggleAiCommandSheet = (force) => {
+    const sheet = document.getElementById("ai-hidden-command-sheet");
+    if (!sheet) return;
+    const shouldOpen = typeof force === "boolean" ? force : sheet.classList.contains("hidden");
+    sheet.classList.toggle("hidden", !shouldOpen);
+  };
+  document.getElementById("ai-command-toggle")?.addEventListener("click", () => window.toggleAiCommandSheet());
 
   const toggleChat = () => {
     const p = document.getElementById("vecina-chat-panel");
@@ -1689,11 +1768,19 @@ export function initVecinaChat() {
   window.aiQuickCmd = window.aiQuickCmd;
 
   window.compareWithSelected = () => {
-      const sel = document.getElementById("ai-compare-select");
+      const sel = document.getElementById("ai-compare-select-sheet") || document.getElementById("ai-compare-select");
       if(!sel.value) return;
       const name = sel.options[sel.selectedIndex].text;
       const input = document.getElementById("ai-input-field");
       input.value = `Compara con ${name}`;
+      window.toggleAiCommandSheet(false);
       sendMessage();
   };
+  const baseCompareSelect = document.getElementById("ai-compare-select");
+  const sheetCompareSelect = document.getElementById("ai-compare-select-sheet");
+  if (baseCompareSelect && sheetCompareSelect) {
+    sheetCompareSelect.innerHTML = baseCompareSelect.innerHTML;
+    const syncCompareOptions = () => { sheetCompareSelect.innerHTML = baseCompareSelect.innerHTML; };
+    setInterval(syncCompareOptions, 2000);
+  }
 }

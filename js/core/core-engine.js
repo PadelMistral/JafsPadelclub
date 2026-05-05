@@ -11,6 +11,7 @@ import {
   buildLevelProgressState,
   getDivisionByRating,
   compareDivisionRank,
+  getPlayFlowInsignia,
 } from "../config/elo-system.js";
 import {
   aggregateMonthlyImprovement,
@@ -106,6 +107,10 @@ export function getCoreDivisionByRating(rating) {
 
 export function getCoreLevelProgressState({ rating, levelOverride } = {}) {
   return buildLevelProgressState({ rating, levelOverride });
+}
+
+export function getCorePlayFlowInsignia(level) {
+  return getPlayFlowInsignia(level);
 }
 
 export function computeRankingContext(logs = [], days = 30) {

@@ -9,6 +9,7 @@ import {
   getDocument,
 } from "./firebase-service.js";
 import { addPlayerHistoryEntry } from "./services/player-history-service.js";
+import { getMatchPlayers, getResultSetsString, isFinishedMatch } from "./utils/match-utils.js";
 import {
   doc,
   getDoc,
@@ -347,7 +348,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const qA = query(collection(db, "partidosAmistosos"), where("jugadores", "array-contains", currentUser.uid));
       const qR = query(collection(db, "partidosReto"), where("jugadores", "array-contains", currentUser.uid));
-      const qE = query(collection(db, "eventoPartidos"), where("jugadores", "array-contains", currentUser.uid));
+      const qE = query(collection(db, "eventoPartidos"), where("playerUids", "array-contains", currentUser.uid));
 
       const [snapA, snapR, snapE] = await Promise.all([getDocs(qA), getDocs(qR), getDocs(qE)]);
 
@@ -356,13 +357,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         ...snapR.docs.map((d) => ({ id: d.id, ...d.data(), type: "Reto" })),
         ...snapE.docs.map((d) => ({ id: d.id, ...d.data(), type: "Torneo/Evento" })),
       ]
-        .filter((m) => m.resultado || m.estado === "jugado" || m.estado === "finalizado")
+        .filter((m) => isFinishedMatch(m))
         .sort((a, b) => (b.fecha?.toMillis?.() || 0) - (a.fecha?.toMillis?.() || 0));
 
       selector.innerHTML = '<option value="">-- Selecciona un partido --</option>';
       all.forEach((m) => {
         const date = m.fecha?.toDate ? m.fecha.toDate().toLocaleDateString() : "---";
-        const res = m.resultado?.sets || "Sin resultado";
+        const res = getResultSetsString(m) || "Sin resultado";
         const opt = document.createElement("option");
         opt.value = m.id;
         opt.textContent = `${date} - ${m.type} [${res}]`;
@@ -385,13 +386,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       (await getDocument("eventoPartidos", id));
     if (match) {
       const infoBox = document.getElementById("linked-match-info");
+      const players = getMatchPlayers(match);
       if (infoBox) {
         infoBox.classList.remove("hidden");
         document.getElementById("txt-match-date").textContent = match.fecha?.toDate
           ? match.fecha.toDate().toLocaleDateString()
           : "Partido Anterior";
-        document.getElementById("txt-result").textContent = match.resultado
-          ? `RESULTADO: ${match.resultado.sets}`
+        document.getElementById("txt-result").textContent = getResultSetsString(match)
+          ? `RESULTADO: ${getResultSetsString(match)}`
           : "PENDIENTE";
         document.getElementById("inp-match-id").value = id;
 
@@ -401,12 +403,12 @@ document.addEventListener("DOMContentLoaded", async () => {
           });
         }
 
-        if (match.jugadores) {
-          renderPlayerEvaluations(match.jugadores, currentUser.uid);
-          const myIdx = match.jugadores.indexOf(currentUser.uid);
+        if (players.length) {
+          renderPlayerEvaluations(players, currentUser.uid);
+          const myIdx = players.indexOf(currentUser.uid);
           if (myIdx !== -1) {
             const partnerIdx = myIdx < 2 ? (myIdx === 0 ? 1 : 0) : myIdx === 2 ? 3 : 2;
-            const partId = match.jugadores[partnerIdx];
+            const partId = players[partnerIdx];
             if (partId && !String(partId).startsWith("GUEST_")) {
               getDocument("usuarios", partId).then((u) => {
                 if (u) document.getElementById("inp-partner").value = u.nombreUsuario || u.nombre;
@@ -426,7 +428,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const players = await Promise.all(
         uids.map(async (uid) => {
           if (!uid) return { id: null, name: "Invitado", isMe: false };
-          if (uid.startsWith("GUEST_")) return { id: uid, name: uid.split("_")[1], isMe: false };
+          if (uid.startsWith("GUEST_") || uid.startsWith("manual_") || uid.startsWith("invitado_")) return { id: uid, name: uid.split("_")[1] || "Invitado", isMe: false };
           if (uid === myUid) return { id: uid, name: "Yo (Mismo)", isMe: true };
           const u = await getDocument("usuarios", uid);
           return { id: uid, name: u?.nombreUsuario || "Jugador", isMe: false };
@@ -791,11 +793,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     const feels = e.biometria?.mood || "Normal";
     const shots = e.shots || {};
     const avgShot = Object.values(shots).reduce((a,b)=>a+b, 0) / (Object.values(shots).length || 1);
-    let txt = "";
-    if (avgShot >= 8) txt += "Rendimiento tecnico sobresaliente. ";
-    else if (avgShot <= 4) txt += "Dia de imprecision tecnica. ";
-    if (feels === "Fluido") txt += "Sintonia perfecta con el juego. ";
-    return txt || "Sesion registrada. Sigue analizando para mejorar.";
+    const bestShot = Object.entries(shots).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))[0]?.[0] || "";
+    const lowShot = Object.entries(shots).sort((a, b) => Number(a[1] || 0) - Number(b[1] || 0))[0]?.[0] || "";
+    const labels = {
+      serve: "saque",
+      volley: "volea",
+      bandeja: "bandeja",
+      vibora: "víbora",
+      smash: "smash",
+      lob: "globo",
+    };
+    const lines = [];
+    if (avgShot >= 8) lines.push("Jornada de alto rendimiento técnico.");
+    else if (avgShot <= 4.5) lines.push("Sesión con margen claro de ajuste técnico.");
+    else lines.push("Sesión equilibrada con señales útiles para seguir afinando.");
+    if (bestShot) lines.push(`Tu golpe más sólido fue el ${labels[bestShot] || bestShot}.`);
+    if (lowShot && lowShot !== bestShot) lines.push(`El punto de mejora inmediata está en el ${labels[lowShot] || lowShot}.`);
+    if (feels === "Fluido") lines.push("La sensación general fue de juego suelto y confiado.");
+    if (feels === "Frustrado" || feels === "Cansado") lines.push("Conviene revisar gestión emocional y recuperación antes del próximo partido.");
+    return lines.join(" ");
   }
 
   function generateCoachNote(entry) {

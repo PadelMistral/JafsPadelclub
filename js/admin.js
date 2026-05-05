@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return window.location.replace("home.html");
         }
 
-        // Inyectar UI dinÃ¡mica
+        // Inyectar UI dinamica
         try {
             const { injectHeader, injectNavbar } = await import('./modules/ui-loader.js');
             if (me) {
@@ -131,7 +131,7 @@ function bindSystemActions() {
     
     document.getElementById("btn-execute-delete-matches")?.addEventListener("click", () => {
         const action = document.getElementById("matches-delete-action")?.value;
-        if (!action || action === "none") return showToast("Aviso", "Selecciona una opciÃ³n de borrado", "info");
+        if (!action || action === "none") return showToast("Aviso", "Selecciona una opcion de borrado", "info");
         window.deleteMatchesByFilter(action);
     });
 
@@ -145,8 +145,8 @@ async function runHistoricalRecalc(systemKey = "default") {
     const confirmed = await confirmAdminAction({
         title: isAtp ? "PRUEBA ATP" : "RECONSTR_HISTORICA",
         message: isAtp
-            ? "Se va a reconstruir todo el historial desde el base_level usando el sistema ATP de prueba. Â¿Proceder?"
-            : "Se va a reconstruir todo el historial de puntos ELO desde el base_level. Â¿Proceder?",
+            ? "Se va a reconstruir todo el historial desde el base_level usando el sistema ATP de prueba. ¿Proceder?"
+            : "Se va a reconstruir todo el historial de puntos ELO desde el base_level. ¿Proceder?",
         confirmLabel: isAtp ? "PROBAR ATP" : "EXECUTE_REBUILD",
         danger: true
     });
@@ -166,7 +166,7 @@ async function runHistoricalRecalc(systemKey = "default") {
         const { pct, current, total, matchId } = e.detail;
         if (bar) bar.style.width = `${pct}%`;
         if (pctEl) pctEl.textContent = `${pct}%`;
-        if (statusEl) statusEl.textContent = `${isAtp ? "ATP" : "ELO"} Â· Procesando match ${current}/${total} [${String(matchId || "").substring(0,8)}...]`;
+        if (statusEl) statusEl.textContent = `${isAtp ? "ATP" : "ELO"} · Procesando match ${current}/${total} [${String(matchId || "").substring(0,8)}...]`;
     };
 
     window.addEventListener("adminRecalcProgress", onProgress);
@@ -174,12 +174,12 @@ async function runHistoricalRecalc(systemKey = "default") {
     try {
         const res = isAtp ? await window.RESTORE_AND_RECALC_FROM_BASE_ATP() : await window.RESTORE_AND_RECALC_FROM_BASE();
         if (res?.success) {
-            showToast("Ã‰XITO", isAtp ? "ReconstrucciÃ³n ATP completada" : "SincronizaciÃ³n histÃ³rica completa", "success");
+            showToast("EXITO", isAtp ? "Reconstruccion ATP completada" : "Sincronizacion historica completa", "success");
             await refreshAll();
         }
     } catch (e) {
         console.error(e);
-        showToast("Error", "Fallo crÃ­tico en reconstrucciÃ³n", "error");
+        showToast("Error", "Fallo critico en reconstruccion", "error");
     } finally {
         window.removeEventListener("adminRecalcProgress", onProgress);
         if (indicator) {
@@ -288,7 +288,7 @@ function shouldDeleteDuplicate(keep, candidate) {
 }
 
 async function cleanupEventDuplicates() {
-    if (!(await confirmAdminAction({ title: "Limpiar duplicados", message: "Se analizarÃ¡n y limpiarÃ¡n duplicados de eventos y partidos huÃ©rfanos.", confirmLabel: "Analizar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Limpiar duplicados", message: "Se analizaran y limpiaran duplicados de eventos y partidos huerfanos.", confirmLabel: "Analizar", danger: true }))) return;
     showToast("Limpieza", "Analizando eventoPartidos...", "info");
     try {
         const snap = await getDocsSafe(collection(db, "eventoPartidos"));
@@ -329,7 +329,7 @@ async function cleanupEventDuplicates() {
             return;
         }
 
-        if (!(await confirmAdminAction({ title: "Eliminar duplicados", message: `Se eliminarÃ¡n ${toDelete.length} registros duplicados o huÃ©rfanos.`, confirmLabel: "Eliminar", danger: true }))) return;
+        if (!(await confirmAdminAction({ title: "Eliminar duplicados", message: `Se eliminaran ${toDelete.length} registros duplicados o huerfanos.`, confirmLabel: "Eliminar", danger: true }))) return;
 
         for (const m of toDelete) {
             await deleteDoc(doc(db, "eventoPartidos", m.id));
@@ -343,7 +343,7 @@ async function cleanupEventDuplicates() {
 }
 
 async function cleanupOldEventMatches() {
-    if (!(await confirmAdminAction({ title: "Limpiar eventos antiguos", message: "Se borrarÃ¡n los partidos ligados a eventos antiguos o no activos.", confirmLabel: "Continuar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Limpiar eventos antiguos", message: "Se borraran los partidos ligados a eventos antiguos o no activos.", confirmLabel: "Continuar", danger: true }))) return;
     const activeIds = new Set(
         eventsArr
             .filter(e => !["finalizado", "cancelado"].includes(String(e?.estado || "").toLowerCase()))
@@ -355,7 +355,7 @@ async function cleanupOldEventMatches() {
         const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         const toDelete = rows.filter(m => !activeIds.has(String(m.eventoId || "")));
         if (!toDelete.length) return showToast("OK", "No hay partidos antiguos", "success");
-        if (!(await confirmAdminAction({ title: "Eliminar partidos antiguos", message: `Se eliminarÃ¡n ${toDelete.length} partidos de eventos no activos.`, confirmLabel: "Eliminar", danger: true }))) return;
+        if (!(await confirmAdminAction({ title: "Eliminar partidos antiguos", message: `Se eliminaran ${toDelete.length} partidos de eventos no activos.`, confirmLabel: "Eliminar", danger: true }))) return;
         for (const m of toDelete) {
             await deleteDoc(doc(db, "eventoPartidos", m.id));
             if (m.linkedMatchId && m.linkedMatchCollection) {
@@ -408,7 +408,7 @@ window.saveEloConfig = async () => {
     const k = Number(document.getElementById("cfg-elo-k")?.value || 32);
 
     try {
-        showToast("Guardando...", "Actualizando parÃ¡metros de puntuaciÃ³n", "info");
+        showToast("Guardando...", "Actualizando parametros de puntuacion", "info");
         await updateDocument("systemConfigs", "elo", {
             victoryPoints: win,
             lossPoints: loss,
@@ -417,9 +417,9 @@ window.saveEloConfig = async () => {
             updatedBy: auth.currentUser?.uid || "admin"
         });
         
-        showToast("ConfiguraciÃ³n Guardada", "Los nuevos valores se aplicarÃ¡n a futuros cÃ¡lculos.", "success");
-    } catch (e) {
-        showToast("Error", "No se pudo guardar la configuraciÃ³n", "error");
+        showToast("Configuracion Guardada", "Los nuevos valores se aplicaran a futuros calculos.", "success");
+        } catch (e) {
+        showToast("Error", "No se pudo guardar la configuracion", "error");
     }
 };
 
@@ -540,14 +540,14 @@ window.jumpAdminPane = (paneName = "users") => {
 
 window.forceAppUpdateAdmin = async () => {
     try {
-        if (!confirm("Â¿Seguro que quieres forzar la recarga de toda la aplicaciÃ³n en todos los mÃ³viles de los usuarios? SaldrÃ¡ un aviso pidiendo que actualicen.")) return;
-        showToast("Forzando update...", "Enviando seÃ±al de actualizaciÃ³n a la base de datos...", "info");
+        if (!confirm("¿Seguro que quieres forzar la recarga de toda la aplicacion en todos los moviles de los usuarios? Saldra un aviso pidiendo que actualicen.")) return;
+        showToast("Forzando update...", "Enviando señal de actualizacion a la base de datos...", "info");
         await setDoc(doc(db, "systemConfigs", "forceUpdate"), {
             versionStamp: Date.now(),
             updatedBy: auth.currentUser?.uid || "admin",
-            message: "Por favor, pulsa aquÃ­ para aplicar la nueva actualizaciÃ³n y corregir errores recientes."
+            message: "Por favor, pulsa aqui para aplicar la nueva actualizacion y corregir errores recientes."
         }, { merge: true });
-        showToast("Â¡HECHO!", "SeÃ±al enviada a todos los usuarios en lÃ­nea", "success");
+        showToast("HECHO", "Señal enviada a todos los usuarios en linea", "success");
     } catch (e) {
         showToast("Error", e.message, "error");
     }
@@ -688,9 +688,9 @@ function renderUserAdminSnapshot(user) {
     const latestType = snapshot.latestMatch
         ? (snapshot.latestMatch.col === "eventoPartidos" ? "Torneo" : snapshot.latestMatch.col === "partidosReto" ? "Reto" : "Amistoso")
         : "Sin actividad";
-    const insight = snapshot.lastInsight?.text || "La IA aÃºn no tiene memoria suficiente para este jugador.";
+    const insight = snapshot.lastInsight?.text || "La IA aun no tiene memoria suficiente para este jugador.";
     const auditText = snapshot.latestAudit
-        ? `${String(snapshot.latestAudit.action || "acciÃ³n").replace(/_/g, " ")} Â· ${formatAuditStamp(snapshot.latestAudit.createdAt)}`
+        ? `${String(snapshot.latestAudit.action || "accion").replace(/_/g, " ")} · ${formatAuditStamp(snapshot.latestAudit.createdAt)}`
         : "Sin cambios admin recientes";
 
     return `
@@ -703,29 +703,29 @@ function renderUserAdminSnapshot(user) {
                 </div>
             </div>
             <div class="admin-field-group">
-                <label>Ãšltimo acceso</label>
+                <label>Ultimo acceso</label>
                 <div class="input-v9">${getUserLastSeenLabel(user)}</div>
             </div>
             <div class="admin-field-group">
-                <label>PrÃ³ximos partidos</label>
+                <label>Proximos partidos</label>
                 <div class="input-v9">${snapshot.openMatches} pendientes</div>
             </div>
             <div class="admin-field-group">
-                <label>Ãšltimo partido</label>
-                <div class="input-v9">${latestType} Â· ${latestDate}</div>
+                <label>Ultimo partido</label>
+                <div class="input-v9">${latestType} · ${latestDate}</div>
             </div>
             <div class="admin-field-group col-span-2">
                 <label>Memoria IA reciente</label>
                 <div class="input-v9" style="line-height:1.45;">${escapeHtml(insight)}</div>
             </div>
             <div class="admin-field-group col-span-2">
-                <label>Ãšltimo cambio admin</label>
+                <label>Ultimo cambio admin</label>
                 <div class="input-v9">${escapeHtml(auditText)}</div>
             </div>
             <div class="admin-field-group col-span-2">
-                <label>Centro histÃ³rico</label>
+                <label>Centro historico</label>
                 <div class="input-v9 flex-row between">
-                    <span>Partidos, diario, IA y auditorÃ­a</span>
+                    <span>Partidos, diario, IA y auditoria</span>
                     <button class="btn-v9 ghost sm" onclick="window.openUserAdminHistory('${user.id}'); event.stopPropagation();">
                         <i class="fas fa-timeline"></i> VER
                     </button>
@@ -826,7 +826,7 @@ function renderUserHistoryModalContent(user) {
                 <span>Diario</span>
                 <span>${formatDateShort(entry?.fecha || entry?.timestamp || entry?.createdAt)}</span>
             </div>
-            <div class="audit-entry__title">${escapeHtml(entry?.rival || entry?.title || "Entrada tÃ¡ctica")}</div>
+            <div class="audit-entry__title">${escapeHtml(entry?.rival || entry?.title || "Entrada tactica")}</div>
             <div class="audit-entry__body">${escapeHtml(formatShortText(entry?.coachNote || entry?.memoryNote || entry?.tactica?.leccion || ""))}</div>
         </div>
     `).join("") : `<div class="audit-feed-empty">Sin entradas de diario registradas.</div>`;
@@ -840,7 +840,7 @@ function renderUserHistoryModalContent(user) {
             <div class="audit-entry__title">${escapeHtml(String(item?.type || "general").toUpperCase())}</div>
             <div class="audit-entry__body">${escapeHtml(formatShortText(item?.text || ""))}</div>
         </div>
-    `).join("") : `<div class="audit-feed-empty">La IA aÃºn no ha generado memoria Ãºtil para este jugador.</div>`;
+    `).join("") : `<div class="audit-feed-empty">La IA aun no ha generado memoria util para este jugador.</div>`;
 
     const auditHtml = relevantAudit.length ? relevantAudit.map((item) => `
         <div class="audit-entry">
@@ -848,7 +848,7 @@ function renderUserHistoryModalContent(user) {
                 <span>${escapeHtml(resolveAdminActorLabel(item.actorEmail, item.actorUid))}</span>
                 <span>${formatAuditStamp(item.createdAt)}</span>
             </div>
-            <div class="audit-entry__title">${escapeHtml(String(item.action || "acciÃ³n").replace(/_/g, " ").toUpperCase())}</div>
+            <div class="audit-entry__title">${escapeHtml(String(item.action || "accion").replace(/_/g, " ").toUpperCase())}</div>
             <div class="audit-entry__body">${escapeHtml(describeAuditLog(item))}</div>
         </div>
     `).join("") : `<div class="audit-feed-empty">Sin cambios administrativos recientes para este usuario.</div>`;
@@ -883,11 +883,11 @@ function renderUserHistoryModalContent(user) {
             </div>
             <div class="admin-history-grid">
                 <section>
-                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">Ãšltimos partidos</div>
+                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">Ultimos partidos</div>
                     <div class="audit-feed">${matchHtml}</div>
                 </section>
                 <section>
-                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">Diario tÃ¡ctico</div>
+                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">Diario tactico</div>
                     <div class="audit-feed">${diaryHtml}</div>
                 </section>
                 <section>
@@ -895,7 +895,7 @@ function renderUserHistoryModalContent(user) {
                     <div class="audit-feed">${aiHtml}</div>
                 </section>
                 <section>
-                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">AuditorÃ­a admin</div>
+                    <div class="text-[11px] font-black uppercase tracking-widest opacity-70 mb-2">Auditoria admin</div>
                     <div class="audit-feed">${auditHtml}</div>
                 </section>
             </div>
@@ -930,7 +930,7 @@ function renderAuditFeed() {
     const container = document.getElementById("admin-audit-feed");
     if (!container) return;
     if (!auditLogs.length) {
-        container.innerHTML = `<div class="audit-feed-empty">AÃºn no hay actividad registrada en el panel.</div>`;
+        container.innerHTML = `<div class="audit-feed-empty">Aun no hay actividad registrada en el panel.</div>`;
         return;
     }
 
@@ -940,7 +940,7 @@ function renderAuditFeed() {
                 <span>${escapeHtml(resolveAdminActorLabel(item.actorEmail, item.actorUid, users))}</span>
                 <span>${formatAuditStamp(item.createdAt)}</span>
             </div>
-            <div class="audit-entry__title">${escapeHtml(String(item.action || "acciÃ³n").replace(/_/g, " ").toUpperCase())}</div>
+            <div class="audit-entry__title">${escapeHtml(String(item.action || "accion").replace(/_/g, " ").toUpperCase())}</div>
             <div class="audit-entry__body">
                 <span class="status-highlight">${escapeHtml(item.entityType || "sistema")}</span>
                 <span class="match-highlight">${escapeHtml(resolveAdminEntityLabel(item.entityType, item.entityId, { users, guestProfiles, matchesArr, eventsArr }))}</span>
@@ -979,7 +979,7 @@ function renderUsers() {
         else if (notifPermission === "default") { notifLabel = "Sin permiso"; notifClass = "acc-badge text-amber-300"; }
         else if (notifPermission === "granted" && stat.enabled > 0) { notifLabel = "Activas"; notifClass = "acc-badge text-green-300"; }
         else if (notifPermission === "granted" && stat.count === 0) { notifLabel = "Sin dispositivo"; notifClass = "acc-badge text-amber-300"; }
-        else if (notifPermission === "granted") { notifLabel = "Sin suscripciÃ³n"; notifClass = "acc-badge text-amber-300"; }
+        else if (notifPermission === "granted") { notifLabel = "Sin suscripcion"; notifClass = "acc-badge text-amber-300"; }
         const seenStr = stat.lastSeenAt ? stat.lastSeenAt.toLocaleDateString("es-ES") : "N/D";
         const displayName = escapeHtml(u.nombreUsuario || u.nombre || "SIN NOMBRE");
         const displayEmail = escapeHtml(u.email || "Sin email");
@@ -1004,7 +1004,7 @@ function renderUsers() {
             <div class="acc-content">
                 <div class="admin-grid-v9">
                     <div class="admin-field-group">
-                        <label>Nombre PÃºblico</label>
+                        <label>Nombre Publico</label>
                         <input type="text" class="input-v9" value="${u.nombreUsuario || ''}" id="u-nick-${u.id}">
                     </div>
                     <div class="admin-field-group">
@@ -1351,12 +1351,12 @@ function renderEvents() {
                         </select>
                     </div>
                     <div class="admin-field-group">
-                        <label>MÃ¡ximo de Plazas</label>
+                        <label>Maximo de Plazas</label>
                         <input type="number" class="input-v9" value="${e.plazasMax || 16}" id="ev-plazas-${e.id}">
                     </div>
                 </div>
                 <div class="flex-row gap-3 mt-6">
-                    <button class="btn-v9 primary flex-1" onclick="window.saveEventAdmin('${e.id}')">ACTUALIZAR CONFIGURACIÃ“N</button>
+                    <button class="btn-v9 primary flex-1" onclick="window.saveEventAdmin('${e.id}')">ACTUALIZAR CONFIGURACION</button>
                     <button class="btn-v9 ghost" onclick="window.location.href='evento-detalle.html?id=${e.id}&admin=1'">MODIFICAR EQUIPOS / BRACKET</button>
                 </div>
             </div>
@@ -1693,8 +1693,8 @@ function renderAdminAvatar(user = {}) {
 }
 
 function confirmAdminAction({
-    title = "Confirmar acciÃ³n",
-    message = "Â¿Quieres continuar?",
+    title = "Confirmar accion",
+    message = "¿Quieres continuar?",
     confirmLabel = "Continuar",
     danger = false,
 } = {}) {
@@ -1742,6 +1742,17 @@ window.saveUserAdmin = async (uid) => {
     const photoUrl = String(document.getElementById(`u-photo-${uid}`)?.value || "").trim();
     const icsUrl = String(document.getElementById(`u-ics-${uid}`)?.value || "").trim();
     const phone = String(document.getElementById(`u-phone-${uid}`)?.value || "").trim();
+    const normalizedIcs = icsUrl.toLowerCase();
+    const duplicateIcsOwner = normalizedIcs
+        ? users.find((u) => String(u?.id || "") !== String(uid) && String(u?.apoingCalendarUrl || apoingByUid.get(u.id)?.icsUrl || "").trim().toLowerCase() === normalizedIcs)
+        : null;
+    if (duplicateIcsOwner) {
+        return showToast(
+            "Apoing duplicado",
+            `Ese .ics ya esta asignado a ${duplicateIcsOwner.nombreUsuario || duplicateIcsOwner.nombre || duplicateIcsOwner.email || "otro usuario"}.`,
+            "warning"
+        );
+    }
     const data = {
         nombreUsuario: document.getElementById(`u-nick-${uid}`).value,
         telefono: phone,
@@ -1782,8 +1793,12 @@ window.saveUserAdmin = async (uid) => {
     }).catch(() => {});
     if (icsUrl) {
         await setDoc(doc(db, "apoingCalendars", uid), {
+            uid,
             icsUrl,
+            name: data.nombreUsuario || "",
+            nickname: data.nombreUsuario || "",
             nombre: data.nombreUsuario || "",
+            nombreUsuario: data.nombreUsuario || "",
             updatedAt: serverTimestamp(),
             updatedBy: auth.currentUser.uid
         }, { merge: true });
@@ -1835,7 +1850,7 @@ window.saveMatchAdmin = async (id, col) => {
     }
     const validation = validateMatchAdminPayload({ resultStr, dateVal, state: estadoVal });
     if (!validation.valid) {
-        return showToast("VALIDACIÃ“N", validation.errors[0], "warning");
+        return showToast("VALIDACION", validation.errors[0], "warning");
     }
     
     const data = buildMatchPersistencePatch({
@@ -1904,7 +1919,7 @@ window.createGuestProfileAdmin = async () => {
     const name = String(document.getElementById("guest-create-name")?.value || "").trim();
     const level = Number(document.getElementById("guest-create-level")?.value || 2.5);
     if (!name) return showToast("Invitados", "Indica un nombre para el invitado", "warning");
-    if (!Number.isFinite(level)) return showToast("Invitados", "Indica un nivel vÃ¡lido", "warning");
+    if (!Number.isFinite(level)) return showToast("Invitados", "Indica un nivel valido", "warning");
     const guestId = `GUEST_${name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_${Math.round(level * 100)}`;
     try {
         await setDoc(doc(db, "invitados", guestId), {
@@ -1969,7 +1984,7 @@ window.saveGuestProfileAdmin = async (guestId) => {
 
 window.deleteGuestProfileAdmin = async (guestId) => {
     if (!guestId) return;
-    if (!(await confirmAdminAction({ title: "Eliminar invitado", message: "Se eliminarÃ¡ el perfil competitivo del invitado. Los partidos no se borran, pero perderÃ¡s esta referencia guardada.", confirmLabel: "Eliminar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Eliminar invitado", message: "Se eliminara el perfil competitivo del invitado. Los partidos no se borran, pero perderas esta referencia guardada.", confirmLabel: "Eliminar", danger: true }))) return;
     try {
         await deleteDoc(doc(db, "invitados", guestId));
         showToast("Invitados", "Perfil eliminado", "success");
@@ -2221,7 +2236,7 @@ function renderAdminDiagnosticCard(row = {}) {
                                 <span>${item.label}</span>
                                 <strong>${typeof item.value === "number" ? item.value.toFixed(2) : escapeAdminAttr(item.value)}</strong>
                             </div>
-                        `).join("") : `<div class="admin-empty">Sin mÃ©tricas adicionales</div>`}
+                        `).join("") : `<div class="admin-empty">Sin metricas adicionales</div>`}
                     </div>
                 </section>
             </div>
@@ -2346,7 +2361,7 @@ async function openAdminRecalcModal(id, col, resultStr) {
         const { processMatchResults } = await import("./ranking-service.js");
         const res = await processMatchResults(id, col, resultStr, { guestOverrides });
         if (!res?.success) throw new Error(res?.error || "No se pudo recalcular.");
-        showToast("Ã‰XITO", "CÃ¡lculo ELO guardado", "success");
+        showToast("EXITO", "Calculo ELO guardado", "success");
         modal.classList.remove("active");
         await refreshAll();
     });
@@ -2358,7 +2373,7 @@ async function openAdminRecalcModal(id, col, resultStr) {
             return;
         }
         if (!currentUser?.uid) {
-          showToast("SesiÃ³n no lista", "Espera un momento e intenta de nuevo.", "warning");
+          showToast("Sesion no lista", "Espera un momento e intenta de nuevo.", "warning");
           return;
         }
         await persistAdminGuestOverrides(guestOverrides);
@@ -2370,7 +2385,7 @@ async function openAdminRecalcModal(id, col, resultStr) {
             manualReason: "Ajuste manual desde admin"
         });
         if (!res?.success) throw new Error(res?.error || "No se pudo guardar el ajuste manual.");
-        showToast("Ã‰XITO", "PuntuaciÃ³n manual guardada", "success");
+        showToast("EXITO", "Puntuacion manual guardada", "success");
         modal.classList.remove("active");
         await refreshAll();
     });
@@ -2471,7 +2486,7 @@ window.approveUserAdmin = async (uid) => {
 };
 
 window.deleteUserAdmin = async (uid) => {
-    if (!(await confirmAdminAction({ title: "Eliminar usuario", message: "Esta acciÃ³n borrarÃ¡ el usuario seleccionado del sistema.", confirmLabel: "Eliminar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Eliminar usuario", message: "Esta accion borrara el usuario seleccionado del sistema.", confirmLabel: "Eliminar", danger: true }))) return;
     await deleteDoc(doc(db, "usuarios", uid));
     await logAdminAudit("delete_user", "usuarios", uid).catch(() => {});
     showToast("SISTEMA", "Usuario borrado", "warn");
@@ -2479,7 +2494,7 @@ window.deleteUserAdmin = async (uid) => {
 };
 
 window.deleteMatchAdmin = async (id, col) => {
-    if (!(await confirmAdminAction({ title: "Eliminar partido", message: "Esta acciÃ³n borrarÃ¡ el partido seleccionado.", confirmLabel: "Eliminar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Eliminar partido", message: "Esta accion borrara el partido seleccionado.", confirmLabel: "Eliminar", danger: true }))) return;
     await deleteDoc(doc(db, col, id));
     await logAdminAudit("delete_match", col, id).catch(() => {});
     refreshAll();
@@ -2495,7 +2510,7 @@ window.deleteMatchesByFilter = async (mode = "all") => {
     if (type !== "all") data = data.filter(m => m.col === type);
 
     if (!data.length) return showToast("SISTEMA", "No hay partidos para borrar", "info");
-    if (!(await confirmAdminAction({ title: "Borrado masivo", message: `Se borrarÃ¡n ${data.length} partidos del bloque ${mode.toUpperCase()}.`, confirmLabel: "Borrar", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Borrado masivo", message: `Se borraran ${data.length} partidos del bloque ${mode.toUpperCase()}.`, confirmLabel: "Borrar", danger: true }))) return;
     for (const m of data) await deleteDoc(doc(db, m.col, m.id));
     await logAdminAudit("bulk_delete_matches", type === "all" ? "matches" : type, mode, { count: data.length }).catch(() => {});
     showToast("SISTEMA", `Eliminados ${data.length} partidos`, "success");
@@ -2682,7 +2697,7 @@ async function exportAdminSnapshot() {
             matches: payload.systemSummary.totals.matches,
             events: payload.systemSummary.totals.events,
         }).catch(() => {});
-        showToast("ExportaciÃ³n lista", "Se ha descargado un snapshot operativo del sistema.", "success");
+        showToast("Exportacion lista", "Se ha descargado un snapshot operativo del sistema.", "success");
     } catch (error) {
         console.error(error);
         showToast("Error", "No se pudo generar el snapshot del panel.", "error");
@@ -2703,7 +2718,7 @@ async function resetPresence() {
 }
 
 async function clearLogs() {
-    showToast("SISTEMA", "FunciÃ³n no disponible en esta build", "info");
+    showToast("SISTEMA", "Funcion no disponible en esta build", "info");
 }
 
 async function recoverFromRankingLogs() {
@@ -2712,7 +2727,7 @@ async function recoverFromRankingLogs() {
         message: "Se intentara restaurar el ultimo estado conocido de cada jugador desde los logs.",
         confirmLabel: "Recuperar"
     }))) return;
-    showToast("RECUPERACIÃ“N", "Consultando registros histÃ³ricos...", "info");
+    showToast("RECUPERACION", "Consultando registros historicos...", "info");
     try {
         const snap = await getDocsSafe(query(collection(db, "rankingLogs"), orderBy("timestamp", "desc")));
         if (!snap || snap.empty) {
@@ -2733,7 +2748,7 @@ async function recoverFromRankingLogs() {
         });
 
         if (latestStates.size === 0) {
-            return showToast("AVISO", "No se encontraron datos vÃ¡lidos en los logs", "warn");
+            return showToast("AVISO", "No se encontraron datos validos en los logs", "warn");
         }
 
         if (!(await confirmAdminAction({
@@ -2752,11 +2767,11 @@ async function recoverFromRankingLogs() {
             ok++;
         }
         
-        showToast("Ã‰XITO", `RecuperaciÃ³n completada: ${ok} usuarios actualizados.`, "success");
+        showToast("EXITO", `Recuperacion completada: ${ok} usuarios actualizados.`, "success");
         await refreshAll();
     } catch (e) {
         console.error("Recovery Error:", e);
-        showToast("ERROR", "No se pudo completar la recuperaciÃ³n", "error");
+        showToast("ERROR", "No se pudo completar la recuperacion", "error");
     }
 }
 
@@ -2766,7 +2781,7 @@ async function recoverMatchesFromLogs() {
         message: "Se intentaran reconstruir partidos finalizados a partir de los registros de puntos.",
         confirmLabel: "Reconstruir"
     }))) return;
-    showToast("RECONSTRUCCIÃ“N", "Analizando fragmentos de datos...", "info");
+    showToast("RECONSTRUCCION", "Analizando fragmentos de datos...", "info");
     try {
         let snap = await getDocsSafe(collection(db, "rankingLogs"));
         if (!snap || snap.empty) {
@@ -2818,7 +2833,7 @@ async function recoverMatchesFromLogs() {
             restored++;
         }
         
-        showToast("Ã‰XITO", `RestauraciÃ³n completa: ${restored} partidos recuperados, ${skipped} ya existÃ­an.`, "success");
+        showToast("EXITO", `Restauracion completa: ${restored} partidos recuperados, ${skipped} ya existian.`, "success");
         await refreshAll();
     } catch (e) {
         console.error("Match Recovery Error:", e);
@@ -2839,7 +2854,7 @@ window.confirmCreateMatchAdmin = async () => {
     const state = document.getElementById('adm-create-state').value;
 
     const validation = validateMatchAdminPayload({ dateVal: dateInput, state });
-    if (!validation.valid) return showToast("VALIDACIÃ“N", validation.errors[0], "warning");
+    if (!validation.valid) return showToast("VALIDACION", validation.errors[0], "warning");
 
     const matchData = {
         fecha: new Date(dateInput),
@@ -2870,7 +2885,7 @@ window.confirmCreateMatchAdmin = async () => {
             matchCollection: col,
             entityId: createdRef?.id || null
         }).catch(() => {});
-        showToast("Ã‰XITO", "Partido creado manualmente", "success");
+        showToast("EXITO", "Partido creado manualmente", "success");
         document.getElementById('modal-admin-create-match').classList.remove('active');
         refreshAll();
     } catch (e) {
@@ -2885,11 +2900,11 @@ window.openCreateEventWizard = () => {
 };
 
 window.syncApoingAdmin = async () => {
-    showToast("APOING", "Iniciando sincronizaciÃ³n forzada...", "info");
+    showToast("APOING", "Iniciando sincronizacion forzada...", "info");
     try {
         const { syncApoingReservations } = await import('./calendario.js');
         await syncApoingReservations(true);
-        showToast("APOING", "SincronizaciÃ³n completada", "success");
+        showToast("APOING", "Sincronizacion completada", "success");
         refreshAll();
     } catch (e) {
         showToast("ERROR", "Fallo al sincronizar Apoing", "error");
@@ -2898,7 +2913,7 @@ window.syncApoingAdmin = async () => {
 
 
 window.resetEloToBase = async () => {
-    if (!(await confirmAdminAction({ title: "Reset global ELO", message: "Se resetearÃ¡ a todos los jugadores a 1000 puntos. Esta acciÃ³n es irreversible.", confirmLabel: "Resetear", danger: true }))) return;
+    if (!(await confirmAdminAction({ title: "Reset global ELO", message: "Se reseteara a todos los jugadores a 1000 puntos. Esta accion es irreversible.", confirmLabel: "Resetear", danger: true }))) return;
     showToast("PROCESANDO", "Reseteando ranking global...", "info");
     
     const { ELO_CONFIG } = await import("./config/elo-system.js");
@@ -2920,7 +2935,7 @@ window.resetEloToBase = async () => {
 
 window.saveApoingAdmin = async (id) => {
     const url = document.getElementById(`ap-url-${id}`).value;
-    if (!url.includes('.ics')) return showToast("ERROR", "URL ICS no vÃ¡lida", "error");
+    if (!url.includes('.ics')) return showToast("ERROR", "URL ICS no valida", "error");
     
     await updateDocument("apoingCalendars", id, { icsUrl: url });
     await logAdminAudit("update_apoing_link", "apoingCalendars", id, { url }).catch(() => {});
