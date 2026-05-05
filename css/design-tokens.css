@@ -1,4 +1,10 @@
-﻿/* FASE 4 - Design Tokens v2.0 — Padeluminatis Pro */
+/* ═══════════════════════════════════════════════════════════
+   DESIGN TOKENS V3.0 — Padeluminatis Pro · God-Tier System
+   Theme-aware variables, premium typography, & motion system
+   ═══════════════════════════════════════════════════════════ */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700;800&family=Orbitron:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600;700&family=Sora:wght@400;500;600;700;800&family=Cinzel:wght@400;700;900&family=Poppins:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Playfair+Display:wght@400;700;900&display=swap");
+
 :root {
   color-scheme: dark;
 
@@ -27,16 +33,44 @@
   --sport-green: #22c55e;
   --primary: var(--color-primary);
 
-  /* ── Typography ── */
-  --font-heading: "Rajdhani", sans-serif;
-  --font-body: "Inter", sans-serif;
-  --fs-2xs: 9px;
-  --fs-xs: 11px;
-  --fs-sm: 13px;
-  --fs-md: 15px;
-  --fs-lg: 18px;
-  --fs-xl: 24px;
-  --fs-2xl: 32px;
+  /* ── Theme-aware overridable tokens ── */
+  --t-font-heading: "Rajdhani", sans-serif;
+  --t-font-body: "Inter", sans-serif;
+  --t-bg-void: #020617;
+  --t-bg-surface: rgba(10, 16, 28, 0.92);
+  --t-bg-card: linear-gradient(155deg, rgba(8, 15, 32, 0.88), rgba(4, 9, 24, 0.92));
+  --t-primary: #00d4ff;
+  --t-primary-glow: rgba(0, 212, 255, 0.25);
+  --t-secondary: #c6ff00;
+  --t-text: #f8fafc;
+  --t-text-muted: rgba(248, 250, 252, 0.6);
+  --t-border: rgba(255, 255, 255, 0.1);
+  --t-radius: 22px;
+  --t-radius-sm: 12px;
+  --t-radius-lg: 30px;
+  --t-radius-pill: 999px;
+  --t-card-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  --t-glow: 0 0 20px var(--t-primary-glow);
+  --t-header-bg: rgba(2, 6, 23, 0.92);
+  --t-nav-bg: rgba(2, 6, 23, 0.95);
+  --t-gradient-hero: linear-gradient(135deg, rgba(0, 212, 255, 0.08), rgba(198, 255, 0, 0.04));
+  --t-btn-primary-bg: linear-gradient(135deg, var(--t-primary), color-mix(in srgb, var(--t-primary) 70%, #fff));
+  --t-btn-primary-text: #000;
+  --t-input-bg: rgba(255, 255, 255, 0.04);
+  --t-input-border: rgba(255, 255, 255, 0.1);
+  --t-badge-bg: rgba(255, 255, 255, 0.06);
+
+  /* ── Typography Scale (fluid) ── */
+  --font-heading: var(--t-font-heading);
+  --font-body: var(--t-font-body);
+  --fs-2xs: clamp(8px, 1.8vw, 9px);
+  --fs-xs: clamp(10px, 2.2vw, 11px);
+  --fs-sm: clamp(11px, 2.6vw, 13px);
+  --fs-md: clamp(13px, 3vw, 15px);
+  --fs-lg: clamp(16px, 3.6vw, 18px);
+  --fs-xl: clamp(20px, 4.5vw, 24px);
+  --fs-2xl: clamp(26px, 5.5vw, 32px);
+  --fs-3xl: clamp(32px, 7vw, 42px);
 
   /* ── Spacing Scale ── */
   --space-1: 4px;
@@ -47,6 +81,7 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
+  --space-12: 48px;
 
   /* ── Radius ── */
   --radius-sm: 10px;
@@ -59,42 +94,36 @@
   --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.28);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.38);
+  --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.5);
   --shadow-glow-cyan: 0 0 20px rgba(0, 212, 255, 0.15);
   --shadow-glow-gold: 0 0 20px rgba(250, 204, 21, 0.15);
 
   /* ── Motion ── */
   --ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
   --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
   --dur-fast: 180ms;
   --dur-base: 260ms;
   --dur-slow: 420ms;
+  --dur-slower: 600ms;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --color-bg: #f3f7fb;
-    --color-surface: rgba(255, 255, 255, 0.94);
-    --color-surface-2: rgba(247, 250, 252, 0.94);
-    --color-border: rgba(2, 6, 23, 0.12);
-    --color-text: #0f172a;
-    --color-text-muted: rgba(15, 23, 42, 0.68);
-    --shadow-sm: 0 6px 16px rgba(15, 23, 42, 0.08);
-    --shadow-md: 0 10px 28px rgba(15, 23, 42, 0.12);
-    --shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.16);
-  }
-}
-
-[data-theme="minimal"] {
-  color-scheme: light;
-  --color-bg: #f3f7fb;
-  --color-surface: rgba(255, 255, 255, 0.94);
-  --color-surface-2: rgba(247, 250, 252, 0.94);
-  --color-border: rgba(2, 6, 23, 0.12);
-  --color-text: #0f172a;
-  --color-text-muted: rgba(15, 23, 42, 0.68);
-  --color-primary: #0f172a;
-  --color-secondary: #334155;
+/* ── Theme transition class ── */
+.theme-transitioning,
+.theme-transitioning *,
+.theme-transitioning *::before,
+.theme-transitioning *::after {
+  transition:
+    background-color 0.6s var(--ease-smooth),
+    background 0.6s var(--ease-smooth),
+    color 0.5s var(--ease-smooth),
+    border-color 0.5s var(--ease-smooth),
+    box-shadow 0.5s var(--ease-smooth),
+    fill 0.4s var(--ease-smooth),
+    stroke 0.4s var(--ease-smooth),
+    filter 0.5s var(--ease-smooth),
+    opacity 0.4s var(--ease-smooth) !important;
 }
 
 /* Shared premium micro-interactions */
@@ -106,8 +135,8 @@
 }
 
 .u-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md), var(--t-glow);
 }
 
 .u-fade-in {
@@ -117,33 +146,48 @@
 @keyframes uiFadeIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
+/* Enhanced skeleton */
 .skeleton {
   border-radius: var(--radius-md);
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.06) 25%,
-    rgba(255, 255, 255, 0.16) 40%,
-    rgba(255, 255, 255, 0.06) 55%
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.12) 37%,
+    rgba(255, 255, 255, 0.04) 63%
   );
-  background-size: 200% 100%;
-  animation: shimmer 1.2s linear infinite;
+  background-size: 300% 100%;
+  animation: shimmerPremium 1.6s ease infinite;
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
+@keyframes shimmerPremium {
+  0% { background-position: 300% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Pulse glow animation */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 8px var(--t-primary-glow); }
+  50% { box-shadow: 0 0 24px var(--t-primary-glow), 0 0 48px rgba(0,0,0,0.1); }
+}
+
+/* Float animation */
+@keyframes gentleFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* Rotate shimmer for cards */
+@keyframes rotateShine {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -153,5 +197,11 @@
     animation: none !important;
     transition: none !important;
     transform: none !important;
+  }
+  .theme-transitioning,
+  .theme-transitioning *,
+  .theme-transitioning *::before,
+  .theme-transitioning *::after {
+    transition: none !important;
   }
 }

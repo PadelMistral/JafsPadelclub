@@ -1,4 +1,4 @@
-﻿@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&family=Sora:wght@400;600;700&family=Cinzel:wght@400;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&family=Sora:wght@400;600;700&family=Cinzel:wght@400;700&display=swap");
 
 /* =====================================================
    PADELUMINATIS THEMES V5.0 - CLEAN & PROFESSIONAL
@@ -464,7 +464,7 @@
 /* GLOBALS & RESPONSIVNESS */
 body {
   font-family: var(--theme-font) !important;
-  background-color: var(--bg-void);
+  background-color: transparent !important;
   color: var(--text-primary);
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   overflow-x: hidden;

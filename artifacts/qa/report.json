@@ -1,0 +1,668 @@
+[
+  {
+    "file": "admin.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/admin.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-admin.png"
+  },
+  {
+    "file": "calendario.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/calendario.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-calendario.png"
+  },
+  {
+    "file": "diario.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/diario.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-diario.png"
+  },
+  {
+    "file": "evento-detalle.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/evento-detalle.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-evento-detalle.png"
+  },
+  {
+    "file": "evento-sorteo.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/evento-sorteo.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-evento-sorteo.png"
+  },
+  {
+    "file": "eventos.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/eventos.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-eventos.png"
+  },
+  {
+    "file": "historial.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/historial.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-historial.png"
+  },
+  {
+    "file": "home.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/home.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [
+      "warning: [2026-04-29T19:07:03.734Z]  @firebase/firestore: Firestore (11.7.3): WebChannelConnection RPC 'Listen' stream 0x33bf72b0 transport errored. Name: undefined Message: undefined"
+    ],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-home.png"
+  },
+  {
+    "file": "index.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/index.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-index.png"
+  },
+  {
+    "file": "mi-elo.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/mi-elo.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [
+      "warning: [2026-04-29T19:07:08.734Z]  @firebase/firestore: Firestore (11.7.3): WebChannelConnection RPC 'Listen' stream 0x4bd3bca7 transport errored. Name: undefined Message: undefined"
+    ],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-mi-elo.png"
+  },
+  {
+    "file": "notificaciones.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/notificaciones.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [
+      "warning: [2026-04-29T19:07:11.374Z]  @firebase/firestore: Firestore (11.7.3): WebChannelConnection RPC 'Listen' stream 0x1c20503d transport errored. Name: undefined Message: undefined"
+    ],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-notificaciones.png"
+  },
+  {
+    "file": "offline.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/offline.html",
+    "state": {
+      "title": "Sin conexion | JafsPadel",
+      "path": "/offline.html",
+      "bodyHeight": 1100,
+      "textLength": 152,
+      "visibleCards": 1,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-offline.png"
+  },
+  {
+    "file": "palas.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/palas.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-palas.png"
+  },
+  {
+    "file": "pantalla-inicial.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/pantalla-inicial.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [
+      "warning: [2026-04-29T19:07:19.046Z]  @firebase/firestore: Firestore (11.7.3): WebChannelConnection RPC 'Listen' stream 0x7df09806 transport errored. Name: undefined Message: undefined"
+    ],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-pantalla-inicial.png"
+  },
+  {
+    "file": "perfil.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/perfil.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [
+      "warning: [2026-04-29T19:07:21.907Z]  @firebase/firestore: Firestore (11.7.3): WebChannelConnection RPC 'Listen' stream 0x8d08d96a transport errored. Name: undefined Message: undefined"
+    ],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-perfil.png"
+  },
+  {
+    "file": "ranking.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/ranking.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [
+      "warning: [2026-04-29T19:07:25.061Z]  @firebase/firestore: Firestore (11.7.3): WebChannelConnection RPC 'Listen' stream 0x517d54cc transport errored. Name: undefined Message: undefined"
+    ],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-ranking.png"
+  },
+  {
+    "file": "recuperar.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/recuperar.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 1100,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-recuperar.png"
+  },
+  {
+    "file": "registro.html",
+    "viewport": "desktop",
+    "url": "http://127.0.0.1:4173/registro.html",
+    "state": {
+      "title": "Registro | JafsPadel",
+      "path": "/registro.html",
+      "bodyHeight": 1573,
+      "textLength": 460,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/desktop-registro.png"
+  },
+  {
+    "file": "admin.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/admin.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-admin.png"
+  },
+  {
+    "file": "calendario.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/calendario.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-calendario.png"
+  },
+  {
+    "file": "diario.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/diario.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-diario.png"
+  },
+  {
+    "file": "evento-detalle.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/evento-detalle.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-evento-detalle.png"
+  },
+  {
+    "file": "evento-sorteo.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/evento-sorteo.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-evento-sorteo.png"
+  },
+  {
+    "file": "eventos.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/eventos.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-eventos.png"
+  },
+  {
+    "file": "historial.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/historial.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [
+      "warning: [2026-04-29T19:07:53.431Z]  @firebase/firestore: Firestore (11.7.3): WebChannelConnection RPC 'Listen' stream 0x4d034b74 transport errored. Name: undefined Message: undefined"
+    ],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-historial.png"
+  },
+  {
+    "file": "home.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/home.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-home.png"
+  },
+  {
+    "file": "index.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/index.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-index.png"
+  },
+  {
+    "file": "mi-elo.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/mi-elo.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-mi-elo.png"
+  },
+  {
+    "file": "notificaciones.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/notificaciones.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [
+      "warning: [2026-04-29T19:08:06.614Z]  @firebase/firestore: Firestore (11.7.3): WebChannelConnection RPC 'Listen' stream 0x643f0840 transport errored. Name: undefined Message: undefined"
+    ],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-notificaciones.png"
+  },
+  {
+    "file": "offline.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/offline.html",
+    "state": {
+      "title": "Sin conexion | JafsPadel",
+      "path": "/offline.html",
+      "bodyHeight": 844,
+      "textLength": 152,
+      "visibleCards": 1,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-offline.png"
+  },
+  {
+    "file": "palas.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/palas.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-palas.png"
+  },
+  {
+    "file": "pantalla-inicial.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/pantalla-inicial.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-pantalla-inicial.png"
+  },
+  {
+    "file": "perfil.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/perfil.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-perfil.png"
+  },
+  {
+    "file": "ranking.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/ranking.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [
+      "warning: [2026-04-29T19:08:23.045Z]  @firebase/firestore: Firestore (11.7.3): WebChannelConnection RPC 'Listen' stream 0x32067eae transport errored. Name: undefined Message: undefined"
+    ],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-ranking.png"
+  },
+  {
+    "file": "recuperar.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/recuperar.html",
+    "state": {
+      "title": "Acceso | JafsPadel",
+      "path": "/index.html",
+      "bodyHeight": 844,
+      "textLength": 96,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-recuperar.png"
+  },
+  {
+    "file": "registro.html",
+    "viewport": "mobile",
+    "url": "http://127.0.0.1:4173/registro.html",
+    "state": {
+      "title": "Registro | JafsPadel",
+      "path": "/registro.html",
+      "bodyHeight": 1476,
+      "textLength": 460,
+      "visibleCards": 2,
+      "fixedOverlays": [],
+      "htmlLang": "es"
+    },
+    "errors": [],
+    "warnings": [],
+    "failedRequests": [],
+    "screenshot": "artifacts/qa/mobile-registro.png"
+  }
+]

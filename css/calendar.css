@@ -2121,6 +2121,249 @@
 .cal-controls-v5,
 .legend-v5,
 .modal-card {
+}
+
+/* === Calendar readability + mobile stability === */
+.calendar-wrapper-v5 {
+  --cal-time-col: 68px;
+  --cal-day-min: 102px;
+  --cal-slot-min-h: 70px;
+  padding: 10px 10px 12px;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.calendar-grid-v5,
+#calendar-grid-v5 {
+  min-width: calc(var(--cal-time-col) + (7 * var(--cal-day-min)) + 28px);
+  width: max-content;
+  padding-right: 10px;
+}
+
+.grid-header-v5,
+.time-row-v5 {
+  grid-template-columns: var(--cal-time-col) repeat(7, minmax(var(--cal-day-min), 1fr));
+  gap: 8px;
+}
+
+.corner-header-v5,
+.time-col-v5 {
+  min-width: var(--cal-time-col);
+  width: var(--cal-time-col);
+  box-sizing: border-box;
+}
+
+.time-col-v5 {
+  padding: 4px 4px 4px 0;
+  z-index: 8;
+}
+
+.day-header-v5 {
+  min-width: var(--cal-day-min);
+  padding: 8px 6px;
+}
+
+.day-header-v5 .d-name {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.day-header-v5 .d-num {
+  font-size: 1.05rem;
+}
+
+.slot-v5 {
+  min-height: var(--cal-slot-min-h);
+  padding: 10px 8px 8px;
+  align-items: flex-start;
+  justify-content: center;
+  text-align: left;
+}
+
+.slot-chip-v5,
+.slot-info-v5,
+.slot-owner-v5 {
+  text-align: left;
+}
+
+.slot-chip-v5 {
+  font-size: 0.62rem;
+  line-height: 1.2;
+}
+
+.slot-info-v5 {
+  white-space: normal;
+  line-height: 1.28;
+  font-size: 0.6rem;
+}
+
+.slot-owner-v5 {
+  margin-top: 5px;
+  font-size: 0.62rem;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  white-space: normal;
+  line-height: 1.25;
+  max-width: 100%;
+  align-self: flex-start;
+  color: #eef2ff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.slot-v5.abierta {
+  background: linear-gradient(180deg, rgba(8, 47, 73, 0.9), rgba(3, 105, 161, 0.42));
+  border-color: rgba(56, 189, 248, 0.5);
+  border-left-color: #38bdf8;
+  border-top-color: rgba(125, 211, 252, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.18), 0 12px 24px rgba(14, 165, 233, 0.08);
+}
+
+.slot-v5.propia {
+  background: linear-gradient(180deg, rgba(6, 78, 59, 0.92), rgba(22, 163, 74, 0.34));
+  border-color: rgba(74, 222, 128, 0.55);
+  border-left-color: #4ade80;
+  border-top-color: rgba(134, 239, 172, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.18), 0 12px 24px rgba(34, 197, 94, 0.08);
+}
+
+.slot-v5.cerrada {
+  background: linear-gradient(180deg, rgba(69, 10, 10, 0.88), rgba(153, 27, 27, 0.28));
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.slot-v5.jugado {
+  background: linear-gradient(180deg, rgba(76, 29, 149, 0.72), rgba(88, 28, 135, 0.3));
+  border-color: rgba(196, 181, 253, 0.36);
+}
+
+.slot-v5.apoing-seeded {
+  position: relative;
+}
+
+.slot-v5.apoing-seeded::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.slot-v5.apoing-other {
+  background: linear-gradient(180deg, rgba(120, 53, 15, 0.92), rgba(249, 115, 22, 0.24));
+  border-color: rgba(251, 146, 60, 0.52);
+  border-left-color: #fb923c;
+  border-top-color: rgba(253, 186, 116, 0.72);
+}
+
+.slot-v5.apoing-mine {
+  background: linear-gradient(180deg, rgba(6, 95, 70, 0.96), rgba(16, 185, 129, 0.26));
+  border-color: rgba(52, 211, 153, 0.56);
+  border-left-color: #34d399;
+  border-top-color: rgba(110, 231, 183, 0.8);
+}
+
+.slot-v5.apoing-other .slot-chip-v5,
+.slot-v5.apoing-mine .slot-chip-v5 {
+  color: #fff7ed;
+}
+
+.slot-v5.apoing-other .slot-owner-v5 {
+  background: rgba(124, 45, 18, 0.36);
+  border-color: rgba(251, 146, 60, 0.34);
+}
+
+.slot-v5.apoing-mine .slot-owner-v5,
+.slot-v5.propia .slot-owner-v5 {
+  background: rgba(6, 95, 70, 0.34);
+  border-color: rgba(52, 211, 153, 0.32);
+}
+
+.cal-legend-v5 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+
+.legend-item-v5 {
+  min-height: 42px;
+}
+
+.legend-item-v5 .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.legend-item-v5 .label {
+  font-size: 0.72rem;
+  color: rgba(226, 232, 240, 0.94);
+}
+
+@media (max-width: 767px) {
+  .calendar-wrapper-v5 {
+    --cal-time-col: 72px;
+    --cal-day-min: 104px;
+    --cal-slot-min-h: 74px;
+    padding: 8px 8px 10px;
+  }
+
+  .calendar-grid-v5,
+  #calendar-grid-v5 {
+    min-width: calc(var(--cal-time-col) + (7 * var(--cal-day-min)) + 24px);
+  }
+
+  .grid-header-v5,
+  .time-row-v5 {
+    gap: 6px;
+  }
+
+  .day-header-v5 .d-name {
+    font-size: 0.62rem;
+  }
+
+  .day-header-v5 .d-num {
+    font-size: 0.96rem;
+  }
+
+  .time-col-v5 .t-start {
+    font-size: 0.82rem;
+  }
+
+  .time-col-v5 .t-end {
+    font-size: 0.58rem;
+  }
+
+  .slot-v5 {
+    padding: 9px 7px 7px;
+  }
+
+  .slot-owner-v5 {
+    font-size: 0.58rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .calendar-wrapper-v5 {
+    --cal-time-col: 74px;
+    --cal-day-min: 106px;
+    --cal-slot-min-h: 76px;
+  }
+
+  .cal-legend-v5 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .legend-item-v5 {
+    padding: 8px 9px;
+  }
+
+  .legend-item-v5 .label {
+    font-size: 0.64rem;
+  }
+}
   scroll-margin-top: 16px;
 }
 
@@ -2193,6 +2436,436 @@
   .slot-v5 {
     min-height: 44px;
   }
+}
+
+/* === Normal viewport calendar fit === */
+body:has(.calendar-main-v5) {
+  height: 100%;
+  min-height: 100dvh;
+}
+
+.page-content.calendar-main-v5 {
+  padding: 80px clamp(6px, 1.2vw, 14px) 100px !important;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.calendar-main-v5 > .container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.calendar-title-row {
+  flex: 0 0 auto;
+}
+
+.calendar-title-row h1 {
+  font-size: clamp(1.2rem, 3dvh, 1.8rem);
+  color: #f8fafc;
+  text-shadow: 0 0 22px rgba(0,212,255,0.14);
+}
+
+.cal-controls-v5 {
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(0,212,255,0.11), transparent 32%),
+    linear-gradient(180deg, rgba(8,15,30,0.92), rgba(5,10,22,0.98));
+  border: 1px solid rgba(103,232,249,0.16);
+}
+
+.calendar-wrapper-v5 {
+  --cal-time-col: clamp(48px, 5vw, 62px);
+  --cal-day-min: 50px;
+  --cal-slot-min-h: 44px;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 10px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(198,255,0,0.07), transparent 30%),
+    linear-gradient(180deg, rgba(8,15,30,0.92), rgba(4,9,18,0.98));
+  border: 1px solid rgba(103,232,249,0.16);
+  min-height: 500px; /* Ensure it never squashes to 0 */
+}
+
+.calendar-grid-v5,
+#calendar-grid-v5 {
+  width: max-content;
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.grid-header-v5,
+.time-row-v5 {
+  grid-template-columns: var(--cal-time-col) repeat(7, minmax(0, 1fr));
+  gap: clamp(3px, 0.5vw, 6px);
+}
+
+.grid-header-v5 {
+  flex: 0 0 auto;
+  margin-bottom: clamp(3px, 0.5dvh, 6px);
+  padding-bottom: clamp(3px, 0.5dvh, 6px);
+  position: relative;
+}
+
+.grid-body-v5 {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(3px, 0.45dvh, 5px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.time-row-v5 {
+  min-height: 54px;
+  flex-shrink: 0;
+}
+
+.corner-header-v5,
+.time-col-v5 {
+  min-width: 0;
+  width: auto;
+}
+
+.day-header-v5 {
+  min-width: 0;
+  padding: clamp(4px, 0.7dvh, 7px) 3px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.045);
+  border-color: rgba(255,255,255,0.07);
+}
+
+.day-header-v5 .d-name {
+  font-size: clamp(0.48rem, 1.05dvh, 0.64rem);
+}
+
+.day-header-v5 .d-num {
+  font-size: clamp(0.78rem, 1.55dvh, 1rem);
+}
+
+.time-col-v5 {
+  padding: 2px;
+  border-radius: 10px;
+  color: #b6eaff;
+  border: 1px solid rgba(103,232,249,0.1);
+}
+
+.time-col-v5 .t-start {
+  font-size: clamp(0.58rem, 1.35dvh, 0.82rem);
+}
+
+.time-col-v5 .t-end {
+  font-size: clamp(0.46rem, 1dvh, 0.58rem);
+}
+
+.slot-v5 {
+  min-height: 0 !important;
+  height: 100%;
+  padding: clamp(3px, 0.65dvh, 7px) clamp(3px, 0.5vw, 6px);
+  border-radius: 10px;
+  gap: 2px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.05), transparent 38%),
+    rgba(255,255,255,0.028);
+  border-color: rgba(255,255,255,0.08);
+}
+
+.slot-meta-v5 {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 28px;
+  max-width: calc(100% - 8px);
+  height: 16px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: clamp(0.42rem, 0.9dvh, 0.56rem);
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: 0.02em;
+  color: rgba(2, 6, 23, 0.92);
+  background: rgba(226, 232, 240, 0.88);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.22);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot-chip-v5 {
+  font-size: clamp(0.44rem, 0.98dvh, 0.58rem);
+  line-height: 1.05;
+  padding-right: 32px;
+}
+
+.slot-info-v5,
+.slot-owner-v5 {
+  font-size: clamp(0.42rem, 0.9dvh, 0.54rem);
+  line-height: 1.08;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.slot-owner-v5 {
+  margin-top: 2px;
+  padding: 1px 4px;
+}
+
+.slot-weather,
+.apoing-slot-mini {
+  display: none !important;
+}
+
+.cal-legend-v5 {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.legend-item-v5 {
+  min-height: 0;
+  padding: 6px 7px;
+  border-radius: 12px;
+}
+
+.legend-item-v5 .label {
+  font-size: clamp(0.5rem, 1.05dvh, 0.62rem);
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.legend-item-v5 .dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+}
+
+.cal-hint-v5,
+.calendar-history-strip {
+  display: none !important;
+}
+
+@media (max-width: 767px) {
+  .page-content.calendar-main-v5 {
+    top: calc(var(--app-header-h, 66px) + env(safe-area-inset-top, 0px) + 3px);
+    bottom: calc(var(--app-nav-h, 74px) + env(safe-area-inset-bottom, 0px) + 3px);
+    height: auto;
+    padding-inline: 5px !important;
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+  }
+
+  .calendar-main-v5 > .container {
+    gap: 4px;
+  }
+
+  .calendar-title-row h1 {
+    font-size: clamp(1rem, 2.2dvh, 1.25rem);
+  }
+
+  .calendar-title-row .page-sub-pro,
+  .cal-location-box {
+    display: none;
+  }
+
+  .cal-controls-v5 {
+    display: grid;
+    grid-template-columns: minmax(68px, 0.7fr) minmax(150px, 1.3fr);
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .cal-clock-box,
+  .cal-week-nav {
+    min-width: 0;
+  }
+
+  .cal-week-nav {
+    justify-content: space-between;
+    gap: 5px;
+  }
+
+  .calendar-wrapper-v5 {
+    --cal-time-col: 32px;
+    padding: 4px;
+    border-radius: 14px;
+  }
+
+  .grid-header-v5,
+  .time-row-v5 {
+    gap: 2px;
+  }
+
+  .corner-header-v5 {
+    font-size: 0;
+    padding: 0;
+  }
+
+  .day-header-v5 {
+    padding: 3px 1px;
+    border-radius: 8px;
+  }
+
+  .day-header-v5 .d-name {
+    font-size: clamp(0.42rem, 0.92dvh, 0.52rem);
+    letter-spacing: 0;
+  }
+
+  .day-header-v5 .d-num {
+    font-size: clamp(0.66rem, 1.35dvh, 0.82rem);
+  }
+
+  .time-col-v5 {
+    padding: 1px;
+    border-radius: 7px;
+  }
+
+  .time-col-v5 .t-start {
+    font-size: clamp(0.48rem, 1.05dvh, 0.62rem);
+  }
+
+  .time-col-v5 .t-end {
+    display: none;
+  }
+
+  .slot-v5 {
+    padding: 2px;
+    border-radius: 7px;
+  }
+
+  .slot-meta-v5 {
+    position: static;
+    min-width: 0;
+    height: 12px;
+    width: 100%;
+    padding: 0 2px;
+    font-size: clamp(0.34rem, 0.72dvh, 0.42rem);
+  }
+
+  .slot-chip-v5 {
+    font-size: clamp(0.36rem, 0.82dvh, 0.46rem);
+    letter-spacing: 0;
+    padding-right: 0;
+  }
+
+  .slot-info-v5,
+  .slot-owner-v5 {
+    display: none;
+  }
+
+  .cal-legend-v5 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px;
+  }
+
+  .legend-item-v5 {
+    padding: 4px;
+    justify-content: center;
+  }
+
+  .legend-item-v5 .label {
+    font-size: clamp(0.42rem, 0.9dvh, 0.52rem);
+  }
+
+  .legend-item-v5 .dot {
+    width: 7px;
+    height: 7px;
+  }
+
+  .calendar-wrapper-v5::after {
+    display: none;
+  }
+}
+
+/* === Calendar semantic color system: cells match legend === */
+:root {
+  --cal-free: #22c55e;
+  --cal-open: #38bdf8;
+  --cal-closed: #ef4444;
+  --cal-mine: #c6ff00;
+  --cal-apoing: #f59e0b;
+  --cal-played: #a78bfa;
+  --cal-private: #64748b;
+}
+
+.slot-v5.libre,
+.legend-item-v5 .dot.libre {
+  --slot-color: var(--cal-free);
+}
+
+.slot-v5.abierta,
+.legend-item-v5 .dot.abierta {
+  --slot-color: var(--cal-open);
+}
+
+.slot-v5.cerrada,
+.legend-item-v5 .dot.cerrada {
+  --slot-color: var(--cal-closed);
+}
+
+.slot-v5.propia,
+.legend-item-v5 .dot.propia {
+  --slot-color: var(--cal-mine);
+}
+
+.slot-v5.apoing-other,
+.legend-item-v5 .dot.apoing-other {
+  --slot-color: var(--cal-apoing);
+}
+
+.slot-v5.apoing-mine,
+.legend-item-v5 .dot.apoing-mine {
+  --slot-color: #34d399;
+}
+
+.slot-v5.jugado,
+.legend-item-v5 .dot.jugado {
+  --slot-color: var(--cal-played);
+}
+
+.slot-v5.bloqueado {
+  --slot-color: var(--cal-private);
+}
+
+.slot-v5 {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--slot-color, #94a3b8) 18%, rgba(15,23,42,0.94)), rgba(2,6,23,0.72)) !important;
+  border-color: color-mix(in srgb, var(--slot-color, #94a3b8) 46%, transparent) !important;
+  border-left: 4px solid var(--slot-color, #94a3b8) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    inset 0 0 0 1px color-mix(in srgb, var(--slot-color, #94a3b8) 12%, transparent),
+    0 10px 20px rgba(0,0,0,0.12) !important;
+}
+
+.slot-v5 .slot-meta-v5 {
+  background: var(--slot-color, #e2e8f0);
+  color: #061018;
+}
+
+.slot-v5 .slot-chip-v5 {
+  color: color-mix(in srgb, var(--slot-color, #e2e8f0) 72%, #ffffff);
+}
+
+.legend-item-v5 .dot {
+  background: var(--slot-color, #94a3b8) !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--slot-color, #94a3b8) 60%, transparent);
 }
 
 

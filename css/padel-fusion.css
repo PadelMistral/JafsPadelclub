@@ -1,19 +1,49 @@
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap");
+
 /* css/padel-fusion.css
    Fusion layer for shell/layout normalization. */
 
 :root {
   --app-shell-header: calc(76px + env(safe-area-inset-top, 0px));
   --app-shell-nav: calc(74px + env(safe-area-inset-bottom, 0px));
+  --sport-accent: #22d3ee;
+  --sport-accent-2: #f59e0b;
+  --sport-surface: rgba(7, 13, 26, 0.76);
+  --sport-surface-strong: rgba(8, 15, 30, 0.92);
+  --sport-stroke: rgba(255, 255, 255, 0.11);
+  --sport-shadow: 0 20px 44px rgba(0, 0, 0, 0.34);
+  --font-base: "Inter", system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Rajdhani", sans-serif;
 }
 
 html,
 body {
   background: transparent !important;
+  font-family: var(--font-base) !important;
+  color: #ecf7ff;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.page-title,
+.page-title-pro,
+.modal-title,
+.card-title,
+.ranking-breakdown-title,
+.header-title {
+  font-family: var(--font-display) !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .sport-bg {
   z-index: -10 !important;
-  background: var(--bg-void, #020617) !important;
+  background-color: var(--bg-void, #020617);
+  /* Let galaxy-bg.js handle the background visuals */
 }
 
 .app-header {
@@ -54,6 +84,10 @@ body {
 .modal-sheet {
   max-height: calc(100dvh - 20px) !important;
   overflow-y: auto !important;
+  background:
+    linear-gradient(180deg, rgba(12, 21, 38, 0.96), rgba(7, 13, 26, 0.95)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 26px !important;
 }
 
 .modal-body {
@@ -120,19 +154,118 @@ body {
 }
 
 .nav-dock-v8 {
-  border-radius: 22px !important;
-  margin-bottom: 0 !important;
-  background: linear-gradient(135deg, rgba(8, 14, 28, 0.84), rgba(10, 18, 34, 0.72)) !important;
-  backdrop-filter: blur(20px) saturate(145%) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(145%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
-  animation: navGlassPulse 4s ease-in-out infinite;
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch !important;
+  gap: 4px !important;
+  width: min(100%, 760px) !important;
+  min-height: 66px !important;
+  padding: 8px 10px !important;
+  border-radius: 26px !important;
+  margin: 0 auto !important;
+  background: linear-gradient(180deg, rgba(8, 15, 28, 0.96), rgba(10, 18, 34, 0.9)) !important;
+  backdrop-filter: blur(26px) saturate(155%) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(155%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42) !important;
+  animation: none !important;
+}
+
+.card,
+.card-premium,
+.card-premium-v7,
+.settings-card,
+.stat-card-profile,
+.quick-stat-card,
+.my-rank-card,
+.gear-card,
+.permission-card,
+.ranking-card,
+.history-card-premium,
+.match-card,
+.entry-card-v7 {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(10, 18, 34, 0.88), rgba(7, 13, 26, 0.82)) !important;
+  border: 1px solid var(--sport-stroke) !important;
+  box-shadow: var(--sport-shadow) !important;
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.card::before,
+.card-premium::before,
+.card-premium-v7::before,
+.settings-card::before,
+.quick-stat-card::before,
+.my-rank-card::before,
+.match-card::before,
+.entry-card-v7::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--sport-accent), rgba(255,255,255,0.14), var(--sport-accent-2));
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-ghost,
+.btn-v9,
+.btn-mini,
+.btn-premium-v7,
+.btn-confirm-v7,
+.btn-booking-elite-v7 {
+  font-family: var(--font-display) !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.btn-primary,
+.btn-premium-v7,
+.btn-confirm-v7,
+.btn-booking-elite-v7 {
+  box-shadow: 0 14px 28px rgba(34, 211, 238, 0.2) !important;
+}
+
+.page-content,
+.calendar-page,
+.diary-page,
+.ranking-page,
+.profile-page,
+.notif-page,
+.admin-page,
+.home-page {
+  position: relative;
+}
+
+.page-content::before,
+.calendar-page::before,
+.ranking-page::before,
+.profile-page::before,
+.notif-page::before,
+.home-page::before {
+  display: none !important;
 }
 
 .nav-item-v8 {
+  position: relative;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 48px;
+  border-radius: 18px;
+  color: rgba(255,255,255,0.55) !important;
   pointer-events: auto !important;
   touch-action: manipulation;
+  transition: transform .22s ease, color .22s ease, background .22s ease;
 }
 
 .nav-item-v8 .nav-icon-v8,
@@ -140,12 +273,81 @@ body {
   pointer-events: none;
 }
 
-.nav-icon-v8.main-action {
-  transform: translateY(-14px) !important;
+.nav-icon-v8 {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.18rem !important;
+  border-radius: 14px;
+  background: transparent !important;
+  color: currentColor !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.nav-label-v8 {
+  font-size: 9px !important;
+  line-height: 1;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.nav-item-v8::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  opacity: 0;
+  transition: opacity .22s ease;
+}
+
+.nav-item-v8.active,
+.nav-item-v8:hover {
+  color: #fff !important;
+  transform: translateY(-1px);
+}
+
+.nav-item-v8.active::before,
+.nav-item-v8:hover::before {
+  opacity: 1;
+}
+
+.nav-item-v8.active .nav-icon-v8 {
+  color: var(--item-clr, var(--sport-accent)) !important;
+}
+
+.nav-active-dot {
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0;
+  transform: translateY(1px);
+  transition: opacity .22s ease, transform .22s ease;
+}
+
+.nav-item-v8.active .nav-active-dot {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.nav-item-v8.center-item {
+  gap: 5px;
+}
+
+.nav-item-v8.center-item .nav-icon-v8.main-action {
+  width: 38px;
+  height: 38px;
+  font-size: 1.28rem !important;
+  transform: none !important;
 }
 
 .nav-item-v8.center-item.active .nav-icon-v8.main-action {
-  transform: translateY(-16px) scale(1.05) !important;
+  color: #f8fafc !important;
 }
 
 @keyframes navGlassPulse {
@@ -160,10 +362,118 @@ body {
   }
 }
 
+.ranking-breakdown-shell,
+.ranking-breakdown-card,
+.rank-user-pro-card,
+.hv2-next-match-card,
+.hv2-match-card,
+.history-card-premium,
+.notif-item-v8 {
+  border-radius: 22px !important;
+}
+
+.ranking-breakdown-shell .modal-card,
+.ranking-breakdown-shell .ranking-breakdown-card,
+.modal-card .ranking-breakdown-card {
+  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.5) !important;
+}
+
+.rank-user-pro-card,
+.rank-competitive-card,
+.ranking-breakdown-card,
+.hv2-match-card,
+.hv2-event-hero-card,
+.hv2-result-mini-card {
+  background:
+    radial-gradient(circle at top right, rgba(34, 211, 238, 0.08), transparent 30%),
+    linear-gradient(180deg, rgba(10, 18, 34, 0.9), rgba(7, 13, 26, 0.86)) !important;
+  border: 1px solid rgba(255,255,255,0.09) !important;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.28) !important;
+}
+
+.rank-user-pro-card strong,
+.rank-competitive-diff,
+.rank-competitive-summary-card strong,
+.rank-competitive-factor b,
+.hv2-event-title-main,
+.hv2-name,
+.hv2-xp-val,
+.home-apoing-notice-title {
+  font-family: var(--font-display) !important;
+  letter-spacing: 0.02em;
+}
+
+.rank-competitive-card,
+.hv2-match-card {
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease !important;
+}
+
+.rank-competitive-card:hover,
+.hv2-match-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 26px 48px rgba(0,0,0,0.34) !important;
+}
+
+.rank-competitive-open {
+  background: rgba(34, 211, 238, 0.14) !important;
+  border-color: rgba(34, 211, 238, 0.24) !important;
+  color: #d7f7ff !important;
+}
+
+.hv2-welcome {
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  box-shadow: 0 24px 54px rgba(0,0,0,0.3) !important;
+}
+
+.hv2-match-card .hv2-mc-badge,
+.hv2-event-status,
+.hv2-result-mini-delta,
+.modal-card .modal-title {
+  font-family: var(--font-display) !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.home-apoing-notice-card {
+  border-radius: 24px !important;
+  background:
+    radial-gradient(circle at top right, rgba(74, 222, 128, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(10, 20, 32, 0.96), rgba(7, 13, 26, 0.92)) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  box-shadow: 0 26px 56px rgba(0,0,0,0.36) !important;
+}
+
+.hv2-welcome,
+.hv2-matches-section,
+.hv2-collapsible,
+.rank-user-pro-card,
+.notif-diagnostics-card {
+  backdrop-filter: blur(18px) saturate(155%);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+}
+
 .text-sport-green {
   color: #4ade80 !important;
 }
 
 .text-sport-red {
   color: #f87171 !important;
+}
+
+@media (max-width: 640px) {
+  .nav-dock-v8 {
+    min-height: 62px !important;
+    padding: 7px 8px !important;
+    border-radius: 22px !important;
+  }
+
+  .nav-label-v8 {
+    font-size: 8px !important;
+  }
+
+  .nav-icon-v8 {
+    width: 32px;
+    height: 32px;
+    font-size: 1.08rem !important;
+  }
 }

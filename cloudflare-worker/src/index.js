@@ -3,8 +3,15 @@
 };
 
 function corsHeaders(origin, env) {
-  const allowed = String(env.APP_ORIGIN || "").trim();
-  const safeOrigin = allowed && origin === allowed ? origin : allowed || "*";
+  const allowedOrigins = String(env.APP_ORIGINS || env.APP_ORIGIN || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const isLocalDev = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin || "");
+  const safeOrigin =
+    allowedOrigins.includes(origin) || isLocalDev
+      ? origin
+      : allowedOrigins[0] || "*";
   return {
     "access-control-allow-origin": safeOrigin,
     "access-control-allow-methods": "GET,POST,OPTIONS",
@@ -59,7 +66,8 @@ function normalizePayload(body = {}) {
   const externalIds = Array.isArray(body.externalIds)
     ? body.externalIds.map((v) => String(v || "").trim()).filter(Boolean).slice(0, 2000)
     : [];
-  const url = typeof body.url === "string" ? body.url.trim() : "home.html";
+  const rawUrl = typeof body.url === "string" ? body.url.trim() : "home.html";
+  const url = normalizeNotificationUrl(rawUrl);
   const data = body.data && typeof body.data === "object" ? body.data : {};
 
   if (!title || !message || !externalIds.length) {
@@ -67,6 +75,24 @@ function normalizePayload(body = {}) {
   }
 
   return { title, message, externalIds, url, data };
+}
+
+function normalizeNotificationUrl(rawUrl = "home.html") {
+  const fallback = "home.html";
+  const value = String(rawUrl || fallback).trim();
+  if (!value) return fallback;
+  if (/^(javascript|data|vbscript):/i.test(value)) return fallback;
+
+  try {
+    if (/^https?:\/\//i.test(value)) {
+      const parsed = new URL(value);
+      return parsed.href;
+    }
+  } catch {
+    return fallback;
+  }
+
+  return value.replace(/^\/+/, "").slice(0, 500) || fallback;
 }
 
 async function sendOneSignalPush(env, payload) {

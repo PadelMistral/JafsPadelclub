@@ -216,11 +216,80 @@ body.notif-native-mode .notif-secondary-btn {
   box-shadow: 0 5px 15px rgba(2, 6, 23, 0.12);
 }
 
+.notif-diagnostics-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(34, 211, 238, 0.12), transparent 38%),
+    rgba(255,255,255,0.04);
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.16);
+}
+
+.notif-diagnostics-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notif-diag-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.notif-diag-item {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  min-width: 0;
+}
+
+.notif-diag-item.wide {
+  grid-column: 1 / -1;
+}
+
+.notif-diag-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+  font-family: "Rajdhani", sans-serif;
+}
+
+.notif-diag-item strong,
+.notif-diag-item code {
+  display: block;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.notif-diag-item code {
+  font-size: 11px;
+  color: rgba(191, 219, 254, 0.92);
+}
+
 body.notif-native-mode .notif-simple-card {
   padding: 16px;
   border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.04));
+}
+
+body.notif-native-mode .notif-diagnostics-card {
+  padding: 16px;
+  border-radius: 22px;
 }
 
 .notif-simple-card strong,
@@ -643,6 +712,10 @@ body.notif-native-mode .notif-support-box {
 }
 
 @media (max-width: 640px) {
+  .notif-diag-grid {
+    grid-template-columns: 1fr;
+  }
+
   .notif-header-v8 {
     align-items: flex-start;
     gap: 12px;

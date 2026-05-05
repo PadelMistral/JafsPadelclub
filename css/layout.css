@@ -631,13 +631,13 @@ button,
 /* ===== TOAST NOTIFICATIONS ===== */
 .toast-container {
   position: fixed;
-  top: 80px;
+  top: calc(86px + env(safe-area-inset-top, 0px));
   right: 16px;
-  z-index: 9000;
+  z-index: 999999;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 360px;
+  max-width: 380px;
   pointer-events: none;
 }
 
@@ -758,7 +758,7 @@ button,
   .toast-container {
     left: max(10px, env(safe-area-inset-left, 10px));
     right: max(10px, env(safe-area-inset-right, 10px));
-    top: calc(72px + env(safe-area-inset-top, 0px));
+    top: calc(82px + env(safe-area-inset-top, 0px));
     bottom: auto;
     max-width: none;
   }
@@ -1231,4 +1231,3 @@ button,
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
-

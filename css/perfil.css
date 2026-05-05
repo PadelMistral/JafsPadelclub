@@ -1939,6 +1939,12 @@ details[open] .profile-accordion-trigger {
   background: transparent;
 }
 
+.profile-accordion-body {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
 /* ═══════════════════════════════════════════════
    APOING CALENDAR PREVIEW
    ═══════════════════════════════════════════════ */
@@ -1971,6 +1977,137 @@ details[open] .profile-accordion-trigger {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
+}
+
+/* Profile simplification layer */
+.profile-page {
+  width: min(100%, 1120px);
+  padding-inline: clamp(12px, 2vw, 20px);
+  gap: 0;
+}
+
+.profile-hero {
+  padding: clamp(22px, 4vw, 30px);
+}
+
+.profile-hero-content {
+  display: grid;
+  gap: 14px;
+}
+
+.profile-top-row {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-name {
+  margin-bottom: 0;
+  line-height: 1;
+}
+
+.profile-badge,
+.profile-division-badge {
+  margin-inline: auto;
+}
+
+.profile-section {
+  padding: clamp(14px, 2.2vw, 22px);
+  margin-bottom: 14px;
+}
+
+.profile-cta-section .card {
+  min-height: 88px;
+}
+
+.profile-stats-grid-v9 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.profile-accordion {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.profile-accordion-trigger {
+  padding: 14px 16px;
+}
+
+.profile-accordion-trigger .section-title {
+  font-size: 0.9rem;
+}
+
+@media (max-width: 900px) {
+  .profile-page {
+    padding-top: 82px;
+    padding-bottom: 106px;
+  }
+
+  .profile-top-row {
+    justify-content: center;
+  }
+
+  .profile-hero-stats {
+    width: min(100%, 520px);
+  }
+
+  .profile-stats-grid-v9,
+  .memory-bank-grid,
+  .achievements-grid-v9,
+  .nexus-grid-v9 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .profile-page {
+    padding-inline: 12px;
+    padding-bottom: 98px;
+  }
+
+  .profile-hero {
+    border-radius: 24px;
+    padding: 18px 16px 20px;
+  }
+
+  .profile-top-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .profile-avatar-wrapper {
+    width: 88px;
+    height: 88px;
+  }
+
+  .profile-hero-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .profile-name {
+    font-size: clamp(1.7rem, 9vw, 2.3rem);
+  }
+
+  .profile-section {
+    border-radius: 20px;
+    padding: 14px;
+  }
+
+  .profile-stats-grid-v9,
+  .memory-bank-grid,
+  .achievements-grid-v9,
+  .nexus-grid-v9 {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-accordion-trigger {
+    padding: 13px 14px;
+  }
+
+  .profile-accordion-body {
+    padding: 12px;
+    gap: 12px;
+  }
 }
 
 .memory-card,

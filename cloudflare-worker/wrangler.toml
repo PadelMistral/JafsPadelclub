@@ -5,3 +5,4 @@ workers_dev = true
 
 [vars]
 APP_ORIGIN = "https://padelmistral.github.io"
+APP_ORIGINS = "https://padelmistral.github.io"

@@ -1408,3 +1408,24 @@ textarea.input {
   background: rgba(0, 212, 255, 0.35);
 }
 
+@media (max-width: 640px) {
+  .events-page {
+    padding: 0.9rem 0.9rem 7rem;
+  }
+  .event-card-v3,
+  .modal-card,
+  .modal-card.glass-strong {
+    width: min(100%, 100vw - 18px);
+    max-width: min(100%, 100vw - 18px);
+    border-radius: 20px;
+  }
+  .events-grid-v3 {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+/* ===== PAGE PADDING OVERRIDE (moved from eventos.html) ===== */
+.page-content.events-page {
+    padding-top: calc(env(safe-area-inset-top, 10px) + 76px);
+}
