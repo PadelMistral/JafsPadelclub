@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#020617">
     <title>Perfil | JafsPadel</title>
     <meta name="description" content="Tu perfil de jugador, progreso, historial y ajustes">
@@ -12,8 +14,11 @@
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./css/global.css">
-    <link rel="stylesheet" href="./css/perfil.css">
+    
+    
+    
+    
+    <link rel="stylesheet" href="./css/bundle.min.css">
 </head>
 
 <body>
@@ -66,6 +71,7 @@
                     <span id="p-role">Atleta Pro</span>
                 </div>
                 <div id="profile-division-badge" class="profile-division-badge"></div>
+                <div id="profile-flow-badge" class="profile-flow-badge" style="margin-top:4px;"></div>
 
             </div>
         </section>
@@ -158,6 +164,25 @@
             </div>
         </section>
 
+        <section class="profile-section animate-fade-in profile-cta-section" style="animation-delay: 0.145s;">
+            <div id="profile-chat-ia-cta"
+                class="card card-premium-v7 p-4 border-glow-cyan cursor-pointer hover:bg-cyan/10 transition-colors"
+                onclick="window.openAIHubFromProfile && window.openAIHubFromProfile()">
+                <div class="flex-row items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                        <i class="fas fa-comments text-primary text-xl"></i>
+                    </div>
+                    <div class="flex-col flex-1">
+                        <span class="text-[11px] font-black text-primary uppercase tracking-widest">Todo lo demás, en el
+                            Chat IA</span>
+                        <span class="text-[10px] text-white/70 mt-0.5">Estadísticas avanzadas, rivales, comparativas,
+                            consejos según tu diario y partidos.</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-primary/80"></i>
+                </div>
+            </div>
+        </section>
+
         <!-- AI Intelligence Report -->
         <section id="ai-tactical-report-section" class="profile-section animate-fade-in" style="animation-delay: 0.1s;">
             <div class="section-header">
@@ -225,24 +250,6 @@
                 </div>
             </div>
             <div id="rival-intel-dashboard" class="rival-intel-panel"></div>
-        </section><!-- AI Chat CTA -->
-        <section class="profile-section animate-fade-in" style="animation-delay: 0.16s;">
-            <div id="profile-chat-ia-cta"
-                class="card card-premium-v7 p-4 border-glow-cyan cursor-pointer hover:bg-cyan/10 transition-colors"
-                onclick="window.openAIHubFromProfile && window.openAIHubFromProfile()">
-                <div class="flex-row items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
-                        <i class="fas fa-comments text-primary text-xl"></i>
-                    </div>
-                    <div class="flex-col flex-1">
-                        <span class="text-[11px] font-black text-primary uppercase tracking-widest">Todo lo demás, en el
-                            Chat IA</span>
-                        <span class="text-[10px] text-white/70 mt-0.5">Estadísticas avanzadas, rivales, comparativas,
-                            consejos según tu diario y partidos.</span>
-                    </div>
-                    <i class="fas fa-chevron-right text-primary/80"></i>
-                </div>
-            </div>
         </section>
 
         <!-- Settings Section -->

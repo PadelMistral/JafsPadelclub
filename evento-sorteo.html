@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -7,11 +7,14 @@
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Sorteo | JafsPadel</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="./css/global.css">
-    <link rel="stylesheet" href="./css/eventos.css">
-    <link rel="stylesheet" href="./css/evento-sorteo.css">
+    
+    
+    
+    
+    
+    <link rel="stylesheet" href="./css/bundle.min.css">
 </head>
 
 <body>
@@ -95,6 +98,14 @@
     </div>
 
     <script type="module" src="./js/evento-sorteo.js"></script>
+    <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initPWAShell } from './js/modules/pwa-shell.js';
+        initThemeSystem();
+        initGalaxyBackground();
+        initPWAShell('evento-sorteo');
+    </script>
 </body>
 
 </html>

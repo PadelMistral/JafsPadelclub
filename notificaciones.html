@@ -5,15 +5,20 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#020617">
     <title>Notificaciones | PADELUMINATIS</title>
     <meta name="description" content="Tus alertas, avisos y estado de notificaciones">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="./css/global.css">
-    <link rel="stylesheet" href="./css/notificaciones.css">
+    
+    
+    
+    
+    <link rel="stylesheet" href="./css/bundle.min.css">
 </head>
 
 <body>
@@ -23,8 +28,8 @@
         <div class="container px-3">
             <header class="notif-header-v8 animate-fade-in no-flicker">
                 <div class="flex-col">
-                    <h1 class="page-title-pro"><i class="fas fa-bell"></i>Centro de alertas<span class="text-primary"></span></h1>
-                    <p class="page-sub-pro">Avisos reales, estado del canal nativo y tu bandeja</p>
+                    <h1 class="page-title-pro"><i class="fas fa-bell"></i>Bandeja de entrada<span class="text-primary"></span></h1>
+                    <p class="page-sub-pro">Tus notificaciones y avisos</p>
                 </div>
                 <div class="header-actions-v8">
                     <button id="btn-read-all" class="action-btn-v8 shadow-glow-primary" title="Marcar todo como leido">
@@ -33,69 +38,123 @@
                     <button id="btn-clear-all" class="action-btn-v8 danger shadow-glow-red" title="Vaciar bandeja">
                         <i class="fas fa-trash-can"></i>
                     </button>
+                    <button onclick="document.getElementById('modal-config-notif').classList.add('active')" class="action-btn-v8 shadow-glow-primary" title="Configuracion">
+                        <i class="fas fa-cog"></i>
+                    </button>
                 </div>
             </header>
 
-            <section id="push-status-banner" class="notif-status-hero animate-fade-in">
-                <div class="notif-status-top">
-                    <div class="notif-status-chip">
-                        <span class="notif-status-dot"></span>
-                        <span id="global-push-status">COMPROBANDO AVISOS...</span>
+            <div id="modal-config-notif" class="modal-overlay hidden" style="display:flex !important; align-items:center !important; justify-content:center !important;" onclick="if(event.target===this){this.classList.remove('active'); this.classList.add('hidden');}">
+                <div class="modal-card glass-strong animate-up" style="max-height: 85vh; overflow-y: auto; width: 100%; max-width: 500px; margin: auto;">
+                    <div class="modal-header">
+                        <div class="flex-col">
+                            <h3 class="modal-title font-black text-primary tracking-widest uppercase">Configuracion</h3>
+                            <span class="text-[10px] text-muted font-bold uppercase">Estado de avisos</span>
+                        </div>
+                        <button class="close-btn" onclick="document.getElementById('modal-config-notif').classList.remove('active'); document.getElementById('modal-config-notif').classList.add('hidden');">&times;</button>
                     </div>
-                    <button id="btn-refresh-push" class="notif-mini-btn">
-                        <i class="fas fa-rotate"></i>
-                    </button>
-                </div>
-                <div class="notif-status-body">
-                    <strong id="perm-title" class="notif-status-title">Preparando tus avisos</strong>
-                    <p id="push-status-explanation" class="notif-status-copy">Estamos revisando si tu movil o navegador puede recibir avisos de la app.</p>
-                </div>
-                <div class="notif-status-actions">
-                    <button id="btn-request-push" class="btn-perm-action">Activar</button>
-                    <button id="btn-test-push" class="notif-secondary-btn">Probar aviso</button>
-                </div>
-                <p class="notif-test-hint">La prueba lanza un aviso local y después otro real para segundo plano. Minimiza la app justo después de pulsar `Probar`.</p>
-            </section>
+                    <div class="modal-body custom-scroll p-3 flex-col gap-4">
+                        <section id="push-status-banner" class="notif-status-hero animate-fade-in">
+                            <div class="notif-status-top">
+                                <div class="notif-status-chip">
+                                    <span class="notif-status-dot"></span>
+                                    <span id="global-push-status">COMPROBANDO AVISOS...</span>
+                                </div>
+                                <button id="btn-refresh-push" class="notif-mini-btn">
+                                    <i class="fas fa-rotate"></i>
+                                </button>
+                            </div>
+                            <div class="notif-status-body">
+                                <strong id="perm-title" class="notif-status-title">Preparando tus avisos</strong>
+                                <p id="push-status-explanation" class="notif-status-copy">Estamos revisando si tu movil o navegador puede recibir avisos de la app.</p>
+                            </div>
+                            <div class="notif-status-actions">
+                                <button id="btn-request-push" class="btn-perm-action">Activar</button>
+                                <button id="btn-test-push" class="notif-secondary-btn">Probar aviso</button>
+                            </div>
+                            <p class="notif-test-hint">La prueba lanza un aviso local y después otro real para segundo plano. Minimiza la app justo después de pulsar `Probar`.</p>
+                        </section>
 
-            <section id="permission-area" class="notif-simple-card animate-up no-flicker">
-                <div class="notif-simple-main">
-                    <div class="notif-simple-icon">
-                        <i class="fas fa-mobile-screen-button"></i>
-                    </div>
-                    <div class="notif-simple-copy">
-                        <span class="notif-simple-label">Estado de tus avisos</span>
-                        <strong id="perm-status-text">Comprobando estado...</strong>
-                        <p id="perm-platform-guide">Te diremos aqui que hacer, con frases simples y sin pasos tecnicos raros.</p>
-                    </div>
-                </div>
-                <div id="notif-status-tags" class="notif-status-tags">
-                    <span id="push-permission-pill" class="notif-tag">Permiso: ---</span>
-                    <span id="push-background-pill" class="notif-tag">Segundo plano: ---</span>
-                    <span id="push-channel-pill" class="notif-tag">Canal: ---</span>
-                    <span id="push-sdk-pill" class="notif-tag">SDK: ---</span>
-                    <span id="push-action-pill" class="notif-tag emphasis">Siguiente paso: ---</span>
-                </div>
-            </section>
+                        <section id="permission-area" class="notif-simple-card animate-up no-flicker">
+                            <div class="notif-simple-main">
+                                <div class="notif-simple-icon">
+                                    <i class="fas fa-mobile-screen-button"></i>
+                                </div>
+                                <div class="notif-simple-copy">
+                                    <span class="notif-simple-label">Estado de tus avisos</span>
+                                    <strong id="perm-status-text">Comprobando estado...</strong>
+                                    <p id="perm-platform-guide">Te diremos aqui que hacer, con frases simples y sin pasos tecnicos raros.</p>
+                                </div>
+                            </div>
+                            <div id="notif-status-tags" class="notif-status-tags">
+                                <span id="push-permission-pill" class="notif-tag">Permiso: ---</span>
+                                <span id="push-background-pill" class="notif-tag">Segundo plano: ---</span>
+                                <span id="push-channel-pill" class="notif-tag">Canal: ---</span>
+                                <span id="push-sdk-pill" class="notif-tag">SDK: ---</span>
+                                <span id="push-action-pill" class="notif-tag emphasis">Siguiente paso: ---</span>
+                            </div>
+                        </section>
 
-            <details class="notif-support-box animate-up">
-                <summary class="notif-support-summary">
-                    <span><i class="fas fa-circle-info"></i> Si no te llegan</span>
-                    <i class="fas fa-chevron-down"></i>
-                </summary>
-                <div class="notif-support-body">
-                    <div class="notif-support-actions">
-                        <button id="btn-reconnect-push" class="notif-support-btn">Reconectar</button>
-                        <button id="btn-reregister-sw" class="notif-support-btn">Reparar</button>
-                        <button id="btn-clean-sw" class="notif-support-btn">Limpiar</button>
-                        <button id="btn-reload-app" class="notif-support-btn">Recargar</button>
+                        <section class="notif-diagnostics-card animate-up no-flicker" style="animation-delay: 0.05s;">
+                            <div class="notif-diagnostics-head">
+                                <div>
+                                    <span class="notif-simple-label">Diagnóstico técnico</span>
+                                    <strong class="notif-status-title">Canal, worker y dispositivo</strong>
+                                </div>
+                                <button id="btn-copy-push-diagnostics" class="notif-mini-btn" title="Copiar diagnóstico">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                            <div class="notif-diag-grid">
+                                <div class="notif-diag-item">
+                                    <span class="notif-diag-label">Plataforma</span>
+                                    <strong id="diag-platform">---</strong>
+                                </div>
+                                <div class="notif-diag-item">
+                                    <span class="notif-diag-label">Service worker</span>
+                                    <strong id="diag-sw">---</strong>
+                                </div>
+                                <div class="notif-diag-item">
+                                    <span class="notif-diag-label">OneSignal</span>
+                                    <strong id="diag-onesignal">---</strong>
+                                </div>
+                                <div class="notif-diag-item">
+                                    <span class="notif-diag-label">Suscripción</span>
+                                    <strong id="diag-subscription">---</strong>
+                                </div>
+                                <div class="notif-diag-item wide">
+                                    <span class="notif-diag-label">Bridge push</span>
+                                    <strong id="diag-bridge">---</strong>
+                                </div>
+                                <div class="notif-diag-item wide">
+                                    <span class="notif-diag-label">Endpoint</span>
+                                    <code id="diag-endpoint">---</code>
+                                </div>
+                            </div>
+                        </section>
+
+                        <details class="notif-support-box animate-up">
+                            <summary class="notif-support-summary">
+                                <span><i class="fas fa-circle-info"></i> Si no te llegan</span>
+                                <i class="fas fa-chevron-down"></i>
+                            </summary>
+                            <div class="notif-support-body">
+                                <div class="notif-support-actions">
+                                    <button id="btn-reconnect-push" class="notif-support-btn">Reconectar</button>
+                                    <button id="btn-reregister-sw" class="notif-support-btn">Reparar</button>
+                                    <button id="btn-clean-sw" class="notif-support-btn">Limpiar</button>
+                                    <button id="btn-reload-app" class="notif-support-btn">Recargar</button>
+                                </div>
+                                <div class="notif-support-note">
+                                    <strong id="push-support-title">Si algo falla</strong>
+                                    <p id="push-support-copy">Te indicaremos aqui el motivo mas probable y que boton merece la pena probar.</p>
+                                </div>
+                                <button id="btn-open-guide" class="btn-micro-guide">VER GUIA SENCILLA</button>
+                            </div>
+                        </details>
                     </div>
-                    <div class="notif-support-note">
-                        <strong id="push-support-title">Si algo falla</strong>
-                        <p id="push-support-copy">Te indicaremos aqui el motivo mas probable y que boton merece la pena probar.</p>
-                    </div>
-                    <button id="btn-open-guide" class="btn-micro-guide">VER GUIA SENCILLA</button>
                 </div>
-            </details>
+            </div>
 
             <div id="notif-denied-guide" class="modal-overlay hidden">
                 <div class="modal-card glass-strong" style="max-width:340px; max-height:72vh; overflow-y:auto; position:relative;">
@@ -182,12 +241,15 @@
     <script type="module" src="./js/notificaciones.js"></script>
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initPWAShell } from './js/modules/pwa-shell.js';
+        initThemeSystem();
         initGalaxyBackground();
+        initPWAShell('notificaciones');
 
         document.addEventListener('DOMContentLoaded', () => {
             const ua = navigator.userAgent || '';
             const isIOS = /iPad|iPhone|iPod/.test(ua);
-            const isSafari = /Safari\//.test(ua) && !/Chrome\//.test(ua);
             const isAndroid = /Android/.test(ua);
 
             const guideAndroid = document.getElementById('guide-android');

@@ -1,0 +1,15 @@
+{
+  "name": "padeluminatis",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PWA fullstack estatica para gestion social y competitiva de padel.",
+  "scripts": {
+    "validate": "node tools/validate-project.mjs",
+    "qa:browser": "node tools/qa-browser.mjs",
+    "serve": "node tools/local-server.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.59.1"
+  }
+}

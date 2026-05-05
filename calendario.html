@@ -5,15 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#020617">
     <title>Calendario | JafsPadel</title>
     <meta name="description" content="Reserva pistas y organiza tus partidos">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="./css/global.css">
-    <link rel="stylesheet" href="./css/calendar.css">
+    <link rel="stylesheet" href="./css/bundle.min.css">
+    <link rel="stylesheet" href="./css/fixes-patch.css">
 </head>
 
 <body>
@@ -26,7 +28,7 @@
                 <h1 class="font-display font-black text-4xl italic tracking-tighter uppercase">
                     Calendario <span class="text-primary italic glow-text-blue">Luminatis</span>
                 </h1>
-                <p class="page-sub-pro">Reservas internas + sincronización Apoing en tiempo real</p>
+                <p class="page-sub-pro">Reservas internas + sincronizacion Apoing en tiempo real</p>
             </div>
 
             <!-- Calendar Header Bar -->
@@ -78,23 +80,23 @@
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot abierta"></span>
-                    <span class="label">ABIERTA OTRO</span>
+                    <span class="label">PARTIDO ABIERTO</span>
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot cerrada"></span>
-                    <span class="label">CERRADA OTRO</span>
+                    <span class="label">COMPLETO / CERRADO</span>
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot propia"></span>
-                    <span class="label">ABIERTA MIA</span>
+                    <span class="label">MI PARTIDO</span>
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot apoing-other"></span>
-                    <span class="label">APOING OTRO</span>
+                    <span class="label">RESERVA APOING</span>
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot apoing-mine"></span>
-                    <span class="label">APOING MIA</span>
+                    <span class="label">MI RESERVA APOING</span>
                 </div>
                 <div class="legend-item-v5">
                     <span class="dot jugado"></span>
@@ -120,7 +122,7 @@
     </main>
 
     <!-- Unified Match Modal (Bottom Sheet Style) -->
-    <div id="modal-match" class="modal-overlay">
+    <div id="modal-match" class="modal-overlay" onclick="if(event.target===this){document.getElementById('modal-match').classList.remove('active');}">
         <div class="modal-card glass-strong slide-up">
             <div class="modal-header">
                 <div class="flex-col">
@@ -139,12 +141,17 @@
     </div>
 
 
+    <!-- Toast container -->
+    <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
     <script type="module" src="./js/calendario.js"></script>
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initPWAShell } from './js/modules/pwa-shell.js';
         initThemeSystem();
         initGalaxyBackground();
+        initPWAShell('calendario');
     </script>
     <script type="module">
         import { initVecinaChat } from './js/modules/vecina-chat.js';

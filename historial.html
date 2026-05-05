@@ -5,100 +5,99 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#020617">
     <title>Historial | JafsPadel</title>
-    <meta name="description" content="Tu historial de partidos de padel">
+    <meta name="description" content="Tu historial de partidos de padel — rivales, resultados y evolución">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700;800&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="./css/global.css">
-    <link rel="stylesheet" href="./css/historial.css">
-</head>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/bundle.min.css">
+    
+
 
 <body>
     <div class="sport-bg"></div>
 
     <main class="page-content history-page">
-        <section class="page-header animate-fade-in">
-            <div class="page-title-row">
-                <div>
-                    <h1 class="page-title-pro">Historial</h1>
-                    <span class="page-sub-pro">Resultados, rivales y evolucion reciente</span>
-                </div>
-                <div class="header-badge">
-                    <i class="fas fa-clock-rotate-left"></i>
-                </div>
-            </div>
-        </section>
 
-        <section class="stats-grid animate-fade-in" style="animation-delay: 0.1s;">
-            <div class="stat-card-mini primary">
-                <div class="stat-icon"><i class="fas fa-gamepad"></i></div>
-                <span class="stat-value-mini" id="st-played">-</span>
-                <span class="stat-label-mini">Partidos</span>
+        <!-- Compact Header -->
+        <div class="hist-page-header animate-fade-in">
+            <div class="hist-title-block">
+                <h1>Historial <span>Padeluminatis</span></h1>
+                <p>Resultados · Rivales · Evolución reciente</p>
             </div>
-            <div class="stat-card-mini success">
-                <div class="stat-icon"><i class="fas fa-trophy"></i></div>
-                <span class="stat-value-mini" id="st-wins">-</span>
-                <span class="stat-label-mini">Victorias</span>
+            <div class="header-badge">
+                <i class="fas fa-clock-rotate-left"></i>
             </div>
-            <div class="stat-card-mini accent">
-                <div class="stat-icon"><i class="fas fa-percent"></i></div>
-                <span class="stat-value-mini" id="st-wr">-</span>
-                <span class="stat-label-mini">Winrate</span>
-            </div>
-        </section>
+        </div>
 
-        <section class="filter-section animate-fade-in" style="animation-delay: 0.15s;">
-            <div class="filter-row mb-4">
-                <div class="filter-tabs custom-scroll" role="tablist" aria-label="Filtros de historial">
-                    <button class="filter-tab active" data-filter="mine" role="tab" aria-selected="true">Mis partidos</button>
-                    <button class="filter-tab" data-filter="all" role="tab" aria-selected="false">Global</button>
-                    <button class="filter-tab" data-filter="won" role="tab" aria-selected="false">Victorias</button>
-                    <button class="filter-tab" data-filter="lost" role="tab" aria-selected="false">Derrotas</button>
-                    <button class="filter-tab" data-filter="canceled" role="tab" aria-selected="false">Anuladas</button>
-                </div>
+        <!-- Compact Stats Strip -->
+        <div class="hist-stats-strip animate-fade-in" style="animation-delay:0.05s">
+            <div class="hist-stat-pill">
+                <div class="ico green"><i class="fas fa-gamepad"></i></div>
+                <div class="vals"><strong id="st-played">-</strong><span>Jugados</span></div>
             </div>
+            <div class="hist-stat-pill">
+                <div class="ico cyan"><i class="fas fa-trophy"></i></div>
+                <div class="vals"><strong id="st-wins">-</strong><span>Victorias</span></div>
+            </div>
+            <div class="hist-stat-pill">
+                <div class="ico amber"><i class="fas fa-percent"></i></div>
+                <div class="vals"><strong id="st-wr">-</strong><span>Win%</span></div>
+            </div>
+        </div>
 
-            <div class="flex-row gap-4 items-center mb-6">
-                <div class="search-box-v7 flex-1">
+        <!-- Compact Filters -->
+        <div class="hist-filter-bar animate-fade-in" style="animation-delay:0.1s">
+            <div class="hist-tabs" role="tablist" aria-label="Filtros de historial">
+                <button class="hist-tab active" data-filter="mine" role="tab" aria-selected="true">Mis partidos</button>
+                <button class="hist-tab" data-filter="all" role="tab" aria-selected="false">Global</button>
+                <button class="hist-tab" data-filter="won" role="tab" aria-selected="false">Victorias</button>
+                <button class="hist-tab" data-filter="lost" role="tab" aria-selected="false">Derrotas</button>
+                <button class="hist-tab" data-filter="canceled" role="tab" aria-selected="false">Anuladas</button>
+            </div>
+            <div class="hist-search-row">
+                <div class="hist-search-box">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="user-search" placeholder="Filtrar por jugador..."
-                        class="bg-transparent border-none text-white text-sm outline-none w-full font-bold" aria-label="Buscar jugador en historial">
+                    <input type="text" id="user-search" placeholder="Filtrar por jugador..." aria-label="Buscar jugador en historial">
                 </div>
-                <div class="sort-dropdown">
-                    <select id="sort-matches" class="premium-select-v7" aria-label="Ordenar historial">
-                        <option value="date-desc">Mas recientes</option>
-                        <option value="date-asc">Mas antiguos</option>
-                        <option value="name-asc">Rival (A-Z)</option>
-                    </select>
+                <select id="sort-matches" class="hist-sort" aria-label="Ordenar historial">
+                    <option value="date-desc">Recientes</option>
+                    <option value="date-asc">Antiguos</option>
+                    <option value="name-asc">Rival A-Z</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- History List -->
+        <section class="history-section animate-fade-in" style="animation-delay: 0.15s;">
+            <div id="history-container" class="history-list">
+                <!-- Skeleton -->
+                <div class="history-item skeleton-item">
+                    <div class="skeleton w-12 h-12 rounded-lg"></div>
+                    <div class="flex-col gap-2 flex-1">
+                        <div class="skeleton h-4 w-24"></div>
+                        <div class="skeleton h-3 w-16"></div>
+                    </div>
+                </div>
+                <div class="history-item skeleton-item">
+                    <div class="skeleton w-12 h-12 rounded-lg"></div>
+                    <div class="flex-col gap-2 flex-1">
+                        <div class="skeleton h-4 w-24"></div>
+                        <div class="skeleton h-3 w-16"></div>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <section class="history-section animate-fade-in" style="animation-delay: 0.2s;">
-            <div id="history-container" class="history-list">
-                <div class="history-item skeleton-item">
-                    <div class="skeleton w-12 h-12 rounded-lg"></div>
-                    <div class="flex-col gap-2 flex-1">
-                        <div class="skeleton h-4 w-24"></div>
-                        <div class="skeleton h-3 w-16"></div>
-                    </div>
-                </div>
-                <div class="history-item skeleton-item">
-                    <div class="skeleton w-12 h-12 rounded-lg"></div>
-                    <div class="flex-col gap-2 flex-1">
-                        <div class="skeleton h-4 w-24"></div>
-                        <div class="skeleton h-3 w-16"></div>
-                    </div>
-                </div>
-            </div>
-        </section>
     </main>
 
-    <div id="modal-match-detail" class="modal-overlay bottom-sheet" role="dialog" aria-modal="true" aria-label="Detalle del partido">
+
+    <div id="modal-match-detail" class="modal-overlay bottom-sheet"
+         onclick="if(event.target===this){this.classList.remove('active');}"
+         role="dialog" aria-modal="true" aria-label="Detalle del partido">
         <div class="modal-sheet" id="match-detail-content"></div>
     </div>
 
@@ -106,9 +105,14 @@
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initPWAShell } from './js/modules/pwa-shell.js';
         initThemeSystem();
         initGalaxyBackground();
+        initPWAShell('historial');
     </script>
+    <!-- TOAST CONTAINER -->
+    <div id="toast-container" class="toast-container"></div>
+    
 </body>
 
 </html>

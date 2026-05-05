@@ -1,10 +1,12 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#020617">
     <title>Ranking | JafsPadel</title>
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
@@ -12,108 +14,11 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="./css/global.css">
-    <link rel="stylesheet" href="./css/ranking.css">
-    <style>
-        .v3-badge {
-            background: linear-gradient(135deg, #00d4ff, #0066ff);
-            color: white;
-            font-size: 10px;
-            font-weight: 900;
-            padding: 2px 8px;
-            border-radius: 50px;
-            margin-left: 10px;
-            vertical-align: middle;
-            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
-        }
-
-        .podium-item {
-            cursor: pointer;
-            transition: transform 0.3s;
-        }
-
-        .podium-item:hover {
-            transform: translateY(-5px) scale(1.02);
-        }
-
-        .system-visual-grid {
-            display: grid;
-            grid-template-columns: 1.25fr .95fr;
-            gap: 16px;
-        }
-
-        .system-chart-card,
-        .system-explain-card {
-            background: rgba(2, 6, 23, 0.56);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 22px;
-            padding: 16px;
-        }
-
-        section.system-chart-card.mb-10.animate-fade-in[style*="animation-delay:0.12s"] {
-            display: none;
-        }
-
-        .system-line {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: .12em;
-            color: rgba(255,255,255,.72);
-            padding: 9px 12px;
-            border-radius: 14px;
-            background: rgba(255,255,255,0.03);
-            margin-top: 8px;
-        }
-
-        .system-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 9px;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: .14em;
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #e2e8f0;
-            background: rgba(255,255,255,0.04);
-        }
-
-        .level-curve {
-            position: relative;
-            min-height: 180px;
-            overflow: hidden;
-        }
-
-        .level-curve::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background:
-              linear-gradient(to top, rgba(255,255,255,0.08) 1px, transparent 1px) 0 0 / 100% 25%,
-              linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 20% 100%;
-            opacity: .7;
-        }
-
-        .curve-label {
-            position: absolute;
-            font-size: 9px;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: .14em;
-            color: rgba(255,255,255,.55);
-        }
-
-        @media (max-width: 900px) {
-            .system-visual-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    
+    
+    
+    
+    <link rel="stylesheet" href="./css/bundle.min.css">
 </head>
 
 <body>
@@ -347,7 +252,7 @@
         </section>
     </main>
 
-    <div id="modal-match" class="modal-overlay">
+    <div id="modal-match" class="modal-overlay" onclick="if(event.target===this){window.closeRankingMatchModal();}">
         <div class="modal-card glass-strong ranking-breakdown-modal">
             <div class="modal-header">
                 <h3 class="modal-title" id="modal-titulo">DETALLE DE PARTIDA</h3>
@@ -357,7 +262,7 @@
         </div>
     </div>
 
-    <div id="modal-rank-user" class="modal-overlay">
+    <div id="modal-rank-user" class="modal-overlay" onclick="if(event.target===this){document.getElementById('modal-rank-user')?.classList.remove('active');}">
         <div class="modal-card glass-strong rank-user-modal ranking-breakdown-modal">
             <div class="modal-header">
                 <h3 class="modal-title" id="rank-user-title">DETALLE DE JUGADOR</h3>
@@ -367,12 +272,17 @@
         </div>
     </div>
 
+    <!-- Toast container global -->
+    <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
     <script type="module" src="./js/ranking.js"></script>
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initPWAShell } from './js/modules/pwa-shell.js';
         initThemeSystem();
         initGalaxyBackground();
+        initPWAShell('ranking');
     </script>
     <script>
         window.closeRankingMatchModal = () => {

@@ -1,19 +1,24 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#020617">
     <title>Eventos | JafsPadel</title>
     <meta name="description" content="Torneos, ligas y competiciones — crea o únete">
     <link rel="icon" type="image/x-icon" href="./imagenes/Logojafs.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="./css/global.css">
-    <link rel="stylesheet" href="./css/eventos.css">
+    
+    
+    
+    
+    <link rel="stylesheet" href="./css/bundle.min.css">
 </head>
 
 <body>
@@ -21,15 +26,15 @@
 
     <main class="page-content events-page">
 
-        <!-- Page Header -->
-        <section class="events-header-v3 animate-fade-in">
-            <div class="events-header-inner">
+        <!-- Page Header - Compact Premium -->
+        <section class="events-header-v3 animate-fade-in" style="padding: 0px 4px 6px;">
+            <div class="events-header-inner" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
                 <div>
-                    <h1 class="page-title-pro">
-                        <i class="fas fa-trophy"></i>
+                    <h1 class="page-title-pro" style="font-size:clamp(1.3rem,4vw,1.8rem); line-height:1;">
+                        <i class="fas fa-trophy" style="color:var(--primary); margin-right:8px; font-size:0.9em;"></i>
                         Competiciones
                     </h1>
-                    <span class="page-sub-pro">Ligas · Torneos · Eliminatorias</span>
+                    <span class="page-sub-pro" style="font-size:9px;">Ligas &middot; Torneos &middot; Eliminatorias</span>
                 </div>
                 <button id="btn-create-event" class="btn-create-event hidden">
                     <i class="fas fa-plus"></i>
@@ -68,13 +73,15 @@
             </div>
         </section>
 
-        <section class="events-filter-section animate-fade-in" style="animation-delay: 0.08s;">
-            <div class="events-filter-scroll">
-                <button class="evf-tab active" data-filter="all"><i class="fas fa-layer-group"></i> Todos</button>
-                <button class="evf-tab" data-filter="league"><i class="fas fa-table-list"></i> Liga</button>
-                <button class="evf-tab" data-filter="knockout"><i class="fas fa-sitemap"></i> Eliminatoria</button>
-                <button class="evf-tab" data-filter="league_knockout"><i class="fas fa-star"></i> Liga + Elim.</button>
-                <button class="evf-tab" data-filter="active"><i class="fas fa-play-circle"></i> En curso</button>
+        <section class="events-filter-section animate-fade-in" style="animation-delay: 0.08s; margin-bottom: 0.75rem;">
+            <div class="events-filter-scroll" style="display:flex; flex-wrap:nowrap; gap:6px; overflow-x:auto; padding:0 4px 6px; scrollbar-width:none; -webkit-overflow-scrolling:touch;">
+                <button class="evf-tab active" data-filter="all" style="flex-shrink:0; padding:6px 13px; font-size:10px; border-radius:10px;"><i class="fas fa-layer-group"></i> Todos</button>
+                <button class="evf-tab" data-filter="mine" style="flex-shrink:0; padding:6px 13px; font-size:10px; border-radius:10px;"><i class="fas fa-user"></i> Míos</button>
+                <button class="evf-tab" data-filter="league" style="flex-shrink:0; padding:6px 13px; font-size:10px; border-radius:10px;"><i class="fas fa-table-list"></i> Liga</button>
+                <button class="evf-tab" data-filter="knockout" style="flex-shrink:0; padding:6px 13px; font-size:10px; border-radius:10px;"><i class="fas fa-sitemap"></i> Elim.</button>
+                <button class="evf-tab" data-filter="league_knockout" style="flex-shrink:0; padding:6px 13px; font-size:10px; border-radius:10px;"><i class="fas fa-star"></i> Liga+E</button>
+                <button class="evf-tab" data-filter="active" style="flex-shrink:0; padding:6px 13px; font-size:10px; border-radius:10px;"><i class="fas fa-play-circle"></i> Activos</button>
+                <button class="evf-tab" data-filter="finished" style="flex-shrink:0; padding:6px 13px; font-size:10px; border-radius:10px;"><i class="fas fa-flag-checkered"></i> Final.</button>
             </div>
         </section>
 
@@ -92,7 +99,7 @@
     </main>
 
     <!-- MODAL: CREAR EVENTO (solo organizador/admin) -->
-    <div id="modal-create-event" class="modal-overlay">
+    <div id="modal-create-event" class="modal-overlay" onclick="if(event.target===this){document.getElementById('modal-create-event').classList.remove('active');}">
         <div class="modal-card glass-strong slide-up" style="max-width: 600px; max-height: 92vh; overflow-y: auto;">
             <div class="modal-header">
                 <div class="flex-col">
@@ -370,12 +377,17 @@
         </div>
     </div>
 
+    <!-- Toast container -->
+    <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
     <script type="module" src="./js/eventos.js"></script>
     <script type="module">
         import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
         import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initPWAShell } from './js/modules/pwa-shell.js';
         initThemeSystem();
         initGalaxyBackground();
+        initPWAShell('eventos');
     </script>
 </body>
 

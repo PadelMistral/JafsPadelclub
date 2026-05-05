@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -7,16 +7,20 @@
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Detalle del evento | JafsPadel</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="./css/global.css">
-    <link rel="stylesheet" href="./css/evento-detalle.css">
+    
+    
+    
+    
+    <link rel="stylesheet" href="./css/bundle.min.css">
 </head>
 
 <body>
     <div class="sport-bg"></div>
 
     <main class="page-content event-detail-page" id="eventDetailPage">
+        <div class="event-detail-shell">
         <!-- Hero Section -->
         <section class="ed-hero">
             <div class="ed-hero-bg" id="ed-hero-bg"></div>
@@ -27,6 +31,16 @@
 
         <!-- Stats Strip -->
         <div class="ed-stats-strip" id="ed-stats-strip"></div>
+        <section class="ed-summary-grid">
+            <div class="ed-summary-card">
+                <span class="ed-summary-kicker">Vista unificada</span>
+                <p class="ed-summary-copy">Sigue el evento desde la información general hasta los cruces finales sin perder el contexto del torneo.</p>
+            </div>
+            <div class="ed-summary-card ed-summary-card-accent">
+                <span class="ed-summary-kicker">Lectura rápida</span>
+                <p class="ed-summary-copy">La clasificación, los partidos y el bracket se actualizan para que el avance del evento se entienda mejor en móvil y escritorio.</p>
+            </div>
+        </section>
 
         <!-- Action Bar (inscripción) -->
         <div id="ed-action-bar" class="ed-action-bar hidden">
@@ -34,6 +48,7 @@
         </div>
 
         <!-- Tabs -->
+        <div class="ed-tabs-shell">
         <div class="ed-tabs">
             <button class="ed-tab active" data-tab="info"><i class="fas fa-info-circle"></i> Info</button>
             <button class="ed-tab" data-tab="participantes"><i class="fas fa-users"></i> Participantes</button>
@@ -43,6 +58,7 @@
             <button id="organizador-tab" class="ed-tab" data-tab="organizador" style="display: none;"><i
                     class="fas fa-crown"></i> Organizador</button>
         </div>
+        </div>
 
         <!-- Panels -->
         <div id="pane-info" class="ed-pane active"></div>
@@ -51,6 +67,7 @@
         <div id="pane-partidos" class="ed-pane hidden"></div>
         <div id="pane-bracket" class="ed-pane hidden"></div>
         <div id="pane-organizador" class="ed-pane hidden"></div>
+        </div>
 
     </main>
 
@@ -111,7 +128,13 @@
 
     <script type="module" src="./js/evento-detalle.js"></script>
     <script type="module">
+        import { initGalaxyBackground } from './js/modules/galaxy-bg.js';
+        import { initThemeSystem } from './js/modules/theme-manager.js';
+        import { initPWAShell } from './js/modules/pwa-shell.js';
         import { initVecinaChat } from './js/modules/vecina-chat.js';
+        initThemeSystem();
+        initGalaxyBackground();
+        initPWAShell('evento-detalle');
         try { initVecinaChat(); } catch (e) { console.warn('Vecina chat init failed', e); }
     </script>
 </body>
