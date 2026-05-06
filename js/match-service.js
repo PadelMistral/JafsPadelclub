@@ -327,7 +327,7 @@ async function showPostMatchSummaryModal(rankingSync = {}, matchId = null, resul
             </div>
             <div class="post-match-main">
               <div class="pm-cell" style="grid-column: span 4; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; text-align: center;">
-                 <span style="font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.6); text-transform: uppercase;">Resultado Oficial</span>
+                 <span style="color: rgba(255,255,255,0.6); text-transform: uppercase;">Resultado Oficial</span>
                  <div style="font-size: 32px; font-weight: 900; font-style: italic; color: #fff; margin-top: 4px; letter-spacing: -1px;">${setsText}</div>
               </div>
               <div class="pm-cell"><span>Rating anterior</span><b>${oldPts}</b></div>
@@ -1210,7 +1210,9 @@ export async function renderMatchDetail(container, matchId, type, currentUser, u
         m = autoMarkPlayedIfNeeded(m);
 
         const isParticipant = !!viewerUid && isUserInMatch(m, viewerUid);
-        const isAdmin = viewerData?.rol === 'Admin' || auth.currentUser?.email === 'Juanan221091@gmail.com';
+        const isAdmin = viewerData?.rol === 'Admin' || auth.currentUser?.email === 'Juanan221091@gmail.com' || window.userData?.rol === 'Admin';
+        
+        // We consider the person who created it OR the one who has the Apoing reservation as the organizer
         const isOrganizer = !!viewerUid && (m.organizerId === viewerUid || m.creador === viewerUid || isAdmin);
         const matchState = String(m.estado || '').toLowerCase();
         const isPlayed = hasMatchResult(m) || matchState === 'cancelado' || matchState === 'anulado';
@@ -1941,8 +1943,8 @@ async function renderCreationSlot(idx, preUid, currentUser, userData, label = ""
  * @private
  */
 async function getPlayerData(uid) {
-    const fallback = { name: 'Vacio', photo: `https://ui-avatars.com/api/?name=V&background=random&color=fff`, level: 2.5, id: null, points: 1000 };
-    if (!uid) return fallback;
+    const fallback = { name: 'Jugador', photo: `./imagenes/Logojafs.png`, level: 2.5, id: null, points: 1000 };
+    if (!uid) return null;
     
     // Normalize UID to string just in case
     const sUid = String(uid);
@@ -2014,15 +2016,18 @@ function renderPlayerSlot(p, idx, options = {}) {
         `;
     }
 
+    const labelText = canEdit ? 'RECLUTAR' : (canSelfJoin ? 'UNIRME' : '');
+    const opacityClass = canEdit ? 'opacity-80' : 'opacity-20';
+    
     return `
-        <div class="p-slot-v7" 
+        <div class="p-slot-v7 ${canEdit ? 'active-edit' : ''}" 
              onclick="${canEdit
                 ? `window.openPlayerSelector('${mid}', '${col}', {idx:${idx}})`
                 : (canSelfJoin ? `window.executeMatchAction('join', '${mid}', '${col}')` : '')}">
-            <div class="p-img-box empty" style="border:1.5px dashed ${teamColor}; opacity:0.3">
-                <i class="fas fa-plus text-white opacity-50"></i>
+            <div class="p-img-box empty" style="border:1.5px dashed ${teamColor}; ${canEdit ? 'opacity:0.7' : 'opacity:0.3'}">
+                <i class="fas ${canEdit ? 'fa-user-plus' : 'fa-plus'} text-white opacity-40"></i>
             </div>
-            <span class="text-[8px] font-black uppercase tracking-widest mt-2" style="color:${teamColor}; opacity:0.4">${canEdit ? 'AÑADIR' : (canSelfJoin ? 'UNIRME' : 'VACÍO')}</span>
+            ${labelText ? `<span class="text-[8px] font-black uppercase tracking-widest mt-2" style="color:${teamColor}; ${canEdit ? 'opacity:0.9' : 'opacity:0.5'}">${labelText}</span>` : ''}
         </div>
     `;
 }
@@ -2077,10 +2082,22 @@ function renderMatchActions(m, isParticipant, isOrganizer, isAdmin, uid, id, col
     const isPlayed = hasResult || matchState === 'cancelado' || matchState === 'anulado';
     const canReportNow = canReportResultNow(m);
     if (isPlayed) {
+        let playedHtml = '';
         if (isAdmin || isParticipant || isOrganizer) {
-            return `<button class="btn-confirm-v7" onclick="openResultForm('${id}', '${col}')"><span class="t-main">EDITAR RESULTADO</span><i class="fas fa-pen"></i></button>`;
+            playedHtml += `<button class="btn-confirm-v7 mb-2" onclick="openResultForm('${id}', '${col}')"><span class="t-main">EDITAR RESULTADO</span><i class="fas fa-pen"></i></button>`;
+        } else {
+            playedHtml += `<button class="btn-confirm-v7 opacity-80 mb-2" onclick="openResultForm('${id}', '${col}')"><span class="t-main">SOLO LECTURA</span><i class="fas fa-eye"></i></button>`;
         }
-        return `<button class="btn-confirm-v7 opacity-80" onclick="openResultForm('${id}', '${col}')"><span class="t-main">SOLO LECTURA</span><i class="fas fa-eye"></i></button>`;
+
+        if (isAdmin) {
+            playedHtml += `
+                <div class="flex-row gap-2 w-full">
+                    <button class="flex-1 py-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-black text-cyan-400" onclick="window.startSwapMode('${id}', '${col}')">POSICION (ADMIN)</button>
+                    <button class="flex-1 py-4 rounded-xl bg-red-500/10 border border-red-500/30 text-[10px] font-black text-red-500" onclick="executeMatchAction('delete', '${id}', '${col}')">BORRAR (ADMIN)</button>
+                </div>
+            `;
+        }
+        return playedHtml;
     }
 
     let actionsHtml = '';
@@ -2257,10 +2274,20 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
         const mState = String(m.estado || '').toLowerCase();
         const isPlayed = hasMatchResult(m) || mState === 'cancelado' || mState === 'anulado';
         const isPastKickoff = Number.isFinite(matchDate?.getTime?.()) && Date.now() > matchDate.getTime();
-        const timeLockedActions = ['join', 'add', 'swap'];
-        if (isPastKickoff && !isPlayed && timeLockedActions.includes(action)) {
-            hideLoading();
-            return showToast("BLOQUEADO", "La franja ya paso. Solo se permite consulta o reporte de resultado.", "warning");
+        const squadActions = ['join', 'add', 'swap', 'remove'];
+        
+        // Admin bypasses all blocks for squad modifications
+        if (isAdmin && squadActions.includes(action)) {
+            // Allow proceed
+        } else {
+            if (isPlayed) {
+                hideLoading();
+                return showToast("BLOQUEADO", "Este partido ya ha finalizado o ha sido cancelado.", "warning");
+            }
+            if (isPastKickoff && squadActions.includes(action)) {
+                hideLoading();
+                return showToast("BLOQUEADO", "La franja horaria ya ha pasado.", "warning");
+            }
         }
         
         if (action === 'join') {
@@ -2398,6 +2425,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                     }
                     hideLoading();
                     triggerFeedback(FEEDBACK.MATCH.LEFT);
+                    showToast("SALIDA", "Has abandonado el partido", "info");
                     if(window.closeMatchModal) window.closeMatchModal();
                 }
             } else { hideLoading(); }
@@ -2421,6 +2449,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
                 await deleteDoc(ref); 
                 hideLoading();
                 triggerFeedback(FEEDBACK.MATCH.CANCELLED); 
+                showToast("CANCELADO", "El partido ha sido eliminado", "warning");
             } else { hideLoading(); }
         }
         else if (action === 'remove') {
@@ -2463,6 +2492,10 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
             }
             hideLoading();
             triggerFeedback({title: "ELIMINADO", msg: "Jugador expulsado", type: "info"});
+            showToast("ELIMINADO", "Jugador retirado del squad", "info");
+            
+            // Refrescar vista detallada
+            if (window.handleSlot) setTimeout(() => window.handleSlot(null, null, id, col), 300);
         }
         else if (action === 'add') {
              if (!isOrganizer) { hideLoading(); return triggerFeedback(FEEDBACK.MATCH.PERMISSION_DENIED); }
@@ -2513,6 +2546,7 @@ window.executeMatchAction = async (action, id, col, extra = {}) => {
              }
              hideLoading();
              triggerFeedback({title: "ANADIDO", msg: "Agente reclutado", type: "success"});
+             showToast("ANADIDO", "Jugador unido al squad", "success");
              // Update DOM animation closing modal
              if (window.closePlayerSelectorModal) window.closePlayerSelectorModal();
              if (window.closeMatchModal) window.closeMatchModal();
@@ -3022,7 +3056,7 @@ export const openResultForm = async (id, col) => {
     // Fetch player names for MVP selection
     const playersResolved = Array.isArray(players) && players.length ? players : [];
     const playerNames = await Promise.all(playersResolved.map(async (uid) => {
-        if (!uid) return { id: null, name: 'Vacio' };
+        if (!uid) return { id: null, name: 'LIBRE' };
         const name = await getPlayerName(uid);
         return { id: uid, name };
     }));
@@ -3190,9 +3224,10 @@ export const openResultForm = async (id, col) => {
             if (!rankingSync?.skipped) {
                 await showPostMatchSummaryModal(rankingSync, id, resultStr);
             } else {
-                setTimeout(() => {
-                    try { window.location.href = `diario.html?matchId=${id}`; } catch (_) {}
-                }, 900);
+                showToast("DIARIO DISPONIBLE", "Â¿Quieres registrar detalles en tu diario?", "info", {
+                    action: () => window.location.href = `diario.html?matchId=${id}`,
+                    actionLabel: "IR AL DIARIO"
+                });
             }
         } catch (e) {
             showToast("ERROR", `Fallo al guardar resultados (${e?.message || 'sync'})`, "error");
@@ -3241,8 +3276,11 @@ window.openPlayerSelector = async (matchId, col, extra) => {
                 </div>
                 
                 <div id="ps-panel-search">
-                    <input type="text" id="ps-search" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-xs font-bold mb-3 outline-none focus:border-primary focus:bg-white/10 transition-all" placeholder=" Buscar nombre o apodo..." oninput="window.filterPsUsers(this.value)">
-                    <div id="ps-list" class="flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scroll pr-1">
+                    <div class="relative mb-3">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-primary opacity-50 text-[10px]"></i>
+                        <input type="text" id="ps-search" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 pl-10 text-white text-xs font-bold outline-none focus:border-primary focus:bg-white/10 transition-all" placeholder="Buscar por nombre..." oninput="window.filterPsUsers(this.value)">
+                    </div>
+                    <div id="ps-list" class="flex-col gap-2 max-h-[42vh] overflow-y-auto custom-scroll pr-1">
                         <!-- Users Rendered Here -->
                     </div>
                 </div>
