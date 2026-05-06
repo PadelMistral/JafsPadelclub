@@ -5,18 +5,33 @@
     padding-bottom: 160px !important; 
 }
 
-/* Calendar wrapper: Beautiful margins and slight smooth scrollability */
+#toast-container {
+    position: fixed !important;
+    top: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 10000 !important;
+    width: 90% !important;
+    max-width: 400px !important;
+    pointer-events: none !important;
+}
+
+#toast-container > * {
+    pointer-events: auto !important;
+}
+
 .calendar-wrapper-v5 {
     margin-top: 15px !important;
-    margin-bottom: 30px !important; /* Huge margin before the legend */
-    --cal-day-min: 65px !important; /* The golden ratio for mobile cells */
-    --cal-time-col: 45px !important; 
-    overflow-x: auto !important; /* Allows slight smooth scroll */
+    margin-bottom: 35px !important;
+    --cal-day-min: 68px !important; 
+    --cal-time-col: 38px !important; 
+    --cal-slot-min-h: 68px !important;
+    overflow-x: auto !important;
     overflow-y: visible !important;
     padding: 8px !important;
-    background: rgba(0,0,0,0.15) !important; /* Container background */
-    border-radius: 14px !important;
-    box-shadow: inset 0 2px 20px rgba(0,0,0,0.2) !important;
+    background: rgba(15, 23, 42, 0.4) !important;
+    border-radius: 16px !important;
+    box-shadow: inset 0 2px 25px rgba(0,0,0,0.3) !important;
 }
 
 .calendar-grid-v5, #calendar-grid-v5 {
@@ -27,13 +42,15 @@
 /* Perfect alignment */
 .grid-header-v5, .time-row-v5 {
     display: grid !important;
-    grid-template-columns: var(--cal-time-col) repeat(7, minmax(var(--cal-day-min), 1fr)) !important;
-    gap: 4px !important;
+    grid-template-columns: var(--cal-time-col) repeat(7, var(--cal-day-min)) !important;
+    gap: 6px !important;
 }
 
 .grid-body-v5 {
     overflow-y: visible !important;
-    gap: 4px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
 }
 
 /* Legend overlay visibility - styled as a beautiful box */
@@ -60,16 +77,22 @@
 .slot-v5 {
     display: flex !important;
     flex-direction: column !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    padding: 4px 3px !important;
+    padding: 2px !important;
     position: relative !important;
-    min-height: 70px !important; 
+    width: var(--cal-day-min) !important;
+    height: var(--cal-slot-min-h) !important;
+    aspect-ratio: 1/1 !important;
     border-radius: 8px !important;
     overflow: hidden !important;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.2) !important;
-    border: 1px solid rgba(255,255,255,0.05) !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    background: rgba(30, 41, 59, 0.4) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 0 10px rgba(255,255,255,0.02) !important;
+}
+
+.slot-v5:active {
+    transform: scale(0.95) !important;
+    filter: brightness(1.3) !important;
 }
 
 /* Hover effects */
@@ -80,46 +103,99 @@
 }
 
 /* Clean text hierarchy */
-.slot-chip-v5 {
-    font-family: 'Rajdhani', sans-serif !important;
-    font-size: 7.5px !important;
-    font-weight: 800 !important;
-    letter-spacing: 0.2px !important;
-    text-transform: uppercase !important;
-    margin-bottom: 2px !important;
-    width: 100% !important;
-    text-align: center !important;
-    white-space: normal !important; /* wraps gracefully */
-    line-height: 1.1 !important;
-    color: rgba(255,255,255,0.85) !important;
+.slot-inner-v7 {
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    padding: 1px !important;
 }
 
-.slot-info-v5 {
-    font-size: 8.5px !important;
+.slot-main-text-v7 {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 9px !important;
     font-weight: 900 !important;
+    line-height: 0.9 !important;
     color: #fff !important;
-    margin-bottom: 3px !important;
-    width: 100% !important;
     text-align: center !important;
-    white-space: normal !important;
-    line-height: 1.1 !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+}
+
+.slot-badge-v7 {
+    font-size: 5.5px !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
+    background: rgba(0,0,0,0.5) !important;
+    padding: 1px 3px !important;
+    border-radius: 3px !important;
+    color: rgba(255,255,255,0.9) !important;
+}
+
+.slot-owner-v7 {
+    font-size: 6px !important;
+    font-weight: 900 !important;
+    color: rgba(255,255,255,1) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    text-transform: uppercase !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8) !important;
+}
+
+.slot-weather {
+    scale: 1.1 !important;
+    top: 4px !important;
+    right: 4px !important;
+    background: rgba(0,0,0,0.6) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 4px !important;
+}
+
+.slot-hour-v7 {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 7px !important;
+    font-weight: 900 !important;
+    color: rgba(255,255,255,0.5) !important;
+    letter-spacing: 0.5px !important;
+}
+
+.slot-v5.libre .slot-inner-v7 {
+    justify-content: center !important;
+}
+
+.slot-v5.libre .slot-footer-v7 {
+    justify-content: center !important;
+    margin-top: 4px !important;
+}
+
+.slot-v5.libre .slot-main-text-v7 {
+    font-size: 8px !important;
+    color: rgba(255,255,255,0.3) !important;
+    text-transform: uppercase !important;
+    font-weight: 800 !important;
 }
 
 /* Weather integrated neatly inside flow */
+/* Weather absolute top-right as requested */
 .slot-weather {
-    position: static !important;
+    position: absolute !important;
+    top: 4px !important;
+    right: 4px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 3px !important;
+    gap: 2px !important;
     font-size: 8px !important;
     font-weight: 900 !important;
-    color: #38bdf8 !important; /* Sky blue */
+    color: #fff !important;
     background: rgba(0,0,0,0.4) !important;
-    padding: 2px 5px !important;
-    border-radius: 12px !important;
-    margin-bottom: 4px !important;
-    margin-top: auto !important; /* Pushes owner down, weather sits above it */
+    padding: 2px 4px !important;
+    border-radius: 6px !important;
+    backdrop-filter: blur(4px) !important;
+    z-index: 10 !important;
 }
 
 /* Owner box cleanly pinned to bottom */
@@ -130,7 +206,8 @@
     width: calc(100% + 6px) !important;
     text-align: center !important;
     white-space: normal !important;
-    padding: 3px 2px !important;
+    padding: 4px 2px !important;
+    margin-top: auto !important;
     margin-bottom: -4px !important;
     margin-left: -3px !important;
     background: rgba(0,0,0,0.3) !important;
@@ -140,34 +217,72 @@
 }
 
 /* Apoing Icon safely out of the way */
+/* Apoing Icon safely positioned */
 .apoing-slot-mini {
     position: absolute !important;
-    top: 2px !important;
-    right: 2px !important;
-    background: rgba(0,0,0,0.6) !important;
-    padding: 2px !important;
+    top: 4px !important;
+    left: 4px !important; /* Move to top-left so it doesn't clash with weather */
+    background: rgba(0,0,0,0.5) !important;
+    padding: 2px 4px !important;
     border-radius: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 2px !important;
 }
 .apoing-slot-mini i {
     font-size: 7px !important;
 }
 .apoing-slot-mini span {
-    display: none !important;
+    display: block !important;
+    font-size: 6px !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
 }
 
+/* Apoing Orange Theme */
+.slot-v5.apoing-seeded {
+    background: linear-gradient(135deg, rgba(251, 146, 60, 0.15), rgba(249, 115, 22, 0.25)) !important;
+    border: 1px solid rgba(251, 146, 60, 0.3) !important;
+    border-left: 4px solid #f97316 !important;
+}
+.slot-v5.apoing-mine {
+    background: linear-gradient(135deg, rgba(251, 146, 60, 0.3), rgba(249, 115, 22, 0.45)) !important;
+    border-color: #f97316 !important;
+}
+.slot-v5.apoing-seeded .slot-chip-v5 { color: #fdba74 !important; }
+.slot-v5.apoing-seeded .slot-info-v5 { color: #fff !important; }
+
 /* Libre State - Deep slate */
-.cal-dot.libre {
+.cal-dot.libre, .dot.libre {
     background: #64748b !important;
     box-shadow: 0 0 8px rgba(100, 116, 139, 0.5) !important;
 }
+.dot.abierta { background: var(--primary) !important; }
+.dot.cerrada { background: #94a3b8 !important; }
+.dot.propia { background: var(--secondary) !important; }
+.dot.apoing-other, .dot.apoing-seeded { background: #fb923c !important; }
+.dot.apoing-mine { background: #f97316 !important; }
 .slot-v5.libre {
-    background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9)) !important;
-    border: 1px solid rgba(100, 116, 139, 0.3) !important;
-    border-left: 3px solid #64748b !important;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(30, 41, 59, 0.4)) !important;
+    border-left: 3px solid rgba(100, 116, 139, 0.5) !important;
 }
-.slot-v5.libre:hover {
-    background: rgba(30, 41, 59, 0.9) !important;
-    border-color: rgba(148, 163, 184, 0.5) !important;
+.slot-v5.abierta {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.05), rgba(0, 212, 255, 0.15)) !important;
+    border-left: 3px solid var(--primary) !important;
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.1) !important;
+}
+.slot-v5.propia {
+    background: linear-gradient(135deg, rgba(198, 255, 0, 0.05), rgba(198, 255, 0, 0.15)) !important;
+    border-left: 3px solid var(--secondary) !important;
+}
+.slot-v5.cerrada {
+    background: rgba(15, 23, 42, 0.8) !important;
+    border-left: 3px solid #475569 !important;
+    opacity: 0.8 !important;
+}
+.slot-v5.apoing-seeded {
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.05), rgba(249, 115, 22, 0.15)) !important;
+    border-left: 3px solid #f97316 !important;
 }
 .slot-v5.libre .slot-chip-v5 { color: #cbd5e1 !important; }
 .slot-v5.libre .slot-info-v5 { color: rgba(255,255,255,0.5) !important; }
